@@ -420,4 +420,106 @@ class PolishScreenshotTest {
         compose.mainClock.advanceTimeBy(600)
         save("remap")
     }
+
+    private fun sampleHistory(): List<com.retrohero.app.data.HistoryEntry> {
+        val games = listOf("Thwaite (USA).nes" to "nes", "Libbet.gb" to "gb", "Micro City.gba" to "gba", "Sonic.md" to "genesis", "Mario.sfc" to "snes").map { sample(it.first, it.second) }
+        val today = java.time.LocalDate.now()
+        val rnd = java.util.Random(7)
+        return (0 until 40).flatMap { back ->
+            val day = today.minusDays(back.toLong())
+            if (rnd.nextInt(4) == 0) emptyList() else List(1 + rnd.nextInt(2)) {
+                val g = games[minOf(rnd.nextInt(games.size), rnd.nextInt(games.size))]
+                val end = day.atTime(17 + rnd.nextInt(6), rnd.nextInt(60)).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+                com.retrohero.app.data.HistoryEntry(g, end, 600L + rnd.nextInt(4000))
+            }
+        }.sortedByDescending { it.end }
+    }
+
+    @Test
+    @Config(qualifiers = "w411dp-h1500dp-night-xxhdpi")
+    fun statsScreen() {
+        val h = sampleHistory()
+        compose.setContent { RetroHeroTheme { com.retrohero.app.ui.screens.StatsScreen(h, onBack = {}, onRecap = { _, _ -> }) } }
+        compose.mainClock.advanceTimeBy(1500)
+        compose.onAllNodesWithText("Systems").onFirst().performClick()
+        compose.onAllNodesWithText("Games").onFirst().performClick()
+        compose.mainClock.advanceTimeBy(1500)
+        save("stats")
+    }
+
+    private fun recapPage(taps: Int, name: String, settle: Long = 4000) {
+        val h = sampleHistory()
+        val s = com.retrohero.app.data.PlayHistory.summarise(h, java.time.LocalDate.now().withDayOfMonth(1))
+        compose.setContent { RetroHeroTheme { com.retrohero.app.ui.screens.RecapScreen("November", s, onClose = {}) } }
+        compose.mainClock.advanceTimeBy(1200)
+        repeat(taps) {
+            compose.onRoot().performClick()
+            compose.mainClock.advanceTimeBy(1200)
+        }
+        compose.mainClock.advanceTimeBy(settle)
+        save(name)
+    }
+
+    @Test fun recapTotal() = recapPage(3, "recap_total")
+    @Test fun recapSlot() = recapPage(5, "recap_slot", 6000)
+    @Test fun recapReceipt() = recapPage(7, "recap_receipt")
+
+    @Test
+    @Config(qualifiers = "w411dp-h1300dp-night-xxhdpi")
+    fun libraryAll() {
+        val games = listOf("Thwaite (USA).nes" to "nes", "Libbet.gb" to "gb", "Micro City.gba" to "gba", "Sonic.md" to "genesis", "Mario.sfc" to "snes", "Zelda.nes" to "nes").map { sample(it.first, it.second) }
+        val h = sampleHistory()
+        compose.setContent {
+            RetroHeroTheme {
+                com.retrohero.app.ui.screens.LibraryScreen(
+                    games = games, favorites = games.take(5),
+                    collections = listOf(com.retrohero.app.data.GameCollection("c", "Couch co-op", games.take(3).map { it.id }) to games.take(3)),
+                    shots = emptyList(), history = h,
+                    onOpenGame = {}, onOptions = {}, onOpenSystem = {}, onOpenCollection = {}, onNewCollection = {}, onOpenStats = {},
+                )
+            }
+        }
+        compose.mainClock.advanceTimeBy(800)
+        save("library_all")
+        compose.onAllNodesWithText("History").onFirst().performClick()
+        compose.mainClock.advanceTimeBy(800)
+        save("library_history")
+    }
+
+    @Test
+    fun miniPlayer() {
+        val g = sample("Thwaite (USA).nes", "nes")
+        compose.setContent {
+            RetroHeroTheme {
+                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF3A2430), Color.Black)))) {
+                    com.retrohero.app.ui.components.MiniPlayer(
+                        game = g, stat = com.retrohero.app.data.PlayStat(4000, 3, System.currentTimeMillis() - 3_600_000), glass = null,
+                        onOpen = {}, onPlay = {}, onHide = {},
+                        modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter).padding(bottom = 110.dp),
+                    )
+                }
+            }
+        }
+        compose.mainClock.advanceTimeBy(500)
+        save("mini_player")
+    }
+
+    @Test
+    fun padNeon() {
+        val system = Systems.get("snes")!!
+        compose.setContent {
+            RetroHeroTheme {
+                Box(Modifier.fillMaxSize().background(Color.Black)) {
+                    com.retrohero.app.emulator.VirtualGamepad(
+                        layout = system.layout, landscape = false, opacity = 0.9f,
+                        onButton = { _, _ -> }, onMenu = {}, onFastForward = {}, onPress = {},
+                        modifier = Modifier.fillMaxWidth().height(400.dp).align(androidx.compose.ui.Alignment.BottomCenter),
+                        accent = system.color, skin = com.retrohero.app.data.Looks.Neon, onRewind = {},
+                    )
+                }
+            }
+        }
+        compose.mainClock.advanceTimeBy(500)
+        save("pad_neon")
+    }
 }

@@ -70,7 +70,7 @@ object Looks {
 
     /** Your imported looks in [dir]. Broken files are skipped. */
     fun custom(dir: File): List<Look> =
-        dir.listFiles { f -> f.extension == "json" }?.sortedBy { it.name }?.mapNotNull { f ->
+        dir.listFiles { f -> f.extension == "json" }?.sortedBy { it.nameWithoutExtension }?.mapNotNull { f ->
             runCatching { parse(f.readText(), f.nameWithoutExtension) }.getOrNull()
         }.orEmpty()
 

@@ -85,7 +85,7 @@ class ScreenshotTest {
         seed()
         ActivityScenario.launch(MainActivity::class.java).use {
             shot("light_1_home")
-            tab("Systems"); shot("light_2_systems")
+            tab("Library"); shot("light_2_library")
             tab("Settings"); shot("light_3_settings")
         }
     }
@@ -132,7 +132,9 @@ class ScreenshotTest {
             saveNow("1c_landed")
             compose.mainClock.autoAdvance = true
             tab("Search"); shot("2_search")
-            tab("Systems"); shot("3_systems")
+            tab("Library"); shot("3_library")
+            compose.onAllNodesWithText("Systems").onFirst().performClick()
+            shot("3a_library_systems")
             compose.onAllNodesWithText("Game Boy Advance").onFirst().performClick()
             shot("3b_system_page")
             compose.onAllNodesWithText("Moonlight Run").onFirst().performClick()
@@ -143,6 +145,14 @@ class ScreenshotTest {
             compose.waitForIdle()
             tab("Cores"); shot("4_cores")
             tab("Settings"); shot("5_settings")
+            compose.onAllNodesWithText("Customisation").onFirst().performClick()
+            shot("5b_customisation")
+            compose.onAllNodesWithContentDescription("Back").onFirst().performClick()
+            compose.waitForIdle()
+            compose.onAllNodesWithText("Gameplay").onFirst().performClick()
+            shot("5c_gameplay")
+            compose.onAllNodesWithContentDescription("Back").onFirst().performClick()
+            compose.waitForIdle()
             tab("Home")
             compose.onAllNodesWithContentDescription("Add games").onFirst().performClick()
             shot("6_add_menu")

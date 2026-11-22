@@ -43,7 +43,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -91,12 +91,13 @@ private const val PAGES = 9
 @Composable
 fun RecapScreen(periodName: String, summary: PlaySummary, onClose: () -> Unit) {
     var page by remember { mutableIntStateOf(0) }
-    var shownAt by remember { mutableLongStateOf(0L) }
+    // A page must be up for 350 ms before a tap counts, so double taps don't skip.
+    var ready by remember { mutableStateOf(false) }
     val lean = remember { Animatable(0f) }
     var drag by remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(page) { shownAt = System.currentTimeMillis() }
+    LaunchedEffect(page) { ready = false; delay(350); ready = true }
     fun next() {
-        if (System.currentTimeMillis() - shownAt < 350) return
+        if (!ready) return
         if (page < PAGES - 1) page++ else onClose()
     }
     fun back() { if (page > 0) page-- }

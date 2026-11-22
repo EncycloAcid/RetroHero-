@@ -147,7 +147,7 @@ fun StatsScreen(history: List<HistoryEntry>, onBack: () -> Unit, onRecap: (Perio
             }
         }
         if (summary.systems.isNotEmpty()) item {
-            StatCard("Systems", "Mostly ${summary.topSystem!!.first.name}") {
+            StatCard("Systems", "Mostly ${summary.topSystem!!.first.shortName}") {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     DonutChart(summary.systems.map { it.second.toFloat() }, Modifier.size(92.dp))
                     Spacer(Modifier.width(18.dp))
