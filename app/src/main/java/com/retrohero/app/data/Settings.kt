@@ -32,6 +32,15 @@ class Settings(context: Context) {
         _romFolders.value = updated
     }
 
+    private val _dynamicColor = MutableStateFlow(prefs.getBoolean("dynamic_color", true))
+    /** Use Material You wallpaper colours (Android 12+). */
+    val dynamicColor: StateFlow<Boolean> = _dynamicColor
+
+    fun setDynamicColor(enabled: Boolean) {
+        prefs.edit { putBoolean("dynamic_color", enabled) }
+        _dynamicColor.value = enabled
+    }
+
     fun coreFor(system: GameSystem): CoreInfo {
         val id = prefs.getString("core_${system.id}", null)
         return system.cores.firstOrNull { it.id == id } ?: system.cores.first()

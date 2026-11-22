@@ -19,6 +19,32 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ContainedLoadingIndicator
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.ListItemShapes
+import androidx.compose.material3.SegmentedListItem
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.style.TextOverflow
+import com.retrohero.app.ui.components.SegmentedGroup
+import com.retrohero.app.ui.components.segmentColors
+import com.retrohero.app.ui.components.SystemBadge
+import com.retrohero.app.ui.components.rememberPressFeedback
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -51,13 +77,8 @@ import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -75,7 +96,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -155,7 +175,7 @@ class EmulatorActivity : ComponentActivity() {
             }
         })
 
-        setContent { RetroHeroTheme { EmulatorScreen() } }
+        setContent { RetroHeroTheme(dynamicColor = settings.dynamicColor.value) { EmulatorScreen() } }
 
         lifecycleScope.launch { boot(corePath, romPath) }
     }
@@ -281,9 +301,9 @@ class EmulatorActivity : ComponentActivity() {
                     Modifier.align(Alignment.Center),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    CircularProgressIndicator()
-                    Spacer(Modifier.height(16.dp))
-                    Text("Starting ${game.title}…", color = Color.White)
+                    ContainedLoadingIndicator(Modifier.size(88.dp))
+                    Spacer(Modifier.height(20.dp))
+                    Text("Starting ${game.title}…", color = Color.White, style = MaterialTheme.typography.titleMedium)
                 }
                 is Phase.Failed -> AlertDialog(
                     onDismissRequest = { finish() },
@@ -346,34 +366,44 @@ class EmulatorActivity : ComponentActivity() {
     private fun PauseMenu() {
         var page by remember { mutableStateOf("main") }
         Box(
-            Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.6f)).clickable(enabled = false) {},
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.6f))
+                .clickable(interactionSource = null, indication = null) { if (page == "main") setMenu(false) else page = "main" }
+                .safeDrawingPadding(),
             contentAlignment = Alignment.Center,
         ) {
             Surface(
-                shape = RoundedCornerShape(24.dp),
-                tonalElevation = 6.dp,
-                modifier = Modifier.padding(24.dp).widthIn(max = 420.dp),
+                shape = MaterialTheme.shapes.extraLarge,
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                modifier = Modifier
+                    .padding(16.dp)
+                    .widthIn(max = 460.dp)
+                    .clickable(interactionSource = null, indication = null) {},
             ) {
-                Column(Modifier.padding(vertical = 16.dp)) {
-                    Text(
-                        game.title,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 24.dp),
-                        maxLines = 2,
-                    )
-                    Text(
-                        system.name,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp),
-                    )
-                    HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                    when (page) {
-                        "save" -> SlotPage(saving = true) { page = "main" }
-                        "load" -> SlotPage(saving = false) { page = "main" }
-                        "options" -> OptionsPage { page = "main" }
-                        else -> MainMenuPage { page = it }
+                Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        SystemBadge(system, 52.dp)
+                        Spacer(Modifier.width(16.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(game.title, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text(system.name, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    Spacer(Modifier.height(20.dp))
+                    AnimatedContent(
+                        targetState = page,
+                        transitionSpec = {
+                            (fadeIn(tween(220)) + scaleIn(initialScale = 0.96f)) togetherWith fadeOut(tween(120))
+                        },
+                        label = "menuPage",
+                    ) { p ->
+                        when (p) {
+                            "save" -> SlotPage(saving = true) { page = "main" }
+                            "load" -> SlotPage(saving = false) { page = "main" }
+                            "options" -> OptionsPage { page = "main" }
+                            else -> MainMenuPage { page = it }
+                        }
                     }
                 }
             }
@@ -382,83 +412,148 @@ class EmulatorActivity : ComponentActivity() {
 
     @Composable
     private fun MainMenuPage(navigate: (String) -> Unit) {
-        Column(Modifier.verticalScroll(rememberScrollState())) {
-            MenuItem(Icons.Default.PlayArrow, "Resume") { setMenu(false) }
-            MenuItem(Icons.Default.Save, "Save state") { navigate("save") }
-            MenuItem(Icons.Default.Download, "Load state") { navigate("load") }
-            ListItem(
-                headlineContent = { Text("Fast forward (${settings.fastForwardSpeed.toInt()}×)") },
-                leadingContent = { Icon(Icons.Default.FastForward, null) },
-                trailingContent = {
-                    Switch(checked = fastForwardToggle, onCheckedChange = {
-                        fastForwardToggle = it
-                        applyFastForward()
-                    })
-                },
-                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-            )
-            ListItem(
-                headlineContent = { Text("Touch controls") },
-                leadingContent = { Icon(Icons.Default.Gamepad, null) },
-                trailingContent = { Switch(checked = showPad, onCheckedChange = { showPad = it }) },
-                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-            )
-            MenuItem(Icons.Default.Tune, "Core options") { navigate("options") }
-            MenuItem(Icons.Default.RestartAlt, "Reset") {
-                NativeBridge.reset()
-                setMenu(false)
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = { setMenu(false) },
+                    shapes = ButtonDefaults.shapes(),
+                    modifier = Modifier.weight(1f).height(ButtonDefaults.MediumContainerHeight),
+                    contentPadding = ButtonDefaults.contentPaddingFor(ButtonDefaults.MediumContainerHeight),
+                ) {
+                    Icon(Icons.Default.PlayArrow, null, Modifier.size(ButtonDefaults.iconSizeFor(ButtonDefaults.MediumContainerHeight)))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Resume", style = ButtonDefaults.textStyleFor(ButtonDefaults.MediumContainerHeight))
+                }
+                FilledTonalIconButton(
+                    onClick = { quit() },
+                    shapes = IconButtonDefaults.shapes(),
+                    modifier = Modifier.size(ButtonDefaults.MediumContainerHeight),
+                ) { Icon(Icons.AutoMirrored.Filled.ExitToApp, "Quit game") }
             }
-            MenuItem(Icons.AutoMirrored.Filled.ExitToApp, "Quit game") { quit() }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ActionTile(Icons.Default.Save, "Save", Modifier.weight(1f)) { navigate("save") }
+                ActionTile(Icons.Default.Download, "Load", Modifier.weight(1f)) { navigate("load") }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ActionTile(Icons.Default.Tune, "Options", Modifier.weight(1f)) { navigate("options") }
+                ActionTile(Icons.Default.RestartAlt, "Reset", Modifier.weight(1f)) {
+                    NativeBridge.reset()
+                    setMenu(false)
+                }
+            }
+            SegmentedGroup(null, 2) {
+                MenuSwitch(shapes(0), Icons.Default.FastForward, "Fast forward", "${settings.fastForwardSpeed.toInt()}× speed", fastForwardToggle) {
+                    fastForwardToggle = it
+                    applyFastForward()
+                }
+                MenuSwitch(shapes(1), Icons.Default.Gamepad, "Touch controls", "Show the on-screen gamepad", showPad) { showPad = it }
+            }
         }
     }
 
     @Composable
-    private fun MenuItem(icon: ImageVector, label: String, onClick: () -> Unit) {
-        ListItem(
-            headlineContent = { Text(label) },
+    private fun ActionTile(icon: ImageVector, label: String, modifier: Modifier, onClick: () -> Unit) {
+        val interaction = remember { MutableInteractionSource() }
+        val press = rememberPressFeedback(interaction, restCorner = 28.dp, pressedCorner = 14.dp, pressedScale = 0.96f)
+        Surface(
+            shape = RoundedCornerShape(press.corner.value),
+            color = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            modifier = modifier
+                .height(84.dp)
+                .graphicsLayer {
+                    scaleX = press.scale.value
+                    scaleY = press.scale.value
+                }
+                .clickable(interactionSource = interaction, indication = null, onClick = onClick),
+        ) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.SpaceBetween) {
+                Icon(icon, null)
+                Text(label, style = MaterialTheme.typography.titleMedium)
+            }
+        }
+    }
+
+    @Composable
+    private fun MenuSwitch(
+        shapes: ListItemShapes,
+        icon: ImageVector,
+        title: String,
+        subtitle: String,
+        checked: Boolean,
+        onChange: (Boolean) -> Unit,
+    ) {
+        SegmentedListItem(
+            onClick = { onChange(!checked) },
+            shapes = shapes,
+            colors = segmentColors(),
             leadingContent = { Icon(icon, null) },
-            modifier = Modifier.clickable(onClick = onClick),
-            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        )
+            supportingContent = { Text(subtitle) },
+            trailingContent = {
+                Switch(
+                    checked = checked,
+                    onCheckedChange = onChange,
+                    thumbContent = if (checked) {
+                        { Icon(Icons.Default.Check, null, Modifier.size(SwitchDefaults.IconSize)) }
+                    } else null,
+                )
+            },
+            verticalAlignment = Alignment.CenterVertically,
+        ) { Text(title) }
+    }
+
+    @Composable
+    private fun PageHeader(title: String, back: () -> Unit) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 12.dp)) {
+            FilledTonalIconButton(onClick = back, shapes = IconButtonDefaults.shapes()) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+            }
+            Spacer(Modifier.width(12.dp))
+            Text(title, style = MaterialTheme.typography.titleLarge)
+        }
     }
 
     @Composable
     private fun SlotPage(saving: Boolean, back: () -> Unit) {
         val fmt = remember { DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT) }
-        Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(if (saving) "Save to slot" else "Load from slot", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(start = 8.dp))
-            val slots = buildList {
-                if (!saving) add(AppPaths.AUTO_SLOT)
-                addAll(1..4)
-            }
-            for (slot in slots) {
-                val file = paths.stateFile(game, slot)
-                val exists = file.exists()
-                val label = if (slot == AppPaths.AUTO_SLOT) "Auto-save" else "Slot $slot"
-                val detail = if (exists) fmt.format(Date(file.lastModified())) else "Empty"
-                OutlinedButton(
-                    onClick = {
-                        val ok = if (saving) NativeBridge.saveState(file.absolutePath) else NativeBridge.loadState(file.absolutePath)
-                        toast(
-                            when {
-                                ok && saving -> "Saved to $label"
-                                ok -> "Loaded $label"
-                                else -> NativeBridge.getLastError().ifEmpty { "Failed" }
-                            },
-                        )
-                        if (ok) setMenu(false)
-                        back()
-                    },
-                    enabled = saving || exists,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(label, fontWeight = FontWeight.SemiBold)
-                        Text(detail, style = MaterialTheme.typography.bodySmall)
-                    }
+        val slots = buildList {
+            if (!saving) add(AppPaths.AUTO_SLOT)
+            addAll(1..4)
+        }
+        Column {
+            PageHeader(if (saving) "Save state" else "Load state", back)
+            SegmentedGroup(null, slots.size) {
+                slots.forEachIndexed { i, slot ->
+                    val file = paths.stateFile(game, slot)
+                    val exists = file.exists()
+                    val label = if (slot == AppPaths.AUTO_SLOT) "Auto-save" else "Slot $slot"
+                    SegmentedListItem(
+                        onClick = {
+                            val ok = if (saving) NativeBridge.saveState(file.absolutePath) else NativeBridge.loadState(file.absolutePath)
+                            toast(
+                                when {
+                                    ok && saving -> "Saved to $label"
+                                    ok -> "Loaded $label"
+                                    else -> NativeBridge.getLastError().ifEmpty { "Failed" }
+                                },
+                            )
+                            if (ok) setMenu(false)
+                            back()
+                        },
+                        enabled = saving || exists,
+                        shapes = shapes(i),
+                        colors = segmentColors(),
+                        leadingContent = {
+                            Icon(
+                                if (slot == AppPaths.AUTO_SLOT) Icons.Default.History else if (exists) Icons.Default.Save else Icons.Default.Add,
+                                null,
+                            )
+                        },
+                        supportingContent = { Text(if (exists) fmt.format(Date(file.lastModified())) else "Empty") },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) { Text(label) }
                 }
             }
-            TextButton(onClick = back) { Text("Back") }
         }
     }
 
@@ -467,25 +562,26 @@ class EmulatorActivity : ComponentActivity() {
         var options by remember { mutableStateOf(NativeBridge.options()) }
         var editing by remember { mutableStateOf<NativeBridge.CoreOption?>(null) }
         Column {
+            PageHeader("Core options", back)
             if (options.isEmpty()) {
                 Text(
-                    "This core has no options.",
+                    "This emulator has no options.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.fillMaxWidth().padding(24.dp),
                     textAlign = TextAlign.Center,
                 )
             } else {
-                LazyColumn(Modifier.height(360.dp)) {
-                    items(options, key = { it.key }) { opt ->
-                        ListItem(
-                            headlineContent = { Text(opt.description) },
+                SegmentedGroup(null, options.size) {
+                    options.forEachIndexed { i, opt ->
+                        SegmentedListItem(
+                            onClick = { editing = opt },
+                            shapes = shapes(i),
+                            colors = segmentColors(),
                             supportingContent = { Text(opt.current, color = MaterialTheme.colorScheme.primary) },
-                            modifier = Modifier.clickable { editing = opt },
-                            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                        )
+                        ) { Text(opt.description) }
                     }
                 }
             }
-            Button(onClick = back, modifier = Modifier.padding(horizontal = 16.dp).fillMaxWidth()) { Text("Done") }
         }
         editing?.let { opt ->
             AlertDialog(
@@ -496,16 +592,16 @@ class EmulatorActivity : ComponentActivity() {
                     LazyColumn {
                         items(opt.values) { value ->
                             Row(
-                                Modifier.fillMaxWidth().selectable(selected = value == opt.current) {
+                                Modifier.fillMaxWidth().clip(MaterialTheme.shapes.large).selectable(selected = value == opt.current) {
                                     NativeBridge.setOption(opt.key, value)
                                     optionsStore.save(opt.key, value)
                                     options = NativeBridge.options()
                                     editing = null
-                                }.padding(vertical = 4.dp),
+                                }.padding(vertical = 8.dp, horizontal = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 RadioButton(selected = value == opt.current, onClick = null)
-                                Spacer(Modifier.size(8.dp))
+                                Spacer(Modifier.size(12.dp))
                                 Text(value)
                             }
                         }

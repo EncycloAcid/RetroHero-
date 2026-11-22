@@ -31,6 +31,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val scanProgress = app.library.scanProgress
     val coreStates = app.cores.states
     val folders = settings.romFolders
+    val dynamicColor = settings.dynamicColor
 
     val recents: StateFlow<List<Game>> = combine(games, settings.recents) { all, ids ->
         val byId = all.associateBy { it.id }

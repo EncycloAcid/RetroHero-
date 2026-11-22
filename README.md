@@ -62,7 +62,7 @@ app/src/main/
 
 ## Building
 
-Requirements: JDK 17+, Android SDK 35, NDK 27.2.12479018 and CMake 3.22.1 (Android Studio installs these automatically).
+Requirements: JDK 17+, Android SDK 37.1, NDK 27.2.12479018 and CMake 3.22.1 (Android Studio installs these automatically).
 
 ```bash
 ./gradlew assembleDebug        # app/build/outputs/apk/debug/app-debug.apk

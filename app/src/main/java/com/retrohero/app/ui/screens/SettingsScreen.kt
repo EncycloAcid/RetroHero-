@@ -1,43 +1,61 @@
 package com.retrohero.app.ui.screens
 
 import android.net.Uri
+import android.os.Build
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Memory
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.FastForward
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Gamepad
+import androidx.compose.material.icons.outlined.GridOn
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Memory
+import androidx.compose.material.icons.outlined.Opacity
+import androidx.compose.material.icons.outlined.Palette
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Save
+import androidx.compose.material.icons.outlined.Vibration
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LinearWavyProgressIndicator
+import androidx.compose.material3.ListItemShapes
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Slider
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.retrohero.app.BuildConfig
 import com.retrohero.app.data.BiosManager
@@ -45,10 +63,13 @@ import com.retrohero.app.data.CoreManager
 import com.retrohero.app.data.Saf
 import com.retrohero.app.data.Settings
 import com.retrohero.app.data.Systems
+import com.retrohero.app.ui.components.SegmentedGroup
+import com.retrohero.app.ui.components.segmentColors
 
 @Composable
 fun SettingsScreen(
     settings: Settings,
+    dynamicColor: Boolean,
     bios: BiosManager,
     biosVersion: Int,
     folders: Set<String>,
@@ -61,126 +82,166 @@ fun SettingsScreen(
     onDeleteBios: (String) -> Unit,
 ) {
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        Section("Game folders") {
-            folders.forEach { uri ->
-                val name = remember(uri) { runCatching { Saf.folderName(Uri.parse(uri)) }.getOrDefault(uri) }
-                Item(name, leading = { Icon(Icons.Default.Folder, null) }) {
-                    IconButton(onClick = { onRemoveFolder(uri) }) { Icon(Icons.Default.Close, "Remove") }
+        // ---- Library -------------------------------------------------------------------
+        Column {
+            val folderList = folders.toList()
+            SegmentedGroup("Game folders", folderList.size + if (scanning) 1 else 0) {
+                folderList.forEachIndexed { i, uri ->
+                    val name = remember(uri) { runCatching { Saf.folderName(Uri.parse(uri)) }.getOrDefault(uri) }
+                    SegmentedListItem(
+                        shapes = shapes(i),
+                        colors = segmentColors(),
+                        leadingContent = { Icon(Icons.Outlined.Folder, null) },
+                        trailingContent = {
+                            IconButton(onClick = { onRemoveFolder(uri) }, shapes = IconButtonDefaults.shapes()) {
+                                Icon(Icons.Outlined.Close, "Remove $name")
+                            }
+                        },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) { Text(name) }
+                }
+                if (scanning) {
+                    SegmentedListItem(
+                        shapes = shapes(folderList.size),
+                        colors = segmentColors(),
+                        supportingContent = { LinearWavyProgressIndicator(Modifier.fillMaxWidth().padding(top = 8.dp)) },
+                    ) { Text("Scanning $scanProgress…") }
                 }
             }
-            if (scanning) Item("Scanning… $scanProgress")
-            Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilledTonalButton(onClick = onAddFolder) { Icon(Icons.Default.Add, null); Text(" Add folder") }
-                FilledTonalButton(onClick = onRescan, enabled = !scanning && folders.isNotEmpty()) {
-                    Icon(Icons.Default.Refresh, null); Text(" Rescan")
+            Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onAddFolder, shapes = ButtonDefaults.shapes()) {
+                    Icon(Icons.Outlined.Add, null, Modifier.size(ButtonDefaults.IconSize))
+                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                    Text("Add folder")
+                }
+                FilledTonalButton(onClick = onRescan, enabled = !scanning && folders.isNotEmpty(), shapes = ButtonDefaults.shapes()) {
+                    Icon(Icons.Outlined.Refresh, null, Modifier.size(ButtonDefaults.IconSize))
+                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                    Text("Rescan")
                 }
             }
         }
 
-        Section("BIOS & system files") {
-            Text(
-                "Some systems need BIOS files dumped from your own console. Import them here — " +
-                    "file names must match exactly.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp),
-            )
-            // biosVersion forces recomposition after imports/deletes.
+        // ---- Appearance & controls ------------------------------------------------------
+        val dynamicAvailable = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+        SegmentedGroup("Look & feel", if (dynamicAvailable) 7 else 6) {
+            var i = 0
+            if (dynamicAvailable) {
+                ToggleRow(shapes(i++), Icons.Outlined.Palette, "Wallpaper colours", "Match the app to your device theme", dynamicColor) {
+                    settings.setDynamicColor(it)
+                }
+            }
+            ToggleRow(shapes(i++), Icons.Outlined.GridOn, "Sharp pixels", "Crisp scaling for pixel art", settings.sharpPixels) { settings.sharpPixels = it }
+            ToggleRow(shapes(i++), Icons.Outlined.Vibration, "Haptic feedback", "Buzz when touch buttons are pressed", settings.haptics) { settings.haptics = it }
+            ToggleRow(shapes(i++), Icons.Outlined.Gamepad, "Stick moves D-pad", "Left stick acts as D-pad on controllers", settings.stickAsDpad) { settings.stickAsDpad = it }
+            SliderRow(shapes(i++), Icons.Outlined.Opacity, "Touch controls opacity", settings.overlayOpacity, 0.2f..1f, { "${(it * 100).toInt()}%" }) {
+                settings.overlayOpacity = it
+            }
+            SliderRow(shapes(i++), Icons.Outlined.FastForward, "Fast-forward speed", settings.fastForwardSpeed, 2f..8f, { "${it.toInt()}×" }, steps = 5) {
+                settings.fastForwardSpeed = it
+            }
+            ToggleRow(shapes(i), Icons.Outlined.Save, "Auto save & resume", "Pick up exactly where you left off", settings.autoSave) { settings.autoSave = it }
+        }
+
+        // ---- BIOS -------------------------------------------------------------------------
+        Column {
             key(biosVersion) {
-                Systems.all.filter { it.bios.isNotEmpty() }.forEach { system ->
-                    system.bios.forEach { file ->
+                val files = Systems.all.flatMap { s -> s.bios.map { s to it } }
+                SegmentedGroup("BIOS & system files", files.size) {
+                    files.forEachIndexed { i, (system, file) ->
                         val present = bios.isPresent(file)
-                        Item(
-                            title = file.fileName,
-                            subtitle = "${system.shortName} · ${file.description}${if (file.required) " · required" else ""}",
-                            leading = {
-                                if (present) Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.tertiary)
-                                else Icon(Icons.Default.Close, null, tint = if (file.required) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline)
+                        SegmentedListItem(
+                            shapes = shapes(i),
+                            colors = segmentColors(),
+                            leadingContent = {
+                                when {
+                                    present -> Icon(Icons.Outlined.CheckCircle, "Installed", tint = MaterialTheme.colorScheme.primary)
+                                    file.required -> Icon(Icons.Outlined.ErrorOutline, "Missing", tint = MaterialTheme.colorScheme.error)
+                                    else -> Icon(Icons.Outlined.Memory, "Optional", tint = MaterialTheme.colorScheme.outline)
+                                }
                             },
-                        ) {
-                            if (present) IconButton(onClick = { onDeleteBios(file.fileName) }) { Icon(Icons.Default.Delete, "Delete") }
-                        }
+                            supportingContent = {
+                                Text("${system.shortName} · ${file.description}${if (file.required && !present) " · required" else ""}")
+                            },
+                            trailingContent = {
+                                if (present) {
+                                    IconButton(onClick = { onDeleteBios(file.fileName) }, shapes = IconButtonDefaults.shapes()) {
+                                        Icon(Icons.Outlined.Delete, "Delete ${file.fileName}")
+                                    }
+                                }
+                            },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) { Text(file.fileName) }
                     }
                 }
             }
-            FilledTonalButton(onClick = onImportBios, modifier = Modifier.padding(12.dp)) {
-                Icon(Icons.Default.Memory, null); Text(" Import BIOS files")
+            Text(
+                "BIOS files come from your own consoles. Names must match exactly.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 16.dp, top = 10.dp),
+            )
+            FilledTonalButton(onClick = onImportBios, shapes = ButtonDefaults.shapes(), modifier = Modifier.padding(top = 12.dp)) {
+                Icon(Icons.Outlined.Memory, null, Modifier.size(ButtonDefaults.IconSize))
+                Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                Text("Import BIOS files")
             }
         }
 
-        Section("Display & controls") {
-            ToggleItem("Sharp pixels", "Crisp nearest-neighbour scaling for pixel art", settings.sharpPixels) { settings.sharpPixels = it }
-            ToggleItem("Haptic feedback", "Vibrate when touch buttons are pressed", settings.haptics) { settings.haptics = it }
-            ToggleItem("Left stick drives D-pad", "For controllers, in games without analog support", settings.stickAsDpad) { settings.stickAsDpad = it }
-            SliderItem("Touch controls opacity", settings.overlayOpacity, 0.2f..1f, { "${(it * 100).toInt()}%" }) { settings.overlayOpacity = it }
-            SliderItem("Fast-forward speed", settings.fastForwardSpeed, 2f..8f, { "${it.toInt()}×" }, steps = 5) { settings.fastForwardSpeed = it }
-        }
-
-        Section("Saves") {
-            ToggleItem("Auto save & resume", "Save state when quitting and resume where you left off", settings.autoSave) { settings.autoSave = it }
-        }
-
-        Section("About") {
-            Item("RetroHero ${BuildConfig.VERSION_NAME}", "Core architecture: ${CoreManager.abi()}")
-            Text(
-                "RetroHero is a libretro frontend. It does not include any games or BIOS files. " +
-                    "Only play games you legally own.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(16.dp, 0.dp, 16.dp, 12.dp),
-            )
+        // ---- About ------------------------------------------------------------------------
+        SegmentedGroup("About", 2) {
+            SegmentedListItem(
+                shapes = shapes(0),
+                colors = segmentColors(),
+                leadingContent = { Icon(Icons.Outlined.AutoAwesome, null) },
+                supportingContent = { Text("Version ${BuildConfig.VERSION_NAME} · ${CoreManager.abi()}") },
+            ) { Text("RetroHero") }
+            SegmentedListItem(
+                shapes = shapes(1),
+                colors = segmentColors(),
+                leadingContent = { Icon(Icons.Outlined.Info, null) },
+                supportingContent = { Text("No games or BIOS files are included. Play games you own.") },
+            ) { Text("Powered by libretro") }
         }
     }
 }
 
 @Composable
-private fun key(value: Int, content: @Composable () -> Unit) = androidx.compose.runtime.key(value) { content() }
-
-@Composable
-private fun Section(title: String, content: @Composable () -> Unit) {
-    Surface(shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainer) {
-        Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-            Text(
-                title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            )
-            content()
-        }
-    }
-}
-
-@Composable
-private fun Item(
+private fun ToggleRow(
+    shapes: ListItemShapes,
+    icon: ImageVector,
     title: String,
-    subtitle: String? = null,
-    leading: (@Composable () -> Unit)? = null,
-    trailing: (@Composable () -> Unit)? = null,
+    subtitle: String,
+    initial: Boolean,
+    onChange: (Boolean) -> Unit,
 ) {
-    ListItem(
-        headlineContent = { Text(title) },
-        supportingContent = subtitle?.let { { Text(it) } },
-        leadingContent = leading,
-        trailingContent = trailing,
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-    )
-}
-
-@Composable
-private fun ToggleItem(title: String, subtitle: String, initial: Boolean, onChange: (Boolean) -> Unit) {
     var checked by remember { mutableStateOf(initial) }
-    Item(title, subtitle) {
-        Switch(checked = checked, onCheckedChange = { checked = it; onChange(it) })
-    }
+    SegmentedListItem(
+        onClick = { checked = !checked; onChange(checked) },
+        shapes = shapes,
+        colors = segmentColors(),
+        leadingContent = { Icon(icon, null) },
+        supportingContent = { Text(subtitle) },
+        trailingContent = {
+            Switch(
+                checked = checked,
+                onCheckedChange = { checked = it; onChange(it) },
+                thumbContent = if (checked) {
+                    { Icon(Icons.Default.Check, null, Modifier.size(SwitchDefaults.IconSize)) }
+                } else null,
+            )
+        },
+        verticalAlignment = Alignment.CenterVertically,
+    ) { Text(title) }
 }
 
 @Composable
-private fun SliderItem(
+private fun SliderRow(
+    shapes: ListItemShapes,
+    icon: ImageVector,
     title: String,
     initial: Float,
     range: ClosedFloatingPointRange<Float>,
@@ -189,11 +250,19 @@ private fun SliderItem(
     onChange: (Float) -> Unit,
 ) {
     var value by remember { mutableFloatStateOf(initial) }
-    Column(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(title, Modifier.weight(1f))
-            Text(format(value), color = MaterialTheme.colorScheme.primary)
-        }
-        Slider(value = value, onValueChange = { value = it }, onValueChangeFinished = { onChange(value) }, valueRange = range, steps = steps)
-    }
+    SegmentedListItem(
+        shapes = shapes,
+        colors = segmentColors(),
+        leadingContent = { Icon(icon, null) },
+        trailingContent = { Text(format(value), color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge) },
+        supportingContent = {
+            Slider(
+                value = value,
+                onValueChange = { value = it },
+                onValueChangeFinished = { onChange(value) },
+                valueRange = range,
+                steps = steps,
+            )
+        },
+    ) { Text(title) }
 }
