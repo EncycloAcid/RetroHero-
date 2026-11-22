@@ -218,6 +218,7 @@ fun HomeScreen(
     stats: Map<String, PlayStat> = emptyMap(),
     collections: List<Pair<GameCollection, List<Game>>> = emptyList(),
     onOpenCollection: (GameCollection) -> Unit = {},
+    onOpenStats: () -> Unit = {},
 ) {
     val mostPlayed = remember(games, stats) {
         games.filter { (stats[it.id]?.seconds ?: 0) >= 60 }.sortedByDescending { stats[it.id]?.seconds ?: 0 }.take(10)
@@ -236,7 +237,7 @@ fun HomeScreen(
         verticalArrangement = Arrangement.spacedBy(20.dp),
         modifier = Modifier.fillMaxSize().background(Color.Black),
     ) {
-        full { HeroCarousel(candidates, games, recents, favorites, onPlay, onOpen, topActions, stats) }
+        full { HeroCarousel(candidates, games, recents, favorites, onPlay, onOpen, topActions, stats, onOpenStats) }
 
         if (recents.isNotEmpty()) {
             full { Box(Modifier.launchRise(2)) { SectionHeader("Recently Played") } }
@@ -529,6 +530,7 @@ private fun HeroCarousel(
     onOpen: (Game) -> Unit,
     topActions: @Composable () -> Unit,
     stats: Map<String, PlayStat> = emptyMap(),
+    onOpenStats: () -> Unit = {},
 ) {
     val last = recents.firstOrNull()
     val totalSeconds = stats.values.sumOf { it.seconds }
@@ -562,7 +564,7 @@ private fun HeroCarousel(
                     0 -> GachaHero(candidates, onPlay)
                     1 -> SpeedDialPage(favorites, onPlay, onOpen)
                     2 -> BecausePage(last!!, picks, onPlay, onOpen)
-                    else -> StatsPage(games, stats, onOpen)
+                    else -> StatsPage(games, stats, onOpen, onOpenStats)
                 }
             }
         }
@@ -787,7 +789,7 @@ private fun SectionHeader(text: String, onClick: (() -> Unit)? = null) {
 }
 
 @Composable
-private fun StatsPage(games: List<Game>, stats: Map<String, PlayStat>, onOpen: (Game) -> Unit) {
+private fun StatsPage(games: List<Game>, stats: Map<String, PlayStat>, onOpen: (Game) -> Unit, onOpenStats: () -> Unit) {
     val ranked = remember(games, stats) {
         games.filter { (stats[it.id]?.seconds ?: 0) > 0 }.sortedByDescending { stats[it.id]!!.seconds }
     }
@@ -816,7 +818,7 @@ private fun StatsPage(games: List<Game>, stats: Map<String, PlayStat>, onOpen: (
             }
         }
         Spacer(Modifier.weight(1f))
-        Text("Your play time", style = LabelStyle, color = LabelColor)
+        Text("Your play time  ›", style = LabelStyle, color = LabelColor, modifier = Modifier.clip(CircleShape).clickable(onClick = onOpenStats))
         Text(PlayTime.format(total).replaceFirstChar { it.uppercase() }, style = HeroTitleStyle, color = Color.White)
         Text(
             if (ranked.size == 1) "on 1 game" else "across ${ranked.size} games",

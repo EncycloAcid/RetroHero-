@@ -129,6 +129,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     /** Play time per game id (only games that have been played). */
     val stats: StateFlow<Map<String, PlayStat>> = _stats
 
+    private val _shots = MutableStateFlow<List<com.retrohero.app.ui.screens.Shot>>(emptyList())
+    /** Every screenshot you've taken, newest first. */
+    val shots: StateFlow<List<com.retrohero.app.ui.screens.Shot>> = _shots
+
     private val _history = MutableStateFlow<List<com.retrohero.app.data.HistoryEntry>>(emptyList())
     /** Every play session, newest first. */
     val history: StateFlow<List<com.retrohero.app.data.HistoryEntry>> = _history
@@ -141,6 +145,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 if (f.exists()) g.id to PlayTime.read(f) else null
             }.toMap()
             _history.value = com.retrohero.app.data.PlayHistory.entries(games.value, app.paths)
+            _shots.value = games.value.flatMap { g -> app.paths.screenshotsOf(g).map { com.retrohero.app.ui.screens.Shot(g, it) } }
+                .sortedByDescending { it.file.lastModified() }
             _artVersion.value++  // new screenshots may have arrived too
         }
     }
@@ -173,6 +179,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun deleteScreenshot(game: Game, shot: File) {
         viewModelScope.launch(Dispatchers.IO) {
             shot.delete()
+            _shots.value = _shots.value.filter { it.file != shot }
             _artVersion.value++
         }
     }

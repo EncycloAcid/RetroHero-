@@ -26,6 +26,20 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
 import com.retrohero.app.ui.components.FloatingNavBar
 import com.retrohero.app.ui.components.GameMenuSheet
+import com.retrohero.app.ui.components.MiniPlayer
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import android.widget.Toast
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import com.retrohero.app.ui.components.MiniPlayerSpace
+import com.retrohero.app.ui.screens.LibraryScreen
+import com.retrohero.app.ui.screens.StatsScreen
+import com.retrohero.app.ui.screens.RecapScreen
+import com.retrohero.app.data.Looks
+import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material.icons.outlined.VideoLibrary
 import com.retrohero.app.ui.components.CollectionPickerSheet
 import com.retrohero.app.ui.components.NameDialog
 import com.retrohero.app.ui.components.LocalArtPaths
@@ -147,6 +161,11 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         // The launch intro plays on a cold start only, not when the activity is recreated.
         val intro = LaunchIntroState(plays = savedInstanceState == null)
+        vm.settings.accent.let { id ->
+            com.retrohero.app.ui.theme.setAccent(
+                Looks.custom(vm.paths.looks).firstOrNull { "look:" + it.id == id }?.accent ?: Looks.accent(id),
+            )
+        }
         setContent {
             RetroHeroTheme {
                 val artVersion by vm.artVersion.collectAsStateWithLifecycle()
@@ -178,7 +197,7 @@ private fun shareScreenshot(context: android.content.Context, file: java.io.File
 private enum class Tab(val label: String, val title: String, val selected: ImageVector, val unselected: ImageVector) {
     Home("Home", "RetroHero", Icons.Filled.Home, Icons.Outlined.Home),
     Games("Search", "Search", Icons.Filled.Search, Icons.Outlined.Search),
-    Systems("Systems", "Systems", Icons.Filled.ViewModule, Icons.Outlined.ViewModule),
+    Library("Library", "Library", Icons.Filled.VideoLibrary, Icons.Outlined.VideoLibrary),
     Cores("Cores", "Emulators", Icons.Filled.Extension, Icons.Outlined.Extension),
     Settings("Settings", "Settings", Icons.Filled.Settings, Icons.Outlined.Settings),
 }
@@ -207,6 +226,28 @@ private fun App(vm: AppViewModel) {
     var pickCollectionsFor by rememberSaveable { mutableStateOf<String?>(null) }
     var renaming by remember { mutableStateOf<GameCollection?>(null) }
     var remapOpen by rememberSaveable { mutableStateOf(false) }
+    var statsOpen by rememberSaveable { mutableStateOf(false) }
+    var recap by remember { mutableStateOf<Pair<com.retrohero.app.ui.screens.Period, com.retrohero.app.data.PlaySummary>?>(null) }
+    var naming by remember { mutableStateOf(false) }
+    val shots by vm.shots.collectAsStateWithLifecycle()
+    val history by vm.history.collectAsStateWithLifecycle()
+    // Dragging the mini player down hides it until you play something else.
+    var miniHidden by rememberSaveable(recents.firstOrNull()?.id) { mutableStateOf(false) }
+    var lookVersion by remember { mutableIntStateOf(0) }
+    val customLooks = remember(lookVersion) { Looks.custom(vm.paths.looks) }
+    val lookScope = rememberCoroutineScope()
+    val lookPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) lookScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val text = context.contentResolver.openInputStream(uri)!!.use { it.readBytes().decodeToString() }
+                    Looks.import(vm.paths.looks, text)
+                }
+            }
+            result.onSuccess { lookVersion++; Toast.makeText(context, "Added “${it.name}”", Toast.LENGTH_SHORT).show() }
+                .onFailure { Toast.makeText(context, "That file isn't a RetroHero look.", Toast.LENGTH_LONG).show() }
+        }
+    }
     var pendingBios by remember { mutableStateOf(false) }
     val remaps by vm.remaps.collectAsStateWithLifecycle()
     val backupState by vm.backupState.collectAsStateWithLifecycle()
@@ -253,15 +294,19 @@ private fun App(vm: AppViewModel) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     // Home is immersive: no top app bar, content runs under the status bar.
     val isHome = !albumOpen && tab == Tab.Home && games.isNotEmpty()
+    // Pages that run under the status bar with their own big titles, like the music app's.
+    val immersive = isHome || (!albumOpen && (tab == Tab.Library || tab == Tab.Settings))
+    val miniGame = recents.firstOrNull()?.takeIf { !miniHidden && !albumOpen && tab != Tab.Settings && sheetFor == null && !statsOpen && recap == null }
     val navBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val glass = rememberHazeState()
-    val floatingNavSpace = if (wide || albumOpen) 0.dp else FloatingNavHeight + 16.dp + navBarInset
+    val floatingNavSpace = (if (wide || albumOpen) 0.dp else FloatingNavHeight + 16.dp + navBarInset) +
+        (if (miniGame != null && !wide) MiniPlayerSpace else 0.dp)
     val systemCount = games.mapTo(HashSet()) { it.systemId }.size
 
     val accent = when {
         openSystem != null -> openSystem.color
         tab == Tab.Games || tab == Tab.Home -> recents.firstOrNull()?.system?.color ?: MaterialTheme.colorScheme.primary
-        tab == Tab.Systems -> MaterialTheme.colorScheme.tertiary
+        tab == Tab.Library -> MaterialTheme.colorScheme.tertiary
         else -> MaterialTheme.colorScheme.primary
     }
     // Two corner glows from the last games played hang from the top and fade as the page scrolls.
@@ -296,7 +341,7 @@ private fun App(vm: AppViewModel) {
         contentColor = MaterialTheme.colorScheme.onBackground,
         modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            if (!isHome && !albumOpen) Column {
+            if (!immersive && !albumOpen) Column {
                 val barTitle: @Composable () -> Unit = {
                         Text(openSystem?.name ?: tab.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
@@ -308,7 +353,7 @@ private fun App(vm: AppViewModel) {
                             }
                             tab == Tab.Games && games.isNotEmpty() -> "Find games across ${systemCount} systems"
                             tab == Tab.Games -> "Your retro game library"
-                            tab == Tab.Systems -> "${Systems.all.size} systems supported"
+                            tab == Tab.Library -> "Your games"
                             tab == Tab.Cores -> "Emulator engines"
                             else -> "Library, controls & BIOS"
                         }
@@ -349,7 +394,7 @@ private fun App(vm: AppViewModel) {
         },
     ) { padding ->
       Row(
-          (if (isHome || albumOpen) Modifier else Modifier.padding(top = padding.calculateTopPadding()))
+          (if (immersive || albumOpen) Modifier else Modifier.padding(top = padding.calculateTopPadding()))
               .fillMaxSize(),
       ) {
         val screen = openSystem?.id ?: openCollection?.let { "col:" + it.id } ?: tab.name
@@ -401,6 +446,7 @@ private fun App(vm: AppViewModel) {
                     stats = stats,
                     collections = collectionGames,
                     onOpenCollection = { openCollectionId = it.id },
+                    onOpenStats = { statsOpen = true },
                     onOpenSystem = { openSystemId = it.id },
                     onSeeAllGames = { tab = Tab.Games },
                     topActions = {
@@ -453,7 +499,19 @@ private fun App(vm: AppViewModel) {
                     onPlay = { sheetFor = it.id },
                     onGameOptions = { menuFor = it.id },
                 )
-                key == Tab.Systems.name -> SystemsScreen(games) { openSystemId = it.id }
+                key == Tab.Library.name -> LibraryScreen(
+                    games = games,
+                    favorites = favorites,
+                    collections = collectionGames,
+                    shots = shots,
+                    history = history,
+                    onOpenGame = { sheetFor = it.id },
+                    onOptions = { menuFor = it.id },
+                    onOpenSystem = { openSystemId = it.id },
+                    onOpenCollection = { openCollectionId = it.id },
+                    onNewCollection = { naming = true },
+                    onOpenStats = { statsOpen = true },
+                )
                 key == Tab.Cores.name -> CoresScreen(coreStates, vm::downloadCore, vm::deleteCore)
                 else -> SettingsScreen(
                     settings = vm.settings,
@@ -477,12 +535,26 @@ private fun App(vm: AppViewModel) {
                         backupPicker.launch("RetroHero-backup-$date.zip")
                     },
                     onRestore = { restorePicker.launch(arrayOf("application/zip", "application/octet-stream")) },
+                    looks = customLooks,
+                    onImportLook = { lookPicker.launch(arrayOf("application/json", "text/*", "*/*")) },
+                    onOpenStats = { statsOpen = true },
                 )
             }
         }
         }
       }
     }
+        if (miniGame != null && !wide) {
+            MiniPlayer(
+                game = miniGame,
+                stat = stats[miniGame.id],
+                glass = glass,
+                onOpen = { sheetFor = miniGame.id },
+                onPlay = { vm.play(miniGame) },
+                onHide = { miniHidden = true },
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = navBarInset + 10.dp + FloatingNavHeight + 10.dp),
+            )
+        }
         if (!wide && !albumOpen) {
             FloatingNavBar(
                 glass = glass,
@@ -551,6 +623,28 @@ private fun App(vm: AppViewModel) {
             onDismiss = close,
             onAddTo = { close(); pickCollectionsFor = menuGame.id },
         )
+    }
+
+    // Stats and the recap story, full screen.
+    BackHandler(enabled = statsOpen && recap == null) { statsOpen = false }
+    AnimatedVisibility(
+        visible = statsOpen,
+        enter = slideInVertically(spring(dampingRatio = 0.86f, stiffness = 380f)) { it / 5 } + fadeIn(tween(200)),
+        exit = slideOutVertically(tween(220)) { it / 5 } + fadeOut(tween(180)),
+    ) {
+        StatsScreen(history, onBack = { statsOpen = false }, onRecap = { p, s -> recap = p to s })
+    }
+    BackHandler(enabled = recap != null) { recap = null }
+    var lastRecap by remember { mutableStateOf(recap) }
+    if (recap != null) lastRecap = recap
+    AnimatedVisibility(visible = recap != null, enter = fadeIn(tween(400)) + scaleIn(tween(500), initialScale = 0.92f), exit = fadeOut(tween(300))) {
+        lastRecap?.let { (p, s) -> RecapScreen(p.name, s, onClose = { recap = null }) }
+    }
+    if (naming) {
+        NameDialog("New collection", "", "Create", onDismiss = { naming = false }) {
+            vm.createCollection(it)
+            naming = false
+        }
     }
 
     // Controller remapping, full screen over Settings.
