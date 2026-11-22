@@ -14,8 +14,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.retrohero.app.data.GameSystem
-import com.retrohero.app.ui.theme.Bricolage
+import com.retrohero.app.ui.theme.InterDisplay
 import com.retrohero.app.ui.theme.PixelFont
+import com.retrohero.app.ui.theme.tag
 import com.retrohero.app.ui.theme.badgeShape
 
 /** A system's short name inside its signature Material shape. */
@@ -25,13 +26,13 @@ fun SystemBadge(system: GameSystem, size: Dp = 56.dp, modifier: Modifier = Modif
         modifier.size(size).background(system.color, system.badgeShape()),
         contentAlignment = Alignment.Center,
     ) {
-        val label = system.shortName.uppercase()
+        val label = system.tag
         // Pixel font for short tags; longer names fall back to the display face so they fit.
         val style = if (label.length <= 3) {
             TextStyle(fontFamily = PixelFont, fontSize = (size.value * 0.58f / 3f).sp)
         } else {
             TextStyle(
-                fontFamily = Bricolage,
+                fontFamily = InterDisplay,
                 fontWeight = FontWeight.ExtraBold,
                 fontSize = (size.value * 0.95f / label.length).coerceAtMost(size.value / 3.4f).sp,
                 letterSpacing = (-0.3).sp,

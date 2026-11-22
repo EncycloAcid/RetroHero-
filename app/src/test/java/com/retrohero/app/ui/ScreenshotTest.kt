@@ -68,7 +68,7 @@ class ScreenshotTest {
     }
 
     private fun tab(label: String) {
-        compose.onAllNodesWithText(label).onFirst().performClick()
+        compose.onAllNodesWithContentDescription(label).onFirst().performClick()
     }
 
     @Test
@@ -88,16 +88,16 @@ class ScreenshotTest {
         ActivityScenario.launch(MainActivity::class.java).use {
             shot("1_games")
             tab("Systems"); shot("2_systems")
-            tab("Cores"); shot("3_cores")
+            tab("Emulators"); shot("3_cores")
             tab("Settings"); shot("4_settings")
-            tab("Games")
+            tab("Library")
             compose.onAllNodesWithContentDescription("Add games").onFirst().performClick()
-            shot("5_fab_menu")
-            compose.onAllNodesWithText("Download from link").onFirst().performClick()
+            shot("5_add_menu")
+            compose.onAllNodesWithText("Download from Link").onFirst().performClick()
             shot("6_download_sheet")
             compose.onAllNodesWithText("Cancel").onFirst().performClick()
             compose.waitForIdle()
-            compose.onAllNodesWithText("Castle Climb").onFirst().performTouchInput { longClick() }
+            compose.onAllNodesWithText("Dungeon Dash").onFirst().performTouchInput { longClick() }
             shot("7_game_sheet")
         }
     }

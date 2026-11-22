@@ -24,3 +24,13 @@ val GameSystem.polygon: RoundedPolygon
 
 @Composable
 fun GameSystem.badgeShape(): Shape = polygon.toShape()
+
+/** Compact label (max 4 characters) for tiles and badges. */
+val GameSystem.tag: String
+    get() = when (id) {
+        "genesis" -> "GEN"
+        "segacd" -> "SCD"
+        "pcecd" -> "PCD"
+        "arcade" -> "ARC"
+        else -> shortName.uppercase().take(4)
+    }
