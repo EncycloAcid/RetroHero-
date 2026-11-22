@@ -578,13 +578,13 @@ class PolishScreenshotTest {
     @Test
     @Config(qualifiers = "w720dp-h900dp-night-xxhdpi")
     fun caseStyles() {
-        val games = shelfGames() + listOf(sample("Tactics (USA).nds", "nds"))
+        val games = shelfGames() + listOf(sample("Tactics (USA).nds", "nds"), sample("Racer (USA).cue", "segacd"), sample("Puzzle (USA).gbc", "gbc"), sample("Heroes (USA).sms", "sms"))
         compose.setContent {
             RetroHeroTheme {
-                Column(Modifier.fillMaxSize().background(Color(0xFF0B0B0D)).padding(top = 40.dp)) {
+                Column(Modifier.fillMaxSize().background(Color(0xFF0B0B0D)).padding(top = 20.dp)) {
                     games.chunked(4).forEach { row ->
                         androidx.compose.foundation.layout.Row(
-                            Modifier.fillMaxWidth().height(400.dp),
+                            Modifier.fillMaxWidth().height(290.dp),
                             horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceEvenly,
                             verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
                         ) {
@@ -598,5 +598,26 @@ class PolishScreenshotTest {
         }
         compose.mainClock.advanceTimeBy(600)
         save("case_styles")
+    }
+
+    @Test
+    @Config(qualifiers = "w720dp-h500dp-night-xxhdpi")
+    fun mediaStyles() {
+        val games = shelfGames() + listOf(sample("Tactics (USA).nds", "nds"), sample("Racer (USA).cue", "segacd"), sample("Puzzle (USA).gbc", "gbc"))
+        compose.setContent {
+            RetroHeroTheme {
+                Column(Modifier.fillMaxSize().background(Color(0xFF0B0B0D)).padding(16.dp)) {
+                    games.chunked(5).forEach { row ->
+                        androidx.compose.foundation.layout.Row(
+                            Modifier.fillMaxWidth().height(220.dp),
+                            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceEvenly,
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                        ) { row.forEach { g -> com.retrohero.app.ui.components.GameMedia(g, 110.dp) } }
+                    }
+                }
+            }
+        }
+        compose.mainClock.advanceTimeBy(600)
+        save("media_styles")
     }
 }

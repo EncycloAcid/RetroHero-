@@ -35,6 +35,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.retrohero.app.data.Game
 import com.retrohero.app.ui.theme.PixelFont
@@ -277,46 +279,114 @@ fun GameBox3D(game: Game, width: Dp, rotY: Float, rotX: Float, modifier: Modifie
     }
 }
 
-/** The printed front of the case, by packaging type. */
+/** The printed front of the case, dressed like that system's real packaging. */
 @Composable
 private fun CaseFront(game: Game, style: CaseStyle, tint: Color, height: Dp) {
-    val label = game.system?.shortName?.uppercase().orEmpty()
+    val id = game.systemId
     when (style) {
         CaseStyle.Cardboard -> Box(Modifier.fillMaxSize()) {
-            GameArt(game, Modifier.fillMaxSize(), showTitle = true, showTag = false)
-            // Printed system band across the top, with a little seal.
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .height(height * 0.085f)
-                    .background(Brush.horizontalGradient(listOf(lerp(tint, Color.Black, 0.15f), lerp(tint, Color.Black, 0.45f))))
-                    .padding(horizontal = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(label, style = TextStyle(fontFamily = PixelFont, fontSize = 7.sp), color = Color.White, modifier = Modifier.weight(1f))
-                Box(Modifier.size(height * 0.05f).clip(CircleShape).background(Color(0xFFF2D27A)).border(1.dp, Color(0xFFB08A2E), CircleShape))
+            when (id) {
+                // NES: art in a black frame, a black band along the bottom with the name in red.
+                "nes" -> Column(Modifier.fillMaxSize().background(Color(0xFF0E0E0E)).padding(5.dp)) {
+                    Box(Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(2.dp))) { GameArt(game, Modifier.fillMaxSize(), showTitle = true, showTag = false) }
+                    Row(Modifier.fillMaxWidth().height(height * 0.1f).padding(horizontal = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text("NES", style = heavy(11), color = Color(0xFFE3262E))
+                        Box(Modifier.padding(start = 5.dp).weight(1f).height(2.dp).background(Color(0xFFE3262E)))
+                        Seal(height)
+                    }
+                }
+                // SNES: silver band across the top with the four-colour dots.
+                "snes" -> Column(Modifier.fillMaxSize()) {
+                    Row(
+                        Modifier.fillMaxWidth().height(height * 0.14f).background(Brush.verticalGradient(listOf(Color(0xFFE4E4EA), Color(0xFFB4B4BC)))).padding(horizontal = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        listOf(0xFFD4262F, 0xFFF0BF1A, 0xFF1F9C50, 0xFF2C52D6).forEach { c ->
+                            Box(Modifier.padding(end = 2.dp).size(height * 0.045f).clip(CircleShape).background(Color(c)))
+                        }
+                        Text("SUPER NES", style = heavy(9), color = Color(0xFF3A3A44), modifier = Modifier.padding(start = 4.dp).weight(1f))
+                        Seal(height)
+                    }
+                    Box(Modifier.weight(1f).fillMaxWidth()) { GameArt(game, Modifier.fillMaxSize(), showTitle = true, showTag = false) }
+                }
+                // Game Boy family: a light band at the top with the name, italic, like the logo.
+                "gb", "gbc", "gba" -> Column(Modifier.fillMaxSize()) {
+                    val band = if (id == "gba") Color(0xFF15151C) else Color(0xFFF4F4F2)
+                    Row(
+                        Modifier.fillMaxWidth().height(height * 0.12f).background(band).padding(horizontal = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        when (id) {
+                            "gb" -> Text("GAME BOY", style = heavy(10, italic = true), color = Color(0xFF1B1B5E))
+                            "gbc" -> Row {
+                                "GAME BOY".forEach { Text(it.toString(), style = heavy(10, italic = true), color = Color(0xFF1B1B5E)) }
+                                Spacer(Modifier.width(3.dp))
+                                "COLOR".forEachIndexed { i, ch ->
+                                    Text(ch.toString(), style = heavy(10, italic = true), color = listOf(Color(0xFFD62A2A), Color(0xFF7A2DBD), Color(0xFF1C8C3B), Color(0xFFF0B31A), Color(0xFF2257C7))[i])
+                                }
+                            }
+                            else -> Column {
+                                Text("GAME BOY", style = heavy(9, italic = true), color = Color.White)
+                                Box(Modifier.width(height * 0.28f).height(2.dp).background(Color(0xFF3F64E0)))
+                            }
+                        }
+                        Spacer(Modifier.weight(1f))
+                        Seal(height)
+                    }
+                    Box(Modifier.weight(1f).fillMaxWidth()) { GameArt(game, Modifier.fillMaxSize(), showTitle = true, showTag = false) }
+                }
+                else -> Column(Modifier.fillMaxSize()) {
+                    Row(
+                        Modifier.fillMaxWidth().height(height * 0.09f).background(lerp(tint, Color.Black, 0.3f)).padding(horizontal = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(game.system?.shortName?.uppercase().orEmpty(), style = heavy(9), color = Color.White, modifier = Modifier.weight(1f))
+                    }
+                    Box(Modifier.weight(1f).fillMaxWidth()) { GameArt(game, Modifier.fillMaxSize(), showTitle = true, showTag = false) }
+                }
             }
-            // Worn corners and edges of printed card.
+            // Printed card: slightly worn edges.
             Canvas(Modifier.fillMaxSize()) {
-                drawRect(Brush.radialGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.32f)), radius = size.maxDimension * 0.78f))
-                drawRect(Color.White.copy(alpha = 0.22f), style = Stroke(1.2.dp.toPx()))
+                drawRect(Brush.radialGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.28f)), radius = size.maxDimension * 0.8f))
+                drawRect(Color.White.copy(alpha = 0.18f), style = Stroke(1.2.dp.toPx()))
             }
         }
-        CaseStyle.Clamshell -> Box(
-            Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF2A2A2E), Color(0xFF0F0F11)))),
-        ) {
-            // Art under a clear sleeve, inset in the black plastic.
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .padding(start = 7.dp, end = 7.dp, top = 7.dp, bottom = 7.dp)
-                    .clip(RoundedCornerShape(3.dp)),
-            ) {
-                GameArt(game, Modifier.fillMaxSize(), showTitle = true, showTag = false)
-                Box(Modifier.fillMaxWidth().height(height * 0.07f).background(Color.Black.copy(alpha = 0.82f)), contentAlignment = Alignment.CenterStart) {
-                    Text(label, style = TextStyle(fontFamily = PixelFont, fontSize = 7.sp), color = Color.White, modifier = Modifier.padding(start = 6.dp))
+        CaseStyle.Clamshell -> Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF2A2A2E), Color(0xFF0D0D0F))))) {
+            Column(Modifier.fillMaxSize().padding(6.dp).clip(RoundedCornerShape(3.dp))) {
+                when (id) {
+                    // Genesis: black top band with a red grid and the name in red.
+                    "genesis", "32x" -> Box(Modifier.fillMaxWidth().height(height * 0.12f).background(Color(0xFF0A0A0A))) {
+                        Canvas(Modifier.fillMaxSize()) {
+                            val step = size.height / 3f
+                            var x = 0f
+                            while (x < size.width) { drawLine(Color(0xFFB3141C).copy(alpha = 0.55f), Offset(x, 0f), Offset(x, size.height), 1f); x += step }
+                            var y = 0f
+                            while (y < size.height) { drawLine(Color(0xFFB3141C).copy(alpha = 0.55f), Offset(0f, y), Offset(size.width, y), 1f); y += step }
+                        }
+                        Text(if (id == "32x") "GENESIS 32X" else "GENESIS", style = heavy(11), color = Color(0xFFE5232B), modifier = Modifier.align(Alignment.CenterStart).padding(start = 6.dp))
+                    }
+                    // Master System: the white grid border.
+                    "sms" -> Box(Modifier.fillMaxWidth().height(height * 0.12f).background(Color.White)) {
+                        Canvas(Modifier.fillMaxSize()) {
+                            val step = size.height / 2.5f
+                            var x = 0f
+                            while (x < size.width) { drawLine(Color.Black.copy(alpha = 0.6f), Offset(x, 0f), Offset(x, size.height), 1f); x += step }
+                            drawLine(Color.Black.copy(alpha = 0.6f), Offset(0f, size.height / 2), Offset(size.width, size.height / 2), 1f)
+                        }
+                        Text("MASTER SYSTEM", style = heavy(8), color = Color(0xFFD4202A), modifier = Modifier.align(Alignment.CenterStart).padding(start = 5.dp).background(Color.White).padding(horizontal = 2.dp))
+                    }
+                    "gg" -> Box(Modifier.fillMaxWidth().height(height * 0.12f).background(Brush.horizontalGradient(listOf(Color(0xFF0E0E10), Color(0xFF2846B8))))) {
+                        Text("GAME GEAR", style = heavy(10), color = Color.White, modifier = Modifier.align(Alignment.CenterStart).padding(start = 6.dp))
+                    }
+                    else -> Box(Modifier.fillMaxWidth().height(height * 0.1f).background(Color.Black)) {
+                        Text(game.system?.shortName?.uppercase().orEmpty(), style = heavy(9), color = Color.White, modifier = Modifier.align(Alignment.CenterStart).padding(start = 6.dp))
+                    }
                 }
-                Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color.White.copy(alpha = 0.1f), Color.Transparent, Color.White.copy(alpha = 0.05f)))))
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    GameArt(game, Modifier.fillMaxSize(), showTitle = true, showTag = false)
+                    // The clear sleeve over the printed insert.
+                    Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color.White.copy(alpha = 0.1f), Color.Transparent, Color.White.copy(alpha = 0.05f)))))
+                }
             }
             Canvas(Modifier.fillMaxSize()) {
                 drawRoundRect(Color.White.copy(alpha = 0.14f), style = Stroke(1.5.dp.toPx()), cornerRadius = androidx.compose.ui.geometry.CornerRadius(7.dp.toPx()))
@@ -324,7 +394,7 @@ private fun CaseFront(game: Game, style: CaseStyle, tint: Color, height: Dp) {
         }
         CaseStyle.Jewel -> Row(Modifier.fillMaxSize().background(Color(0xFF101012))) {
             // The hinge: a dark ridged strip down the left.
-            Canvas(Modifier.fillMaxHeight().fillMaxWidth(0.085f)) {
+            Canvas(Modifier.fillMaxHeight().fillMaxWidth(0.08f)) {
                 drawRect(Brush.horizontalGradient(listOf(Color(0xFF1C1C20), Color(0xFF050506))))
                 val step = 4.dp.toPx()
                 var y = step
@@ -334,89 +404,190 @@ private fun CaseFront(game: Game, style: CaseStyle, tint: Color, height: Dp) {
                 }
             }
             Box(Modifier.fillMaxSize().padding(3.dp)) {
-                GameArt(game, Modifier.fillMaxSize(), showTitle = true, showTag = false)
-                // Black band like a PlayStation insert.
-                Box(Modifier.fillMaxWidth().height(height * 0.075f).background(Color.Black.copy(alpha = 0.88f)), contentAlignment = Alignment.CenterStart) {
-                    Text(label, style = TextStyle(fontFamily = PixelFont, fontSize = 7.sp), color = Color.White, modifier = Modifier.padding(start = 6.dp))
+                Row(Modifier.fillMaxSize()) {
+                    if (id == "psx") {
+                        // The black strip down the left of a PlayStation insert, name running up it.
+                        Box(Modifier.fillMaxHeight().fillMaxWidth(0.13f).background(Color.Black), contentAlignment = Alignment.Center) {
+                            Column(Modifier.graphicsLayer { rotationZ = -90f }.width(height * 0.8f), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    // Four little colour blocks, then the name.
+                                    listOf(0xFFE5232B, 0xFFF0BF1A, 0xFF1F9C50, 0xFF2C52D6).forEach { c ->
+                                        Box(Modifier.padding(end = 1.dp).size(5.dp).background(Color(c)))
+                                    }
+                                    Text("  PlayStation", style = heavy(8), color = Color.White, maxLines = 1, softWrap = false)
+                                }
+                            }
+                        }
+                    }
+                    Column(Modifier.fillMaxSize()) {
+                        if (id != "psx") {
+                            Box(Modifier.fillMaxWidth().height(height * 0.09f).background(Color.Black)) {
+                                Text(
+                                    when (id) { "segacd" -> "SEGA CD"; "pcecd" -> "CD-ROM²"; else -> game.system?.shortName?.uppercase().orEmpty() },
+                                    style = heavy(9),
+                                    color = if (id == "segacd") Color(0xFFE5232B) else Color.White,
+                                    modifier = Modifier.align(Alignment.CenterStart).padding(start = 6.dp),
+                                )
+                            }
+                        }
+                        Box(Modifier.weight(1f).fillMaxWidth()) { GameArt(game, Modifier.fillMaxSize(), showTitle = true, showTag = false) }
+                    }
                 }
-                // Clear plastic: a cool tint and bright edges.
+                // Clear plastic: a cool tint.
                 Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color(0x22BFD8FF), Color.Transparent, Color(0x14FFFFFF)))))
             }
             Unit
         }
-        CaseStyle.Keepcase -> Box(
-            Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFFE6E6EA), Color(0xFFBDBDC4)))),
-        ) {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .padding(start = 8.dp, end = 8.dp, top = height * 0.1f, bottom = 8.dp)
-                    .clip(RoundedCornerShape(4.dp)),
-            ) { GameArt(game, Modifier.fillMaxSize(), showTitle = true, showTag = false) }
-            Text(
-                label,
-                style = TextStyle(fontFamily = PixelFont, fontSize = 7.sp),
-                color = Color(0xFF2A2A30),
-                modifier = Modifier.align(Alignment.TopStart).padding(start = 10.dp, top = height * 0.035f),
-            )
+        CaseStyle.Keepcase -> Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFFDCDCE2), Color(0xFFB4B4BC))))) {
+            Column(Modifier.fillMaxSize().padding(start = 7.dp, end = 7.dp, top = 7.dp, bottom = 7.dp).clip(RoundedCornerShape(4.dp))) {
+                // DS inserts: a white band with the name, a thin grey rule under it.
+                Box(Modifier.fillMaxWidth().height(height * 0.11f).background(Color.White)) {
+                    Text("NINTENDO DS", style = heavy(9), color = Color(0xFF3A3A44), modifier = Modifier.align(Alignment.CenterStart).padding(start = 6.dp))
+                }
+                Box(Modifier.fillMaxWidth().height(2.dp).background(Color(0xFF9A9AA4)))
+                Box(Modifier.weight(1f).fillMaxWidth()) { GameArt(game, Modifier.fillMaxSize(), showTitle = true, showTag = false) }
+            }
+            // Clear outer sleeve.
+            Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color.White.copy(alpha = 0.18f), Color.Transparent))))
         }
     }
 }
 
-/** The cartridge, disc or card that comes out of the box, with the game's art as its label. */
+/** A gold oval seal, like the one on Nintendo boxes. */
+@Composable
+private fun Seal(height: Dp) {
+    Box(
+        Modifier
+            .size(width = height * 0.09f, height = height * 0.055f)
+            .clip(CircleShape)
+            .background(Brush.verticalGradient(listOf(Color(0xFFF6DE8A), Color(0xFFC79A34))))
+            .border(1.dp, Color(0xFF8A6A1E), CircleShape),
+    )
+}
+
+private fun heavy(size: Int, italic: Boolean = false) = TextStyle(
+    fontFamily = com.retrohero.app.ui.theme.Inter,
+    fontWeight = androidx.compose.ui.text.font.FontWeight.Black,
+    fontStyle = if (italic) androidx.compose.ui.text.font.FontStyle.Italic else androidx.compose.ui.text.font.FontStyle.Normal,
+    fontSize = size.sp,
+    letterSpacing = 0.02.em,
+)
+
+/** Game Boy carts have a corner cut off at the top right. */
+private val GameBoyCartShape = androidx.compose.foundation.shape.GenericShape { size, _ ->
+    val cut = size.width * 0.14f
+    val r = size.width * 0.05f
+    moveTo(r, 0f)
+    lineTo(size.width - cut, 0f)
+    lineTo(size.width, cut)
+    lineTo(size.width, size.height - r)
+    quadraticTo(size.width, size.height, size.width - r, size.height)
+    lineTo(r, size.height)
+    quadraticTo(0f, size.height, 0f, size.height - r)
+    lineTo(0f, r)
+    quadraticTo(0f, 0f, r, 0f)
+    close()
+}
+
+/** The cartridge, disc or card that comes out of the box, shaped like the real thing. */
 @Composable
 fun GameMedia(game: Game, width: Dp, modifier: Modifier = Modifier, spin: Float = 0f) {
     val spec = boxSpec(game.systemId)
+    val id = game.systemId
     when (spec.media) {
         Media.Disc -> Box(modifier.size(width).graphicsLayer { rotationZ = spin }, contentAlignment = Alignment.Center) {
             Canvas(Modifier.fillMaxSize()) {
-                // Silver with a rainbow sheen, like the data side of a CD.
-                drawCircle(
-                    Brush.sweepGradient(
-                        listOf(
-                            Color(0xFFE8E8EE), Color(0xFFB9D4F2), Color(0xFFF2D8F0), Color(0xFFF5F0C8),
-                            Color(0xFFC8F0DA), Color(0xFFE8E8EE),
-                        ),
-                    ),
-                )
-                drawCircle(Color.Black.copy(alpha = 0.15f), style = Stroke(2.dp.toPx()))
+                if (id == "psx") {
+                    // PlayStation discs are black underneath, with a faint purple sheen.
+                    drawCircle(Brush.sweepGradient(listOf(Color(0xFF111114), Color(0xFF2A1F3A), Color(0xFF111114), Color(0xFF1E2A3A), Color(0xFF111114))))
+                } else {
+                    drawCircle(Brush.sweepGradient(listOf(Color(0xFFE8E8EE), Color(0xFFB9D4F2), Color(0xFFF2D8F0), Color(0xFFF5F0C8), Color(0xFFC8F0DA), Color(0xFFE8E8EE))))
+                }
+                drawCircle(Color.Black.copy(alpha = 0.2f), style = Stroke(2.dp.toPx()))
             }
-            BoxWithConstraints(Modifier.fillMaxSize(0.88f).clip(CircleShape), contentAlignment = Alignment.Center) {
+            // Printed label side.
+            Box(Modifier.fillMaxSize(0.9f).clip(CircleShape), contentAlignment = Alignment.Center) {
                 GameArt(game, Modifier.fillMaxSize(), showTag = false)
+                if (id == "psx") {
+                    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.75f to Color.Transparent, 0.76f to Color.Black.copy(alpha = 0.85f))))
+                    Text("PlayStation", style = heavy(8), color = Color.White, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = width * 0.07f))
+                }
             }
-            // Hub and hole.
-            Box(Modifier.fillMaxSize(0.3f).clip(CircleShape).background(Color(0xFFD9D9DE)))
+            Box(Modifier.fillMaxSize(0.32f).clip(CircleShape).background(Brush.radialGradient(listOf(Color(0xFFE6E6EA), Color(0xFFB8B8C0)))))
             Box(Modifier.fillMaxSize(0.12f).clip(CircleShape).background(Color(0xFF0A0A0C)))
         }
         else -> {
             val h = width / spec.mediaAspect
-            val shape = if (spec.media == Media.Card) RoundedCornerShape(8.dp) else RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
+            val shape = when {
+                spec.media == Media.Card -> RoundedCornerShape(8.dp)
+                id == "gb" || id == "gbc" -> GameBoyCartShape
+                id == "snes" -> RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp, bottomStart = 6.dp, bottomEnd = 6.dp)
+                else -> RoundedCornerShape(topStart = 10.dp, topEnd = 10.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
+            }
             Box(
                 modifier
                     .size(width, h)
                     .graphicsLayer { shadowElevation = 24f; this.shape = shape; clip = true }
                     .background(Brush.verticalGradient(listOf(lerp(spec.shell, Color.White, 0.18f), spec.shell, lerp(spec.shell, Color.Black, 0.25f)))),
             ) {
-                // Grip ridges along the top of a cartridge.
-                if (spec.media == Media.Cartridge) {
-                    Canvas(Modifier.fillMaxWidth().height(h * 0.14f).padding(horizontal = 14.dp, vertical = 5.dp)) {
-                        val n = 7
+                when {
+                    // NES: label up top, a block of grip grooves along the bottom.
+                    id == "nes" -> Canvas(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(h * 0.22f).padding(horizontal = 10.dp, vertical = 6.dp)) {
+                        val n = 6
                         for (i in 0 until n) {
                             val y = size.height * i / (n - 1)
-                            drawLine(Color.Black.copy(alpha = 0.22f), Offset(0f, y), Offset(size.width, y), 1.5.dp.toPx())
+                            drawLine(Color.Black.copy(alpha = 0.28f), Offset(0f, y), Offset(size.width, y), 2.dp.toPx())
                         }
                     }
+                    // SNES: two grooves down each side.
+                    id == "snes" -> Canvas(Modifier.fillMaxSize()) {
+                        listOf(0.06f, 0.1f, 0.9f, 0.94f).forEach { fx ->
+                            drawLine(Color.Black.copy(alpha = 0.22f), Offset(size.width * fx, size.height * 0.25f), Offset(size.width * fx, size.height * 0.85f), 2.dp.toPx())
+                        }
+                    }
+                    // Game Boy: a little embossed arrow under the label.
+                    id == "gb" || id == "gbc" -> Text("▲", color = Color.Black.copy(alpha = 0.25f), style = TextStyle(fontSize = 12.sp), modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 6.dp))
+                    // Sega and others: ribbed sides.
+                    spec.media == Media.Cartridge -> Canvas(Modifier.fillMaxSize()) {
+                        val n = 8
+                        for (i in 0 until n) {
+                            val y = size.height * (0.35f + 0.5f * i / (n - 1))
+                            drawLine(Color.White.copy(alpha = 0.07f), Offset(0f, y), Offset(size.width * 0.07f, y), 1.5.dp.toPx())
+                            drawLine(Color.White.copy(alpha = 0.07f), Offset(size.width * 0.93f, y), Offset(size.width, y), 1.5.dp.toPx())
+                        }
+                    }
+                    else -> Unit
                 }
                 // The label.
+                val labelAlign = when {
+                    spec.media == Media.Card -> Alignment.Center
+                    id == "nes" -> Alignment.TopCenter
+                    else -> Alignment.TopCenter
+                }
                 Box(
                     Modifier
-                        .align(if (spec.media == Media.Card) Alignment.Center else Alignment.BottomCenter)
-                        .fillMaxWidth(0.82f)
-                        .fillMaxHeight(if (spec.media == Media.Card) 0.78f else 0.7f)
-                        .offset(y = if (spec.media == Media.Card) 0.dp else (-8).dp)
-                        .clip(RoundedCornerShape(5.dp))
-                        .border(1.dp, Color.Black.copy(alpha = 0.3f), RoundedCornerShape(5.dp)),
-                ) { GameArt(game, Modifier.fillMaxSize(), showTitle = true, showTag = false) }
+                        .align(labelAlign)
+                        .padding(top = if (spec.media == Media.Card) 0.dp else h * 0.08f)
+                        .fillMaxWidth(if (id == "snes") 0.74f else 0.8f)
+                        .fillMaxHeight(when { spec.media == Media.Card -> 0.74f; id == "nes" -> 0.6f; id == "gb" || id == "gbc" -> 0.62f; else -> 0.66f })
+                        .clip(RoundedCornerShape(4.dp))
+                        .border(1.dp, Color.Black.copy(alpha = 0.3f), RoundedCornerShape(4.dp)),
+                ) {
+                    GameArt(game, Modifier.fillMaxSize(), showTag = false)
+                    // Title printed small along the bottom of the label, like a real cart.
+                    Text(
+                        game.title,
+                        style = TextStyle(fontFamily = com.retrohero.app.ui.theme.Inter, fontWeight = androidx.compose.ui.text.font.FontWeight.Black, fontSize = 10.sp, lineHeight = 11.sp),
+                        color = Color.White,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .fillMaxWidth()
+                            .background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f))))
+                            .padding(horizontal = 5.dp, vertical = 3.dp),
+                    )
+                }
             }
         }
     }
