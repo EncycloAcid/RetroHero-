@@ -66,7 +66,7 @@ Requirements: JDK 17+, Android SDK 37.1, NDK 27.2.12479018 and CMake 3.22.1 (And
 
 ```bash
 ./gradlew assembleDebug        # app/build/outputs/apk/debug/app-debug.apk
-./gradlew testDebugUnitTest
+./gradlew testDebugUnitTest    # also renders UI screenshots to app/build/screenshots/
 ```
 
 `assembleRelease` is signed with the debug key so you can test a minified build. Set up your own signing config before you publish.
