@@ -256,6 +256,7 @@ fun GameBox3D(game: Game, width: Dp, rotY: Float, rotX: Float, modifier: Modifie
                 return@Box
             }
             CaseFront(game, style, tint, height)
+            Wear(game.id.hashCode())
             // Glare: a soft bright band that slides with the tilt (stronger on clear plastic).
             val shine = if (style == CaseStyle.Cardboard) 0.16f else 0.3f
             Canvas(Modifier.fillMaxSize()) {
@@ -449,6 +450,33 @@ private fun CaseFront(game: Game, style: CaseStyle, tint: Color, height: Dp) {
             }
             // Clear outer sleeve.
             Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color.White.copy(alpha = 0.18f), Color.Transparent))))
+        }
+    }
+}
+
+/** Handled-box wear: a few faint scuffs and a crease, different for every game. */
+@Composable
+private fun Wear(seed: Int) {
+    Canvas(Modifier.fillMaxSize()) {
+        val r = java.util.Random(seed.toLong())
+        repeat(5) {
+            val x = r.nextFloat() * size.width
+            val y = r.nextFloat() * size.height
+            val len = size.minDimension * (0.08f + r.nextFloat() * 0.18f)
+            val ang = r.nextFloat() * 6.28f
+            drawLine(
+                Color.White.copy(alpha = 0.06f + r.nextFloat() * 0.05f),
+                Offset(x, y),
+                Offset(x + len * kotlin.math.cos(ang), y + len * kotlin.math.sin(ang)),
+                strokeWidth = 1f,
+            )
+        }
+        // A soft crease across one corner.
+        val cx = if (r.nextBoolean()) 0f else size.width
+        drawLine(Color.White.copy(alpha = 0.07f), Offset(cx, size.height * 0.08f), Offset(if (cx == 0f) size.width * 0.12f else size.width * 0.88f, 0f), 1.5f)
+        // Rubbed corners.
+        listOf(Offset(0f, 0f), Offset(size.width, 0f), Offset(0f, size.height), Offset(size.width, size.height)).forEach { c ->
+            drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = 0.08f), Color.Transparent), center = c, radius = size.minDimension * 0.1f), size.minDimension * 0.1f, c)
         }
     }
 }

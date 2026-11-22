@@ -73,6 +73,7 @@ import com.retrohero.app.data.GameSystem
 import com.retrohero.app.data.HistoryEntry
 import com.retrohero.app.data.PlayTime
 import com.retrohero.app.ui.components.GameArt
+import com.retrohero.app.ui.components.glossCard
 import com.retrohero.app.ui.components.LocalNavSpace
 import com.retrohero.app.ui.components.press3D
 import com.retrohero.app.ui.theme.Inter
@@ -108,6 +109,7 @@ fun LibraryScreen(
     onOpenCollection: (GameCollection) -> Unit,
     onNewCollection: () -> Unit,
     onOpenStats: () -> Unit,
+    onPlay: (Game) -> Unit = {},
 ) {
     var tab by rememberSaveable { mutableStateOf(LibraryTab.All) }
     val counts = remember(games) { games.groupingBy { it.systemId }.eachCount() }
@@ -121,9 +123,9 @@ fun LibraryScreen(
         modifier = Modifier.fillMaxSize().background(Color.Black),
     ) {
         span {
-            Column(Modifier.windowInsetsPadding(WindowInsets.statusBars).padding(top = 16.dp)) {
-                Text("Library", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 34.sp, lineHeight = 40.sp, letterSpacing = (-0.03).em), color = Color.White)
-                Spacer(Modifier.height(16.dp))
+            Column {
+                com.retrohero.app.ui.components.PageHeader("Library", "${games.size} games · ${favorites.size} pinned")
+                Spacer(Modifier.height(12.dp))
                 Chips(tab) { tab = it }
             }
         }
@@ -146,15 +148,9 @@ fun LibraryScreen(
                 if (favorites.isNotEmpty()) {
                     span { SectionTitle("Pinned") }
                     items(favorites.take(9), key = { "pin_" + it.id }) { g ->
-                        GameArt(
-                            g,
-                            Modifier
-                                .aspectRatio(1f)
-                                .press3D()
-                                .clip(RoundedCornerShape(18.dp))
-                                .combinedClickable(onClick = { onOpenGame(g) }, onLongClick = { onOptions(g) }),
-                            showTag = false,
-                        )
+                        androidx.compose.foundation.layout.BoxWithConstraints {
+                            com.retrohero.app.ui.components.BoxTile(g, maxWidth * 0.86f, onClick = { onOpenGame(g) }, onLongClick = { onOptions(g) }, meta = g.system?.shortName, onPlay = { onPlay(g) })
+                        }
                     }
                 }
             }
@@ -272,26 +268,8 @@ private fun LazyGridScope.historyItems(history: List<HistoryEntry>, onOpen: (Gam
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Chips(selected: LibraryTab, onSelect: (LibraryTab) -> Unit) {
-    FlowRow(
-        Modifier.clip(RoundedCornerShape(20.dp)).background(ChipTrack).padding(3.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        LibraryTab.entries.forEach { t ->
-            val on = t == selected
-            val bg by animateColorAsState(if (on) ChipOn else Chip, tween(220), label = "chip")
-            Box(
-                Modifier
-                    .heightIn(min = 28.dp)
-                    .clip(CircleShape)
-                    .background(bg)
-                    .clickable { onSelect(t) }
-                    .padding(horizontal = 14.dp, vertical = 5.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(t.label, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.sp), color = Color.White.copy(alpha = if (on) 1f else 0.72f))
-            }
-        }
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LibraryTab.entries.forEach { t -> com.retrohero.app.ui.components.PillChip(t.label, t == selected, { onSelect(t) }) }
     }
 }
 
@@ -310,10 +288,9 @@ private fun Empty(text: String) {
 private fun CategoryCard(label: String, count: Int, covers: List<Game>, modifier: Modifier, onClick: () -> Unit) {
     Box(
         modifier
-            .height(78.dp)
+            .height(84.dp)
             .press3D()
-            .clip(RoundedCornerShape(16.dp))
-            .background(CardFill)
+            .glossCard(RoundedCornerShape(20.dp))
             .clickable(onClick = onClick),
     ) {
         CoverStack(covers, 46.dp, Modifier.align(Alignment.BottomEnd).offset(x = 10.dp, y = 12.dp))
@@ -331,8 +308,7 @@ private fun WideCard(label: String, subtitle: String, covers: List<Game>, onClic
             .fillMaxWidth()
             .height(104.dp)
             .press3D()
-            .clip(RoundedCornerShape(18.dp))
-            .background(CardFill)
+            .glossCard(RoundedCornerShape(22.dp))
             .clickable(onClick = onClick),
     ) {
         CoverStack(covers, 60.dp, Modifier.align(Alignment.BottomEnd).padding(end = 34.dp).offset(y = 12.dp))
@@ -353,8 +329,7 @@ private fun StatsCard(history: List<HistoryEntry>, onClick: () -> Unit) {
         Modifier
             .fillMaxWidth()
             .press3D()
-            .clip(RoundedCornerShape(18.dp))
-            .background(CardFill)
+            .glossCard(RoundedCornerShape(22.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 18.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,

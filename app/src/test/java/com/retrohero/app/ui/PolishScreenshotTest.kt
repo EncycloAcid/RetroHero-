@@ -541,7 +541,7 @@ class PolishScreenshotTest {
             RetroHeroTheme {
                 com.retrohero.app.ui.screens.ShelfScreen(
                     games = games, stats = emptyMap(), recentIds = emptyList(), favorites = setOf(games[0].id),
-                    tiltEnabled = false, reducedMotion = false, onPlay = {}, onDetails = {},
+                    tiltEnabled = false, reducedMotion = false, onPlay = {}, onDetails = {}, startWithSpines = false,
                 )
             }
         }
@@ -560,7 +560,7 @@ class PolishScreenshotTest {
             RetroHeroTheme {
                 com.retrohero.app.ui.screens.ShelfScreen(
                     games = listOf(games[index]), stats = emptyMap(), recentIds = emptyList(), favorites = emptySet(),
-                    tiltEnabled = false, reducedMotion = false, onPlay = {}, onDetails = {},
+                    tiltEnabled = false, reducedMotion = false, onPlay = {}, onDetails = {}, startWithSpines = false,
                 )
             }
         }
@@ -619,5 +619,46 @@ class PolishScreenshotTest {
         }
         compose.mainClock.advanceTimeBy(600)
         save("media_styles")
+    }
+
+    @Test
+    @Config(qualifiers = "w411dp-h891dp-night-xxhdpi")
+    fun spineWall() {
+        val more = shelfGames() + listOf(
+            "Tactics (USA).nds" to "nds", "Racer (USA).cue" to "segacd", "Puzzle (USA).gbc" to "gbc", "Heroes (USA).sms" to "sms",
+            "Star Patrol (USA).nes" to "nes", "Blade Run (USA).sfc" to "snes", "Galaxy Siege (USA).cue" to "psx", "Dungeon Dash (USA).gba" to "gba",
+            "Moonlight Run (USA).gb" to "gb", "Turbo Kart (USA).md" to "genesis", "Castle Climb (USA).nes" to "nes", "Neon Drift (USA).sfc" to "snes",
+        ).map { sample(it.first, it.second) }
+        compose.setContent {
+            RetroHeroTheme {
+                com.retrohero.app.ui.screens.ShelfScreen(
+                    games = more, stats = emptyMap(), recentIds = emptyList(), favorites = emptySet(),
+                    tiltEnabled = false, reducedMotion = false, onPlay = {}, onDetails = {},
+                )
+            }
+        }
+        compose.mainClock.advanceTimeBy(800)
+        save("spine_wall")
+    }
+
+    @Test
+    @Config(qualifiers = "w411dp-h891dp-night-xxhdpi")
+    fun storeGrid() {
+        val games = shelfGames()
+        compose.setContent {
+            RetroHeroTheme {
+                Box(Modifier.fillMaxSize().background(Color.Black)) {
+                    com.retrohero.app.ui.screens.GamesScreen(
+                        games = games, recents = emptyList(), hasFolders = true, scanning = false,
+                        onAddFolder = {}, onDownload = {}, onPlay = {}, onGameOptions = {},
+                        onQuickPlay = {},
+                    )
+                }
+            }
+        }
+        compose.mainClock.advanceTimeBy(800)
+        compose.onRoot().performTouchInput { swipeUp() }
+        compose.mainClock.advanceTimeBy(800)
+        save("store_grid")
     }
 }

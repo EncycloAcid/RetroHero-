@@ -86,6 +86,10 @@ import com.retrohero.app.data.Game
 import com.retrohero.app.data.Systems
 import com.retrohero.app.ui.components.EmptyState
 import com.retrohero.app.ui.components.GameArt
+import com.retrohero.app.ui.components.PageHeader
+import com.retrohero.app.ui.components.PillChip
+import com.retrohero.app.ui.components.BoxTile
+import com.retrohero.app.ui.components.glossCard
 import com.retrohero.app.ui.components.GameCard
 
 @Composable
@@ -101,6 +105,8 @@ fun GamesScreen(
     showSystemFilter: Boolean = true,
     stats: Map<String, com.retrohero.app.data.PlayStat> = emptyMap(),
     favorites: Set<String> = emptySet(),
+    title: String = "Search",
+    onQuickPlay: ((Game) -> Unit)? = null,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var systemFilter by rememberSaveable { mutableStateOf<String?>(null) }
@@ -178,6 +184,7 @@ fun GamesScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
+        fullWidth { PageHeader(title, if (games.size == 1) "1 game" else "${games.size} games across ${systemsPresent.size} ${if (systemsPresent.size == 1) "system" else "systems"}") }
         fullWidth { SearchField(query, games.size) { query = it } }
 
         // Sort and quick filters.
@@ -185,12 +192,9 @@ fun GamesScreen(
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 item {
                     Box {
-                        FilterChip(
-                            selected = false,
-                            onClick = { sortMenu = true },
-                            label = { Text(sort.label) },
-                            leadingIcon = { Icon(Icons.Default.SwapVert, "Sort by", Modifier.size(18.dp)) },
-                        )
+                        PillChip(sort.label, selected = false, onClick = { sortMenu = true }, leading = {
+                            Icon(Icons.Default.SwapVert, "Sort by", Modifier.padding(end = 6.dp).size(18.dp), tint = Color.White)
+                        })
                         DropdownMenu(sortMenu, onDismissRequest = { sortMenu = false }) {
                             com.retrohero.app.data.GameSort.entries.forEach { s ->
                                 DropdownMenuItem(
@@ -203,34 +207,19 @@ fun GamesScreen(
                     }
                 }
                 item {
-                    FilterChip(
-                        selected = onlyFavourites,
-                        onClick = { onlyFavourites = !onlyFavourites },
-                        label = { Text("Favourites") },
-                        leadingIcon = if (onlyFavourites) { { Icon(Icons.Default.Check, null, Modifier.size(18.dp)) } } else null,
-                    )
+                    PillChip("Favourites", onlyFavourites, { onlyFavourites = !onlyFavourites })
                 }
                 item {
-                    FilterChip(
-                        selected = onlyUnplayed,
-                        onClick = { onlyUnplayed = !onlyUnplayed },
-                        label = { Text("Not played yet") },
-                        leadingIcon = if (onlyUnplayed) { { Icon(Icons.Default.Check, null, Modifier.size(18.dp)) } } else null,
-                    )
+                    PillChip("Not played yet", onlyUnplayed, { onlyUnplayed = !onlyUnplayed })
                 }
             }
         }
         if (showSystemFilter && systemsPresent.size > 1) {
             fullWidth {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    item {
-                        ToggleButton(checked = systemFilter == null, onCheckedChange = { systemFilter = null }) { Text("All") }
-                    }
+                    item { PillChip("All", systemFilter == null, { systemFilter = null }) }
                     items(systemsPresent, key = { it.id }) { system ->
-                        ToggleButton(
-                            checked = systemFilter == system.id,
-                            onCheckedChange = { systemFilter = if (it) system.id else null },
-                        ) { Text(system.shortName) }
+                        PillChip(system.shortName, systemFilter == system.id, { systemFilter = if (systemFilter == system.id) null else system.id }, color = system.color)
                     }
                 }
             }
@@ -257,7 +246,15 @@ fun GamesScreen(
             }
         }
         items(filtered, key = { it.id }) { game ->
-            GameCard(game, onClick = { onPlay(game) }, onLongClick = { onGameOptions(game) }, modifier = Modifier.animateItem())
+            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.animateItem()) {
+                BoxTile(
+                    game, maxWidth * 0.86f,
+                    onClick = { onPlay(game) },
+                    onLongClick = { onGameOptions(game) },
+                    meta = listOfNotNull(game.system?.shortName, stats[game.id]?.takeIf { it.seconds >= 60 }?.let { com.retrohero.app.data.PlayTime.format(it.seconds) }).joinToString(" · "),
+                    onPlay = onQuickPlay?.let { { it(game) } },
+                )
+            }
         }
     }
     // A–Z fast scroller along the right edge when sorted by name.
@@ -336,10 +333,10 @@ private fun SearchField(query: String, total: Int, onChange: (String) -> Unit) {
         colors = TextFieldDefaults.colors(
             focusedIndicatorColor = Color.Transparent,
             unfocusedIndicatorColor = Color.Transparent,
-            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.75f),
+            focusedContainerColor = Color.Transparent,
+            unfocusedContainerColor = Color.Transparent,
         ),
-        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp).glossCard(CircleShape),
     )
 }
 

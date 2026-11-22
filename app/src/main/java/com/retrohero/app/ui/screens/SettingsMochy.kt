@@ -78,6 +78,7 @@ import com.retrohero.app.data.Looks
 import com.retrohero.app.data.PadSkin
 import com.retrohero.app.data.Settings
 import com.retrohero.app.ui.components.LocalNavSpace
+import com.retrohero.app.ui.components.glossCard
 import com.retrohero.app.ui.components.press3D
 import com.retrohero.app.ui.theme.Inter
 import com.retrohero.app.ui.theme.Salmon
@@ -112,18 +113,17 @@ fun SettingsHome(onOpen: (String) -> Unit, onOpenStats: () -> Unit) {
             .fillMaxSize()
             .background(Color.Black)
             .verticalScroll(rememberScrollState())
-            .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 24.dp + LocalNavSpace.current),
+            .padding(start = 20.dp, end = 20.dp, bottom = 24.dp + LocalNavSpace.current),
     ) {
-        Image(painterResource(R.drawable.ic_logo_mark), null, Modifier.size(width = 47.dp, height = 32.dp))
-        Spacer(Modifier.height(6.dp))
-        Text("Settings", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 34.sp, lineHeight = 40.sp, letterSpacing = (-0.03).em), color = Color.White)
-        Spacer(Modifier.height(16.dp))
+        com.retrohero.app.ui.components.PageHeader("Settings", "Make RetroHero yours") {
+            Image(painterResource(R.drawable.ic_logo_mark), null, Modifier.size(width = 41.dp, height = 28.dp))
+        }
+        Spacer(Modifier.height(14.dp))
         // Search pill.
         val focused = query.isNotEmpty()
         val fill by animateColorAsState(if (focused) Color(0xFF1E1E21) else SearchFill, tween(200), label = "searchFill")
         Row(
-            Modifier.fillMaxWidth().height(48.dp).clip(CircleShape).background(fill).padding(horizontal = 16.dp),
+            Modifier.fillMaxWidth().height(48.dp).glossCard(CircleShape).background(fill.copy(alpha = if (focused) 0.6f else 0f)).padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(Icons.Rounded.Search, null, tint = Placeholder, modifier = Modifier.size(20.dp))
@@ -173,8 +173,7 @@ fun SettingsHome(onOpen: (String) -> Unit, onOpenStats: () -> Unit) {
             Modifier
                 .fillMaxWidth()
                 .press3D()
-                .clip(RoundedCornerShape(22.dp))
-                .background(Color(0xFF0F0F0F))
+                .glossCard(RoundedCornerShape(22.dp), tint = Salmon)
                 .clickable(onClick = onOpenStats)
                 .padding(horizontal = 18.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -205,8 +204,7 @@ private fun CategoryBubble(title: String, icon: ImageVector, onClick: () -> Unit
             .fillMaxWidth()
             .height(64.dp)
             .press3D()
-            .clip(RoundedCornerShape(22.dp))
-            .background(BubbleFill)
+            .glossCard(RoundedCornerShape(22.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,

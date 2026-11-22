@@ -25,6 +25,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.graphics.Color
+import com.retrohero.app.ui.components.glossCard
 import com.retrohero.app.data.CoreInfo
 import com.retrohero.app.data.CoreManager
 import com.retrohero.app.data.CoreManager.CoreState
@@ -43,25 +46,26 @@ fun CoresScreen(
     val cores = Systems.allCores()
     val (installed, available) = cores.partition { states[it.first.id] is CoreState.Installed }
     LazyColumn(
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp + LocalNavSpace.current),
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp + LocalNavSpace.current),
         verticalArrangement = Arrangement.spacedBy(20.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
+        item { com.retrohero.app.ui.components.PageHeader("Emulators", "${installed.size} of ${cores.size} installed") }
         item {
-            Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.secondaryContainer) {
+            Box(Modifier.glossCard()) {
                 Column(Modifier.padding(20.dp)) {
-                    Icon(Icons.Outlined.Inventory2, null, tint = MaterialTheme.colorScheme.onSecondaryContainer)
+                    Icon(Icons.Outlined.Inventory2, null, tint = Color.White)
                     Text(
-                        "${installed.size} of ${cores.size} emulators installed",
+                        "Emulators download by themselves",
                         style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        color = Color.White,
                         modifier = Modifier.padding(top = 12.dp),
                     )
                     Text(
                         "Cores download automatically the first time you play a system. " +
                             "Built for ${CoreManager.abi()}. Each one is an independent open-source project.",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f),
+                        color = Color.White.copy(alpha = 0.65f),
                         modifier = Modifier.padding(top = 4.dp),
                     )
                 }

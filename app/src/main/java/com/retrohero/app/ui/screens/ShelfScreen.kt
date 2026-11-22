@@ -40,6 +40,8 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SwapVert
+import androidx.compose.material.icons.rounded.ViewCarousel
+import androidx.compose.material.icons.rounded.ViewWeek
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -102,10 +104,13 @@ fun ShelfScreen(
     reducedMotion: Boolean,
     onPlay: (Game) -> Unit,
     onDetails: (Game) -> Unit,
+    startWithSpines: Boolean = true,
 ) {
     var system by rememberSaveable { mutableStateOf<String?>(null) }
     var sort by rememberSaveable { mutableStateOf(GameSort.Recent) }
     var sortMenu by remember { mutableStateOf(false) }
+    // Spines (a video-store wall) or the 3D cover flow.
+    var spines by rememberSaveable { mutableStateOf(startWithSpines) }
     var opened by remember { mutableStateOf<Game?>(null) }
     val systems = remember(games) { val ids = games.mapTo(HashSet()) { it.systemId }; Systems.all.filter { it.id in ids } }
     val shown = remember(games, system, sort, stats, recentIds) {
@@ -116,12 +121,16 @@ fun ShelfScreen(
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         val focus = shown.getOrNull(0)
-        Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
-            Row(Modifier.fillMaxWidth().padding(start = 22.dp, end = 12.dp, top = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Shelf", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 34.sp, letterSpacing = (-0.03).em), color = Color.White)
-                    Text("${shown.size} ${if (shown.size == 1) "game" else "games"} · ${sort.label}", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.55f))
-                }
+        Column(Modifier.fillMaxSize()) {
+            com.retrohero.app.ui.components.PageHeader(
+                "Shelf",
+                "${shown.size} ${if (shown.size == 1) "game" else "games"} · ${sort.label}",
+                Modifier.padding(start = 22.dp, end = 12.dp),
+            ) {
+                Box(
+                    Modifier.padding(end = 8.dp).size(48.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f)).clickable { spines = !spines },
+                    contentAlignment = Alignment.Center,
+                ) { Icon(if (spines) Icons.Rounded.ViewCarousel else Icons.Rounded.ViewWeek, if (spines) "Show as cover flow" else "Show as spines", tint = Color.White) }
                 Box {
                     Box(
                         Modifier.size(48.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f)).clickable { sortMenu = true },
@@ -147,6 +156,10 @@ fun ShelfScreen(
                 Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                     Text("No games here yet.", style = MaterialTheme.typography.bodyLarge, color = Color.White.copy(alpha = 0.55f))
                 }
+                return@Column
+            }
+            if (spines) {
+                SpineShelf(shown, onPick = { opened = it }, modifier = Modifier.weight(1f))
                 return@Column
             }
             val pager = rememberPagerState { shown.size }
@@ -255,13 +268,8 @@ fun ShelfScreen(
 }
 
 @Composable
-private fun ShelfChip(text: String, selected: Boolean, color: Color = Color.White, onClick: () -> Unit) {
-    val bg = if (selected) lerp(color, Color.Black, 0.35f).copy(alpha = if (color == Color.White) 0.25f else 1f) else Color.White.copy(alpha = 0.07f)
-    Box(
-        Modifier.height(40.dp).clip(CircleShape).background(bg).clickable(onClick = onClick).padding(horizontal = 16.dp),
-        contentAlignment = Alignment.Center,
-    ) { Text(text, style = MaterialTheme.typography.labelLarge, color = Color.White.copy(alpha = if (selected) 1f else 0.75f)) }
-}
+private fun ShelfChip(text: String, selected: Boolean, color: Color = Color.White, onClick: () -> Unit) =
+    com.retrohero.app.ui.components.PillChip(text, selected, onClick, color = color)
 
 /**
  * The box comes forward, its lid swings open and the cartridge or disc slides out below it;
