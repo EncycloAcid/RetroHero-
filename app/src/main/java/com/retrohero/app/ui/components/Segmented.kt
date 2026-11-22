@@ -42,4 +42,4 @@ fun SegmentedGroup(
 
 /** Segmented rows sit on a raised container so the group reads clearly against the page. */
 @Composable
-fun segmentColors() = ListItemDefaults.segmentedColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+fun segmentColors() = ListItemDefaults.segmentedColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)

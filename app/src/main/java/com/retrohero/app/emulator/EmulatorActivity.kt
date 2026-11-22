@@ -44,6 +44,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextOverflow
 import com.retrohero.app.ui.components.SegmentedGroup
+import com.retrohero.app.ui.components.MonoSwitch
 import com.retrohero.app.ui.components.ShapeIcon
 import com.retrohero.app.ui.components.segmentColors
 import com.retrohero.app.ui.components.SystemBadge
@@ -504,13 +505,7 @@ class EmulatorActivity : ComponentActivity() {
             leadingContent = { ShapeIcon(icon) },
             supportingContent = { Text(subtitle) },
             trailingContent = {
-                Switch(
-                    checked = checked,
-                    onCheckedChange = onChange,
-                    thumbContent = if (checked) {
-                        { Icon(Icons.Default.Check, null, Modifier.size(SwitchDefaults.IconSize)) }
-                    } else null,
-                )
+                MonoSwitch(checked, onChange)
             },
             verticalAlignment = Alignment.CenterVertically,
         ) { Text(title) }

@@ -25,10 +25,7 @@ fun GameCard(game: Game, onClick: () -> Unit, onLongClick: () -> Unit, modifier:
     val press = rememberPressFeedback(interaction, restCorner = 24.dp, pressedCorner = 40.dp, pressedScale = 0.94f)
     Column(
         modifier
-            .graphicsLayer {
-                scaleX = press.scale.value
-                scaleY = press.scale.value
-            }
+            .press3D()
             .combinedClickable(interactionSource = interaction, indication = null, onClick = onClick, onLongClick = onLongClick),
     ) {
         val shape = RoundedCornerShape(press.corner.value)

@@ -8,6 +8,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.runtime.getValue
 import com.retrohero.app.ui.components.MorphShape
+import com.retrohero.app.ui.components.press3D
 import com.retrohero.app.ui.components.rememberMorph
 import com.retrohero.app.ui.theme.polygon
 import androidx.compose.foundation.clickable
@@ -98,10 +99,7 @@ private fun SystemCard(system: GameSystem, count: Int, onOpen: (GameSystem) -> U
         modifier
             .fillMaxWidth()
             .height(164.dp)
-            .graphicsLayer {
-                scaleX = press.scale.value
-                scaleY = press.scale.value
-            }
+            .press3D()
             .clip(RoundedCornerShape(press.corner.value))
             .background(Brush.linearGradient(listOf(tint, deep), start = Offset.Zero, end = Offset.Infinite))
             .clickable(interactionSource = interaction, indication = null) { onOpen(system) },

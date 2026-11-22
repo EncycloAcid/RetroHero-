@@ -97,6 +97,9 @@ import com.retrohero.app.ui.components.GameArt
 import com.retrohero.app.ui.components.GameCard
 import com.retrohero.app.ui.components.MorphShape
 import com.retrohero.app.ui.components.rememberMorph
+import com.retrohero.app.ui.components.launchMarkTarget
+import com.retrohero.app.ui.components.launchRise
+import com.retrohero.app.ui.components.press3D
 import com.retrohero.app.ui.components.rememberPressFeedback
 import com.retrohero.app.ui.theme.Inter
 import com.retrohero.app.ui.theme.PixelFont
@@ -194,9 +197,9 @@ fun HomeScreen(
         full { GachaHero(candidates, onPlay, topActions) }
 
         if (recents.isNotEmpty()) {
-            full { SectionHeader("Recently Played") }
+            full { Box(Modifier.launchRise(2)) { SectionHeader("Recently Played") } }
             full {
-                LazyRow(contentPadding = PaddingValues(horizontal = ContentInset), horizontalArrangement = Arrangement.spacedBy(CardSpacing)) {
+                LazyRow(modifier = Modifier.launchRise(3), contentPadding = PaddingValues(horizontal = ContentInset), horizontalArrangement = Arrangement.spacedBy(CardSpacing)) {
                     items(recents, key = { "r_" + it.id }) { game -> RowCard(game, onPlay, onOptions) }
                 }
             }
@@ -308,6 +311,8 @@ private fun GachaHero(candidates: List<Game>, onPlay: (Game) -> Unit, topActions
         val focus = unit * FocusSize
         val coverShape = RoundedCornerShape(unit * CoverCorner)
 
+        Box(Modifier.fillMaxSize().launchRise(0)) {
+
         // The colour wash, a wandering light and the glow behind the big cover.
         Box(
             Modifier.fillMaxSize().drawBehind {
@@ -412,6 +417,8 @@ private fun GachaHero(candidates: List<Game>, onPlay: (Game) -> Unit, topActions
                 },
         )
 
+        }
+
         Row(
             Modifier.windowInsetsPadding(WindowInsets.statusBars).fillMaxWidth().padding(start = ContentInset - 8.dp, end = 24.dp, top = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -420,7 +427,7 @@ private fun GachaHero(candidates: List<Game>, onPlay: (Game) -> Unit, topActions
                 painterResource(R.drawable.ic_launcher_monochrome),
                 "RetroHero",
                 tint = Color.White,
-                modifier = Modifier.size(52.dp),
+                modifier = Modifier.size(52.dp).launchMarkTarget(),
             )
             Spacer(Modifier.weight(1f))
             topActions()
@@ -433,7 +440,7 @@ private fun GachaHero(candidates: List<Game>, onPlay: (Game) -> Unit, topActions
                 Phase.Landed -> "You got"
             },
             title = state.result?.title ?: "Random plays",
-            modifier = Modifier.align(Alignment.BottomStart),
+            modifier = Modifier.align(Alignment.BottomStart).launchRise(1),
         ) {
             when (state.phase) {
                 Phase.Landed -> {
@@ -552,10 +559,7 @@ private fun RowCard(game: Game, onPlay: (Game) -> Unit, onOptions: (Game) -> Uni
     Column(
         Modifier
             .width(138.dp)
-            .graphicsLayer {
-                scaleX = press.scale.value
-                scaleY = press.scale.value
-            }
+            .press3D()
             .combinedClickable(interactionSource = interaction, indication = null, onClick = { onPlay(game) }, onLongClick = { onOptions(game) }),
     ) {
         GameArt(game, Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(press.corner.value)))
@@ -570,7 +574,7 @@ private fun SystemCard(system: GameSystem, count: Int, onOpen: (GameSystem) -> U
     val pressed by interaction.collectIsPressedAsState()
     val p by animateFloatAsState(if (pressed) 1f else 0f, spring(0.5f, Spring.StiffnessMediumLow), label = "sysMorph")
     val morph = rememberMorph(system.polygon, MaterialShapes.Circle)
-    Column(Modifier.width(138.dp).clickable(interactionSource = interaction, indication = null) { onOpen(system) }) {
+    Column(Modifier.width(138.dp).press3D().clickable(interactionSource = interaction, indication = null) { onOpen(system) }) {
         Box(
             Modifier
                 .fillMaxWidth()

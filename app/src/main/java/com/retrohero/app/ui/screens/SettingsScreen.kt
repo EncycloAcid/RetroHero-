@@ -66,6 +66,7 @@ import com.retrohero.app.data.Saf
 import com.retrohero.app.data.Settings
 import com.retrohero.app.data.Systems
 import com.retrohero.app.ui.components.SegmentedGroup
+import com.retrohero.app.ui.components.MonoSwitch
 import com.retrohero.app.ui.components.ShapeIcon
 import com.retrohero.app.ui.components.segmentColors
 
@@ -238,13 +239,7 @@ private fun ToggleRow(
         leadingContent = { ShapeIcon(icon) },
         supportingContent = { Text(subtitle) },
         trailingContent = {
-            Switch(
-                checked = checked,
-                onCheckedChange = { checked = it; onChange(it) },
-                thumbContent = if (checked) {
-                    { Icon(Icons.Default.Check, null, Modifier.size(SwitchDefaults.IconSize)) }
-                } else null,
-            )
+            MonoSwitch(checked, { checked = it; onChange(it) })
         },
         verticalAlignment = Alignment.CenterVertically,
     ) { Text(title) }

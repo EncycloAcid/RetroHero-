@@ -31,7 +31,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -62,7 +61,15 @@ import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
-import com.retrohero.app.ui.components.AuroraBackground
+import com.retrohero.app.ui.components.LaunchIntroOverlay
+import com.retrohero.app.ui.components.LaunchIntroState
+import com.retrohero.app.ui.components.LocalLaunchIntro
+import com.retrohero.app.ui.components.topGlow
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.graphics.lerp
 import com.retrohero.app.ui.components.DownloadSheet
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
@@ -116,9 +123,17 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // The launch intro plays on a cold start only, not when the activity is recreated.
+        val intro = LaunchIntroState(plays = savedInstanceState == null)
         setContent {
-            val dynamic by vm.dynamicColor.collectAsStateWithLifecycle()
-            RetroHeroTheme(dynamicColor = dynamic) { App(vm) }
+            RetroHeroTheme {
+                CompositionLocalProvider(LocalLaunchIntro provides intro) {
+                    Box(Modifier.fillMaxSize()) {
+                        App(vm)
+                        LaunchIntroOverlay(intro)
+                    }
+                }
+            }
         }
     }
 }
@@ -181,7 +196,17 @@ private fun App(vm: AppViewModel) {
         tab == Tab.Systems -> MaterialTheme.colorScheme.tertiary
         else -> MaterialTheme.colorScheme.primary
     }
-    AuroraBackground(accent, Modifier.fillMaxSize()) {
+    // Two corner glows from the last games played hang from the top and fade as the page scrolls.
+    val glowLeft = lerp(recents.getOrNull(0)?.system?.color ?: accent, Color.Black, 0.35f)
+    val glowRight = lerp(recents.getOrNull(1)?.system?.color ?: glowLeft, Color.Black, 0.35f)
+    val glowL by animateColorAsState(glowLeft, tween(700), label = "glowL")
+    val glowR by animateColorAsState(glowRight, tween(700), label = "glowR")
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .topGlow(glowL, glowR, 340.dp) { 1f - scrollBehavior.state.collapsedFraction },
+    ) {
     Row(Modifier.fillMaxSize()) {
         if (wide && openSystem == null) {
             // Landscape / large screens: an expressive navigation rail instead of the bottom bar.

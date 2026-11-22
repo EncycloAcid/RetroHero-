@@ -103,7 +103,16 @@ class ScreenshotTest {
     @Test
     fun captureScreens() {
         seed()
+        compose.mainClock.autoAdvance = false
         ActivityScenario.launch(MainActivity::class.java).use {
+            // Launch intro: the splash mark flying into Home's logo while Home rises in.
+            compose.mainClock.advanceTimeBy(250)
+            saveNow("0a_intro_start")
+            compose.mainClock.advanceTimeBy(380)
+            saveNow("0b_intro_mid")
+            compose.mainClock.advanceTimeBy(260)
+            saveNow("0c_intro_late")
+            compose.mainClock.autoAdvance = true
             shot("1_home")
             // Roll the gacha: mid-spin, then after it lands.
             compose.onAllNodesWithText("roll!!").onFirst().performClick()
