@@ -554,7 +554,8 @@ private fun HeroCarousel(
             Box(
                 Modifier.fillMaxSize().graphicsLayer {
                     alpha = 1f - (abs(offset) * 0.6f).coerceAtMost(0.6f)
-                    translationX = offset * size.width * 0.25f
+                    // Neighbours trail behind (pushed outward), never pulled into view.
+                    translationX = -offset * size.width * 0.25f
                 },
             ) {
                 when (pages[index]) {

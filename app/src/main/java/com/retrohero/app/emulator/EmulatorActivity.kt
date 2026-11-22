@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.IntSize
 import com.retrohero.app.data.Cheat
 import com.retrohero.app.data.Cheats
 import com.retrohero.app.data.PlayTime
+import com.retrohero.app.data.Remap
 import com.retrohero.app.data.ScreenFilter
 import java.io.File
 import android.content.Context
@@ -203,7 +204,7 @@ class EmulatorActivity : ComponentActivity() {
         system = game.system ?: run { finish(); return }
         paths = AppPaths(this)
         settings = Settings(this)
-        input = InputMapper(settings.stickAsDpad)
+        input = InputMapper(settings.stickAsDpad, Remap.load(paths.remapFile))
         optionsStore = CoreOptionsStore(paths.coreOptionsFile(coreId))
         gamePrefs = GamePrefs(this, settings.sharpPixels)
         padLayouts = PadLayouts(paths.padLayoutFile)
@@ -212,6 +213,8 @@ class EmulatorActivity : ComponentActivity() {
         cheats = Cheats.load(paths.cheatsFile(game))
         input.onRewind = { held -> if (rewindOn) NativeBridge.setRewinding(held) }
         input.rewindKeyEnabled = system.id != "psx"
+        input.onFastForward = { held -> fastForwardHeld = held; applyFastForward() }
+        input.onMenu = { if (phase is Phase.Running) setMenu(!menuOpen) }
 
         enableEdgeToEdge()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -427,8 +430,9 @@ class EmulatorActivity : ComponentActivity() {
     // ---- Physical controllers -------------------------------------------------------------
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (event.keyCode == KeyEvent.KEYCODE_BUTTON_MODE && event.action == KeyEvent.ACTION_UP && phase is Phase.Running) {
-            setMenu(!menuOpen)
+        // The controller's menu button (and anything remapped to it) still works with the menu open.
+        if (menuOpen && event.keyCode == KeyEvent.KEYCODE_BUTTON_MODE && event.action == KeyEvent.ACTION_UP) {
+            setMenu(false)
             return true
         }
         if (!menuOpen && !editingPad && phase is Phase.Running && event.keyCode != KeyEvent.KEYCODE_BACK) {

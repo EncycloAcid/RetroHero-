@@ -6,6 +6,7 @@ import androidx.core.content.edit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * User preferences. Note: the emulator runs in its own process, which reads these once at
@@ -127,6 +128,44 @@ class Settings(context: Context) {
         },
     )
 
+    /** Adds several favourites at once (used by restore). */
+    fun addFavorites(ids: Collection<String>) {
+        val updated = _favorites.value + ids
+        prefs.edit { putStringSet(KEY_FAVORITES, updated) }
+        _favorites.value = updated
+    }
+
+    /** Simple preferences (not folders, lists or favourites) for backups. */
+    fun exportPrefs(): JSONObject {
+        val o = JSONObject()
+        prefs.all.forEach { (k, v) ->
+            if (k in BackupSkip) return@forEach
+            when (v) {
+                is Boolean, is Int, is Long, is String -> o.put(k, v)
+                is Float -> o.put(k, v.toDouble()).also { o.put("$k#f", true) }
+            }
+        }
+        return o
+    }
+
+    fun importPrefs(o: JSONObject) {
+        prefs.edit {
+            o.keys().forEach { k ->
+                if (k.endsWith("#f") || k in BackupSkip) return@forEach
+                when (val v = o.get(k)) {
+                    is Boolean -> putBoolean(k, v)
+                    is String -> putString(k, v)
+                    is Number -> when {
+                        o.optBoolean("$k#f") -> putFloat(k, v.toFloat())
+                        v is Long -> putLong(k, v)
+                        else -> putInt(k, v.toInt())
+                    }
+                }
+            }
+        }
+        _dynamicColor.value = prefs.getBoolean("dynamic_color", true)
+    }
+
     fun markPlayed(gameId: String) {
         val updated = (listOf(gameId) + _recents.value.filter { it != gameId }).take(MAX_RECENTS)
         prefs.edit { putString(KEY_RECENTS, JSONArray(updated).toString()) }
@@ -147,5 +186,7 @@ class Settings(context: Context) {
         const val KEY_FAVORITES = "favorites"
         const val KEY_COLLECTIONS = "collections"
         const val MAX_RECENTS = 20
+        /** Not portable between phones (folder grants), or saved separately in a backup. */
+        val BackupSkip = setOf(KEY_FOLDERS, KEY_RECENTS, KEY_FAVORITES, KEY_COLLECTIONS, "onboarding_done")
     }
 }

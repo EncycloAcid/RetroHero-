@@ -34,6 +34,10 @@ import androidx.compose.material.icons.outlined.Opacity
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Save
+import androidx.compose.material.icons.outlined.SportsEsports
+import androidx.compose.material.icons.outlined.Backup
+import androidx.compose.material.icons.outlined.Restore
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.Vibration
 import androidx.compose.material3.Button
@@ -87,6 +91,10 @@ fun SettingsScreen(
     onImportBios: () -> Unit,
     onDownloadBios: () -> Unit,
     onDeleteBios: (String) -> Unit,
+    onOpenControllers: () -> Unit = {},
+    remapCount: Int = 0,
+    onBackUp: (includeBios: Boolean) -> Unit = {},
+    onRestore: () -> Unit = {},
 ) {
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 24.dp + LocalNavSpace.current),
@@ -146,6 +154,53 @@ fun SettingsScreen(
             }
             ToggleRow(shapes(i++), Icons.Outlined.Save, "Auto save & resume", "Pick up exactly where you left off", settings.autoSave) { settings.autoSave = it }
             ToggleRow(shapes(i), Icons.Outlined.PhotoLibrary, "Screenshots to Gallery", "Also save in-game screenshots to Pictures", settings.screenshotsToGallery) { settings.screenshotsToGallery = it }
+        }
+
+        // ---- Controllers ------------------------------------------------------------------
+        SegmentedGroup("Controllers", 1) {
+            SegmentedListItem(
+                onClick = onOpenControllers,
+                shapes = shapes(0),
+                colors = segmentColors(),
+                leadingContent = { ShapeIcon(Icons.Outlined.SportsEsports) },
+                supportingContent = {
+                    Text(if (remapCount == 0) "Rebind buttons, rewind and fast forward" else "$remapCount ${if (remapCount == 1) "button" else "buttons"} changed")
+                },
+                trailingContent = { Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null) },
+                verticalAlignment = Alignment.CenterVertically,
+            ) { Text("Controller buttons") }
+        }
+        Text(
+            "To move or resize the touch buttons, open the pause menu in a game and choose Edit controls.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 8.dp),
+        )
+
+        // ---- Backup -----------------------------------------------------------------------
+        Column {
+            var includeBios by remember { mutableStateOf(false) }
+            SegmentedGroup("Backup & restore", 1) {
+                ToggleRow(shapes(0), Icons.Outlined.Memory, "Include BIOS files", "Bigger backup; handy when moving to a new phone", includeBios) { includeBios = it }
+            }
+            Text(
+                "Saves your progress, save states, screenshots, cheats, play time, collections and settings to one file. Games and emulators aren't included.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { onBackUp(includeBios) }, shapes = ButtonDefaults.shapes()) {
+                    Icon(Icons.Outlined.Backup, null, Modifier.size(ButtonDefaults.IconSize))
+                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                    Text("Back up now")
+                }
+                FilledTonalButton(onClick = onRestore, shapes = ButtonDefaults.shapes()) {
+                    Icon(Icons.Outlined.Restore, null, Modifier.size(ButtonDefaults.IconSize))
+                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                    Text("Restore")
+                }
+            }
         }
 
         // ---- BIOS -------------------------------------------------------------------------

@@ -3,6 +3,7 @@ package com.retrohero.app.emulator
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.MotionEvent
+import com.retrohero.app.data.Remap
 import com.retrohero.app.data.RetroPad
 import kotlin.math.abs
 
@@ -10,14 +11,20 @@ import kotlin.math.abs
  * Maps physical controllers and keyboards to RetroPad ports. Android's gamepad layout
  * (A bottom, B right) is mapped positionally to the SNES-style RetroPad (B bottom, A right).
  */
-class InputMapper(private val stickAsDpad: Boolean) {
+class InputMapper(
+    private val stickAsDpad: Boolean,
+    /** Remap profiles from [Remap.load]. */
+    private val profiles: Map<String, Map<Int, Int>> = emptyMap(),
+) {
     private val ports = LinkedHashMap<Int, Int>()
     private val motionDpad = HashMap<Int, Int>() // port -> bitmask of dpad buttons driven by axes
     private val triggers = HashMap<Int, Int>()
 
     /** Called with true/false while the rewind button is held. */
     var onRewind: ((Boolean) -> Unit)? = null
-    /** L3 rewinds on systems that don't use the stick buttons. */
+    var onFastForward: ((Boolean) -> Unit)? = null
+    var onMenu: (() -> Unit)? = null
+    /** L3 rewinds by default on systems that don't use the stick buttons. */
     var rewindKeyEnabled = true
 
     fun portFor(deviceId: Int): Int = ports.getOrPut(deviceId) { ports.size.coerceAtMost(3) }
@@ -29,35 +36,19 @@ class InputMapper(private val stickAsDpad: Boolean) {
             s and InputDevice.SOURCE_DPAD == InputDevice.SOURCE_DPAD && event.device?.isVirtual == false
     }
 
-    fun keyToRetro(keyCode: Int): Int? = when (keyCode) {
-        KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_Z -> RetroPad.B
-        KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_X -> RetroPad.A
-        KeyEvent.KEYCODE_BUTTON_X, KeyEvent.KEYCODE_A -> RetroPad.Y
-        KeyEvent.KEYCODE_BUTTON_Y, KeyEvent.KEYCODE_S -> RetroPad.X
-        KeyEvent.KEYCODE_BUTTON_L1, KeyEvent.KEYCODE_Q -> RetroPad.L
-        KeyEvent.KEYCODE_BUTTON_R1, KeyEvent.KEYCODE_W -> RetroPad.R
-        KeyEvent.KEYCODE_BUTTON_L2 -> RetroPad.L2
-        KeyEvent.KEYCODE_BUTTON_R2 -> RetroPad.R2
-        KeyEvent.KEYCODE_BUTTON_THUMBL -> RetroPad.L3
-        KeyEvent.KEYCODE_BUTTON_THUMBR -> RetroPad.R3
-        KeyEvent.KEYCODE_BUTTON_START, KeyEvent.KEYCODE_ENTER -> RetroPad.START
-        KeyEvent.KEYCODE_BUTTON_SELECT, KeyEvent.KEYCODE_SHIFT_RIGHT, KeyEvent.KEYCODE_DEL -> RetroPad.SELECT
-        KeyEvent.KEYCODE_DPAD_UP -> RetroPad.UP
-        KeyEvent.KEYCODE_DPAD_DOWN -> RetroPad.DOWN
-        KeyEvent.KEYCODE_DPAD_LEFT -> RetroPad.LEFT
-        KeyEvent.KEYCODE_DPAD_RIGHT -> RetroPad.RIGHT
-        else -> null
-    }
+    fun keyToRetro(keyCode: Int): Int? = Remap.default(keyCode, rewindKeyEnabled)?.takeIf { it < Remap.REWIND }
 
     /** Returns true if the event was consumed. */
     fun onKey(event: KeyEvent): Boolean {
-        if (rewindKeyEnabled && event.keyCode == KeyEvent.KEYCODE_BUTTON_THUMBL && onRewind != null) {
-            if (event.repeatCount == 0) onRewind?.invoke(event.action == KeyEvent.ACTION_DOWN)
-            return true
+        val action = Remap.resolve(profiles, event.device?.descriptor, event.keyCode, rewindKeyEnabled) ?: return false
+        val down = event.action == KeyEvent.ACTION_DOWN
+        if (down && event.repeatCount > 0) return true
+        when (action) {
+            Remap.REWIND -> onRewind?.invoke(down)
+            Remap.FAST_FORWARD -> onFastForward?.invoke(down)
+            Remap.MENU -> if (!down) onMenu?.invoke()
+            else -> NativeBridge.setButton(portFor(event.deviceId), action, down)
         }
-        val id = keyToRetro(event.keyCode) ?: return false
-        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount > 0) return true
-        NativeBridge.setButton(portFor(event.deviceId), id, event.action == KeyEvent.ACTION_DOWN)
         return true
     }
 

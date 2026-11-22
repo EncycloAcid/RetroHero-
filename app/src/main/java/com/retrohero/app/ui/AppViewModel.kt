@@ -66,6 +66,64 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun deleteCollection(c: GameCollection) = settings.deleteCollection(c.id)
     fun setInCollection(c: GameCollection, game: Game, inIt: Boolean) = settings.setInCollection(c.id, game.id, inIt)
 
+    // ---- Controller remaps (written here, read by the game process at launch) ----
+    private val _remaps = MutableStateFlow(com.retrohero.app.data.Remap.load(app.paths.remapFile))
+    val remaps: StateFlow<Map<String, Map<Int, Int>>> = _remaps
+
+    fun setRemaps(profiles: Map<String, Map<Int, Int>>) {
+        _remaps.value = profiles
+        viewModelScope.launch(Dispatchers.IO) { com.retrohero.app.data.Remap.save(app.paths.remapFile, profiles) }
+    }
+
+    // ---- Backup & restore ----
+    sealed interface BackupState {
+        data object Working : BackupState
+        data class Done(val message: String) : BackupState
+        data class Failed(val message: String) : BackupState
+    }
+
+    private val _backup = MutableStateFlow<BackupState?>(null)
+    val backupState: StateFlow<BackupState?> = _backup
+    fun dismissBackup() { _backup.value = null }
+
+    private val backup by lazy { com.retrohero.app.data.Backup(app.filesDir, settings) }
+
+    fun backUp(uri: Uri, includeBios: Boolean) {
+        _backup.value = BackupState.Working
+        viewModelScope.launch(Dispatchers.IO) {
+            _backup.value = runCatching {
+                val version = app.packageManager.getPackageInfo(app.packageName, 0).versionName ?: "?"
+                app.contentResolver.openOutputStream(uri, "wt")!!.use { backup.write(it, games.value, includeBios, version) }
+                BackupState.Done("Backup saved. Keep it somewhere safe, like Drive or your computer.")
+            }.getOrElse { BackupState.Failed("Couldn't save the backup: ${it.message ?: "unknown error"}") }
+        }
+    }
+
+    fun restore(uri: Uri) {
+        _backup.value = BackupState.Working
+        viewModelScope.launch(Dispatchers.IO) {
+            _backup.value = runCatching {
+                val r = app.contentResolver.openInputStream(uri)!!.use { backup.restore(it, games.value) }
+                _remaps.value = com.retrohero.app.data.Remap.load(app.paths.remapFile)
+                _biosVersion.value++
+                refreshStats()
+                BackupState.Done(
+                    buildString {
+                        append("Restored ${r.files} files")
+                        if (r.favorites > 0) append(", ${r.favorites} favourites")
+                        if (r.collections > 0) append(", ${r.collections} collections")
+                        append(".")
+                        if (r.unmatched > 0) append(" ${r.unmatched} games from the backup aren't in your library yet; add their folder and restore again to link them.")
+                    },
+                )
+            }.getOrElse {
+                BackupState.Failed(
+                    (it as? com.retrohero.app.data.Backup.BadBackupException)?.message ?: "Couldn't restore: ${it.message ?: "unknown error"}",
+                )
+            }
+        }
+    }
+
     // ---- Play time ----
     private val _stats = MutableStateFlow<Map<String, PlayStat>>(emptyMap())
     /** Play time per game id (only games that have been played). */

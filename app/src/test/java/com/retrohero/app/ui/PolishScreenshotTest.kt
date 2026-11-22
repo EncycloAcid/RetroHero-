@@ -24,6 +24,8 @@ import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeUp
+import androidx.compose.ui.test.swipe
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import com.retrohero.app.R
@@ -282,5 +284,140 @@ class PolishScreenshotTest {
         }
         compose.mainClock.advanceTimeBy(800)
         save("system_rows")
+    }
+
+    private fun pngFile(name: String, color: Int): java.io.File {
+        val app = ApplicationProvider.getApplicationContext<com.retrohero.app.RetroHeroApp>()
+        val bmp = Bitmap.createBitmap(64, 48, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp)
+        c.drawColor(color)
+        val paint = android.graphics.Paint().apply { this.color = android.graphics.Color.WHITE }
+        c.drawRect(8f, 30f, 56f, 40f, paint)
+        c.drawCircle(20f, 16f, 6f, paint)
+        return java.io.File(app.cacheDir, name).apply { outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) } }
+    }
+
+    @Test
+    fun padEditing() {
+        val system = Systems.get("snes")!!
+        compose.setContent {
+            RetroHeroTheme {
+                Column(Modifier.fillMaxSize().background(Color.Black)) {
+                    Box(Modifier.fillMaxWidth().weight(1f).background(Brush.verticalGradient(listOf(Color(0xFF2B2440), Color(0xFF0E0C14)))))
+                    com.retrohero.app.emulator.VirtualGamepad(
+                        layout = system.layout, landscape = false, opacity = 0.7f,
+                        onButton = { _, _ -> }, onMenu = {}, onFastForward = {}, onPress = {},
+                        modifier = Modifier.fillMaxWidth().height(400.dp), accent = system.color,
+                        onRewind = {},
+                        edit = com.retrohero.app.emulator.PadEditState(
+                            adjust = mapOf("dpad" to com.retrohero.app.emulator.PadAdjust(12f, -20f, 1.15f), "face" to com.retrohero.app.emulator.PadAdjust(-6f, 0f, 0.9f)),
+                            selected = "dpad", onSelect = {}, onAdjust = { _, _ -> },
+                        ),
+                    )
+                }
+            }
+        }
+        compose.mainClock.advanceTimeBy(500)
+        save("pad_edit")
+    }
+
+    @Test
+    fun gameDetailWithStats() {
+        val g = sample("Thwaite (USA).nes", "nes")
+        val shots = listOf(pngFile("s1.png", 0xFF3A6EA5.toInt()), pngFile("s2.png", 0xFFB5523B.toInt()), pngFile("s3.png", 0xFF3B8F5A.toInt()))
+        compose.setContent {
+            RetroHeroTheme {
+                com.retrohero.app.ui.screens.GameDetailScreen(
+                    game = g, currentCore = g.system!!.cores.first(), saveSlots = listOf(-1 to 1_700_000_000_000L),
+                    onPlay = {}, onSelectCore = {}, onDelete = null, onClose = {},
+                    stat = com.retrohero.app.data.PlayStat(3 * 3600 + 12 * 60, 9, System.currentTimeMillis() - 86_400_000L),
+                    screenshots = shots,
+                )
+            }
+        }
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onRoot().performTouchInput { swipeUp() }
+        compose.mainClock.advanceTimeBy(1000)
+        save("detail_stats")
+    }
+
+    @Test
+    @Config(qualifiers = "w411dp-h1700dp-night-xxhdpi")
+    fun homeWithCollectionsAndStats() {
+        val games = listOf("Thwaite (USA).nes" to "nes", "Libbet.gb" to "gb", "Micro City.gba" to "gba", "Sonic.md" to "genesis", "Mario.sfc" to "snes", "Zelda.nes" to "nes")
+            .map { sample(it.first, it.second) }
+        val stats = mapOf(games[0].id to com.retrohero.app.data.PlayStat(11_520, 6, 0), games[2].id to com.retrohero.app.data.PlayStat(4_200, 3, 0), games[4].id to com.retrohero.app.data.PlayStat(1_500, 2, 0))
+        val couch = com.retrohero.app.data.GameCollection("c1", "Couch co-op", games.take(4).map { it.id })
+        val rpg = com.retrohero.app.data.GameCollection("c2", "Weekend RPGs", listOf(games[4].id))
+        compose.setContent {
+            RetroHeroTheme {
+                com.retrohero.app.ui.screens.HomeScreen(
+                    games = games, recents = listOf(games[0], games[2]), onPlay = {}, onOpen = {}, onOptions = {}, onOpenSystem = {}, onSeeAllGames = {},
+                    topActions = {}, bottomPadding = 100.dp, stats = stats,
+                    collections = listOf(couch to games.take(4), rpg to listOf(games[4])),
+                )
+            }
+        }
+        compose.mainClock.advanceTimeBy(1500)
+        save("home_collections")
+        repeat(3) {
+            compose.onRoot().performTouchInput {
+                swipe(androidx.compose.ui.geometry.Offset(right * 0.9f, 900f), androidx.compose.ui.geometry.Offset(left + 20f, 900f), 200)
+            }
+            compose.mainClock.advanceTimeBy(2000)
+        }
+        save("home_stats_page")
+    }
+
+    @Test
+    fun collectionPage() {
+        val games = listOf("Thwaite (USA).nes" to "nes", "Libbet.gb" to "gb", "Micro City.gba" to "gba").map { sample(it.first, it.second) }
+        compose.setContent {
+            RetroHeroTheme {
+                com.retrohero.app.ui.screens.CollectionScreen(
+                    collection = com.retrohero.app.data.GameCollection("c1", "Couch co-op", games.map { it.id }),
+                    games = games, onBack = {}, onOpenGame = {}, onPlay = {}, onPlayRandom = {}, onRemove = {}, onOptions = {}, onRename = {}, onDelete = {},
+                )
+            }
+        }
+        compose.mainClock.advanceTimeBy(800)
+        save("collection_page")
+    }
+
+    @Test
+    fun collectionPicker() {
+        val g = sample("Thwaite (USA).nes", "nes")
+        compose.setContent {
+            RetroHeroTheme {
+                Box(Modifier.fillMaxSize().background(Color.Black)) {
+                    com.retrohero.app.ui.components.CollectionPickerSheet(
+                        game = g,
+                        collections = listOf(
+                            com.retrohero.app.data.GameCollection("c1", "Couch co-op", listOf(g.id, "x", "y")),
+                            com.retrohero.app.data.GameCollection("c2", "Weekend RPGs", listOf("z")),
+                        ),
+                        onToggle = { _, _ -> }, onCreate = {}, onDismiss = {},
+                    )
+                }
+            }
+        }
+        compose.mainClock.advanceTimeBy(1000)
+        save("collection_picker")
+    }
+
+    @Test
+    fun remapPage() {
+        val profiles = mapOf(com.retrohero.app.data.Remap.ANY to mapOf(android.view.KeyEvent.KEYCODE_BUTTON_R1 to com.retrohero.app.data.Remap.FAST_FORWARD))
+        compose.setContent {
+            RetroHeroTheme {
+                com.retrohero.app.ui.screens.RemapScreen(
+                    profiles = profiles,
+                    controllers = listOf(com.retrohero.app.ui.screens.ControllerProfile("d1", "Xbox Wireless Controller")),
+                    onChange = {}, onBack = {},
+                )
+            }
+        }
+        compose.mainClock.advanceTimeBy(600)
+        save("remap")
     }
 }

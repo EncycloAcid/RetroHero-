@@ -31,6 +31,8 @@ import com.retrohero.app.ui.components.NameDialog
 import com.retrohero.app.ui.components.LocalArtPaths
 import com.retrohero.app.ui.components.LocalArtVersion
 import com.retrohero.app.ui.screens.CollectionScreen
+import com.retrohero.app.ui.screens.RemapScreen
+import com.retrohero.app.ui.screens.rememberControllers
 import com.retrohero.app.data.GameCollection
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.retrohero.app.ui.components.FloatingNavHeight
@@ -204,6 +206,16 @@ private fun App(vm: AppViewModel) {
     var openCollectionId by rememberSaveable { mutableStateOf<String?>(null) }
     var pickCollectionsFor by rememberSaveable { mutableStateOf<String?>(null) }
     var renaming by remember { mutableStateOf<GameCollection?>(null) }
+    var remapOpen by rememberSaveable { mutableStateOf(false) }
+    var pendingBios by remember { mutableStateOf(false) }
+    val remaps by vm.remaps.collectAsStateWithLifecycle()
+    val backupState by vm.backupState.collectAsStateWithLifecycle()
+    val backupPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        if (uri != null) vm.backUp(uri, pendingBios)
+    }
+    val restorePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) vm.restore(uri)
+    }
     val collections by vm.collections.collectAsStateWithLifecycle()
     val stats by vm.stats.collectAsStateWithLifecycle()
     val artVersion by vm.artVersion.collectAsStateWithLifecycle()
@@ -457,6 +469,14 @@ private fun App(vm: AppViewModel) {
                     onImportBios = { biosPicker.launch(arrayOf("*/*")) },
                     onDownloadBios = { vm.openDownload(AppViewModel.DownloadKind.Bios) },
                     onDeleteBios = vm::deleteBios,
+                    onOpenControllers = { remapOpen = true },
+                    remapCount = remaps.values.sumOf { it.size },
+                    onBackUp = { bios ->
+                        pendingBios = bios
+                        val date = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(java.util.Date())
+                        backupPicker.launch("RetroHero-backup-$date.zip")
+                    },
+                    onRestore = { restorePicker.launch(arrayOf("application/zip", "application/octet-stream")) },
                 )
             }
         }
@@ -531,6 +551,43 @@ private fun App(vm: AppViewModel) {
             onDismiss = close,
             onAddTo = { close(); pickCollectionsFor = menuGame.id },
         )
+    }
+
+    // Controller remapping, full screen over Settings.
+    BackHandler(enabled = remapOpen) { remapOpen = false }
+    AnimatedVisibility(
+        visible = remapOpen,
+        enter = slideInVertically(spring(dampingRatio = 0.86f, stiffness = 380f)) { it / 5 } + fadeIn(tween(200)),
+        exit = slideOutVertically(tween(220)) { it / 5 } + fadeOut(tween(180)),
+    ) {
+        RemapScreen(
+            profiles = remaps,
+            controllers = rememberControllers(),
+            onChange = vm::setRemaps,
+            onBack = { remapOpen = false },
+        )
+    }
+
+    when (val b = backupState) {
+        AppViewModel.BackupState.Working -> AlertDialog(
+            onDismissRequest = {},
+            confirmButton = {},
+            title = { Text("Working…") },
+            text = { LinearWavyProgressIndicator(Modifier.fillMaxWidth()) },
+        )
+        is AppViewModel.BackupState.Done -> AlertDialog(
+            onDismissRequest = vm::dismissBackup,
+            confirmButton = { TextButton(onClick = vm::dismissBackup) { Text("OK") } },
+            title = { Text("Done") },
+            text = { Text(b.message) },
+        )
+        is AppViewModel.BackupState.Failed -> AlertDialog(
+            onDismissRequest = vm::dismissBackup,
+            confirmButton = { TextButton(onClick = vm::dismissBackup) { Text("OK") } },
+            title = { Text("Something went wrong") },
+            text = { Text(b.message) },
+        )
+        null -> Unit
     }
 
     val pickGame = pickCollectionsFor?.let { id -> games.firstOrNull { it.id == id } }
