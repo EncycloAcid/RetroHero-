@@ -691,25 +691,14 @@ class EmulatorActivity : ComponentActivity() {
         }
     }
 
+    /** A bright chunky tile; colours cycle through the arcade palette. */
     @Composable
     private fun ActionTile(icon: ImageVector, label: String, modifier: Modifier, onClick: () -> Unit) {
-        val interaction = remember { MutableInteractionSource() }
-        val press = rememberPressFeedback(interaction, restCorner = 28.dp, pressedCorner = 14.dp, pressedScale = 0.96f)
-        Surface(
-            shape = RoundedCornerShape(press.corner.value),
-            color = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-            modifier = modifier
-                .height(84.dp)
-                .graphicsLayer {
-                    scaleX = press.scale.value
-                    scaleY = press.scale.value
-                }
-                .clickable(interactionSource = interaction, indication = null, onClick = onClick),
-        ) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.SpaceBetween) {
-                Icon(icon, null)
-                Text(label, style = MaterialTheme.typography.titleMedium)
+        val face = remember(label) { com.retrohero.app.ui.components.Arcade.palette[(label.hashCode() and 0x7fffffff) % com.retrohero.app.ui.components.Arcade.palette.size] }
+        com.retrohero.app.ui.components.Chunky(modifier, face = face, shape = RoundedCornerShape(24.dp), onClick = onClick) {
+            Column(Modifier.fillMaxWidth().height(84.dp).padding(16.dp), verticalArrangement = Arrangement.SpaceBetween) {
+                Icon(icon, null, tint = com.retrohero.app.ui.components.Arcade.Ink)
+                Text(label, style = MaterialTheme.typography.titleMediumEmphasized, color = com.retrohero.app.ui.components.Arcade.Ink, maxLines = 1)
             }
         }
     }

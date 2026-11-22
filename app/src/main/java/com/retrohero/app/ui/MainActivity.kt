@@ -295,7 +295,7 @@ private fun App(vm: AppViewModel) {
     // Home is immersive: no top app bar, content runs under the status bar.
     val isHome = !albumOpen && tab == Tab.Home && games.isNotEmpty()
     // Pages that run under the status bar with their own big titles, like the music app's.
-    val immersive = isHome || (!albumOpen && (tab == Tab.Library || tab == Tab.Settings))
+    val immersive = !albumOpen
     val miniGame = recents.firstOrNull()?.takeIf { !miniHidden && !albumOpen && tab != Tab.Settings && sheetFor == null && !statsOpen && recap == null }
     val navBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val glass = rememberHazeState()
@@ -498,6 +498,7 @@ private fun App(vm: AppViewModel) {
                     onDownload = { vm.openDownload(AppViewModel.DownloadKind.Game) },
                     onPlay = { sheetFor = it.id },
                     onGameOptions = { menuFor = it.id },
+                    title = if (key == Tab.Home.name) "RetroHero" else "Search",
                 )
                 key == Tab.Library.name -> LibraryScreen(
                     games = games,

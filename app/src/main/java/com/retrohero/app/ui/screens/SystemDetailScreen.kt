@@ -332,19 +332,17 @@ private fun Header(
                 color = Color.White.copy(alpha = 0.8f),
             )
             Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(
-                    Modifier
-                        .height(40.dp)
-                        .press3D(maxTilt = 4f)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.9f))
-                        .clickable(enabled = games.isNotEmpty(), onClick = onPlayRandom)
-                        .padding(horizontal = 18.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                com.retrohero.app.ui.components.Chunky(
+                    face = com.retrohero.app.ui.components.Arcade.Butter,
+                    shape = CircleShape,
+                    depth = 4.dp,
+                    onClick = if (games.isNotEmpty()) onPlayRandom else null,
                 ) {
-                    Icon(Icons.Rounded.Casino, null, tint = Color(0xFF1A1A1A), modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Play random", style = MaterialTheme.typography.labelLargeEmphasized, color = Color(0xFF1A1A1A))
+                    Row(Modifier.height(46.dp).padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.Casino, null, tint = com.retrohero.app.ui.components.Arcade.Ink, modifier = Modifier.size(22.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Play random", style = MaterialTheme.typography.titleSmallEmphasized, color = com.retrohero.app.ui.components.Arcade.Ink)
+                    }
                 }
             }
         }

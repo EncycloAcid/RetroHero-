@@ -100,30 +100,26 @@ fun GameMenuSheet(
                 }
             }
             Spacer(Modifier.height(18.dp))
-            tiles.chunked(3).forEach { row ->
+            tiles.chunked(3).forEachIndexed { r, row ->
                 Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    row.forEach { tile ->
-                        Column(
-                            Modifier
-                                .weight(1f)
-                                .height(108.dp)
-                                .press3D()
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(Color.White.copy(alpha = 0.07f))
-                                .clickable(onClick = tile.onClick)
-                                .padding(12.dp),
-                        ) {
-                            Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                                Icon(tile.icon, null, tint = tile.tint, modifier = Modifier.size(28.dp))
+                    row.forEachIndexed { c, tile ->
+                        // Each tile a different bright colour, like arcade buttons.
+                        val face = if (tile.tint == Color.White || tile.tint == Salmon) Arcade.palette[(r * 3 + c) % Arcade.palette.size] else Arcade.Panel
+                        val ink = if (face == Arcade.Panel) tile.tint else Arcade.Ink
+                        Chunky(Modifier.weight(1f), face = face, shape = RoundedCornerShape(22.dp), onClick = tile.onClick) {
+                            Column(Modifier.fillMaxWidth().height(108.dp).padding(12.dp)) {
+                                Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                                    Icon(tile.icon, null, tint = ink, modifier = Modifier.size(30.dp))
+                                }
+                                Text(
+                                    tile.label,
+                                    style = MaterialTheme.typography.labelLargeEmphasized,
+                                    color = ink,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 1,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
                             }
-                            Text(
-                                tile.label,
-                                style = MaterialTheme.typography.labelLarge,
-                                color = Color.White,
-                                textAlign = TextAlign.Center,
-                                maxLines = 1,
-                                modifier = Modifier.fillMaxWidth(),
-                            )
                         }
                     }
                     repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }

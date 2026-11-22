@@ -27,6 +27,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.foundation.border
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
@@ -73,8 +75,14 @@ fun MiniPlayer(
                 alpha = 1f - (drag.value / 120.dp.toPx()).coerceIn(0f, 0.8f)
             }
             .press3D(maxTilt = 6f)
+            // A game cartridge: tinted by the game's system, on a darker ledge.
+            .drawBehind {
+                val tint = game.system?.color ?: Arcade.Grape
+                drawRoundRect(androidx.compose.ui.graphics.lerp(tint, Color.Black, 0.7f), topLeft = androidx.compose.ui.geometry.Offset(0f, 4.dp.toPx()), cornerRadius = androidx.compose.ui.geometry.CornerRadius(20.dp.toPx()))
+            }
             .clip(shape)
-            .then(if (glass != null) Modifier.frostedGlass(glass, shape) { 1f } else Modifier.background(Color(0xFF131313).copy(alpha = 0.92f)))
+            .background(androidx.compose.ui.graphics.lerp(game.system?.color ?: Arcade.Grape, Color.Black, 0.45f))
+            .border(2.dp, Color.White.copy(alpha = 0.1f), shape)
             .pointerInput(game.id) {
                 val tracker = VelocityTracker()
                 detectVerticalDragGestures(
@@ -114,7 +122,8 @@ fun MiniPlayer(
                     drawRect(Brush.horizontalGradient(0.82f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
                 },
         ) {
-            Text(game.title, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = Color.White, maxLines = 1, softWrap = false)
+            PixelLabel("Continue", Color.White.copy(alpha = 0.6f), size = 7)
+            Text(game.title, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold), color = Color.White, maxLines = 1, softWrap = false)
             val sub = buildString {
                 append(game.system?.name.orEmpty())
                 if (stat != null && stat.lastPlayed > 0) {
@@ -125,9 +134,8 @@ fun MiniPlayer(
             Text(sub, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f), maxLines = 1, softWrap = false)
         }
         Spacer(Modifier.width(8.dp))
-        Box(
-            Modifier.size(36.dp).clip(RoundedCornerShape(22.dp)).clickable(onClick = onPlay),
-            contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Rounded.PlayArrow, "Resume ${game.title}", tint = Color.White, modifier = Modifier.size(19.dp * 1.3f)) }
+        Chunky(face = Arcade.Butter, shape = androidx.compose.foundation.shape.CircleShape, depth = 3.dp, onClick = onPlay, contentAlignment = Alignment.Center) {
+            Icon(Icons.Rounded.PlayArrow, "Resume ${game.title}", tint = Arcade.Ink, modifier = Modifier.padding(8.dp).size(24.dp))
+        }
     }
 }

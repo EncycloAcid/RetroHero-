@@ -72,6 +72,11 @@ import com.retrohero.app.data.Game
 import com.retrohero.app.data.Systems
 import com.retrohero.app.ui.components.EmptyState
 import com.retrohero.app.ui.components.GameArt
+import com.retrohero.app.ui.components.Arcade
+import com.retrohero.app.ui.components.ArcadeChip
+import com.retrohero.app.ui.components.ArcadeHeader
+import com.retrohero.app.ui.components.Chunky
+import androidx.compose.ui.unit.em
 import com.retrohero.app.ui.components.GameCard
 
 @Composable
@@ -85,6 +90,7 @@ fun GamesScreen(
     onPlay: (Game) -> Unit,
     onGameOptions: (Game) -> Unit,
     showSystemFilter: Boolean = true,
+    title: String = "Search",
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var systemFilter by rememberSaveable { mutableStateOf<String?>(null) }
@@ -147,19 +153,15 @@ fun GamesScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
+        fullWidth { ArcadeHeader(title, "${games.size} games", Arcade.Sky) }
         fullWidth { SearchField(query, games.size) { query = it } }
 
         if (showSystemFilter && systemsPresent.size > 1) {
             fullWidth {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    item {
-                        ToggleButton(checked = systemFilter == null, onCheckedChange = { systemFilter = null }) { Text("All") }
-                    }
+                    item { ArcadeChip("All", systemFilter == null, Arcade.Sky, { systemFilter = null }) }
                     items(systemsPresent, key = { it.id }) { system ->
-                        ToggleButton(
-                            checked = systemFilter == system.id,
-                            onCheckedChange = { systemFilter = if (it) system.id else null },
-                        ) { Text(system.shortName) }
+                        ArcadeChip(system.shortName, systemFilter == system.id, system.color, { systemFilter = if (systemFilter == system.id) null else system.id })
                     }
                 }
             }
@@ -192,6 +194,7 @@ private fun LazyGridScope.fullWidth(content: @Composable () -> Unit) =
 
 @Composable
 private fun SearchField(query: String, total: Int, onChange: (String) -> Unit) {
+    Chunky(Modifier.fillMaxWidth().padding(top = 4.dp), face = Arcade.Panel, ledge = androidx.compose.ui.graphics.lerp(Arcade.Sky, Color.Black, 0.5f), shape = CircleShape, depth = 4.dp) {
     TextField(
         value = query,
         onValueChange = onChange,
@@ -205,16 +208,17 @@ private fun SearchField(query: String, total: Int, onChange: (String) -> Unit) {
         colors = TextFieldDefaults.colors(
             focusedIndicatorColor = Color.Transparent,
             unfocusedIndicatorColor = Color.Transparent,
-            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
-            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.75f),
+            focusedContainerColor = Color.Transparent,
+            unfocusedContainerColor = Color.Transparent,
         ),
-        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        modifier = Modifier.fillMaxWidth(),
     )
+    }
 }
 
 @Composable
 private fun SectionHeader(text: String) {
-    Text(text, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 8.dp, start = 4.dp))
+    Text(text, style = TextStyle(fontFamily = com.retrohero.app.ui.theme.Inter, fontWeight = androidx.compose.ui.text.font.FontWeight.Black, fontSize = 24.sp, letterSpacing = (-0.03).em), color = Color.White, modifier = Modifier.padding(top = 8.dp, start = 4.dp))
 }
 
 @Composable

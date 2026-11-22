@@ -16,6 +16,7 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -35,6 +36,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
@@ -61,56 +66,56 @@ fun FloatingNavBar(
     modifier: Modifier = Modifier,
     glass: HazeState? = null,
 ) {
-    val scheme = MaterialTheme.colorScheme
-    var pressedAny by remember { mutableStateOf(false) }
-    val barScale by animateFloatAsState(if (pressedAny) 0.985f else 1f, spring(0.6f, Spring.StiffnessMedium), label = "barPress")
+    // Arcade style: a dark chunky bar on a ledge; the selected tab is a bright block that
+    // slides over with a bounce, and its icon pops.
     BoxWithConstraints(
         modifier
             .fillMaxWidth()
-            .height(FloatingNavHeight)
-            .graphicsLayer {
-                scaleX = barScale
-                scaleY = barScale
-            }
-            .shadow(24.dp, CircleShape, ambientColor = Color.Black, spotColor = Color.Black)
-            .clip(CircleShape)
-            // Frosted chrome over the blurred app; a plain graphite fill where there's nothing to blur.
-            .then(
-                if (glass != null) Modifier.frostedGlass(glass, CircleShape)
-                else Modifier.background(Color(0xFF131313).copy(alpha = 0.94f)),
-            )
-            .padding(6.dp),
+            .height(FloatingNavHeight + 5.dp),
     ) {
-        val itemWidth: Dp = maxWidth / items.size
-        val x by animateDpAsState(
-            itemWidth * selected,
-            spring(dampingRatio = 0.68f, stiffness = Spring.StiffnessMediumLow),
-            label = "navPill",
-        )
+        val barH = FloatingNavHeight
+        Box(Modifier.fillMaxWidth().height(barH).offset(y = 5.dp).background(Color(0xFF0B0A0E), RoundedCornerShape(26.dp)))
         Box(
             Modifier
-                .offset(x = x)
-                .width(itemWidth)
-                .fillMaxHeight()
-                .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.11f)),
-        )
-        Row(Modifier.fillMaxWidth().fillMaxHeight()) {
-            items.forEachIndexed { i, item ->
-                val active = i == selected
-                val tint by animateColorAsState(if (active) Color.White else Color.White.copy(alpha = 0.7f), label = "navTint")
-                val interaction = remember { MutableInteractionSource() }
-                val itemPressed by interaction.collectIsPressedAsState()
-                LaunchedEffect(itemPressed) { pressedAny = itemPressed }
-                Box(
-                    Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .clip(CircleShape)
-                        .clickable(interactionSource = interaction, indication = null) { onSelect(i) },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(if (active) item.selectedIcon else item.icon, item.label, tint = tint, modifier = Modifier.size(28.dp))
+                .fillMaxWidth()
+                .height(barH)
+                .background(Arcade.Panel, RoundedCornerShape(26.dp))
+                .border(2.dp, Color.White.copy(alpha = 0.07f), RoundedCornerShape(26.dp))
+                .padding(7.dp),
+        ) {
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                val itemWidth: Dp = maxWidth / items.size
+                val x by animateDpAsState(itemWidth * selected, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow), label = "navBlock")
+                val color by animateColorAsState(Arcade.tab(selected), label = "navColor")
+                Box(Modifier.offset(x = x + 3.dp, y = 3.dp).width(itemWidth - 6.dp).fillMaxHeight().background(Arcade.ledge(color), RoundedCornerShape(18.dp)))
+                Box(Modifier.offset(x = x + 3.dp).width(itemWidth - 6.dp).fillMaxHeight(0.92f).background(color, RoundedCornerShape(18.dp)))
+                Row(Modifier.fillMaxWidth().fillMaxHeight()) {
+                    items.forEachIndexed { i, item ->
+                        val active = i == selected
+                        val pop = remember { Animatable(1f) }
+                        LaunchedEffect(active) {
+                            if (active) {
+                                pop.snapTo(0.6f)
+                                pop.animateTo(1f, spring(dampingRatio = 0.35f, stiffness = Spring.StiffnessMediumLow))
+                            }
+                        }
+                        val tint by animateColorAsState(if (active) Arcade.Ink else Color.White.copy(alpha = 0.6f), label = "navTint")
+                        Box(
+                            Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(18.dp))
+                                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelect(i) },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                if (active) item.selectedIcon else item.icon,
+                                item.label,
+                                tint = tint,
+                                modifier = Modifier.size(26.dp).graphicsLayer { scaleX = pop.value; scaleY = pop.value },
+                            )
+                        }
+                    }
                 }
             }
         }

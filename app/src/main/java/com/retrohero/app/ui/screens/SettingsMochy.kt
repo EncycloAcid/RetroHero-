@@ -78,6 +78,9 @@ import com.retrohero.app.data.Looks
 import com.retrohero.app.data.PadSkin
 import com.retrohero.app.data.Settings
 import com.retrohero.app.ui.components.LocalNavSpace
+import com.retrohero.app.ui.components.Arcade
+import com.retrohero.app.ui.components.ArcadeHeader
+import com.retrohero.app.ui.components.Chunky
 import com.retrohero.app.ui.components.press3D
 import com.retrohero.app.ui.theme.Inter
 import com.retrohero.app.ui.theme.Salmon
@@ -112,18 +115,17 @@ fun SettingsHome(onOpen: (String) -> Unit, onOpenStats: () -> Unit) {
             .fillMaxSize()
             .background(Color.Black)
             .verticalScroll(rememberScrollState())
-            .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 24.dp + LocalNavSpace.current),
+            .padding(start = 20.dp, end = 20.dp, bottom = 24.dp + LocalNavSpace.current),
     ) {
-        Image(painterResource(R.drawable.ic_logo_mark), null, Modifier.size(width = 47.dp, height = 32.dp))
-        Spacer(Modifier.height(6.dp))
-        Text("Settings", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 34.sp, lineHeight = 40.sp, letterSpacing = (-0.03).em), color = Color.White)
+        ArcadeHeader("Settings", "Options", Arcade.Grape, trailing = {
+            Image(painterResource(R.drawable.ic_logo_mark), null, Modifier.padding(bottom = 10.dp).size(width = 44.dp, height = 30.dp))
+        })
         Spacer(Modifier.height(16.dp))
         // Search pill.
         val focused = query.isNotEmpty()
         val fill by animateColorAsState(if (focused) Color(0xFF1E1E21) else SearchFill, tween(200), label = "searchFill")
         Row(
-            Modifier.fillMaxWidth().height(48.dp).clip(CircleShape).background(fill).padding(horizontal = 16.dp),
+            Modifier.fillMaxWidth().height(52.dp).clip(CircleShape).background(fill).border(2.dp, if (focused) Arcade.Grape else Color.White.copy(alpha = 0.08f), CircleShape).padding(horizontal = 18.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(Icons.Rounded.Search, null, tint = Placeholder, modifier = Modifier.size(20.dp))
@@ -168,55 +170,39 @@ fun SettingsHome(onOpen: (String) -> Unit, onOpenStats: () -> Unit) {
         }
 
         Spacer(Modifier.height(18.dp))
-        // Your stats card, like Mochy's profile entry.
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .press3D()
-                .clip(RoundedCornerShape(22.dp))
-                .background(Color(0xFF0F0F0F))
-                .clickable(onClick = onOpenStats)
-                .padding(horizontal = 18.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(Modifier.size(40.dp).clip(CircleShape).background(Salmon), contentAlignment = Alignment.Center) {
-                Icon(Icons.Rounded.Insights, null, tint = Color(0xFF1A1A1A), modifier = Modifier.size(20.dp))
+        // Your stats card: a bright chunky block.
+        Chunky(Modifier.fillMaxWidth(), face = Arcade.Pink, shape = RoundedCornerShape(26.dp), onClick = onOpenStats) {
+            Row(Modifier.padding(horizontal = 18.dp, vertical = 18.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(44.dp).clip(CircleShape).background(Arcade.Ink), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.Insights, null, tint = Arcade.Pink, modifier = Modifier.size(22.dp))
+                }
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Your stats & recap", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Black, fontSize = 19.sp), color = Arcade.Ink)
+                    Text("Play time, favourite systems, your month", style = MaterialTheme.typography.bodySmall, color = Arcade.Ink.copy(alpha = 0.7f))
+                }
+                Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Arcade.Ink)
             }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text("Your stats & recap", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 17.sp), color = Color.White)
-                Text("Play time, favourite systems, your month", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.55f))
-            }
-            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Color.White.copy(alpha = 0.5f))
         }
-        Spacer(Modifier.height(18.dp))
-        Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp).height(0.8.dp).background(Color.White.copy(alpha = 0.1f)))
-        Spacer(Modifier.height(18.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            categories.forEach { c -> CategoryBubble(c.title, c.icon) { onOpen(c.id) } }
+        Spacer(Modifier.height(22.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            categories.forEachIndexed { i, c -> CategoryBubble(c.title, c.icon, Arcade.palette[(i + 1) % Arcade.palette.size]) { onOpen(c.id) } }
         }
     }
 }
 
 @Composable
-private fun CategoryBubble(title: String, icon: ImageVector, onClick: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .height(64.dp)
-            .press3D()
-            .clip(RoundedCornerShape(22.dp))
-            .background(BubbleFill)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.size(40.dp).clip(CircleShape).background(IconTile), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = Color.White, modifier = Modifier.size(20.dp))
+private fun CategoryBubble(title: String, icon: ImageVector, color: Color, onClick: () -> Unit) {
+    // Dark face on a ledge in the category's colour, with a bright icon tile.
+    Chunky(Modifier.fillMaxWidth(), face = BubbleFill, ledge = androidx.compose.ui.graphics.lerp(color, Color.Black, 0.35f), shape = RoundedCornerShape(22.dp), depth = 4.dp, onClick = onClick) {
+        Row(Modifier.height(66.dp).padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(42.dp).clip(RoundedCornerShape(14.dp)).background(color), contentAlignment = Alignment.Center) {
+                Icon(icon, null, tint = Arcade.Ink, modifier = Modifier.size(22.dp))
+            }
+            Spacer(Modifier.width(14.dp))
+            Text(title, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 17.sp), color = Color.White, modifier = Modifier.weight(1f))
+            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = color)
         }
-        Spacer(Modifier.width(12.dp))
-        Text(title, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 17.sp), color = Color.White, modifier = Modifier.weight(1f))
-        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Color.White.copy(alpha = 0.35f))
     }
 }
 
@@ -233,15 +219,14 @@ fun SubSettings(title: String, onBack: () -> Unit, content: @Composable ColumnSc
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         Column {
-            Box(
-                Modifier.size(40.dp).clip(CircleShape).background(Color(0xFF2C2C2E)).clickable(onClick = onBack),
-                contentAlignment = Alignment.Center,
-            ) { Icon(Icons.AutoMirrored.Rounded.ArrowBackIos, "Back", tint = Color.White, modifier = Modifier.size(18.dp).offset(x = 3.dp)) }
+            Chunky(face = Color(0xFF2C2C2E), shape = CircleShape, depth = 3.dp, onClick = onBack, contentAlignment = Alignment.Center) {
+                Icon(Icons.AutoMirrored.Rounded.ArrowBackIos, "Back", tint = Color.White, modifier = Modifier.padding(11.dp).size(18.dp).offset(x = 3.dp))
+            }
             Text(
                 title,
-                style = MaterialTheme.typography.headlineLargeEmphasized,
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Black, fontSize = 38.sp, lineHeight = 42.sp, letterSpacing = (-0.045).em),
                 color = Color.White,
-                modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+                modifier = Modifier.padding(top = 14.dp, bottom = 4.dp),
             )
         }
         content()
@@ -342,15 +327,8 @@ private fun StylePager(
             val id = items[i]
             val isSel = id == selected
             val ring by animateFloatAsState(if (isSel) 1f else 0f, tween(220), label = "ring")
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(187.dp)
-                    .clip(RoundedCornerShape(22.dp))
-                    .background(Color(0xFF1C1C1E))
-                    .border(2.dp, Color.White.copy(alpha = 0.9f * ring), RoundedCornerShape(22.dp))
-                    .clickable { onSelect(id) },
-            ) {
+            Chunky(Modifier.fillMaxWidth(), face = Color(0xFF1C1C1E), ledge = androidx.compose.ui.graphics.lerp(Arcade.Grape, Color.Black, 0.3f + 0.4f * (1 - ring)), outline = Arcade.Grape.copy(alpha = ring), shape = RoundedCornerShape(24.dp), onClick = { onSelect(id) }) {
+            Box(Modifier.fillMaxWidth().height(187.dp).clip(RoundedCornerShape(24.dp))) {
                 // The mini phone.
                 Box(
                     Modifier
@@ -371,6 +349,7 @@ private fun StylePager(
                     color = Color.White,
                     modifier = Modifier.align(Alignment.BottomStart).padding(start = 22.dp, bottom = 24.dp),
                 )
+            }
             }
         }
         Text(
