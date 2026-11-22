@@ -19,6 +19,8 @@ class AppPaths(context: Context) {
     val covers = File(context.filesDir, "covers")
     val cheats = File(context.filesDir, "cheats")
     val playtime = File(context.filesDir, "playtime")
+    /** Imported look files. */
+    val looks = File(context.filesDir, "looks")
     /** Controller remaps; written by the main app, read when a game starts. */
     val remapFile = File(context.filesDir, "remap.json")
     /** Touch-control positions; written in-game. */

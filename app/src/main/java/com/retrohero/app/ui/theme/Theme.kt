@@ -13,8 +13,17 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 
-/** Salmon accent used for the gacha pointer and small highlights. */
-val Salmon = Color(0xFFF0908D)
+private val accentState = androidx.compose.runtime.mutableStateOf(Color(0xFFF0908D))
+
+/**
+ * The accent colour (salmon by default) used for the gacha pointer and small highlights.
+ * It follows the chosen look; reading it in a composable recomposes when the look changes.
+ */
+val Salmon: Color get() = accentState.value
+
+fun setAccent(color: Color) {
+    accentState.value = color
+}
 
 /**
  * Dark-only, monochrome palette on pure black: the interface stays greyscale and colour comes
@@ -109,8 +118,9 @@ fun RetroHeroTheme(
     @Suppress("UNUSED_PARAMETER") dynamicColor: Boolean = false,
     content: @Composable () -> Unit,
 ) {
+    val accent = Salmon
     MaterialExpressiveTheme(
-        colorScheme = Mono,
+        colorScheme = Mono.copy(tertiary = accent),
         motionScheme = MotionScheme.expressive(),
         typography = MonoTypography,
         content = content,

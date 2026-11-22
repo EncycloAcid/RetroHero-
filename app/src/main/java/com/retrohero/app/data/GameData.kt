@@ -51,20 +51,39 @@ data class PlayStat(val seconds: Long, val sessions: Int, val lastPlayed: Long) 
     }
 }
 
+/** One stretch of play: ended at [end] (epoch ms), lasted [seconds]. */
+data class PlaySession(val end: Long, val seconds: Long)
+
 object PlayTime {
+    /** How many stretches of play to keep per game. */
+    private const val MAX_LOG = 1500
+
     fun read(file: File): PlayStat {
         val o = readJson(file) ?: return PlayStat.None
         return PlayStat(o.optLong("seconds"), o.optInt("sessions"), o.optLong("lastPlayed"))
     }
 
+    /** Every recorded stretch of play, oldest first. */
+    fun log(file: File): List<PlaySession> {
+        val arr = readJson(file)?.optJSONArray("log") ?: return emptyList()
+        return (0 until arr.length()).map { i ->
+            val e = arr.getJSONArray(i)
+            PlaySession(e.getLong(0), e.getLong(1))
+        }
+    }
+
     /** Adds [seconds] of play; [newSession] counts a fresh launch. */
     fun add(file: File, seconds: Long, newSession: Boolean, now: Long = System.currentTimeMillis()) {
         if (seconds <= 0 && !newSession) return
-        val old = read(file)
+        val old = readJson(file)
+        val log = old?.optJSONArray("log") ?: JSONArray()
+        if (seconds > 0) log.put(JSONArray(listOf(now, seconds)))
+        while (log.length() > MAX_LOG) log.remove(0)
         val o = JSONObject()
-            .put("seconds", old.seconds + seconds.coerceAtLeast(0))
-            .put("sessions", old.sessions + if (newSession) 1 else 0)
+            .put("seconds", (old?.optLong("seconds") ?: 0) + seconds.coerceAtLeast(0))
+            .put("sessions", (old?.optInt("sessions") ?: 0) + if (newSession) 1 else 0)
             .put("lastPlayed", now)
+            .put("log", log)
         writeAtomic(file, o.toString())
     }
 

@@ -22,6 +22,9 @@ import com.retrohero.app.data.Cheat
 import com.retrohero.app.data.Cheats
 import com.retrohero.app.data.PlayTime
 import com.retrohero.app.data.Remap
+import com.retrohero.app.data.Looks
+import com.retrohero.app.data.PadSkin
+import com.retrohero.app.ui.theme.setAccent
 import com.retrohero.app.data.ScreenFilter
 import java.io.File
 import android.content.Context
@@ -163,6 +166,7 @@ class EmulatorActivity : ComponentActivity() {
     private lateinit var optionsStore: CoreOptionsStore
     private lateinit var gamePrefs: GamePrefs
     private lateinit var padLayouts: PadLayouts
+    private var padSkin: PadSkin = Looks.Glass
 
     private var phase by mutableStateOf<Phase>(Phase.Loading)
     private var menuOpen by mutableStateOf(false)
@@ -207,6 +211,10 @@ class EmulatorActivity : ComponentActivity() {
         input = InputMapper(settings.stickAsDpad, Remap.load(paths.remapFile))
         optionsStore = CoreOptionsStore(paths.coreOptionsFile(coreId))
         gamePrefs = GamePrefs(this, settings.sharpPixels)
+        // The chosen look: an accent and a pad skin (imported looks carry both).
+        val custom = Looks.custom(paths.looks)
+        padSkin = settings.padSkin.let { id -> custom.firstOrNull { "look:" + it.id == id }?.pad ?: Looks.skin(id) }
+        setAccent(settings.accent.let { id -> custom.firstOrNull { "look:" + it.id == id }?.accent ?: Looks.accent(id) })
         padLayouts = PadLayouts(paths.padLayoutFile)
         filter = gamePrefs.filter(system.id)
         integerScale = gamePrefs.integerScale(system.id)
@@ -522,6 +530,7 @@ class EmulatorActivity : ComponentActivity() {
             onPress = { if (settings.haptics) view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP) },
             modifier = modifier,
             accent = system.color,
+            skin = padSkin,
             onRewind = if (rewindOn) { held -> NativeBridge.setRewinding(held) } else null,
             adjust = remember(editingPad, landscape) { padLayouts.get(system.id, landscape) },
             edit = if (editingPad) {

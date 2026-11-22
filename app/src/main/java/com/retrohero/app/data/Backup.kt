@@ -21,7 +21,7 @@ class Backup(private val filesDir: File, private val settings: Settings) {
 
     class BadBackupException(message: String) : Exception(message)
 
-    private val dirs = listOf("saves", "states", "screenshots", "covers", "cheats", "playtime", "core_options")
+    private val dirs = listOf("saves", "states", "screenshots", "covers", "cheats", "playtime", "core_options", "looks")
     private val files = listOf("pad_layout.json", "remap.json")
     private val gamePrefs get() = File(filesDir.parentFile, "shared_prefs/game_prefs.xml")
 

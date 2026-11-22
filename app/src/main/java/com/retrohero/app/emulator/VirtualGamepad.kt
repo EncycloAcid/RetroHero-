@@ -63,7 +63,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.retrohero.app.data.Looks
 import com.retrohero.app.data.PadButton
+import com.retrohero.app.data.PadSkin
 import com.retrohero.app.data.PadLayout
 import com.retrohero.app.data.RetroPad
 import kotlin.math.atan2
@@ -150,6 +152,7 @@ fun VirtualGamepad(
     onPress: () -> Unit,
     modifier: Modifier = Modifier,
     accent: Color = Color(0xFFFF4F8B),
+    skin: PadSkin = Looks.Glass,
     onRewind: ((Boolean) -> Unit)? = null,
     adjust: Map<String, PadAdjust> = emptyMap(),
     edit: PadEditState? = null,
@@ -206,6 +209,7 @@ fun VirtualGamepad(
     ) {
         CompositionLocalProvider(
             LocalPadAccent provides accent,
+            LocalPadSkin provides skin,
             LocalPadEdit provides edit,
             LocalPadAdjust provides adjust,
             LocalShowRewind provides (onRewind != null),
@@ -232,9 +236,24 @@ private fun SpeedControls(regions: Regions, pressed: Set<Int>, modifier: Modifie
 }
 
 // Frosted-glass look shared by every control.
-private val GlassFill = Color(0xFF1A1622).copy(alpha = 0.55f)
-private val GlassEdge = Color.White.copy(alpha = 0.22f)
+private val LocalPadSkin = staticCompositionLocalOf { Looks.Glass }
+
+// The current skin's colours.
+private val GlassFill: Color @Composable get() = LocalPadSkin.current.fill
+private val GlassEdge: Color @Composable get() = LocalPadSkin.current.edge
 private val GlassPressed = Color.White.copy(alpha = 0.32f)
+private val PadLabel: Color @Composable get() = LocalPadSkin.current.label
+
+/** Face-button colour for the current skin: classic colours, the body colour, or the accent. */
+@Composable
+private fun skinFace(label: String, accent: Color): Color {
+    val skin = LocalPadSkin.current
+    return when (skin.faces) {
+        "mono" -> skin.pressed ?: skin.edge
+        "accent" -> skin.edge
+        else -> faceColor(label, accent)
+    }
+}
 
 /** Classic face-button colours, recognisable at a glance. */
 private fun faceColor(label: String, accent: Color): Color = when (label) {
@@ -302,6 +321,10 @@ private fun Dpad(regions: Regions, pressed: Set<Int>, size: Dp) {
     val accent = LocalPadAccent.current
     val anyPressed = pressed.any { it in DPAD_IDS }
     val scale = pressScale(anyPressed)
+    val fill = GlassFill
+    val edge = GlassEdge
+    val label = PadLabel
+    val glow = LocalPadSkin.current.glow
     Canvas(
         Modifier
             .size(size)
@@ -320,7 +343,7 @@ private fun Dpad(regions: Regions, pressed: Set<Int>, size: Dp) {
         }
         // Soft drop shadow, glass body, rim.
         translate(top = 3.dp.toPx()) { drawPath(cross, Color.Black.copy(alpha = 0.25f)) }
-        drawPath(cross, GlassFill)
+        drawPath(cross, fill)
         fun lit(rect: Rect, id: Int) {
             if (id in pressed) drawRoundRect(accent.copy(alpha = 0.85f), rect.topLeft, rect.size, CornerRadius(r))
         }
@@ -328,13 +351,14 @@ private fun Dpad(regions: Regions, pressed: Set<Int>, size: Dp) {
         lit(Rect(arm, arm * 1.9f, arm * 2, w), RetroPad.DOWN)
         lit(Rect(0f, arm, arm * 1.1f, arm * 2), RetroPad.LEFT)
         lit(Rect(arm * 1.9f, arm, w, arm * 2), RetroPad.RIGHT)
-        drawPath(cross, GlassEdge, style = Stroke(1.5.dp.toPx()))
+        if (glow > 0f) drawPath(cross, edge.copy(alpha = 0.25f * glow), style = Stroke(7.dp.toPx()))
+        drawPath(cross, edge, style = Stroke(1.5.dp.toPx()))
         // Centre dimple and direction arrows.
         drawCircle(Color.White.copy(alpha = 0.10f), radius = arm * 0.28f, center = center)
         val c = w / 2f
         val t = arm * 0.17f
         val e = arm * 0.38f
-        val arrow = Color.White.copy(alpha = 0.6f)
+        val arrow = label.copy(alpha = label.alpha * 0.65f)
         fun tri(ax: Float, ay: Float, bx: Float, by: Float, cx: Float, cy: Float) =
             drawPath(Path().apply { moveTo(ax, ay); lineTo(bx, by); lineTo(cx, cy); close() }, arrow)
         tri(c, e, c - t, e + t, c + t, e + t)
@@ -395,7 +419,8 @@ private fun FaceButtons(layout: PadLayout, regions: Regions, pressed: Set<Int>) 
 @Composable
 private fun RoundButton(button: PadButton, regions: Regions, pressed: Set<Int>, size: Dp, modifier: Modifier = Modifier) {
     val isPressed = button.id in pressed
-    val color = faceColor(button.label, LocalPadAccent.current)
+    val color = skinFace(button.label, LocalPadAccent.current)
+    val labelColor = if (LocalPadSkin.current.faces == "color") Color.White else PadLabel
     val scale = pressScale(isPressed)
     Box(
         modifier
@@ -420,7 +445,7 @@ private fun RoundButton(button: PadButton, regions: Regions, pressed: Set<Int>, 
     ) {
         Text(
             button.label,
-            color = Color.White,
+            color = labelColor,
             style = TextStyle(
                 fontFamily = InterDisplay,
                 fontWeight = FontWeight.ExtraBold,
@@ -443,7 +468,7 @@ private fun Shoulders(buttons: List<PadButton>, regions: Regions, pressed: Set<I
                 isPressed = b.id in pressed,
                 shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp, bottomStart = 12.dp, bottomEnd = 12.dp),
                 modifier = Modifier.width(if (buttons.size > 1) 68.dp else 84.dp).height(42.dp),
-            ) { Text(b.label, color = Color.White, style = TextStyle(fontFamily = InterDisplay, fontWeight = FontWeight.Bold, fontSize = 16.sp)) }
+            ) { Text(b.label, color = PadLabel, style = TextStyle(fontFamily = InterDisplay, fontWeight = FontWeight.Bold, fontSize = 16.sp)) }
         }
     }
 }
@@ -468,7 +493,7 @@ private fun Pill(label: String, id: Int, regions: Regions, pressed: Set<Int>) {
     ) {
         Text(
             label,
-            color = Color.White.copy(alpha = 0.9f),
+            color = PadLabel.copy(alpha = 0.9f),
             style = TextStyle(fontFamily = InterDisplay, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 1.2.sp),
         )
     }
@@ -483,7 +508,7 @@ private fun IconControl(key: String, id: Int, regions: Regions, pressed: Set<Int
         isPressed = id in pressed,
         shape = CircleShape,
         modifier = Modifier.size(42.dp),
-    ) { Icon(icon, description, tint = Color.White) }
+    ) { Icon(icon, description, tint = PadLabel) }
 }
 
 @Composable
@@ -497,6 +522,7 @@ private fun GlassControl(
     content: @Composable () -> Unit,
 ) {
     val accent = LocalPadAccent.current
+    val skin = LocalPadSkin.current
     val scale = pressScale(isPressed)
     Box(
         modifier
@@ -505,7 +531,7 @@ private fun GlassControl(
                 scaleX = scale
                 scaleY = scale
             }
-            .background(if (isPressed) accent.copy(alpha = 0.75f) else GlassFill, shape)
+            .background(if (isPressed) (skin.pressed ?: accent.copy(alpha = 0.75f)) else GlassFill, shape)
             .border(1.5.dp, if (isPressed) GlassPressed else GlassEdge, shape),
         contentAlignment = Alignment.Center,
     ) { content() }

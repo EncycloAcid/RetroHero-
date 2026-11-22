@@ -74,6 +74,16 @@ class Settings(context: Context) {
         get() = prefs.getFloat("ff_speed", 3f)
         set(v) = prefs.edit { putFloat("ff_speed", v) }
 
+    /** Accent colour id from [Looks.accents], or "look:<id>" for an imported look. */
+    var accent: String
+        get() = prefs.getString("accent", "salmon")!!
+        set(v) = prefs.edit { putString("accent", v) }
+
+    /** Touch-pad skin id from [Looks.skins], or "look:<id>" for an imported look. */
+    var padSkin: String
+        get() = prefs.getString("pad_skin", "glass")!!
+        set(v) = prefs.edit { putString("pad_skin", v) }
+
     /** Also copy in-game screenshots to Pictures/RetroHero. */
     var screenshotsToGallery: Boolean
         get() = prefs.getBoolean("screenshots_to_gallery", false)
