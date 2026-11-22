@@ -1,0 +1,31 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Controller silhouette with a gradient-free two-tone look. -->
+    <path
+        android:fillColor="#FFFF4F8B"
+        android:pathData="M38,38h32c9.4,0 15.6,6.2 17.4,15.6l3.2,17c1.2,6.3 -3.6,12.4 -10,12.4c-3.8,0 -7.2,-2.1 -8.9,-5.4L68,72H40l-3.7,5.6C34.6,80.9 31.2,83 27.4,83c-6.4,0 -11.2,-6.1 -10,-12.4l3.2,-17C22.4,44.2 28.6,38 38,38z" />
+    <!-- D-pad -->
+    <path
+        android:fillColor="#FF1B1033"
+        android:pathData="M33,49h6v6h6v6h-6v6h-6v-6h-6v-6h6z" />
+    <!-- Face buttons -->
+    <path
+        android:fillColor="#FF35D0FF"
+        android:pathData="M71,52m-4,0a4,4 0,1 1,8 0a4,4 0,1 1,-8 0" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M63,60m-4,0a4,4 0,1 1,8 0a4,4 0,1 1,-8 0" />
+    <path
+        android:fillColor="#FF7C5CFF"
+        android:pathData="M79,60m-4,0a4,4 0,1 1,8 0a4,4 0,1 1,-8 0" />
+    <path
+        android:fillColor="#FFFFD600"
+        android:pathData="M71,68m-4,0a4,4 0,1 1,8 0a4,4 0,1 1,-8 0" />
+    <!-- Star above: the "hero" -->
+    <path
+        android:fillColor="#FFFFD600"
+        android:pathData="M54,18l3.5,7.6 8.3,0.9 -6.2,5.6 1.8,8.2L54,36.1l-7.3,4.2 1.8,-8.2 -6.2,-5.6 8.3,-0.9z" />
+</vector>
