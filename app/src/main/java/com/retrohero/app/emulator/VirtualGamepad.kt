@@ -1,10 +1,13 @@
 package com.retrohero.app.emulator
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.material.icons.rounded.FastForward
+import androidx.compose.material.icons.rounded.FastRewind
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -68,6 +71,57 @@ import kotlin.math.hypot
 
 private const val ID_MENU = 100
 private const val ID_FAST_FORWARD = 101
+private const val ID_REWIND = 102
+
+/** Editing state for moving and resizing groups of controls. */
+class PadEditState(
+    val adjust: Map<String, PadAdjust>,
+    val selected: String?,
+    val onSelect: (String) -> Unit,
+    val onAdjust: (String, PadAdjust) -> Unit,
+)
+
+private val LocalPadEdit = staticCompositionLocalOf<PadEditState?> { null }
+private val LocalPadAdjust = staticCompositionLocalOf<Map<String, PadAdjust>> { emptyMap() }
+
+/** Applies a group's saved offset and size; while editing, also makes it draggable. */
+@Composable
+private fun Modifier.padGroup(name: String): Modifier {
+    val edit = LocalPadEdit.current
+    val adj = (edit?.adjust ?: LocalPadAdjust.current)[name] ?: PadAdjust()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    var m = this
+        .offset(adj.dx.dp, adj.dy.dp)
+        .graphicsLayer {
+            scaleX = adj.scale
+            scaleY = adj.scale
+        }
+    if (edit != null) {
+        val selected = edit.selected == name
+        val latest = androidx.compose.runtime.rememberUpdatedState(adj)
+        m = m
+            .border(
+                if (selected) 2.dp else 1.dp,
+                Color.White.copy(alpha = if (selected) 0.9f else 0.35f),
+                RoundedCornerShape(18.dp),
+            )
+            .background(Color.White.copy(alpha = if (selected) 0.12f else 0.04f), RoundedCornerShape(18.dp))
+            .pointerInput(name) {
+                detectDragGestures(
+                    onDragStart = { edit.onSelect(name) },
+                ) { change, drag ->
+                    change.consume()
+                    val cur = latest.value
+                    // Drag happens in the scaled layer, so scale it back to screen space.
+                    with(density) {
+                        edit.onAdjust(name, cur.copy(dx = cur.dx + (drag.x * cur.scale).toDp().value, dy = cur.dy + (drag.y * cur.scale).toDp().value))
+                    }
+                }
+            }
+            .pointerInput("tap_$name") { detectTapGestures { edit.onSelect(name) } }
+    }
+    return m
+}
 
 private sealed interface Region {
     val rect: Rect
@@ -96,6 +150,9 @@ fun VirtualGamepad(
     onPress: () -> Unit,
     modifier: Modifier = Modifier,
     accent: Color = Color(0xFFFF4F8B),
+    onRewind: ((Boolean) -> Unit)? = null,
+    adjust: Map<String, PadAdjust> = emptyMap(),
+    edit: PadEditState? = null,
 ) {
     val regions = remember { Regions() }
     var pressed by remember { mutableStateOf(emptySet<Int>()) }
@@ -104,7 +161,8 @@ fun VirtualGamepad(
     Box(
         modifier
             .onGloballyPositioned { origin = it.positionInRoot() }
-            .pointerInput(layout) {
+            .pointerInput(layout, edit != null) {
+                if (edit != null) return@pointerInput
                 val slop = 10.dp.toPx()
                 awaitPointerEventScope {
                     while (true) {
@@ -127,6 +185,7 @@ fun VirtualGamepad(
                                 when (id) {
                                     ID_MENU -> onMenu()
                                     ID_FAST_FORWARD -> onFastForward(true)
+                                    ID_REWIND -> onRewind?.invoke(true)
                                     else -> onButton(id, true)
                                 }
                             }
@@ -134,6 +193,7 @@ fun VirtualGamepad(
                                 when (id) {
                                     ID_MENU -> Unit
                                     ID_FAST_FORWARD -> onFastForward(false)
+                                    ID_REWIND -> onRewind?.invoke(false)
                                     else -> onButton(id, false)
                                 }
                             }
@@ -144,8 +204,13 @@ fun VirtualGamepad(
                 }
             },
     ) {
-        CompositionLocalProvider(LocalPadAccent provides accent) {
-            Box(Modifier.fillMaxSize().alpha(opacity)) {
+        CompositionLocalProvider(
+            LocalPadAccent provides accent,
+            LocalPadEdit provides edit,
+            LocalPadAdjust provides adjust,
+            LocalShowRewind provides (onRewind != null),
+        ) {
+            Box(Modifier.fillMaxSize().alpha(if (edit != null) maxOf(opacity, 0.85f) else opacity)) {
                 if (landscape) LandscapeControls(layout, regions, pressed) else PortraitControls(layout, regions, pressed)
             }
         }
@@ -153,6 +218,18 @@ fun VirtualGamepad(
 }
 
 private val LocalPadAccent = staticCompositionLocalOf { Color(0xFFFF4F8B) }
+private val LocalShowRewind = staticCompositionLocalOf { false }
+
+/** Fast-forward, plus rewind beside it when rewind is on. */
+@Composable
+private fun SpeedControls(regions: Regions, pressed: Set<Int>, modifier: Modifier = Modifier) {
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (LocalShowRewind.current) {
+            IconControl("rw", ID_REWIND, regions, pressed, Icons.Rounded.FastRewind, "Rewind")
+        }
+        IconControl("ff", ID_FAST_FORWARD, regions, pressed, Icons.Rounded.FastForward, "Fast forward")
+    }
+}
 
 // Frosted-glass look shared by every control.
 private val GlassFill = Color(0xFF1A1622).copy(alpha = 0.55f)
@@ -184,22 +261,22 @@ private fun pressScale(pressed: Boolean): Float {
 private fun PortraitControls(layout: PadLayout, regions: Regions, pressed: Set<Int>) {
     Column(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 8.dp)) {
         Row(Modifier.fillMaxWidth().height(42.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Shoulders(layout.leftShoulders, regions, pressed, "l")
-            Shoulders(layout.rightShoulders, regions, pressed, "r")
+            Box(Modifier.padGroup("l")) { Shoulders(layout.leftShoulders, regions, pressed, "l") }
+            Box(Modifier.padGroup("r")) { Shoulders(layout.rightShoulders, regions, pressed, "r") }
         }
         Row(
             Modifier.fillMaxWidth().weight(1f),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Dpad(regions, pressed, 156.dp)
-            FaceButtons(layout, regions, pressed)
+            Box(Modifier.padGroup("dpad")) { Dpad(regions, pressed, 156.dp) }
+            Box(Modifier.padGroup("face")) { FaceButtons(layout, regions, pressed) }
         }
-        // Utility row: fast-forward and pause flank SELECT / START.
+        // Utility row: speed controls and pause flank SELECT / START.
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            IconControl("ff", ID_FAST_FORWARD, regions, pressed, Icons.Rounded.FastForward, "Fast forward")
-            SelectStart(layout, regions, pressed, Modifier)
-            IconControl("menu", ID_MENU, regions, pressed, Icons.Rounded.Pause, "Menu")
+            SpeedControls(regions, pressed, Modifier.padGroup("speed"))
+            SelectStart(layout, regions, pressed, Modifier.padGroup("selstart"))
+            Box(Modifier.padGroup("menu")) { IconControl("menu", ID_MENU, regions, pressed, Icons.Rounded.Pause, "Menu") }
         }
     }
 }
@@ -207,15 +284,15 @@ private fun PortraitControls(layout: PadLayout, regions: Regions, pressed: Set<I
 @Composable
 private fun LandscapeControls(layout: PadLayout, regions: Regions, pressed: Set<Int>) {
     Box(Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 14.dp)) {
-        Column(Modifier.align(Alignment.TopStart)) { Shoulders(layout.leftShoulders, regions, pressed, "l") }
-        Column(Modifier.align(Alignment.TopEnd)) { Shoulders(layout.rightShoulders, regions, pressed, "r") }
-        Row(Modifier.align(Alignment.TopCenter), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            IconControl("ff", ID_FAST_FORWARD, regions, pressed, Icons.Rounded.FastForward, "Fast forward")
+        Column(Modifier.align(Alignment.TopStart).padGroup("l")) { Shoulders(layout.leftShoulders, regions, pressed, "l") }
+        Column(Modifier.align(Alignment.TopEnd).padGroup("r")) { Shoulders(layout.rightShoulders, regions, pressed, "r") }
+        Row(Modifier.align(Alignment.TopCenter).padGroup("speed"), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            SpeedControls(regions, pressed)
             IconControl("menu", ID_MENU, regions, pressed, Icons.Rounded.Pause, "Menu")
         }
-        Box(Modifier.align(Alignment.CenterStart).offset(y = 24.dp)) { Dpad(regions, pressed, 146.dp) }
-        Box(Modifier.align(Alignment.CenterEnd).offset(y = 24.dp)) { FaceButtons(layout, regions, pressed) }
-        SelectStart(layout, regions, pressed, Modifier.align(Alignment.BottomCenter))
+        Box(Modifier.align(Alignment.CenterStart).offset(y = 24.dp).padGroup("dpad")) { Dpad(regions, pressed, 146.dp) }
+        Box(Modifier.align(Alignment.CenterEnd).offset(y = 24.dp).padGroup("face")) { FaceButtons(layout, regions, pressed) }
+        SelectStart(layout, regions, pressed, Modifier.align(Alignment.BottomCenter).padGroup("selstart"))
     }
 }
 

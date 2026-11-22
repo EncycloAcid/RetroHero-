@@ -42,10 +42,20 @@ struct CoreApi {
     void (*unload_game)() = nullptr;
     void *(*get_memory_data)(unsigned) = nullptr;
     size_t (*get_memory_size)(unsigned) = nullptr;
+    // Optional: not every core supports cheats.
+    void (*cheat_reset)() = nullptr;
+    void (*cheat_set)(unsigned, bool, const char *) = nullptr;
 };
 
 // A single libretro frontend instance. RetroHero runs each game in its own
 // process, so there is exactly one of these per process.
+// Rewind tuning: snapshot every N frames, cap the buffer's memory, and skip cores whose
+// states are too big to snapshot cheaply.
+constexpr unsigned kRewindInterval = 2;
+constexpr size_t kRewindBudget = 48u << 20;
+constexpr size_t kRewindMaxState = 4u << 20;
+constexpr size_t kRewindMaxSlots = 1800;
+
 class Frontend {
 public:
     static Frontend &get();
@@ -56,6 +66,12 @@ public:
     void start();
     void setPaused(bool paused);
     void setFastForward(bool enabled, float speed);
+    // Rewind keeps recent states in memory; holding rewind steps back through them.
+    void setRewindEnabled(bool enabled);
+    void setRewinding(bool rewinding);
+    bool rewindAvailable() const { return rewindEnabled_.load() && !rewindTooBig_.load(); }
+    bool setCheats(const std::vector<std::string> &codes);
+    bool supportsCheats() const { return core_.cheat_set != nullptr && core_.cheat_reset != nullptr; }
     void reset();
     bool saveState(const std::string &path);
     bool loadState(const std::string &path);
@@ -81,6 +97,10 @@ private:
     bool environment(unsigned cmd, void *data);
     void setVariables(const retro_variable *vars);
     void updateAvInfo(const retro_system_av_info &info);
+    void runFrameLocked();
+    void pushRewindLocked();
+    bool popRewindLocked();
+    void clearRewindLocked();
 
     static bool envCb(unsigned cmd, void *data);
     static void videoCb(const void *data, unsigned w, unsigned h, size_t pitch);
@@ -115,6 +135,14 @@ private:
     std::atomic<bool> fastForward_{false};
     std::atomic<float> ffSpeed_{3.0f};
     std::thread thread_;
+
+    // Rewind ring buffer (only touched with coreMutex_ held).
+    std::atomic<bool> rewindEnabled_{false};
+    std::atomic<bool> rewinding_{false};
+    std::atomic<bool> rewindTooBig_{false};
+    std::vector<std::vector<uint8_t>> ring_;
+    size_t ringHead_ = 0, ringCount_ = 0, ringStateSize_ = 0;
+    unsigned rewindTick_ = 0;
 
     std::atomic<uint32_t> buttons_[4]{};
     std::atomic<int16_t> analog_[4][2][2]{};

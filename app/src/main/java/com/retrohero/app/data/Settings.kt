@@ -73,6 +73,11 @@ class Settings(context: Context) {
         get() = prefs.getFloat("ff_speed", 3f)
         set(v) = prefs.edit { putFloat("ff_speed", v) }
 
+    /** Also copy in-game screenshots to Pictures/RetroHero. */
+    var screenshotsToGallery: Boolean
+        get() = prefs.getBoolean("screenshots_to_gallery", false)
+        set(v) = prefs.edit { putBoolean("screenshots_to_gallery", v) }
+
     var stickAsDpad: Boolean
         get() = prefs.getBoolean("stick_as_dpad", true)
         set(v) = prefs.edit { putBoolean("stick_as_dpad", v) }

@@ -15,6 +15,11 @@ class InputMapper(private val stickAsDpad: Boolean) {
     private val motionDpad = HashMap<Int, Int>() // port -> bitmask of dpad buttons driven by axes
     private val triggers = HashMap<Int, Int>()
 
+    /** Called with true/false while the rewind button is held. */
+    var onRewind: ((Boolean) -> Unit)? = null
+    /** L3 rewinds on systems that don't use the stick buttons. */
+    var rewindKeyEnabled = true
+
     fun portFor(deviceId: Int): Int = ports.getOrPut(deviceId) { ports.size.coerceAtMost(3) }
 
     fun isGamepad(event: KeyEvent): Boolean {
@@ -46,6 +51,10 @@ class InputMapper(private val stickAsDpad: Boolean) {
 
     /** Returns true if the event was consumed. */
     fun onKey(event: KeyEvent): Boolean {
+        if (rewindKeyEnabled && event.keyCode == KeyEvent.KEYCODE_BUTTON_THUMBL && onRewind != null) {
+            if (event.repeatCount == 0) onRewind?.invoke(event.action == KeyEvent.ACTION_DOWN)
+            return true
+        }
         val id = keyToRetro(event.keyCode) ?: return false
         if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount > 0) return true
         NativeBridge.setButton(portFor(event.deviceId), id, event.action == KeyEvent.ACTION_DOWN)

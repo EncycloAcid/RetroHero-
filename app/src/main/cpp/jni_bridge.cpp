@@ -2,6 +2,7 @@
 #include <jni.h>
 
 #include <string>
+#include <vector>
 
 #include "frontend.h"
 
@@ -65,8 +66,53 @@ JNIEXPORT void JNICALL JNI_FN(setSurface)(JNIEnv *env, jobject, jobject surface)
     Frontend::get().video().setWindow(win);
 }
 
-JNIEXPORT void JNICALL JNI_FN(setSharpScale)(JNIEnv *, jobject, jint scale) {
-    Frontend::get().video().setSharpScale(scale);
+JNIEXPORT void JNICALL JNI_FN(setFilter)(JNIEnv *, jobject, jint filter) {
+    Frontend::get().video().setFilter(filter);
+}
+
+JNIEXPORT void JNICALL JNI_FN(setRewindEnabled)(JNIEnv *, jobject, jboolean on) {
+    Frontend::get().setRewindEnabled(on);
+}
+
+JNIEXPORT void JNICALL JNI_FN(setRewinding)(JNIEnv *, jobject, jboolean on) {
+    Frontend::get().setRewinding(on);
+}
+
+JNIEXPORT jboolean JNICALL JNI_FN(supportsCheats)(JNIEnv *, jobject) {
+    return Frontend::get().supportsCheats();
+}
+
+JNIEXPORT jboolean JNICALL JNI_FN(setCheats)(JNIEnv *env, jobject, jobjectArray codes) {
+    std::vector<std::string> out;
+    jsize n = codes ? env->GetArrayLength(codes) : 0;
+    for (jsize i = 0; i < n; i++) {
+        auto js = static_cast<jstring>(env->GetObjectArrayElement(codes, i));
+        out.push_back(str(env, js));
+        env->DeleteLocalRef(js);
+    }
+    return Frontend::get().setCheats(out);
+}
+
+JNIEXPORT jintArray JNICALL JNI_FN(getFrameSize)(JNIEnv *env, jobject) {
+    unsigned w = 0, h = 0;
+    Frontend::get().video().frameSize(w, h);
+    jintArray arr = env->NewIntArray(2);
+    jint dims[2] = {static_cast<jint>(w), static_cast<jint>(h)};
+    env->SetIntArrayRegion(arr, 0, 2, dims);
+    return arr;
+}
+
+// Returns [width, height, ARGB pixels...] or null when no frame has been drawn yet.
+JNIEXPORT jintArray JNICALL JNI_FN(grabFrame)(JNIEnv *env, jobject) {
+    std::vector<uint32_t> px;
+    unsigned w = 0, h = 0;
+    if (!Frontend::get().video().grabArgb(px, w, h)) return nullptr;
+    jintArray arr = env->NewIntArray(static_cast<jsize>(px.size() + 2));
+    if (!arr) return nullptr;
+    jint dims[2] = {static_cast<jint>(w), static_cast<jint>(h)};
+    env->SetIntArrayRegion(arr, 0, 2, dims);
+    env->SetIntArrayRegion(arr, 2, static_cast<jsize>(px.size()), reinterpret_cast<const jint *>(px.data()));
+    return arr;
 }
 
 JNIEXPORT void JNICALL JNI_FN(setButton)(JNIEnv *, jobject, jint port, jint id, jboolean pressed) {

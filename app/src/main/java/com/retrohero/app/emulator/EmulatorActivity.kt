@@ -1,6 +1,28 @@
 package com.retrohero.app.emulator
 
 import android.annotation.SuppressLint
+import android.content.ContentValues
+import android.graphics.Bitmap
+import android.os.SystemClock
+import android.provider.MediaStore
+import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.material.icons.filled.AspectRatio
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.FastRewind
+import androidx.compose.material.icons.filled.OpenWith
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntSize
+import com.retrohero.app.data.Cheat
+import com.retrohero.app.data.Cheats
+import com.retrohero.app.data.PlayTime
+import com.retrohero.app.data.ScreenFilter
+import java.io.File
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
@@ -138,12 +160,30 @@ class EmulatorActivity : ComponentActivity() {
     private lateinit var settings: Settings
     private lateinit var input: InputMapper
     private lateinit var optionsStore: CoreOptionsStore
+    private lateinit var gamePrefs: GamePrefs
+    private lateinit var padLayouts: PadLayouts
 
     private var phase by mutableStateOf<Phase>(Phase.Loading)
     private var menuOpen by mutableStateOf(false)
     private var showPad by mutableStateOf(true)
     private var fastForwardToggle by mutableStateOf(false)
     private var aspect by mutableFloatStateOf(4f / 3f)
+    private var frameSize by mutableStateOf(IntSize.Zero)
+    private var filter by mutableIntStateOf(0)
+    private var integerScale by mutableStateOf(false)
+    private var rewindOn by mutableStateOf(false)
+    private var cheats by mutableStateOf<List<Cheat>>(emptyList())
+    private var cheatsSupported by mutableStateOf(false)
+    private var flash by mutableIntStateOf(0)
+    /** Touch-control editing: null when not editing. */
+    private var editingPad by mutableStateOf(false)
+    private var padAdjust by mutableStateOf<Map<String, PadAdjust>>(emptyMap())
+    private var padSelected by mutableStateOf<String?>(null)
+    private var padLandscape = false
+
+    // Play time: counted only while the game is actually running on screen.
+    private var runningSince = 0L
+    private var pendingSession = true
 
     private var started = false
     private var shutDown = false
@@ -165,6 +205,13 @@ class EmulatorActivity : ComponentActivity() {
         settings = Settings(this)
         input = InputMapper(settings.stickAsDpad)
         optionsStore = CoreOptionsStore(paths.coreOptionsFile(coreId))
+        gamePrefs = GamePrefs(this, settings.sharpPixels)
+        padLayouts = PadLayouts(paths.padLayoutFile)
+        filter = gamePrefs.filter(system.id)
+        integerScale = gamePrefs.integerScale(system.id)
+        cheats = Cheats.load(paths.cheatsFile(game))
+        input.onRewind = { held -> if (rewindOn) NativeBridge.setRewinding(held) }
+        input.rewindKeyEnabled = system.id != "psx"
 
         enableEdgeToEdge()
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -175,7 +222,11 @@ class EmulatorActivity : ComponentActivity() {
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (phase is Phase.Running) setMenu(!menuOpen) else finish()
+                when {
+                    editingPad -> finishPadEdit(save = true)
+                    phase is Phase.Running -> setMenu(!menuOpen)
+                    else -> finish()
+                }
             }
         })
 
@@ -206,16 +257,114 @@ class EmulatorActivity : ComponentActivity() {
             phase = Phase.Failed(error.ifEmpty { "Failed to start the game." })
             return
         }
-        NativeBridge.setSharpScale(if (settings.sharpPixels) 3 else 1)
+        NativeBridge.setFilter(filter)
+        rewindOn = gamePrefs.rewind
+        NativeBridge.setRewindEnabled(rewindOn)
+        cheatsSupported = NativeBridge.supportsCheats()
+        applyCheats()
         aspect = NativeBridge.getAspectRatio()
         NativeBridge.start()
         started = true
         phase = Phase.Running
+        startClock()
     }
 
     private fun setMenu(open: Boolean) {
         menuOpen = open
         if (started) NativeBridge.setPaused(open)
+        if (open) stopClock() else startClock()
+    }
+
+    private fun startClock() {
+        if (started && !shutDown && runningSince == 0L && !menuOpen) runningSince = SystemClock.elapsedRealtime()
+    }
+
+    /** Stops counting and writes the time played so far. */
+    private fun stopClock() {
+        if (runningSince == 0L && !pendingSession) return
+        val secs = if (runningSince == 0L) 0L else (SystemClock.elapsedRealtime() - runningSince) / 1000
+        runningSince = 0L
+        if (secs <= 0 && !pendingSession) return
+        val newSession = pendingSession
+        pendingSession = false
+        runCatching { PlayTime.add(paths.playtimeFile(game), secs, newSession) }
+    }
+
+    private fun applyCheats() {
+        if (!cheatsSupported) return
+        NativeBridge.setCheats(cheats.filter { it.enabled }.map { it.code }.toTypedArray())
+    }
+
+    private fun updateCheats(list: List<Cheat>) {
+        cheats = list
+        Cheats.save(paths.cheatsFile(game), list)
+        applyCheats()
+    }
+
+    private fun setScreen(newFilter: Int = filter, integer: Boolean = integerScale) {
+        filter = newFilter
+        integerScale = integer
+        gamePrefs.setFilter(system.id, newFilter)
+        gamePrefs.setIntegerScale(system.id, integer)
+        NativeBridge.setFilter(newFilter)
+    }
+
+    private fun setRewind(on: Boolean) {
+        rewindOn = on
+        gamePrefs.rewind = on
+        NativeBridge.setRewindEnabled(on)
+    }
+
+    /** Saves the current frame as a PNG (scaled up with hard pixel edges). */
+    private fun takeScreenshot() {
+        lifecycleScope.launch {
+            val file = withContext(Dispatchers.IO) {
+                val raw = NativeBridge.grabFrame() ?: return@withContext null
+                val w = raw[0]
+                val h = raw[1]
+                if (w <= 0 || h <= 0) return@withContext null
+                val bmp = Bitmap.createBitmap(raw, 2, w, w, h, Bitmap.Config.ARGB_8888)
+                val k = (720 / maxOf(w, h)).coerceIn(1, 4)
+                val out = if (k > 1) Bitmap.createScaledBitmap(bmp, w * k, h * k, false) else bmp
+                val dir = paths.screenshotsDir(game).apply { mkdirs() }
+                val f = File(dir, "${System.currentTimeMillis()}.png")
+                f.outputStream().use { out.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                if (settings.screenshotsToGallery) runCatching { copyToGallery(f) }
+                f
+            }
+            if (file != null) {
+                flash++
+                toast("Screenshot saved")
+            } else {
+                toast("Nothing to capture yet")
+            }
+        }
+    }
+
+    private fun copyToGallery(f: File) {
+        if (Build.VERSION.SDK_INT < 29) return
+        val values = ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, "${game.baseName}-${f.nameWithoutExtension}.png")
+            put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/RetroHero")
+        }
+        val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) ?: return
+        contentResolver.openOutputStream(uri)?.use { out -> f.inputStream().use { it.copyTo(out) } }
+    }
+
+    private fun startPadEdit() {
+        padAdjust = padLayouts.get(system.id, padLandscape)
+        padSelected = null
+        showPad = true
+        editingPad = true
+        menuOpen = false  // stay paused while editing
+    }
+
+    private fun finishPadEdit(save: Boolean) {
+        if (save) padLayouts.set(system.id, padLandscape, padAdjust)
+        editingPad = false
+        padSelected = null
+        setMenu(false)
     }
 
     private fun applyFastForward() {
@@ -226,13 +375,18 @@ class EmulatorActivity : ComponentActivity() {
         super.onPause()
         if (started && !shutDown) {
             NativeBridge.setPaused(true)
+            NativeBridge.setRewinding(false)
             NativeBridge.saveSram(paths.saveRam(game).absolutePath)
+            stopClock()
         }
     }
 
     override fun onResume() {
         super.onResume()
-        if (started && !shutDown && !menuOpen) NativeBridge.setPaused(false)
+        if (started && !shutDown && !menuOpen && !editingPad) {
+            NativeBridge.setPaused(false)
+            startClock()
+        }
     }
 
     override fun finish() {
@@ -254,6 +408,7 @@ class EmulatorActivity : ComponentActivity() {
 
     private fun shutdownCore() {
         if (!started || shutDown) return
+        stopClock()
         shutDown = true
         NativeBridge.setPaused(true)
         if (settings.autoSave) NativeBridge.saveState(paths.stateFile(game, AppPaths.AUTO_SLOT).absolutePath)
@@ -276,7 +431,7 @@ class EmulatorActivity : ComponentActivity() {
             setMenu(!menuOpen)
             return true
         }
-        if (!menuOpen && phase is Phase.Running && event.keyCode != KeyEvent.KEYCODE_BACK) {
+        if (!menuOpen && !editingPad && phase is Phase.Running && event.keyCode != KeyEvent.KEYCODE_BACK) {
             if (input.isGamepad(event)) showPad = false
             if (input.onKey(event)) return true
         }
@@ -304,6 +459,7 @@ class EmulatorActivity : ComponentActivity() {
             }
         }
 
+        padLandscape = landscape
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             if (landscape) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { GameView() }
@@ -334,6 +490,15 @@ class EmulatorActivity : ComponentActivity() {
             }
 
             if (menuOpen) PauseMenu()
+            if (editingPad) PadEditBar(Modifier.align(Alignment.TopCenter))
+            ScreenshotFlash(flash)
+        }
+        LaunchedEffect(phase) {
+            while (phase is Phase.Running) {
+                val sz = NativeBridge.getFrameSize()
+                if (sz[0] > 0 && sz[1] > 0) frameSize = IntSize(sz[0], sz[1])
+                delay(1000)
+            }
         }
     }
 
@@ -353,14 +518,41 @@ class EmulatorActivity : ComponentActivity() {
             onPress = { if (settings.haptics) view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP) },
             modifier = modifier,
             accent = system.color,
+            onRewind = if (rewindOn) { held -> NativeBridge.setRewinding(held) } else null,
+            adjust = remember(editingPad, landscape) { padLayouts.get(system.id, landscape) },
+            edit = if (editingPad) {
+                PadEditState(
+                    adjust = padAdjust,
+                    selected = padSelected,
+                    onSelect = { padSelected = it },
+                    onAdjust = { name, a -> padAdjust = padAdjust + (name to a) },
+                )
+            } else null,
         )
     }
 
     @SuppressLint("ClickableViewAccessibility")
     @Composable
     private fun GameView() {
+        BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            val density = LocalDensity.current
+            val size = if (integerScale && frameSize.height > 0) {
+                integerFit(
+                    with(density) { maxWidth.toPx() },
+                    with(density) { maxHeight.toPx() },
+                    frameSize.height,
+                    aspect,
+                )?.let { (w, h) -> with(density) { Modifier.size(w.toDp(), h.toDp()) } }
+            } else null
+            GameSurface(size ?: Modifier.aspectRatio(aspect))
+        }
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    @Composable
+    private fun GameSurface(modifier: Modifier) {
         AndroidView(
-            modifier = Modifier.aspectRatio(aspect),
+            modifier = modifier,
             factory = { ctx ->
                 SurfaceView(ctx).apply {
                     holder.addCallback(object : SurfaceHolder.Callback {
@@ -422,6 +614,8 @@ class EmulatorActivity : ComponentActivity() {
                             "save" -> SlotPage(saving = true) { page = "main" }
                             "load" -> SlotPage(saving = false) { page = "main" }
                             "options" -> OptionsPage { page = "main" }
+                            "cheats" -> CheatsPage { page = "main" }
+                            "screen" -> ScreenPage { page = "main" }
                             else -> MainMenuPage { page = it }
                         }
                     }
@@ -455,18 +649,31 @@ class EmulatorActivity : ComponentActivity() {
                 ActionTile(Icons.Default.Download, "Load", Modifier.weight(1f)) { navigate("load") }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ActionTile(Icons.Default.PhotoCamera, "Screenshot", Modifier.weight(1f)) { takeScreenshot() }
+                ActionTile(Icons.Default.Tv, "Screen", Modifier.weight(1f)) { navigate("screen") }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ActionTile(Icons.Default.Code, if (cheats.any { it.enabled }) "Cheats · ${cheats.count { it.enabled }}" else "Cheats", Modifier.weight(1f)) { navigate("cheats") }
+                ActionTile(Icons.Default.OpenWith, "Edit controls", Modifier.weight(1f)) { startPadEdit() }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ActionTile(Icons.Default.Tune, "Options", Modifier.weight(1f)) { navigate("options") }
                 ActionTile(Icons.Default.RestartAlt, "Reset", Modifier.weight(1f)) {
                     NativeBridge.reset()
                     setMenu(false)
                 }
             }
-            SegmentedGroup(null, 2) {
+            SegmentedGroup(null, 3) {
                 MenuSwitch(shapes(0), Icons.Default.FastForward, "Fast forward", "${settings.fastForwardSpeed.toInt()}× speed", fastForwardToggle) {
                     fastForwardToggle = it
                     applyFastForward()
                 }
-                MenuSwitch(shapes(1), Icons.Default.Gamepad, "Touch controls", "Show the on-screen gamepad", showPad) { showPad = it }
+                MenuSwitch(
+                    shapes(1), Icons.Default.FastRewind, "Rewind",
+                    if (system.id == "psx") "Hold the rewind button" else "Hold the rewind button or L3",
+                    rewindOn,
+                ) { setRewind(it) }
+                MenuSwitch(shapes(2), Icons.Default.Gamepad, "Touch controls", "Show the on-screen gamepad", showPad) { showPad = it }
             }
         }
     }
@@ -625,9 +832,200 @@ class EmulatorActivity : ComponentActivity() {
         }
     }
 
+    @Composable
+    private fun ScreenPage(back: () -> Unit) {
+        Column {
+            PageHeader("Screen", back)
+            SegmentedGroup(null, ScreenFilter.labels.size) {
+                ScreenFilter.labels.forEachIndexed { i, label ->
+                    SegmentedListItem(
+                        onClick = { setScreen(newFilter = i) },
+                        shapes = shapes(i),
+                        colors = segmentColors(),
+                        leadingContent = { RadioButton(selected = filter == i, onClick = null) },
+                        supportingContent = { Text(ScreenFilter.descriptions[i]) },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) { Text(label) }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            SegmentedGroup(null, 1) {
+                MenuSwitch(shapes(0), Icons.Default.AspectRatio, "Integer scaling", "Every game pixel the same size, with a border", integerScale) {
+                    setScreen(integer = it)
+                }
+            }
+            Text(
+                "Saved for every ${system.shortName} game.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 10.dp, start = 4.dp),
+            )
+        }
+    }
+
+    @Composable
+    private fun CheatsPage(back: () -> Unit) {
+        var adding by remember { mutableStateOf(false) }
+        var deleting by remember { mutableStateOf<Cheat?>(null) }
+        Column {
+            PageHeader("Cheats", back)
+            when {
+                !cheatsSupported -> Text(
+                    "This emulator doesn't support cheat codes.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth().padding(24.dp),
+                    textAlign = TextAlign.Center,
+                )
+                else -> {
+                    if (cheats.isEmpty()) {
+                        Text(
+                            "No codes yet. Add Game Genie, Action Replay or GameShark codes for this game.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 16.dp),
+                            textAlign = TextAlign.Center,
+                        )
+                    } else {
+                        SegmentedGroup(null, cheats.size) {
+                            cheats.forEachIndexed { i, cheat ->
+                                SegmentedListItem(
+                                    onClick = { updateCheats(cheats.toMutableList().also { it[i] = cheat.copy(enabled = !cheat.enabled) }) },
+                                    onLongClick = { deleting = cheat },
+                                    shapes = shapes(i),
+                                    colors = segmentColors(),
+                                    supportingContent = { Text(cheat.code, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                    trailingContent = {
+                                        MonoSwitch(cheat.enabled, { on -> updateCheats(cheats.toMutableList().also { it[i] = cheat.copy(enabled = on) }) })
+                                    },
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) { Text(cheat.name) }
+                            }
+                        }
+                        Text(
+                            "Hold a code to delete it.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 8.dp, start = 4.dp),
+                        )
+                    }
+                    Spacer(Modifier.height(12.dp))
+                    Button(onClick = { adding = true }, shapes = ButtonDefaults.shapes(), modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.Add, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Add code")
+                    }
+                }
+            }
+        }
+        if (adding) AddCheatDialog(onDismiss = { adding = false }) { name, code ->
+            updateCheats(cheats + Cheat(name, code))
+            adding = false
+        }
+        deleting?.let { c ->
+            AlertDialog(
+                onDismissRequest = { deleting = null },
+                title = { Text("Delete “${c.name}”?") },
+                confirmButton = { TextButton(onClick = { updateCheats(cheats - c); deleting = null }) { Text("Delete") } },
+                dismissButton = { TextButton(onClick = { deleting = null }) { Text("Cancel") } },
+            )
+        }
+    }
+
+    @Composable
+    private fun AddCheatDialog(onDismiss: () -> Unit, onAdd: (String, String) -> Unit) {
+        var name by remember { mutableStateOf("") }
+        var code by remember { mutableStateOf("") }
+        val normalised = Cheats.normalise(code)
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("Add cheat") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(
+                        code, { code = it },
+                        label = { Text("Code") },
+                        supportingText = { Text("One code per line for multi-part cheats") },
+                        minLines = 2,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = normalised.isNotEmpty(), onClick = { onAdd(name.trim().ifEmpty { "Cheat ${cheats.size + 1}" }, normalised) }) { Text("Add") }
+            },
+            dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        )
+    }
+
+    /** Shown over the game while moving touch controls. */
+    @Composable
+    private fun PadEditBar(modifier: Modifier) {
+        Surface(
+            shape = MaterialTheme.shapes.extraLarge,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            modifier = modifier.safeDrawingPadding().padding(12.dp).widthIn(max = 520.dp),
+        ) {
+            Column(Modifier.padding(horizontal = 18.dp, vertical = 14.dp)) {
+                Text("Edit controls", style = MaterialTheme.typography.titleMedium)
+                val sel = padSelected
+                if (sel == null) {
+                    Text(
+                        "Drag a group of buttons to move it. Tap one to resize it.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    val a = padAdjust[sel] ?: PadAdjust()
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Size", style = MaterialTheme.typography.labelLarge, modifier = Modifier.width(44.dp))
+                        Slider(
+                            value = a.scale,
+                            onValueChange = { padAdjust = padAdjust + (sel to a.copy(scale = it)) },
+                            valueRange = 0.6f..1.6f,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text("${(a.scale * 100).toInt()}%", style = MaterialTheme.typography.labelLarge, modifier = Modifier.width(48.dp), textAlign = TextAlign.End)
+                    }
+                }
+                Row(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = { padAdjust = emptyMap(); padSelected = null }) { Text("Reset all") }
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = { finishPadEdit(save = false) }) { Text("Cancel") }
+                    Button(onClick = { finishPadEdit(save = true) }, shapes = ButtonDefaults.shapes()) { Text("Done") }
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun ScreenshotFlash(trigger: Int) {
+        val alpha = remember { Animatable(0f) }
+        LaunchedEffect(trigger) {
+            if (trigger == 0) return@LaunchedEffect
+            alpha.snapTo(0.7f)
+            alpha.animateTo(0f, tween(350))
+        }
+        if (alpha.value > 0f) Box(Modifier.fillMaxSize().background(Color.White.copy(alpha = alpha.value)))
+    }
+
     private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
 
     companion object {
+        /**
+         * The largest whole multiple of the frame height that fits [maxW] x [maxH] at [aspect];
+         * null when even 1x does not fit.
+         */
+        fun integerFit(maxW: Float, maxH: Float, frameH: Int, aspect: Float): Pair<Float, Float>? {
+            var k = (maxH / frameH).toInt()
+            while (k >= 1) {
+                val h = frameH * k.toFloat()
+                val w = h * aspect
+                if (w <= maxW) return w to h
+                k--
+            }
+            return null
+        }
+
         private const val EXTRA_GAME = "game"
         private const val EXTRA_CORE_PATH = "core_path"
         private const val EXTRA_CORE_ID = "core_id"

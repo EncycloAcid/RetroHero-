@@ -20,7 +20,19 @@ object NativeBridge {
     external fun shutdown(sramPath: String)
 
     external fun setSurface(surface: Surface?)
-    external fun setSharpScale(scale: Int)
+    /** See [ScreenFilter]. */
+    external fun setFilter(filter: Int)
+    /** Width and height of the last frame the core drew (0, 0 before the first). */
+    external fun getFrameSize(): IntArray
+    /** [width, height, ARGB pixels…] of the last frame, or null before the first. */
+    external fun grabFrame(): IntArray?
+
+    external fun setRewindEnabled(enabled: Boolean)
+    external fun setRewinding(rewinding: Boolean)
+
+    external fun supportsCheats(): Boolean
+    /** Replaces the active cheats; false if the core has no cheat support. */
+    external fun setCheats(codes: Array<String>): Boolean
 
     external fun setButton(port: Int, id: Int, pressed: Boolean)
     external fun setAnalog(port: Int, index: Int, axis: Int, value: Float)

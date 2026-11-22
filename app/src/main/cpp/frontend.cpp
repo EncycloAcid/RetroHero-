@@ -95,6 +95,9 @@ bool Frontend::loadCore(const std::string &corePath, const std::string &systemDi
               loadSym(h, "retro_unload_game", core_.unload_game) &&
               loadSym(h, "retro_get_memory_data", core_.get_memory_data) &&
               loadSym(h, "retro_get_memory_size", core_.get_memory_size);
+    // Optional symbols.
+    loadSym(h, "retro_cheat_reset", core_.cheat_reset);
+    loadSym(h, "retro_cheat_set", core_.cheat_set);
     if (!ok) {
         setError("Core is missing required libretro symbols");
         dlclose(h);
@@ -204,10 +207,10 @@ void Frontend::runLoop() {
                 lastFrame = now;
                 frameTimeCb_.callback(static_cast<retro_usec_t>(usec));
             }
-            core_.run();
+            runFrameLocked();
         }
         if (!audioStaging_.empty()) {
-            if (!fastForward_) audio_.write(audioStaging_.data(), audioStaging_.size() / 2);
+            if (!fastForward_ && !rewinding_) audio_.write(audioStaging_.data(), audioStaging_.size() / 2);
             audioStaging_.clear();
         }
 
@@ -222,6 +225,81 @@ void Frontend::runLoop() {
             std::this_thread::sleep_until(next);
         }
     }
+}
+
+void Frontend::runFrameLocked() {
+    if (rewinding_ && rewindEnabled_) {
+        // Step back one snapshot and run a single frame from it so the screen updates.
+        // With nothing left to rewind to, hold on the current frame.
+        if (popRewindLocked()) core_.run();
+        else video_.redraw();
+        return;
+    }
+    core_.run();
+    if (rewindEnabled_ && !rewindTooBig_ && ++rewindTick_ % kRewindInterval == 0) pushRewindLocked();
+}
+
+void Frontend::pushRewindLocked() {
+    size_t size = core_.serialize_size();
+    if (size == 0 || size > kRewindMaxState) {
+        rewindTooBig_ = true;
+        clearRewindLocked();
+        ring_.clear();
+        ring_.shrink_to_fit();
+        return;
+    }
+    if (size != ringStateSize_ || ring_.empty()) {
+        // (Re)allocate the ring for this state size.
+        size_t slots = kRewindBudget / size;
+        if (slots > kRewindMaxSlots) slots = kRewindMaxSlots;
+        if (slots < 2) {
+            rewindTooBig_ = true;
+            return;
+        }
+        ring_.assign(slots, std::vector<uint8_t>());
+        ringStateSize_ = size;
+        ringHead_ = ringCount_ = 0;
+    }
+    auto &slot = ring_[ringHead_];
+    if (slot.size() != size) slot.resize(size);
+    if (!core_.serialize(slot.data(), size)) return;
+    ringHead_ = (ringHead_ + 1) % ring_.size();
+    if (ringCount_ < ring_.size()) ringCount_++;
+}
+
+bool Frontend::popRewindLocked() {
+    if (ringCount_ == 0 || ring_.empty()) return false;
+    ringHead_ = (ringHead_ + ring_.size() - 1) % ring_.size();
+    ringCount_--;
+    auto &slot = ring_[ringHead_];
+    return core_.unserialize(slot.data(), slot.size());
+}
+
+void Frontend::clearRewindLocked() {
+    ringHead_ = ringCount_ = 0;
+    rewindTick_ = 0;
+}
+
+void Frontend::setRewindEnabled(bool enabled) {
+    std::lock_guard<std::mutex> lk(coreMutex_);
+    rewindEnabled_ = enabled;
+    if (!enabled) {
+        rewinding_ = false;
+        clearRewindLocked();
+        ring_.clear();
+        ring_.shrink_to_fit();
+        ringStateSize_ = 0;
+    }
+}
+
+void Frontend::setRewinding(bool rewinding) { rewinding_ = rewinding && rewindEnabled_; }
+
+bool Frontend::setCheats(const std::vector<std::string> &codes) {
+    std::lock_guard<std::mutex> lk(coreMutex_);
+    if (!gameLoaded_ || !core_.cheat_reset || !core_.cheat_set) return false;
+    core_.cheat_reset();
+    for (size_t i = 0; i < codes.size(); i++) core_.cheat_set(static_cast<unsigned>(i), true, codes[i].c_str());
+    return true;
 }
 
 void Frontend::setPaused(bool paused) {
@@ -243,6 +321,7 @@ void Frontend::setFastForward(bool enabled, float speed) {
 void Frontend::reset() {
     std::lock_guard<std::mutex> lk(coreMutex_);
     if (gameLoaded_) core_.reset();
+    clearRewindLocked();
 }
 
 bool Frontend::saveState(const std::string &path) {
@@ -270,6 +349,7 @@ bool Frontend::loadState(const std::string &path) {
         setError("Loading state failed");
         return false;
     }
+    clearRewindLocked();
     return true;
 }
 
