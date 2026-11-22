@@ -44,6 +44,7 @@ import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
+import com.retrohero.app.ui.components.AuroraBackground
 import com.retrohero.app.ui.components.DownloadSheet
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
@@ -65,6 +66,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
@@ -135,7 +137,16 @@ private fun App(vm: AppViewModel) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val systemCount = games.mapTo(HashSet()) { it.systemId }.size
 
+    val accent = when {
+        openSystem != null -> openSystem.color
+        tab == Tab.Games -> recents.firstOrNull()?.system?.color ?: MaterialTheme.colorScheme.primary
+        tab == Tab.Systems -> MaterialTheme.colorScheme.tertiary
+        else -> MaterialTheme.colorScheme.primary
+    }
+    AuroraBackground(accent, Modifier.fillMaxSize()) {
     Scaffold(
+        containerColor = Color.Transparent,
+        contentColor = MaterialTheme.colorScheme.onBackground,
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             Column {
@@ -173,6 +184,10 @@ private fun App(vm: AppViewModel) {
                         }
                     },
                     scrollBehavior = scrollBehavior,
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent,
+                        scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.94f),
+                    ),
                 )
                 if (scanning) LinearWavyProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp))
             }
@@ -204,7 +219,7 @@ private fun App(vm: AppViewModel) {
         },
         bottomBar = {
             if (openSystem == null) {
-                ShortNavigationBar {
+                ShortNavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.96f)) {
                     Tab.entries.forEach { t ->
                         ShortNavigationBarItem(
                             selected = tab == t,
@@ -268,6 +283,8 @@ private fun App(vm: AppViewModel) {
                 )
             }
         }
+    }
+
     }
 
     sheetFor?.let { id -> games.firstOrNull { it.id == id } }?.let { game ->

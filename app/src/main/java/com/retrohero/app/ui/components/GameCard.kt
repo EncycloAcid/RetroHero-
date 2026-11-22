@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -30,16 +31,22 @@ fun GameCard(game: Game, onClick: () -> Unit, onLongClick: () -> Unit, modifier:
             }
             .combinedClickable(interactionSource = interaction, indication = null, onClick = onClick, onLongClick = onLongClick),
     ) {
+        val shape = RoundedCornerShape(press.corner.value)
+        val glow = (game.system?.color ?: MaterialTheme.colorScheme.primary)
         GameArt(
             game,
-            Modifier.fillMaxWidth().aspectRatio(0.74f).clip(RoundedCornerShape(press.corner.value)),
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(0.74f)
+                .shadow(14.dp, shape, ambientColor = glow, spotColor = glow)
+                .clip(shape),
         )
         Text(
             game.title,
             style = MaterialTheme.typography.titleSmall,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 8.dp, start = 4.dp, end = 4.dp),
+            modifier = Modifier.padding(top = 10.dp, start = 4.dp, end = 4.dp),
         )
         Text(
             game.system?.shortName.orEmpty(),

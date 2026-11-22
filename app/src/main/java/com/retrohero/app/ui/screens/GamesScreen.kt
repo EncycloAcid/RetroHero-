@@ -1,6 +1,7 @@
 package com.retrohero.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -52,7 +53,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
+import com.retrohero.app.ui.theme.PixelFont
 import androidx.compose.ui.unit.dp
 import com.retrohero.app.data.Game
 import com.retrohero.app.data.Systems
@@ -187,8 +191,8 @@ private fun SearchField(query: String, total: Int, onChange: (String) -> Unit) {
         colors = TextFieldDefaults.colors(
             focusedIndicatorColor = Color.Transparent,
             unfocusedIndicatorColor = Color.Transparent,
-            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.75f),
         ),
         modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
     )
@@ -204,9 +208,9 @@ private fun RecentCarousel(recents: List<Game>, onPlay: (Game) -> Unit, onOption
     val state = rememberCarouselState { recents.size }
     HorizontalMultiBrowseCarousel(
         state = state,
-        preferredItemWidth = 220.dp,
-        itemSpacing = 8.dp,
-        modifier = Modifier.fillMaxWidth().height(280.dp),
+        preferredItemWidth = 240.dp,
+        itemSpacing = 10.dp,
+        modifier = Modifier.fillMaxWidth().height(300.dp),
     ) { index ->
         val game = recents[index]
         Box(
@@ -215,30 +219,36 @@ private fun RecentCarousel(recents: List<Game>, onPlay: (Game) -> Unit, onOption
                 .maskClip(MaterialTheme.shapes.extraLarge)
                 .combinedClickable(onClick = { onPlay(game) }, onLongClick = { onOptions(game) }),
         ) {
-            GameArt(game, Modifier.fillMaxSize())
+            GameArt(game, Modifier.fillMaxSize(), showTag = false)
             Box(
                 Modifier.fillMaxSize().background(
-                    Brush.verticalGradient(0.45f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.85f)),
+                    Brush.verticalGradient(0.35f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.88f)),
                 ),
             )
-            Column(Modifier.align(Alignment.BottomStart).padding(16.dp)) {
+            Column(Modifier.align(Alignment.BottomStart).padding(18.dp)) {
+                Text(
+                    game.system?.shortName.orEmpty().uppercase(),
+                    style = TextStyle(fontFamily = PixelFont, fontSize = 9.sp, color = game.system?.color ?: Color.White),
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
                 Text(
                     game.title,
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.headlineSmall,
                     color = Color.White,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Text(game.system?.name.orEmpty(), style = MaterialTheme.typography.labelLarge, color = Color.White.copy(alpha = 0.8f), maxLines = 1)
             }
-            Surface(
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.align(Alignment.TopEnd).padding(12.dp).size(44.dp),
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(14.dp)
+                    .size(46.dp)
+                    .background(Color.White.copy(alpha = 0.22f), CircleShape)
+                    .border(1.dp, Color.White.copy(alpha = 0.35f), CircleShape),
+                contentAlignment = Alignment.Center,
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.PlayArrow, "Play", tint = MaterialTheme.colorScheme.onPrimary)
-                }
+                Icon(Icons.Default.PlayArrow, "Play", tint = Color.White)
             }
         }
     }

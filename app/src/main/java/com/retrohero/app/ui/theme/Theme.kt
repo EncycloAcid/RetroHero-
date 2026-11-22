@@ -75,17 +75,17 @@ private val LightBrand = lightColorScheme(
 
 private val Base = Typography()
 
-/** Bolder, tighter display and headline styles for an expressive look. */
+/** Bricolage Grotesque for display → title styles; the system face for body copy. */
 private val ExpressiveTypography = Typography(
-    displayLarge = Base.displayLarge.heavy(),
-    displayMedium = Base.displayMedium.heavy(),
-    displaySmall = Base.displaySmall.heavy(),
-    headlineLarge = Base.headlineLarge.heavy(),
-    headlineMedium = Base.headlineMedium.heavy(),
-    headlineSmall = Base.headlineSmall.heavy(),
-    titleLarge = Base.titleLarge.copy(fontWeight = FontWeight.Bold),
-    titleMedium = Base.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-    titleSmall = Base.titleSmall.copy(fontWeight = FontWeight.SemiBold),
+    displayLarge = Base.displayLarge.brand(FontWeight.ExtraBold, -1.0),
+    displayMedium = Base.displayMedium.brand(FontWeight.ExtraBold, -0.8),
+    displaySmall = Base.displaySmall.brand(FontWeight.ExtraBold, -0.6),
+    headlineLarge = Base.headlineLarge.brand(FontWeight.ExtraBold, -0.5),
+    headlineMedium = Base.headlineMedium.brand(FontWeight.ExtraBold, -0.4),
+    headlineSmall = Base.headlineSmall.brand(FontWeight.Bold, -0.3),
+    titleLarge = Base.titleLarge.brand(FontWeight.Bold, -0.2),
+    titleMedium = Base.titleMedium.brand(FontWeight.SemiBold, 0.0),
+    titleSmall = Base.titleSmall.brand(FontWeight.SemiBold, 0.0),
     bodyLarge = Base.bodyLarge,
     bodyMedium = Base.bodyMedium,
     bodySmall = Base.bodySmall,
@@ -94,7 +94,8 @@ private val ExpressiveTypography = Typography(
     labelSmall = Base.labelSmall.copy(fontWeight = FontWeight.SemiBold),
 )
 
-private fun TextStyle.heavy() = copy(fontWeight = FontWeight.ExtraBold, letterSpacing = (-0.5).sp)
+private fun TextStyle.brand(weight: FontWeight, tracking: Double) =
+    copy(fontFamily = Bricolage, fontWeight = weight, letterSpacing = tracking.sp)
 
 @Composable
 fun RetroHeroTheme(
