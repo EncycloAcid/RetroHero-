@@ -73,11 +73,6 @@ import com.retrohero.app.data.GameSystem
 import com.retrohero.app.data.HistoryEntry
 import com.retrohero.app.data.PlayTime
 import com.retrohero.app.ui.components.GameArt
-import com.retrohero.app.ui.components.Arcade
-import com.retrohero.app.ui.components.ArcadeChip
-import com.retrohero.app.ui.components.ArcadeHeader
-import com.retrohero.app.ui.components.Chunky
-import com.retrohero.app.ui.components.PixelLabel
 import com.retrohero.app.ui.components.LocalNavSpace
 import com.retrohero.app.ui.components.press3D
 import com.retrohero.app.ui.theme.Inter
@@ -126,9 +121,9 @@ fun LibraryScreen(
         modifier = Modifier.fillMaxSize().background(Color.Black),
     ) {
         span {
-            Column {
-                ArcadeHeader("Library", "${games.size} games", Arcade.Mint)
-                Spacer(Modifier.height(12.dp))
+            Column(Modifier.windowInsetsPadding(WindowInsets.statusBars).padding(top = 16.dp)) {
+                Text("Library", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 34.sp, lineHeight = 40.sp, letterSpacing = (-0.03).em), color = Color.White)
+                Spacer(Modifier.height(16.dp))
                 Chips(tab) { tab = it }
             }
         }
@@ -137,12 +132,12 @@ fun LibraryScreen(
                 span {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            CategoryCard("Favourites", favorites.size, favorites, Arcade.Pink, Modifier.weight(1f)) { tab = LibraryTab.Favourites }
-                            CategoryCard("Collections", collections.size, collections.flatMap { it.second }, Arcade.Mint, Modifier.weight(1f)) { tab = LibraryTab.Collections }
+                            CategoryCard("Favourites", favorites.size, favorites, Modifier.weight(1f)) { tab = LibraryTab.Favourites }
+                            CategoryCard("Collections", collections.size, collections.flatMap { it.second }, Modifier.weight(1f)) { tab = LibraryTab.Collections }
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            CategoryCard("Systems", systems.size, systems.mapNotNull { s -> games.firstOrNull { it.systemId == s.id } }, Arcade.Sky, Modifier.weight(1f)) { tab = LibraryTab.Systems }
-                            CategoryCard("Screenshots", shots.size, shots.map { it.game }, Arcade.Butter, Modifier.weight(1f)) { tab = LibraryTab.Screenshots }
+                            CategoryCard("Systems", systems.size, systems.mapNotNull { s -> games.firstOrNull { it.systemId == s.id } }, Modifier.weight(1f)) { tab = LibraryTab.Systems }
+                            CategoryCard("Screenshots", shots.size, shots.map { it.game }, Modifier.weight(1f)) { tab = LibraryTab.Screenshots }
                         }
                     }
                 }
@@ -277,14 +272,32 @@ private fun LazyGridScope.historyItems(history: List<HistoryEntry>, onOpen: (Gam
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Chips(selected: LibraryTab, onSelect: (LibraryTab) -> Unit) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        LibraryTab.entries.forEachIndexed { i, t -> ArcadeChip(t.label, t == selected, Arcade.palette[i], { onSelect(t) }) }
+    FlowRow(
+        Modifier.clip(RoundedCornerShape(20.dp)).background(ChipTrack).padding(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        LibraryTab.entries.forEach { t ->
+            val on = t == selected
+            val bg by animateColorAsState(if (on) ChipOn else Chip, tween(220), label = "chip")
+            Box(
+                Modifier
+                    .heightIn(min = 28.dp)
+                    .clip(CircleShape)
+                    .background(bg)
+                    .clickable { onSelect(t) }
+                    .padding(horizontal = 14.dp, vertical = 5.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(t.label, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.sp), color = Color.White.copy(alpha = if (on) 1f else 0.72f))
+            }
+        }
     }
 }
 
 @Composable
 private fun SectionTitle(text: String) {
-    Text(text, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Black, fontSize = 24.sp, letterSpacing = (-0.03).em), color = Color.White, modifier = Modifier.padding(top = 12.dp))
+    Text(text, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 20.sp), color = Color.White, modifier = Modifier.padding(top = 12.dp))
 }
 
 @Composable
@@ -292,30 +305,40 @@ private fun Empty(text: String) {
     Text(text, style = MaterialTheme.typography.bodyLarge, color = Color.White.copy(alpha = 0.55f), modifier = Modifier.padding(vertical = 28.dp, horizontal = 4.dp))
 }
 
-/** Bright chunky category card with a fanned stack of covers spilling out of the corner. */
+/** 78 dp category card with a little fanned stack of covers spilling out of the corner. */
 @Composable
-private fun CategoryCard(label: String, count: Int, covers: List<Game>, color: Color, modifier: Modifier, onClick: () -> Unit) {
-    Chunky(modifier.height(96.dp), face = color, shape = RoundedCornerShape(22.dp), onClick = onClick) {
-        Box(Modifier.fillMaxSize().clip(RoundedCornerShape(22.dp))) {
-            CoverStack(covers, 50.dp, Modifier.align(Alignment.BottomEnd).offset(x = 10.dp, y = 14.dp))
-            Column(Modifier.padding(start = 16.dp, top = 14.dp)) {
-                Text(label, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Black, fontSize = 17.sp, letterSpacing = (-0.02).em), color = Arcade.Ink)
-                Text("$count", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Black, fontSize = 26.sp), color = Arcade.Ink.copy(alpha = 0.55f))
-            }
+private fun CategoryCard(label: String, count: Int, covers: List<Game>, modifier: Modifier, onClick: () -> Unit) {
+    Box(
+        modifier
+            .height(78.dp)
+            .press3D()
+            .clip(RoundedCornerShape(16.dp))
+            .background(CardFill)
+            .clickable(onClick = onClick),
+    ) {
+        CoverStack(covers, 46.dp, Modifier.align(Alignment.BottomEnd).offset(x = 10.dp, y = 12.dp))
+        Column(Modifier.padding(start = 14.dp, top = 12.dp)) {
+            Text(label, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 15.sp), color = Color.White)
+            Text("$count", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.55f))
         }
     }
 }
 
 @Composable
 private fun WideCard(label: String, subtitle: String, covers: List<Game>, onClick: () -> Unit) {
-    Chunky(Modifier.fillMaxWidth().height(110.dp), face = Arcade.Grape, shape = RoundedCornerShape(24.dp), onClick = onClick) {
-        Box(Modifier.fillMaxSize().clip(RoundedCornerShape(24.dp))) {
-            CoverStack(covers, 64.dp, Modifier.align(Alignment.BottomEnd).padding(end = 30.dp).offset(y = 14.dp))
-            Column(Modifier.align(Alignment.CenterStart).padding(start = 20.dp)) {
-                PixelLabel("Played", Arcade.Ink.copy(alpha = 0.6f))
-                Text(label, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Black, fontSize = 24.sp, letterSpacing = (-0.03).em), color = Arcade.Ink)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Arcade.Ink.copy(alpha = 0.65f))
-            }
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(104.dp)
+            .press3D()
+            .clip(RoundedCornerShape(18.dp))
+            .background(CardFill)
+            .clickable(onClick = onClick),
+    ) {
+        CoverStack(covers, 60.dp, Modifier.align(Alignment.BottomEnd).padding(end = 34.dp).offset(y = 12.dp))
+        Column(Modifier.align(Alignment.CenterStart).padding(start = 18.dp)) {
+            Text(label, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 20.sp), color = Color.White)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.55f))
         }
     }
 }
@@ -326,16 +349,23 @@ private fun StatsCard(history: List<HistoryEntry>, onClick: () -> Unit) {
         val from = LocalDate.now().minusDays(6)
         history.filter { !it.day().isBefore(from) }.sumOf { it.seconds }
     }
-    Chunky(Modifier.fillMaxWidth(), face = Arcade.Tangerine, shape = RoundedCornerShape(24.dp), onClick = onClick) {
-        Row(Modifier.padding(horizontal = 20.dp, vertical = 18.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Rounded.Insights, null, tint = Arcade.Ink, modifier = Modifier.size(30.dp))
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text("Stats & recap", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Black, fontSize = 19.sp), color = Arcade.Ink)
-                Text(if (week > 0) "${PlayTime.format(week)} this week" else "Play a game to start your stats", style = MaterialTheme.typography.bodySmall, color = Arcade.Ink.copy(alpha = 0.7f))
-            }
-            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Arcade.Ink)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .press3D()
+            .clip(RoundedCornerShape(18.dp))
+            .background(CardFill)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 18.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Rounded.Insights, null, tint = Color(0xFF88FF76))
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text("Stats & recap", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 17.sp), color = Color.White)
+            Text(if (week > 0) "${PlayTime.format(week)} this week" else "Play a game to start your stats", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.55f))
         }
+        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Color.White.copy(alpha = 0.5f))
     }
 }
 
