@@ -4,6 +4,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -70,35 +73,92 @@ fun boxSpec(systemId: String): BoxSpec = when (systemId) {
     else -> BoxSpec(0.72f, 0.18f, Media.Cartridge, Color(0xFF3A3A40), 1f)
 }
 
+/** What the packaging is made of, which decides how the front, spine and edges look. */
+enum class CaseStyle { Cardboard, Clamshell, Jewel, Keepcase }
+
+fun caseStyle(systemId: String): CaseStyle = when (systemId) {
+    "psx", "segacd", "pcecd" -> CaseStyle.Jewel
+    "genesis", "32x", "sms", "gg", "atari2600", "atari7800" -> CaseStyle.Clamshell
+    "nds" -> CaseStyle.Keepcase
+    else -> CaseStyle.Cardboard
+}
+
 /**
- * A game box in 3D: the cover on the front, a spine that comes into view as it turns, and a
- * glare that slides across like a foil card. [rotY]/[rotX] are degrees; [lid] 0..1 swings the
- * front open like a case to show the tray inside.
+ * A game box in 3D, made to look like the real packaging: a printed cardboard box, a black
+ * plastic clamshell with the art under a clear sleeve, a CD jewel case with its ridged hinge,
+ * or a grey keep case. It has a spine and a top edge that come into view as it turns, a glare
+ * that slides across like a foil card, and a soft reflection on the floor. [rotY]/[rotX] are
+ * degrees; [lid] 0..1 swings the front open to show the tray inside.
  */
 @Composable
-fun GameBox3D(game: Game, width: Dp, rotY: Float, rotX: Float, modifier: Modifier = Modifier, lid: Float = 0f) {
+fun GameBox3D(game: Game, width: Dp, rotY: Float, rotX: Float, modifier: Modifier = Modifier, lid: Float = 0f, reflection: Boolean = true) {
     val spec = boxSpec(game.systemId)
+    val style = caseStyle(game.systemId)
     val height = width / spec.aspect
     val density = LocalDensity.current
     val wPx = with(density) { width.toPx() }
+    val hPx = with(density) { height.toPx() }
     val tint = game.system?.color ?: Color(0xFF6E6A86)
-    val spineColor = lerp(tint, Color.Black, 0.45f)
-    val rad = Math.toRadians(rotY.toDouble())
-    val frontHalf = (wPx / 2f) * cos(rad).toFloat()
-    val spineW = wPx * spec.depth * abs(sin(rad).toFloat())
+    val radY = Math.toRadians(rotY.toDouble())
+    val radX = Math.toRadians(rotX.toDouble())
+    val frontHalfW = (wPx / 2f) * cos(radY).toFloat()
+    val frontHalfH = (hPx / 2f) * cos(radX).toFloat()
+    val depthPx = wPx * spec.depth
+    val spineW = depthPx * abs(sin(radY).toFloat())
     val cam = 14f * density.density
+    val corner = when (style) {
+        CaseStyle.Cardboard -> 4.dp
+        CaseStyle.Clamshell -> 7.dp
+        CaseStyle.Jewel -> 3.dp
+        CaseStyle.Keepcase -> 10.dp
+    }
+    val spineFill = when (style) {
+        CaseStyle.Cardboard -> lerp(tint, Color.Black, 0.35f)
+        CaseStyle.Clamshell -> Color(0xFF151517)
+        CaseStyle.Jewel -> Color(0xFF0E0E10)
+        CaseStyle.Keepcase -> Color(0xFFD6D6DA)
+    }
+    val spineInk = if (style == CaseStyle.Keepcase) Color(0xFF2A2A30) else Color.White.copy(alpha = 0.85f)
+
     Box(modifier.size(width, height), contentAlignment = Alignment.Center) {
-        // Soft shadow on the floor.
+        // Reflection on a glossy floor, fading out.
+        if (reflection && lid == 0f) {
+            Box(
+                Modifier
+                    .size(width, height)
+                    .graphicsLayer {
+                        translationY = hPx + 6.dp.toPx()
+                        rotationY = rotY
+                        scaleY = -1f
+                        cameraDistance = cam
+                        alpha = 0.18f
+                        compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen
+                    }
+                    .clip(RoundedCornerShape(corner))
+                    // Only the part nearest the box shows, fading to nothing (flipped, so the
+                    // bottom of this layer is the edge touching the box).
+                    .drawWithContent {
+                        drawContent()
+                        drawRect(
+                            Brush.verticalGradient(0f to Color.Transparent, 0.62f to Color.Transparent, 1f to Color.Black),
+                            blendMode = androidx.compose.ui.graphics.BlendMode.DstIn,
+                        )
+                    },
+            ) {
+                GameArt(game, Modifier.fillMaxSize(), showTag = false)
+            }
+        }
+        // Contact shadow.
         Box(
             Modifier
                 .align(Alignment.BottomCenter)
-                .offset(y = 22.dp)
-                .width(width * 0.9f)
-                .height(26.dp)
+                .offset(y = 16.dp)
+                .width(width * 0.95f)
+                .height(22.dp)
                 .graphicsLayer { translationX = -rotY * 1.4f; scaleX = 1f - abs(rotY) / 140f }
-                .background(Brush.radialGradient(listOf(Color.Black.copy(alpha = 0.7f), Color.Transparent)), CircleShape),
+                .background(Brush.radialGradient(listOf(Color.Black.copy(alpha = 0.75f), Color.Transparent)), CircleShape),
         )
-        // The spine, on whichever side has turned toward you.
+        // Spine, on whichever side has turned toward you.
         if (spineW > 0.5f) {
             val side = if (rotY > 0) -1f else 1f
             Box(
@@ -106,25 +166,41 @@ fun GameBox3D(game: Game, width: Dp, rotY: Float, rotX: Float, modifier: Modifie
                     .width(with(density) { spineW.toDp() })
                     .fillMaxHeight()
                     .graphicsLayer {
-                        translationX = side * (frontHalf + spineW / 2f)
+                        translationX = side * (frontHalfW + spineW / 2f)
                         rotationX = rotX
                         cameraDistance = cam
-                        scaleY = 1f - spineW / wPx * 0.08f
+                        scaleY = (1f - spineW / wPx * 0.08f) * cos(radX).toFloat()
                     }
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(Brush.horizontalGradient(if (side < 0) listOf(lerp(spineColor, Color.Black, 0.4f), spineColor) else listOf(spineColor, lerp(spineColor, Color.Black, 0.4f)))),
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(Brush.horizontalGradient(if (side < 0) listOf(lerp(spineFill, Color.Black, 0.45f), spineFill) else listOf(spineFill, lerp(spineFill, Color.Black, 0.45f)))),
                 contentAlignment = Alignment.Center,
             ) {
-                if (spineW > 18f) {
-                    Text(
-                        game.title.uppercase(),
-                        style = TextStyle(fontFamily = PixelFont, fontSize = 7.sp),
-                        color = Color.White.copy(alpha = 0.8f),
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Clip,
-                        modifier = Modifier.graphicsLayer { rotationZ = 90f }.width(height * 0.8f),
-                    )
+                when (style) {
+                    // A jewel case's spine is a strip of ridges (the hinge).
+                    CaseStyle.Jewel -> Canvas(Modifier.fillMaxSize()) {
+                        val step = 3.dp.toPx()
+                        var y = 0f
+                        while (y < size.height) {
+                            drawLine(Color.White.copy(alpha = 0.08f), Offset(0f, y), Offset(size.width, y), 1f)
+                            y += step
+                        }
+                    }
+                    else -> Unit
+                }
+                if (spineW > 64f) {
+                    Column(
+                        Modifier.graphicsLayer { rotationZ = 90f }.width(height * 0.92f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            game.title.uppercase(),
+                            style = TextStyle(fontFamily = PixelFont, fontSize = 7.sp),
+                            color = spineInk,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Clip,
+                        )
+                    }
                 }
             }
         }
@@ -134,22 +210,22 @@ fun GameBox3D(game: Game, width: Dp, rotY: Float, rotX: Float, modifier: Modifie
                 Modifier
                     .fillMaxSize()
                     .graphicsLayer { rotationY = rotY; rotationX = rotX; cameraDistance = cam }
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(Brush.verticalGradient(listOf(lerp(spec.shell, Color.Black, 0.55f), lerp(spec.shell, Color.Black, 0.75f))))
-                    .border(2.dp, lerp(spec.shell, Color.Black, 0.3f), RoundedCornerShape(6.dp)),
+                    .clip(RoundedCornerShape(corner))
+                    .background(Brush.verticalGradient(listOf(lerp(spec.shell, Color.Black, 0.55f), lerp(spec.shell, Color.Black, 0.78f))))
+                    .border(2.dp, lerp(spec.shell, Color.Black, 0.3f), RoundedCornerShape(corner)),
             ) {
-                // The tray the cartridge or disc sits in.
                 Box(
                     Modifier
                         .align(Alignment.Center)
                         .fillMaxWidth(0.72f)
                         .fillMaxHeight(if (spec.media == Media.Disc) 0.72f else 0.6f)
                         .clip(if (spec.media == Media.Disc) CircleShape else RoundedCornerShape(8.dp))
-                        .background(Color.Black.copy(alpha = 0.45f)),
+                        .background(Color.Black.copy(alpha = 0.45f))
+                        .border(1.dp, Color.White.copy(alpha = 0.06f), if (spec.media == Media.Disc) CircleShape else RoundedCornerShape(8.dp)),
                 )
             }
         }
-        // The front cover.
+        // The front.
         Box(
             Modifier
                 .fillMaxSize()
@@ -157,54 +233,132 @@ fun GameBox3D(game: Game, width: Dp, rotY: Float, rotX: Float, modifier: Modifie
                     cameraDistance = cam
                     rotationX = rotX
                     if (lid > 0f) {
-                        // Swing open on the left edge.
                         transformOrigin = TransformOrigin(0f, 0.5f)
                         rotationY = rotY - 112f * lid
                     } else {
                         rotationY = rotY
                     }
-                    shadowElevation = 18f
-                    shape = RoundedCornerShape(6.dp)
+                    shadowElevation = 22f
+                    shape = RoundedCornerShape(corner)
                     clip = true
                 },
         ) {
-            // Past 90° we're looking at the inside of the lid, not the cover.
             if (rotY - 112f * lid < -90f) {
+                // The inside of the lid.
                 Box(
                     Modifier
                         .fillMaxSize()
                         .background(Brush.horizontalGradient(listOf(lerp(spec.shell, Color.Black, 0.6f), lerp(spec.shell, Color.Black, 0.4f))))
-                        .border(2.dp, lerp(spec.shell, Color.Black, 0.3f), RoundedCornerShape(6.dp)),
+                        .border(2.dp, lerp(spec.shell, Color.Black, 0.3f), RoundedCornerShape(corner)),
                 )
                 return@Box
             }
-            GameArt(game, Modifier.fillMaxSize(), showTitle = true)
-            // Plastic edge and system band along the top, like a real box.
-            Box(Modifier.fillMaxWidth().height(height * 0.075f).background(lerp(tint, Color.Black, 0.2f).copy(alpha = 0.92f)), contentAlignment = Alignment.CenterStart) {
-                Text(
-                    game.system?.shortName?.uppercase().orEmpty(),
-                    style = TextStyle(fontFamily = PixelFont, fontSize = 7.sp),
-                    color = Color.White,
-                    modifier = Modifier.padding(start = 8.dp),
-                )
-            }
-            // Glare: a soft bright band that slides with the tilt.
+            CaseFront(game, style, tint, height)
+            // Glare: a soft bright band that slides with the tilt (stronger on clear plastic).
+            val shine = if (style == CaseStyle.Cardboard) 0.16f else 0.3f
             Canvas(Modifier.fillMaxSize()) {
                 val shift = (rotY / 40f + rotX / 60f).coerceIn(-1f, 1f)
                 val cx = size.width * (0.5f - shift)
                 drawRect(
                     Brush.linearGradient(
                         0f to Color.Transparent,
-                        0.45f to Color.White.copy(alpha = 0.0f),
-                        0.5f to Color.White.copy(alpha = 0.22f + 0.1f * abs(shift)),
-                        0.55f to Color.White.copy(alpha = 0.0f),
+                        0.42f to Color.White.copy(alpha = 0f),
+                        0.5f to Color.White.copy(alpha = shine + 0.08f * abs(shift)),
+                        0.58f to Color.White.copy(alpha = 0f),
                         1f to Color.Transparent,
                         start = Offset(cx - size.width, 0f),
                         end = Offset(cx + size.width, size.height),
                     ),
                 )
-                drawRoundRect(Color.White.copy(alpha = 0.18f), style = Stroke(1.5.dp.toPx()), cornerRadius = androidx.compose.ui.geometry.CornerRadius(6.dp.toPx()))
+                // Light catching the top edge, shadow along the bottom.
+                drawRect(Brush.verticalGradient(0f to Color.White.copy(alpha = 0.18f), 0.04f to Color.Transparent, 0.9f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.3f)))
             }
+        }
+    }
+}
+
+/** The printed front of the case, by packaging type. */
+@Composable
+private fun CaseFront(game: Game, style: CaseStyle, tint: Color, height: Dp) {
+    val label = game.system?.shortName?.uppercase().orEmpty()
+    when (style) {
+        CaseStyle.Cardboard -> Box(Modifier.fillMaxSize()) {
+            GameArt(game, Modifier.fillMaxSize(), showTitle = true, showTag = false)
+            // Printed system band across the top, with a little seal.
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .height(height * 0.085f)
+                    .background(Brush.horizontalGradient(listOf(lerp(tint, Color.Black, 0.15f), lerp(tint, Color.Black, 0.45f))))
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(label, style = TextStyle(fontFamily = PixelFont, fontSize = 7.sp), color = Color.White, modifier = Modifier.weight(1f))
+                Box(Modifier.size(height * 0.05f).clip(CircleShape).background(Color(0xFFF2D27A)).border(1.dp, Color(0xFFB08A2E), CircleShape))
+            }
+            // Worn corners and edges of printed card.
+            Canvas(Modifier.fillMaxSize()) {
+                drawRect(Brush.radialGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.32f)), radius = size.maxDimension * 0.78f))
+                drawRect(Color.White.copy(alpha = 0.22f), style = Stroke(1.2.dp.toPx()))
+            }
+        }
+        CaseStyle.Clamshell -> Box(
+            Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFF2A2A2E), Color(0xFF0F0F11)))),
+        ) {
+            // Art under a clear sleeve, inset in the black plastic.
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(start = 7.dp, end = 7.dp, top = 7.dp, bottom = 7.dp)
+                    .clip(RoundedCornerShape(3.dp)),
+            ) {
+                GameArt(game, Modifier.fillMaxSize(), showTitle = true, showTag = false)
+                Box(Modifier.fillMaxWidth().height(height * 0.07f).background(Color.Black.copy(alpha = 0.82f)), contentAlignment = Alignment.CenterStart) {
+                    Text(label, style = TextStyle(fontFamily = PixelFont, fontSize = 7.sp), color = Color.White, modifier = Modifier.padding(start = 6.dp))
+                }
+                Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color.White.copy(alpha = 0.1f), Color.Transparent, Color.White.copy(alpha = 0.05f)))))
+            }
+            Canvas(Modifier.fillMaxSize()) {
+                drawRoundRect(Color.White.copy(alpha = 0.14f), style = Stroke(1.5.dp.toPx()), cornerRadius = androidx.compose.ui.geometry.CornerRadius(7.dp.toPx()))
+            }
+        }
+        CaseStyle.Jewel -> Row(Modifier.fillMaxSize().background(Color(0xFF101012))) {
+            // The hinge: a dark ridged strip down the left.
+            Canvas(Modifier.fillMaxHeight().fillMaxWidth(0.085f)) {
+                drawRect(Brush.horizontalGradient(listOf(Color(0xFF1C1C20), Color(0xFF050506))))
+                val step = 4.dp.toPx()
+                var y = step
+                while (y < size.height) {
+                    drawLine(Color.White.copy(alpha = 0.12f), Offset(size.width * 0.2f, y), Offset(size.width * 0.8f, y), 1f)
+                    y += step
+                }
+            }
+            Box(Modifier.fillMaxSize().padding(3.dp)) {
+                GameArt(game, Modifier.fillMaxSize(), showTitle = true, showTag = false)
+                // Black band like a PlayStation insert.
+                Box(Modifier.fillMaxWidth().height(height * 0.075f).background(Color.Black.copy(alpha = 0.88f)), contentAlignment = Alignment.CenterStart) {
+                    Text(label, style = TextStyle(fontFamily = PixelFont, fontSize = 7.sp), color = Color.White, modifier = Modifier.padding(start = 6.dp))
+                }
+                // Clear plastic: a cool tint and bright edges.
+                Box(Modifier.fillMaxSize().background(Brush.linearGradient(listOf(Color(0x22BFD8FF), Color.Transparent, Color(0x14FFFFFF)))))
+            }
+            Unit
+        }
+        CaseStyle.Keepcase -> Box(
+            Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color(0xFFE6E6EA), Color(0xFFBDBDC4)))),
+        ) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(start = 8.dp, end = 8.dp, top = height * 0.1f, bottom = 8.dp)
+                    .clip(RoundedCornerShape(4.dp)),
+            ) { GameArt(game, Modifier.fillMaxSize(), showTitle = true, showTag = false) }
+            Text(
+                label,
+                style = TextStyle(fontFamily = PixelFont, fontSize = 7.sp),
+                color = Color(0xFF2A2A30),
+                modifier = Modifier.align(Alignment.TopStart).padding(start = 10.dp, top = height * 0.035f),
+            )
         }
     }
 }

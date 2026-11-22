@@ -574,4 +574,29 @@ class PolishScreenshotTest {
 
     @Test fun shelfOpenNes() = openShelf(0, "shelf_open_nes")
     @Test fun shelfOpenPsx() = openShelf(4, "shelf_open_psx")
+
+    @Test
+    @Config(qualifiers = "w720dp-h900dp-night-xxhdpi")
+    fun caseStyles() {
+        val games = shelfGames() + listOf(sample("Tactics (USA).nds", "nds"))
+        compose.setContent {
+            RetroHeroTheme {
+                Column(Modifier.fillMaxSize().background(Color(0xFF0B0B0D)).padding(top = 40.dp)) {
+                    games.chunked(4).forEach { row ->
+                        androidx.compose.foundation.layout.Row(
+                            Modifier.fillMaxWidth().height(400.dp),
+                            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceEvenly,
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                        ) {
+                            row.forEachIndexed { i, g ->
+                                com.retrohero.app.ui.components.GameBox3D(g, 130.dp, rotY = if (i % 2 == 0) 24f else -20f, rotX = 8f)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        compose.mainClock.advanceTimeBy(600)
+        save("case_styles")
+    }
 }
