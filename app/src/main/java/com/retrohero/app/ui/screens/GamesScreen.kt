@@ -1,5 +1,6 @@
 package com.retrohero.app.ui.screens
 
+import com.retrohero.app.ui.components.LocalNavSpace
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -141,7 +142,7 @@ fun GamesScreen(
 
     LazyVerticalGrid(
         columns = GridCells.Adaptive(124.dp),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp + LocalNavSpace.current),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
         modifier = Modifier.fillMaxSize(),

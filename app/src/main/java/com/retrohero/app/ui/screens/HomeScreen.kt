@@ -199,6 +199,7 @@ fun HomeScreen(
     games: List<Game>,
     recents: List<Game>,
     onPlay: (Game) -> Unit,
+    onOpen: (Game) -> Unit,
     onOptions: (Game) -> Unit,
     onOpenSystem: (GameSystem) -> Unit,
     onSeeAllGames: () -> Unit,
@@ -225,7 +226,7 @@ fun HomeScreen(
             full { Box(Modifier.launchRise(2)) { SectionHeader("Recently Played") } }
             full {
                 LazyRow(modifier = Modifier.launchRise(3), contentPadding = PaddingValues(horizontal = ContentInset), horizontalArrangement = Arrangement.spacedBy(CardSpacing)) {
-                    items(recents, key = { "r_" + it.id }) { game -> RowCard(game, onPlay, onOptions) }
+                    items(recents, key = { "r_" + it.id }) { game -> RowCard(game, onOpen, onOptions) }
                 }
             }
         }
@@ -239,7 +240,7 @@ fun HomeScreen(
         }
         full { SectionHeader("All Games", onSeeAllGames) }
         items(games, key = { it.id }) { game ->
-            GameCard(game, onClick = { onPlay(game) }, onLongClick = { onOptions(game) }, modifier = Modifier.animateItem())
+            GameCard(game, onClick = { onOpen(game) }, onLongClick = { onOptions(game) }, modifier = Modifier.animateItem())
         }
     }
 }

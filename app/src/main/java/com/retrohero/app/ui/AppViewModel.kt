@@ -6,6 +6,7 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.retrohero.app.RetroHeroApp
+import com.retrohero.app.data.AppPaths
 import com.retrohero.app.data.CoreInfo
 import com.retrohero.app.data.Game
 import com.retrohero.app.data.GameSystem
@@ -45,7 +46,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     sealed interface LaunchState {
-        data class NeedsCore(val game: Game, val core: CoreInfo) : LaunchState
+        data class NeedsCore(val game: Game, val core: CoreInfo, val slot: Int? = null) : LaunchState
         data class Downloading(val game: Game, val core: CoreInfo) : LaunchState
         data class Preparing(val game: Game, val file: String) : LaunchState
         data class Error(val message: String) : LaunchState
@@ -252,16 +253,23 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun gamesFor(system: GameSystem) = games.value.filter { it.systemId == system.id }
 
-    fun play(game: Game) {
+    /** Starts [game]; with [slot], resumes from that save-state slot instead of the auto-save. */
+    fun play(game: Game, slot: Int? = null) {
         val system = game.system ?: return
         val core = settings.coreFor(system)
-        if (app.cores.isInstalled(core.id)) prepareAndLaunch(game, core)
-        else _launch.value = LaunchState.NeedsCore(game, core)
+        if (app.cores.isInstalled(core.id)) prepareAndLaunch(game, core, slot)
+        else _launch.value = LaunchState.NeedsCore(game, core, slot)
     }
 
-    /** "Gacha" pick: play a random game, avoiding the one played last when possible. */
-    fun playRandom() {
-        val all = games.value
+    /** Save-state slots that exist for [game], newest first: slot to last-modified time. */
+    fun saveSlots(game: Game): List<Pair<Int, Long>> =
+        (listOf(AppPaths.AUTO_SLOT) + (1..4)).mapNotNull { slot ->
+            app.paths.stateFile(game, slot).takeIf { it.exists() }?.let { slot to it.lastModified() }
+        }.sortedByDescending { it.second }
+
+    /** "Gacha" pick: play a random game (optionally from one system), avoiding the last one played. */
+    fun playRandom(systemId: String? = null) {
+        val all = games.value.filter { systemId == null || it.systemId == systemId }
         if (all.isEmpty()) return
         val last = settings.recents.value.firstOrNull()
         val pool = all.filter { it.id != last }.ifEmpty { all }
@@ -274,7 +282,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val error = app.cores.download(state.core.id)
             if (error != null) _launch.value = LaunchState.Error("Couldn't download ${state.core.displayName}: $error")
-            else prepareAndLaunch(state.game, state.core)
+            else prepareAndLaunch(state.game, state.core, state.slot)
         }
     }
 
@@ -282,7 +290,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         if (_launch.value !is LaunchState.Downloading && _launch.value !is LaunchState.Preparing) _launch.value = null
     }
 
-    private fun prepareAndLaunch(game: Game, core: CoreInfo) {
+    private fun prepareAndLaunch(game: Game, core: CoreInfo, slot: Int? = null) {
         _launch.value = LaunchState.Preparing(game, game.fileName)
         viewModelScope.launch {
             try {
@@ -292,7 +300,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 val corePath = app.cores.coreFile(core.id) ?: error("Core not installed")
                 settings.markPlayed(game.id)
                 _launch.value = null
-                _launchIntents.send(EmulatorActivity.intent(app, game, core.id, corePath.absolutePath, rom.absolutePath))
+                _launchIntents.send(EmulatorActivity.intent(app, game, core.id, corePath.absolutePath, rom.absolutePath, slot))
             } catch (e: Exception) {
                 _launch.value = LaunchState.Error(e.message ?: "Couldn't open this game.")
             }

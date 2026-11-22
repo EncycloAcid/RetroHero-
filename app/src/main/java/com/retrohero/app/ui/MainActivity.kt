@@ -2,6 +2,16 @@ package com.retrohero.app.ui
 
 import android.app.ActivityOptions
 import android.os.Bundle
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import com.retrohero.app.ui.components.LocalNavSpace
+import com.retrohero.app.ui.screens.GameDetailScreen
+import com.retrohero.app.ui.screens.OnboardingScreen
+import com.retrohero.app.ui.screens.SystemDetailScreen
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Home
@@ -190,6 +200,7 @@ private fun App(vm: AppViewModel) {
     // Home is immersive: no top app bar, content runs under the status bar.
     val isHome = openSystem == null && tab == Tab.Home && games.isNotEmpty()
     val navBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val glass = rememberHazeState()
     val floatingNavSpace = if (wide || openSystem != null) 0.dp else FloatingNavHeight + 16.dp + navBarInset
     val systemCount = games.mapTo(HashSet()) { it.systemId }.size
 
@@ -231,7 +242,7 @@ private fun App(vm: AppViewModel) {
         contentColor = MaterialTheme.colorScheme.onBackground,
         modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            if (!isHome) Column {
+            if (!isHome && openSystem == null) Column {
                 val barTitle: @Composable () -> Unit = {
                         Text(openSystem?.name ?: tab.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
@@ -284,35 +295,34 @@ private fun App(vm: AppViewModel) {
         },
     ) { padding ->
       Row(
-          (if (isHome) Modifier else Modifier.padding(top = padding.calculateTopPadding(), bottom = floatingNavSpace))
+          (if (isHome || openSystem != null) Modifier else Modifier.padding(top = padding.calculateTopPadding()))
               .fillMaxSize(),
       ) {
         val screen = openSystem?.id ?: tab.name
         val effects = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
         val spatial = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
+        CompositionLocalProvider(LocalNavSpace provides floatingNavSpace) {
         AnimatedContent(
             targetState = screen,
             transitionSpec = { (fadeIn(effects) + scaleIn(spatial, initialScale = 0.96f)) togetherWith fadeOut(effects) },
             label = "screen",
-            modifier = Modifier.weight(1f).fillMaxHeight(),
+            modifier = Modifier.weight(1f).fillMaxHeight().hazeSource(glass),
         ) { key ->
             val system = Systems.get(key)
             when {
-                system != null -> GamesScreen(
+                system != null -> SystemDetailScreen(
+                    system = system,
                     games = games.filter { it.systemId == system.id },
-                    recents = emptyList(),
-                    hasFolders = folders.isNotEmpty(),
-                    scanning = scanning,
-                    onAddFolder = { folderPicker.launch(null) },
-                    onDownload = { vm.openDownload(AppViewModel.DownloadKind.Game) },
-                    onPlay = vm::play,
-                    onGameOptions = { sheetFor = it.id },
-                    showSystemFilter = false,
+                    onBack = { openSystemId = null },
+                    onOpenGame = { sheetFor = it.id },
+                    onPlay = { vm.play(it) },
+                    onPlayRandom = { vm.playRandom(system.id) },
                 )
                 key == Tab.Home.name && games.isNotEmpty() -> HomeScreen(
                     games = games,
                     recents = recents,
                     onPlay = vm::play,
+                    onOpen = { sheetFor = it.id },
                     onOptions = { sheetFor = it.id },
                     onOpenSystem = { openSystemId = it.id },
                     onSeeAllGames = { tab = Tab.Games },
@@ -363,7 +373,7 @@ private fun App(vm: AppViewModel) {
                     scanning = scanning,
                     onAddFolder = { folderPicker.launch(null) },
                     onDownload = { vm.openDownload(AppViewModel.DownloadKind.Game) },
-                    onPlay = vm::play,
+                    onPlay = { sheetFor = it.id },
                     onGameOptions = { sheetFor = it.id },
                 )
                 key == Tab.Systems.name -> SystemsScreen(games) { openSystemId = it.id }
@@ -385,10 +395,12 @@ private fun App(vm: AppViewModel) {
                 )
             }
         }
+        }
       }
     }
         if (!wide && openSystem == null) {
             FloatingNavBar(
+                glass = glass,
                 items = Tab.entries.map { NavItem(it.label, it.selected, it.unselected) },
                 selected = tab.ordinal,
                 onSelect = { tab = Tab.entries[it] },
@@ -402,17 +414,46 @@ private fun App(vm: AppViewModel) {
 
     }
 
-    sheetFor?.let { id -> games.firstOrNull { it.id == id } }?.let { game ->
-        val system = game.system ?: return@let
-        GameSheet(
-            game = game,
-            currentCore = vm.settings.coreFor(system),
-            onSelectCore = { vm.setCore(system, it) },
-            onPlay = { sheetFor = null; vm.play(game) },
-            onDelete = if (game.isLocal) {
-                { sheetFor = null; vm.deleteGame(game) }
-            } else null,
-            onDismiss = { sheetFor = null },
+    // The game page slides up over everything; back closes it.
+    val detailGame = sheetFor?.let { id -> games.firstOrNull { it.id == id } }
+    var lastDetail by remember { mutableStateOf<com.retrohero.app.data.Game?>(null) }
+    if (detailGame != null) lastDetail = detailGame
+    BackHandler(enabled = detailGame != null) { sheetFor = null }
+    AnimatedVisibility(
+        visible = detailGame != null,
+        enter = slideInVertically(spring(dampingRatio = 0.86f, stiffness = 380f)) { it / 5 } + fadeIn(tween(200)),
+        exit = slideOutVertically(tween(220)) { it / 5 } + fadeOut(tween(180)),
+    ) {
+        val game = lastDetail
+        val system = game?.system
+        if (game != null && system != null) {
+            GameDetailScreen(
+                game = game,
+                currentCore = vm.settings.coreFor(system),
+                saveSlots = remember(game.id, launchState) { vm.saveSlots(game) },
+                onPlay = { slot -> vm.play(game, slot) },
+                onSelectCore = { vm.setCore(system, it) },
+                onDelete = if (game.isLocal) {
+                    { sheetFor = null; vm.deleteGame(game) }
+                } else null,
+                onClose = { sheetFor = null },
+            )
+        }
+    }
+
+    // First run: a short setup, only for a fresh install with nothing added yet.
+    var onboarding by rememberSaveable { mutableStateOf(!vm.settings.onboardingDone && games.isEmpty() && folders.isEmpty()) }
+    AnimatedVisibility(visible = onboarding, enter = fadeIn(), exit = fadeOut(tween(350))) {
+        OnboardingScreen(
+            hasGames = games.isNotEmpty() || folders.isNotEmpty(),
+            onAddFolder = { folderPicker.launch(null) },
+            onDownloadLink = { vm.openDownload(AppViewModel.DownloadKind.Game) },
+            onHomebrew = { homebrewOpen = true },
+            onImportBios = { biosPicker.launch(arrayOf("*/*")) },
+            onFinish = {
+                vm.settings.onboardingDone = true
+                onboarding = false
+            },
         )
     }
 

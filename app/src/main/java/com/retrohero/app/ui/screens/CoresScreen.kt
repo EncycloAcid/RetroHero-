@@ -1,5 +1,6 @@
 package com.retrohero.app.ui.screens
 
+import com.retrohero.app.ui.components.LocalNavSpace
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -42,7 +43,7 @@ fun CoresScreen(
     val cores = Systems.allCores()
     val (installed, available) = cores.partition { states[it.first.id] is CoreState.Installed }
     LazyColumn(
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp + LocalNavSpace.current),
         verticalArrangement = Arrangement.spacedBy(20.dp),
         modifier = Modifier.fillMaxSize(),
     ) {

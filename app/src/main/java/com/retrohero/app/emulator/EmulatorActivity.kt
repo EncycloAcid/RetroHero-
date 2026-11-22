@@ -193,8 +193,13 @@ class EmulatorActivity : ComponentActivity() {
             if (!NativeBridge.loadGame(romPath, paths.saveRam(game).absolutePath)) {
                 return@withContext NativeBridge.getLastError()
             }
-            val auto = paths.stateFile(game, AppPaths.AUTO_SLOT)
-            if (settings.autoSave && auto.exists()) NativeBridge.loadState(auto.absolutePath)
+            val requested = if (intent.hasExtra(EXTRA_LOAD_SLOT)) intent.getIntExtra(EXTRA_LOAD_SLOT, AppPaths.AUTO_SLOT) else null
+            val resume = when {
+                requested != null -> paths.stateFile(game, requested)
+                settings.autoSave -> paths.stateFile(game, AppPaths.AUTO_SLOT)
+                else -> null
+            }
+            if (resume != null && resume.exists()) NativeBridge.loadState(resume.absolutePath)
             null
         }
         if (error != null) {
@@ -628,11 +633,15 @@ class EmulatorActivity : ComponentActivity() {
         private const val EXTRA_CORE_ID = "core_id"
         private const val EXTRA_ROM_PATH = "rom_path"
 
-        fun intent(context: Context, game: Game, coreId: String, corePath: String, romPath: String) =
+        private const val EXTRA_LOAD_SLOT = "load_slot"
+
+        /** [slot]: a save-state slot to resume from (AppPaths.AUTO_SLOT or 1..4); null uses the usual auto-resume. */
+        fun intent(context: Context, game: Game, coreId: String, corePath: String, romPath: String, slot: Int? = null) =
             Intent(context, EmulatorActivity::class.java)
                 .putExtra(EXTRA_GAME, game.toJson().toString())
                 .putExtra(EXTRA_CORE_ID, coreId)
                 .putExtra(EXTRA_CORE_PATH, corePath)
                 .putExtra(EXTRA_ROM_PATH, romPath)
+                .apply { if (slot != null) putExtra(EXTRA_LOAD_SLOT, slot) }
     }
 }

@@ -48,6 +48,11 @@ class Settings(context: Context) {
 
     fun setCoreFor(system: GameSystem, core: CoreInfo) = prefs.edit { putString("core_${system.id}", core.id) }
 
+    /** First-run onboarding has been finished or skipped. */
+    var onboardingDone: Boolean
+        get() = prefs.getBoolean("onboarding_done", false)
+        set(v) = prefs.edit { putBoolean("onboarding_done", v) }
+
     var overlayOpacity: Float
         get() = prefs.getFloat("overlay_opacity", 0.7f)
         set(v) = prefs.edit { putFloat("overlay_opacity", v) }

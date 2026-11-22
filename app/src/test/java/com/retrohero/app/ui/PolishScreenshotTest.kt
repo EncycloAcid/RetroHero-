@@ -19,6 +19,9 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import com.retrohero.app.R
@@ -96,6 +99,22 @@ class PolishScreenshotTest {
         }
         compose.mainClock.advanceTimeBy(400)
         save("skeleton")
+    }
+
+    @Test
+    fun onboarding() {
+        compose.setContent {
+            RetroHeroTheme {
+                com.retrohero.app.ui.screens.OnboardingScreen(
+                    hasGames = false, onAddFolder = {}, onDownloadLink = {}, onHomebrew = {}, onImportBios = {}, onFinish = {},
+                )
+            }
+        }
+        compose.mainClock.advanceTimeBy(600)
+        save("onboarding_1")
+        compose.onAllNodesWithText("Get started").onFirst().performClick()
+        compose.mainClock.advanceTimeBy(800)
+        save("onboarding_2")
     }
 
     @Test

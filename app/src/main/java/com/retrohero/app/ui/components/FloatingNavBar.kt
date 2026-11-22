@@ -4,6 +4,8 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
+import dev.chrisbanes.haze.HazeState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Brush
@@ -40,6 +42,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
+/** Space the floating nav takes at the bottom; scrolling screens pad their content by it. */
+val LocalNavSpace = compositionLocalOf { 0.dp }
+
 class NavItem(val label: String, val selectedIcon: ImageVector, val icon: ImageVector)
 
 val FloatingNavHeight = 62.dp
@@ -49,7 +54,13 @@ val FloatingNavHeight = 62.dp
  * on an expressive spring.
  */
 @Composable
-fun FloatingNavBar(items: List<NavItem>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
+fun FloatingNavBar(
+    items: List<NavItem>,
+    selected: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+    glass: HazeState? = null,
+) {
     val scheme = MaterialTheme.colorScheme
     var pressedAny by remember { mutableStateOf(false) }
     val barScale by animateFloatAsState(if (pressedAny) 0.985f else 1f, spring(0.6f, Spring.StiffnessMedium), label = "barPress")
@@ -63,9 +74,11 @@ fun FloatingNavBar(items: List<NavItem>, selected: Int, onSelect: (Int) -> Unit,
             }
             .shadow(24.dp, CircleShape, ambientColor = Color.Black, spotColor = Color.Black)
             .clip(CircleShape)
-            // Dark frosted chrome: a translucent graphite fill with a faint light edge on top.
-            .background(Brush.verticalGradient(listOf(Color(0xFF2A2A2A).copy(alpha = 0.94f), Color(0xFF1B1B1B).copy(alpha = 0.94f))))
-            .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.14f), Color.White.copy(alpha = 0.03f))), CircleShape)
+            // Frosted chrome over the blurred app; a plain graphite fill where there's nothing to blur.
+            .then(
+                if (glass != null) Modifier.frostedGlass(glass, CircleShape)
+                else Modifier.background(Color(0xFF131313).copy(alpha = 0.94f)),
+            )
             .padding(6.dp),
     ) {
         val itemWidth: Dp = maxWidth / items.size

@@ -1,5 +1,6 @@
 package com.retrohero.app.ui.screens
 
+import com.retrohero.app.ui.components.LocalNavSpace
 import android.net.Uri
 import android.os.Build
 import androidx.compose.foundation.layout.Arrangement
@@ -87,7 +88,7 @@ fun SettingsScreen(
     onDeleteBios: (String) -> Unit,
 ) {
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 24.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 24.dp + LocalNavSpace.current),
         verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         // ---- Library -------------------------------------------------------------------

@@ -1,5 +1,6 @@
 package com.retrohero.app.ui.screens
 
+import com.retrohero.app.ui.components.LocalNavSpace
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -60,7 +61,7 @@ fun SystemsScreen(games: List<Game>, onOpen: (GameSystem) -> Unit) {
     val (withGames, empty) = remember(counts) { Systems.all.partition { (counts[it.id] ?: 0) > 0 } }
     LazyVerticalGrid(
         columns = GridCells.Adaptive(160.dp),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp + LocalNavSpace.current),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxSize(),
