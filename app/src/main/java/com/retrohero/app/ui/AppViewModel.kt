@@ -54,7 +54,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         all.filter { it.id in ids }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    fun toggleFavorite(game: Game) = settings.toggleFavorite(game.id)
+    /** A short message, optionally with Undo. */
+    class Message(val text: String, val undo: (() -> Unit)? = null)
+
+    private val _messages = Channel<Message>(Channel.BUFFERED)
+    val messages = _messages.receiveAsFlow()
+    fun say(text: String, undo: (() -> Unit)? = null) { _messages.trySend(Message(text, undo)) }
+
+    fun toggleFavorite(game: Game): Boolean {
+        val pinned = settings.toggleFavorite(game.id)
+        say(if (pinned) "Pinned ${game.title}" else "Unpinned ${game.title}") { settings.toggleFavorite(game.id) }
+        return pinned
+    }
 
     val paths: AppPaths get() = app.paths
 
@@ -63,8 +74,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun createCollection(name: String, first: Game? = null) = settings.createCollection(name, first?.id)
     fun renameCollection(c: GameCollection, name: String) = settings.renameCollection(c.id, name)
-    fun deleteCollection(c: GameCollection) = settings.deleteCollection(c.id)
-    fun setInCollection(c: GameCollection, game: Game, inIt: Boolean) = settings.setInCollection(c.id, game.id, inIt)
+    fun deleteCollection(c: GameCollection) {
+        val before = settings.collections.value
+        settings.deleteCollection(c.id)
+        say("Deleted “${c.name}”") { settings.setCollections(before) }
+    }
+
+    fun setInCollection(c: GameCollection, game: Game, inIt: Boolean) {
+        settings.setInCollection(c.id, game.id, inIt)
+        say(if (inIt) "Added to “${c.name}”" else "Removed from “${c.name}”") { settings.setInCollection(c.id, game.id, !inIt) }
+    }
 
     // ---- Controller remaps (written here, read by the game process at launch) ----
     private val _remaps = MutableStateFlow(com.retrohero.app.data.Remap.load(app.paths.remapFile))
@@ -178,9 +197,19 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteScreenshot(game: Game, shot: File) {
         viewModelScope.launch(Dispatchers.IO) {
-            shot.delete()
+            // Keep it aside so Undo can put it back; the cache is cleared by the system later.
+            val trash = File(app.cacheDir, "trash").apply { mkdirs() }
+            val kept = File(trash, "${System.nanoTime()}_${shot.name}")
+            if (!shot.renameTo(kept)) shot.delete()
             _shots.value = _shots.value.filter { it.file != shot }
             _artVersion.value++
+            say("Screenshot deleted") {
+                viewModelScope.launch(Dispatchers.IO) {
+                    if (kept.exists()) kept.renameTo(shot)
+                    _artVersion.value++
+                    refreshStats()
+                }
+            }
         }
     }
 

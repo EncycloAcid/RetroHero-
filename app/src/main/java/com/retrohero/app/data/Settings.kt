@@ -100,6 +100,11 @@ class Settings(context: Context) {
         _tiltEffects.value = on
     }
 
+    /** The tab you were on, so the app reopens there. */
+    var lastTab: String?
+        get() = prefs.getString("last_tab", null)
+        set(v) = prefs.edit { putString("last_tab", v) }
+
     /** Also copy in-game screenshots to Pictures/RetroHero. */
     var screenshotsToGallery: Boolean
         get() = prefs.getBoolean("screenshots_to_gallery", false)

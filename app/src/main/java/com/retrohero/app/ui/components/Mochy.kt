@@ -53,7 +53,11 @@ private val TiltSpring = spring<Float>(dampingRatio = Spring.DampingRatioNoBounc
  * Press feedback that tips the surface toward the finger (up to [maxTilt] degrees) while it
  * shrinks a touch. Observes touches without consuming them, so clicks still work.
  */
+/** True when the person asked for less motion (Settings → Gameplay & comfort). */
+val LocalReducedMotion = androidx.compose.runtime.staticCompositionLocalOf { false }
+
 fun Modifier.press3D(maxTilt: Float = 7f, pressedScale: Float = 0.97f): Modifier = composed {
+    if (LocalReducedMotion.current) return@composed this
     val scope = rememberCoroutineScope()
     val press = remember { Animatable(0f) }
     var normalized by remember { mutableStateOf(Offset.Zero) }

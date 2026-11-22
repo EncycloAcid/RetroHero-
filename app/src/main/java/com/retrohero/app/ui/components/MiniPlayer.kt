@@ -126,8 +126,8 @@ fun MiniPlayer(
         }
         Spacer(Modifier.width(8.dp))
         Box(
-            Modifier.size(36.dp).clip(RoundedCornerShape(22.dp)).clickable(onClick = onPlay),
+            Modifier.size(48.dp).clip(RoundedCornerShape(24.dp)).clickable(onClick = onPlay),
             contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Rounded.PlayArrow, "Resume ${game.title}", tint = Color.White, modifier = Modifier.size(19.dp * 1.3f)) }
+        ) { Icon(Icons.Rounded.PlayArrow, "Resume ${game.title}", tint = Color.White, modifier = Modifier.size(26.dp)) }
     }
 }

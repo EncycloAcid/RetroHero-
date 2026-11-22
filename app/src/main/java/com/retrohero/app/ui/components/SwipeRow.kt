@@ -33,6 +33,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.semantics
 import com.retrohero.app.ui.theme.Salmon
 import kotlinx.coroutines.launch
 
@@ -59,7 +62,13 @@ fun SwipeRow(
     }
     SwipeToDismissBox(
         state = state,
-        modifier = modifier,
+        // Screen readers get the swipe actions as plain actions.
+        modifier = modifier.semantics {
+            customActions = listOf(
+                CustomAccessibilityAction("Play") { onPlay(); true },
+                CustomAccessibilityAction(removeLabel ?: if (isFavorite) "Unpin" else "Pin") { onToggleFavorite(); true },
+            )
+        },
         onDismiss = { value ->
             when (value) {
                 SwipeToDismissBoxValue.StartToEnd -> onPlay()

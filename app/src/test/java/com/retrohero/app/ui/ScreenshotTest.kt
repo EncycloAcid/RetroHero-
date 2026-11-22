@@ -28,6 +28,9 @@ import java.io.File
  * Uses made-up sample games; box art falls back to generated covers.
  */
 @RunWith(RobolectricTestRunner::class)
+// The full walk-through runs first: compose test roots from an earlier test in the same
+// class can linger and confuse its node lookups.
+@org.junit.FixMethodOrder(org.junit.runners.MethodSorters.NAME_ASCENDING)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [36], qualifiers = "w411dp-h891dp-night-xxhdpi")
 class ScreenshotTest {
@@ -38,6 +41,7 @@ class ScreenshotTest {
 
     private fun seed() {
         val app = ApplicationProvider.getApplicationContext<RetroHeroApp>()
+        app.settings.lastTab = null
         val tree = "content://com.android.externalstorage.documents/tree/primary%3ARoms"
         val samples = listOf(
             "Star Courier (USA).nes" to "nes", "Castle Climb (Europe).nes" to "nes",
@@ -110,7 +114,7 @@ class ScreenshotTest {
     }
 
     @Test
-    fun captureScreens() {
+    fun a0_captureScreens() {
         seed()
         compose.mainClock.autoAdvance = false
         ActivityScenario.launch(MainActivity::class.java).use {
@@ -122,6 +126,7 @@ class ScreenshotTest {
             compose.mainClock.advanceTimeBy(260)
             saveNow("0c_intro_late")
             compose.mainClock.autoAdvance = true
+            compose.waitForIdle()
             shot("1_home")
             // Roll the gacha: mid-spin, then after it lands.
             compose.onAllNodesWithText("roll!!").onFirst().performClick()
@@ -149,7 +154,7 @@ class ScreenshotTest {
             shot("5b_customisation")
             compose.onAllNodesWithContentDescription("Back").onFirst().performClick()
             compose.waitForIdle()
-            compose.onAllNodesWithText("Gameplay").onFirst().performClick()
+            compose.onAllNodesWithText("Gameplay & comfort").onFirst().performClick()
             shot("5c_gameplay")
             compose.onAllNodesWithContentDescription("Back").onFirst().performClick()
             compose.waitForIdle()

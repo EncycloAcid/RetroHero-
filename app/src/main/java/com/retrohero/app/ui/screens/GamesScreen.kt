@@ -68,6 +68,20 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 import com.retrohero.app.ui.theme.PixelFont
 import androidx.compose.ui.unit.dp
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.draw.clip
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.filled.SwapVert
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import kotlinx.coroutines.launch
 import com.retrohero.app.data.Game
 import com.retrohero.app.data.Systems
 import com.retrohero.app.ui.components.EmptyState
@@ -85,9 +99,17 @@ fun GamesScreen(
     onPlay: (Game) -> Unit,
     onGameOptions: (Game) -> Unit,
     showSystemFilter: Boolean = true,
+    stats: Map<String, com.retrohero.app.data.PlayStat> = emptyMap(),
+    favorites: Set<String> = emptySet(),
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var systemFilter by rememberSaveable { mutableStateOf<String?>(null) }
+    var sort by rememberSaveable { mutableStateOf(com.retrohero.app.data.GameSort.Name) }
+    var onlyFavourites by rememberSaveable { mutableStateOf(false) }
+    var onlyUnplayed by rememberSaveable { mutableStateOf(false) }
+    var sortMenu by remember { mutableStateOf(false) }
+    val grid = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+    val scope = rememberCoroutineScope()
 
     if (!hasFolders && games.isEmpty()) {
         EmptyState(
@@ -132,23 +154,72 @@ fun GamesScreen(
         val ids = games.mapTo(HashSet()) { it.systemId }
         Systems.all.filter { it.id in ids }
     }
-    val filtered = remember(games, query, systemFilter) {
-        games.filter {
-            (systemFilter == null || it.systemId == systemFilter) &&
-                (query.isBlank() || it.title.contains(query.trim(), ignoreCase = true))
-        }
+    val filtered = remember(games, query, systemFilter, sort, onlyFavourites, onlyUnplayed, stats, favorites, recents) {
+        val q = query.trim()
+        com.retrohero.app.data.GameSort.apply(
+            games.filter {
+                (systemFilter == null || it.systemId == systemFilter) &&
+                    (q.isEmpty() || it.title.contains(q, ignoreCase = true) || it.fileName.contains(q, ignoreCase = true) ||
+                        it.system?.shortName?.equals(q, ignoreCase = true) == true) &&
+                    (!onlyFavourites || it.id in favorites) &&
+                    (!onlyUnplayed || (stats[it.id]?.sessions ?: 0) == 0)
+            },
+            sort, stats, recents.map { it.id },
+        )
     }
-    val browsing = query.isBlank() && systemFilter == null
+    val browsing = query.isBlank() && systemFilter == null && !onlyFavourites && !onlyUnplayed
 
+    Box(Modifier.fillMaxSize()) {
     LazyVerticalGrid(
+        state = grid,
         columns = GridCells.Adaptive(124.dp),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp + LocalNavSpace.current),
+        contentPadding = PaddingValues(start = 16.dp, end = 28.dp, bottom = 24.dp + LocalNavSpace.current),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
         fullWidth { SearchField(query, games.size) { query = it } }
 
+        // Sort and quick filters.
+        fullWidth {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                item {
+                    Box {
+                        FilterChip(
+                            selected = false,
+                            onClick = { sortMenu = true },
+                            label = { Text(sort.label) },
+                            leadingIcon = { Icon(Icons.Default.SwapVert, "Sort by", Modifier.size(18.dp)) },
+                        )
+                        DropdownMenu(sortMenu, onDismissRequest = { sortMenu = false }) {
+                            com.retrohero.app.data.GameSort.entries.forEach { s ->
+                                DropdownMenuItem(
+                                    text = { Text(s.label) },
+                                    leadingIcon = { if (s == sort) Icon(Icons.Default.Check, null) },
+                                    onClick = { sort = s; sortMenu = false; scope.launch { grid.scrollToItem(0) } },
+                                )
+                            }
+                        }
+                    }
+                }
+                item {
+                    FilterChip(
+                        selected = onlyFavourites,
+                        onClick = { onlyFavourites = !onlyFavourites },
+                        label = { Text("Favourites") },
+                        leadingIcon = if (onlyFavourites) { { Icon(Icons.Default.Check, null, Modifier.size(18.dp)) } } else null,
+                    )
+                }
+                item {
+                    FilterChip(
+                        selected = onlyUnplayed,
+                        onClick = { onlyUnplayed = !onlyUnplayed },
+                        label = { Text("Not played yet") },
+                        leadingIcon = if (onlyUnplayed) { { Icon(Icons.Default.Check, null, Modifier.size(18.dp)) } } else null,
+                    )
+                }
+            }
+        }
         if (showSystemFilter && systemsPresent.size > 1) {
             fullWidth {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -173,16 +244,76 @@ fun GamesScreen(
 
         if (filtered.isEmpty()) {
             fullWidth {
-                Text(
-                    "No matches",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(24.dp),
-                )
+                Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("No games match", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Try a different search, or clear the filters.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                    TextButton(onClick = { query = ""; systemFilter = null; onlyFavourites = false; onlyUnplayed = false }) { Text("Clear filters") }
+                }
             }
         }
         items(filtered, key = { it.id }) { game ->
             GameCard(game, onClick = { onPlay(game) }, onLongClick = { onGameOptions(game) }, modifier = Modifier.animateItem())
+        }
+    }
+    // A–Z fast scroller along the right edge when sorted by name.
+    if (sort == com.retrohero.app.data.GameSort.Name && filtered.size > 12) {
+        val headerItems = 3 + (if (showSystemFilter && systemsPresent.size > 1) 1 else 0) + (if (browsing && recents.isNotEmpty()) 3 else 0)
+        AlphabetScroller(
+            letters = filtered.map { it.title.firstOrNull()?.uppercaseChar()?.let { c -> if (c.isLetter()) c else '#' } ?: '#' },
+            onJump = { index -> scope.launch { grid.scrollToItem(headerItems + index) } },
+            modifier = Modifier.align(Alignment.CenterEnd).padding(bottom = LocalNavSpace.current),
+        )
+    }
+    }
+}
+
+/** Letters down the right edge: tap or drag to jump to games starting with that letter. */
+@Composable
+private fun AlphabetScroller(letters: List<Char>, onJump: (Int) -> Unit, modifier: Modifier = Modifier) {
+    val present = remember(letters) { letters.distinct() }
+    val firstIndex = remember(letters) { present.associateWith { c -> letters.indexOf(c) } }
+    var active by remember { mutableStateOf<Char?>(null) }
+    val view = androidx.compose.ui.platform.LocalView.current
+    Column(
+        modifier
+            .padding(end = 4.dp)
+            .clip(CircleShape)
+            .background(Color.White.copy(alpha = if (active != null) 0.1f else 0.04f))
+            .pointerInput(present) {
+                fun pick(y: Float) {
+                    val i = ((y / size.height) * present.size).toInt().coerceIn(0, present.lastIndex)
+                    val c = present[i]
+                    if (c != active) {
+                        active = c
+                        view.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+                        onJump(firstIndex[c] ?: 0)
+                    }
+                }
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    pick(down.position.y)
+                    do {
+                        val e = awaitPointerEvent()
+                        e.changes.forEach { if (it.pressed) { pick(it.position.y); it.consume() } }
+                    } while (e.changes.any { it.pressed })
+                    active = null
+                }
+            }
+            .padding(vertical = 8.dp, horizontal = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        present.forEach { c ->
+            Text(
+                c.toString(),
+                style = MaterialTheme.typography.labelSmall,
+                color = if (c == active) Color.White else Color.White.copy(alpha = 0.55f),
+                modifier = Modifier.padding(vertical = 1.dp).semantics { contentDescription = "Jump to $c" },
+            )
         }
     }
 }

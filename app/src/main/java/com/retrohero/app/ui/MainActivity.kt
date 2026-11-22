@@ -27,6 +27,13 @@ import androidx.compose.foundation.layout.navigationBars
 import com.retrohero.app.ui.components.FloatingNavBar
 import com.retrohero.app.ui.components.GameMenuSheet
 import com.retrohero.app.ui.components.MiniPlayer
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import android.widget.Toast
@@ -163,7 +170,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         // The launch intro plays on a cold start only, not when the activity is recreated.
-        val intro = LaunchIntroState(plays = savedInstanceState == null)
+        // The intro lands the logo on Home's header, so it only plays when the app opens on Home.
+        val opensOnHome = vm.settings.lastTab.let { it == null || it == "Home" }
+        val intro = LaunchIntroState(plays = savedInstanceState == null && !vm.settings.reducedMotion.value && opensOnHome)
         vm.settings.accent.let { id ->
             com.retrohero.app.ui.theme.setAccent(
                 Looks.custom(vm.paths.looks).firstOrNull { "look:" + it.id == id }?.accent ?: Looks.accent(id),
@@ -176,6 +185,7 @@ class MainActivity : ComponentActivity() {
                     LocalLaunchIntro provides intro,
                     LocalArtPaths provides vm.paths,
                     LocalArtVersion provides artVersion,
+                    com.retrohero.app.ui.components.LocalReducedMotion provides vm.settings.reducedMotion.collectAsStateWithLifecycle().value,
                 ) {
                     Box(Modifier.fillMaxSize()) {
                         App(vm)
@@ -224,7 +234,8 @@ private fun App(vm: AppViewModel) {
     var addMenu by remember { mutableStateOf(false) }
     var homebrewOpen by rememberSaveable { mutableStateOf(false) }
 
-    var tab by rememberSaveable { mutableStateOf(Tab.Home) }
+    var tab by rememberSaveable { mutableStateOf(Tab.entries.firstOrNull { it.name == vm.settings.lastTab } ?: Tab.Home) }
+    LaunchedEffect(tab) { vm.settings.lastTab = tab.name }
     var openSystemId by rememberSaveable { mutableStateOf<String?>(null) }
     var openCollectionId by rememberSaveable { mutableStateOf<String?>(null) }
     var pickCollectionsFor by rememberSaveable { mutableStateOf<String?>(null) }
@@ -504,6 +515,8 @@ private fun App(vm: AppViewModel) {
                     onDownload = { vm.openDownload(AppViewModel.DownloadKind.Game) },
                     onPlay = { sheetFor = it.id },
                     onGameOptions = { menuFor = it.id },
+                    stats = stats,
+                    favorites = favoriteIds,
                 )
                 key == Tab.Shelf.name -> ShelfScreen(
                     games = games,
@@ -617,6 +630,30 @@ private fun App(vm: AppViewModel) {
                 onClearCover = { vm.clearCover(game) },
                 onShareScreenshot = { shareScreenshot(context, it) },
                 onDeleteScreenshot = { vm.deleteScreenshot(game, it) },
+            )
+        }
+    }
+
+    // Messages with Undo, floating above the nav bar.
+    val snackbar = remember { SnackbarHostState() }
+    LaunchedEffect(Unit) {
+        vm.messages.collect { m ->
+            snackbar.currentSnackbarData?.dismiss()
+            launch {
+                val r = snackbar.showSnackbar(m.text, actionLabel = if (m.undo != null) "Undo" else null, withDismissAction = m.undo == null, duration = SnackbarDuration.Short)
+                if (r == SnackbarResult.ActionPerformed) m.undo?.invoke()
+            }
+        }
+    }
+    Box(Modifier.fillMaxSize().padding(bottom = floatingNavSpace + 8.dp).navigationBarsPadding(), contentAlignment = Alignment.BottomCenter) {
+        SnackbarHost(snackbar) { data ->
+            Snackbar(
+                data,
+                shape = RoundedCornerShape(18.dp),
+                containerColor = Color(0xFF232326),
+                contentColor = Color.White,
+                actionColor = com.retrohero.app.ui.theme.Salmon,
+                modifier = Modifier.padding(horizontal = 16.dp),
             )
         }
     }
