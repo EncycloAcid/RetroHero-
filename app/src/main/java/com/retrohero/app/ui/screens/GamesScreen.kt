@@ -29,6 +29,8 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material.icons.filled.SportsEsports
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -65,6 +67,7 @@ fun GamesScreen(
     hasFolders: Boolean,
     scanning: Boolean,
     onAddFolder: () -> Unit,
+    onDownload: () -> Unit,
     onPlay: (Game) -> Unit,
     onGameOptions: (Game) -> Unit,
     showSystemFilter: Boolean = true,
@@ -72,7 +75,7 @@ fun GamesScreen(
     var query by rememberSaveable { mutableStateOf("") }
     var systemFilter by rememberSaveable { mutableStateOf<String?>(null) }
 
-    if (!hasFolders) {
+    if (!hasFolders && games.isEmpty()) {
         EmptyState(
             icon = Icons.Default.SportsEsports,
             title = "Let's find your games",
@@ -88,6 +91,11 @@ fun GamesScreen(
                 Icon(Icons.Default.CreateNewFolder, null)
                 Spacer(Modifier.width(8.dp))
                 Text("Choose folder", style = ButtonDefaults.textStyleFor(ButtonDefaults.MediumContainerHeight))
+            }
+            OutlinedButton(onClick = onDownload, shapes = ButtonDefaults.shapes(), modifier = Modifier.padding(top = 12.dp)) {
+                Icon(Icons.Default.Download, null, Modifier.size(ButtonDefaults.IconSize))
+                Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                Text("Download from a link")
             }
         }
         return
@@ -116,7 +124,7 @@ fun GamesScreen(
 
     LazyVerticalGrid(
         columns = GridCells.Adaptive(124.dp),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 96.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
         modifier = Modifier.fillMaxSize(),

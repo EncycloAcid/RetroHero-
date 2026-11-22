@@ -95,5 +95,6 @@ dependencies {
     testImplementation("org.robolectric:robolectric:4.18.1")
     testImplementation("androidx.compose.ui:ui-test-junit4")
     testImplementation("androidx.test.ext:junit:1.3.0")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

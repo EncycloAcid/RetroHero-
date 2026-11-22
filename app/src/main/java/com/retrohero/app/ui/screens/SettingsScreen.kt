@@ -17,9 +17,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
+import androidx.compose.material.icons.outlined.Verified
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.FastForward
 import androidx.compose.material.icons.outlined.Folder
@@ -79,6 +81,7 @@ fun SettingsScreen(
     onRemoveFolder: (String) -> Unit,
     onRescan: () -> Unit,
     onImportBios: () -> Unit,
+    onDownloadBios: () -> Unit,
     onDeleteBios: (String) -> Unit,
 ) {
     Column(
@@ -152,19 +155,26 @@ fun SettingsScreen(
                 val files = Systems.all.flatMap { s -> s.bios.map { s to it } }
                 SegmentedGroup("BIOS & system files", files.size) {
                     files.forEachIndexed { i, (system, file) ->
-                        val present = bios.isPresent(file)
+                        val status = remember(biosVersion, file) { bios.status(file) }
+                        val present = status != BiosManager.Status.Missing
                         SegmentedListItem(
                             shapes = shapes(i),
                             colors = segmentColors(),
                             leadingContent = {
                                 when {
-                                    present -> Icon(Icons.Outlined.CheckCircle, "Installed", tint = MaterialTheme.colorScheme.primary)
+                                    status == BiosManager.Status.Verified -> Icon(Icons.Outlined.Verified, "Verified", tint = MaterialTheme.colorScheme.primary)
+                                    status == BiosManager.Status.Unverified -> Icon(Icons.AutoMirrored.Outlined.HelpOutline, "Unverified", tint = MaterialTheme.colorScheme.tertiary)
                                     file.required -> Icon(Icons.Outlined.ErrorOutline, "Missing", tint = MaterialTheme.colorScheme.error)
                                     else -> Icon(Icons.Outlined.Memory, "Optional", tint = MaterialTheme.colorScheme.outline)
                                 }
                             },
                             supportingContent = {
-                                Text("${system.shortName} · ${file.description}${if (file.required && !present) " · required" else ""}")
+                                val tag = when (status) {
+                                    BiosManager.Status.Verified -> " · verified"
+                                    BiosManager.Status.Unverified -> " · checksum doesn't match"
+                                    BiosManager.Status.Missing -> if (file.required) " · required" else ""
+                                }
+                                Text("${system.shortName} · ${file.description}$tag")
                             },
                             trailingContent = {
                                 if (present) {
@@ -179,15 +189,22 @@ fun SettingsScreen(
                 }
             }
             Text(
-                "BIOS files come from your own consoles. Names must match exactly.",
+                "BIOS files come from your own consoles. Each file is identified by checksum, so any file name works.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 16.dp, top = 10.dp),
             )
-            FilledTonalButton(onClick = onImportBios, shapes = ButtonDefaults.shapes(), modifier = Modifier.padding(top = 12.dp)) {
-                Icon(Icons.Outlined.Memory, null, Modifier.size(ButtonDefaults.IconSize))
-                Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                Text("Import BIOS files")
+            Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onDownloadBios, shapes = ButtonDefaults.shapes()) {
+                    Icon(Icons.Outlined.Download, null, Modifier.size(ButtonDefaults.IconSize))
+                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                    Text("Download")
+                }
+                FilledTonalButton(onClick = onImportBios, shapes = ButtonDefaults.shapes()) {
+                    Icon(Icons.Outlined.Memory, null, Modifier.size(ButtonDefaults.IconSize))
+                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                    Text("Import files")
+                }
             }
         }
 

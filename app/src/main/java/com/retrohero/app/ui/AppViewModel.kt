@@ -10,7 +10,10 @@ import com.retrohero.app.data.CoreInfo
 import com.retrohero.app.data.Game
 import com.retrohero.app.data.GameSystem
 import com.retrohero.app.emulator.EmulatorActivity
+import com.retrohero.app.data.Downloader
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -20,6 +23,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as RetroHeroApp
@@ -53,6 +57,95 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _biosVersion = MutableStateFlow(0)
     val biosVersion: StateFlow<Int> = _biosVersion
+
+    // ---- Link downloads (games & BIOS) -------------------------------------------------
+
+    enum class DownloadKind { Game, Bios }
+
+    sealed interface DownloadState {
+        val kind: DownloadKind
+
+        data class Input(override val kind: DownloadKind, val error: String? = null) : DownloadState
+        data class Running(override val kind: DownloadKind, val read: Long, val total: Long?) : DownloadState
+        data class Done(override val kind: DownloadKind, val title: String, val detail: String, val game: Game? = null) : DownloadState
+        data class Failed(override val kind: DownloadKind, val message: String) : DownloadState
+    }
+
+    private val _download = MutableStateFlow<DownloadState?>(null)
+    val download: StateFlow<DownloadState?> = _download
+    private var downloadJob: Job? = null
+
+    fun openDownload(kind: DownloadKind) {
+        _download.value = DownloadState.Input(kind)
+    }
+
+    fun startDownload(kind: DownloadKind, url: String) {
+        Downloader.validate(url)?.let {
+            _download.value = DownloadState.Input(kind, it)
+            return
+        }
+        _download.value = DownloadState.Running(kind, 0, null)
+        downloadJob = viewModelScope.launch {
+            try {
+                val file = Downloader.fetch(url, app.paths.downloadTmp) { read, total ->
+                    _download.value = DownloadState.Running(kind, read, total)
+                }
+                _download.value = when (kind) {
+                    DownloadKind.Game -> finishGame(file)
+                    DownloadKind.Bios -> finishBios(file)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _download.value = DownloadState.Failed(kind, e.message ?: "Download failed")
+            }
+        }
+    }
+
+    private suspend fun finishGame(file: File): DownloadState = withContext(Dispatchers.IO) {
+        val dest = File(app.paths.downloads, file.name)
+        dest.delete()
+        if (!file.renameTo(dest)) file.copyTo(dest, overwrite = true).also { file.delete() }
+        val game = app.library.addDownloaded(dest)
+        if (game == null) {
+            dest.delete()
+            DownloadState.Failed(DownloadKind.Game, "RetroHero doesn't recognise \"${file.name}\" as a game for any supported system.")
+        } else {
+            DownloadState.Done(DownloadKind.Game, game.title, "Added to ${game.system?.name}", game)
+        }
+    }
+
+    private suspend fun finishBios(file: File): DownloadState = withContext(Dispatchers.IO) {
+        try {
+            val results = bios.install(file, file.name)
+            _biosVersion.value++
+            when {
+                results.isEmpty() -> DownloadState.Failed(DownloadKind.Bios, "No recognised BIOS files were found in ${file.name}.")
+                else -> DownloadState.Done(
+                    DownloadKind.Bios,
+                    if (results.size == 1) results[0].name else "${results.size} BIOS files installed",
+                    results.joinToString("\n") { "${it.name} · ${if (it.verified) "verified ✓" else "unverified (checksum unknown or different)"}" },
+                )
+            }
+        } finally {
+            file.delete()
+        }
+    }
+
+    fun cancelDownload() {
+        downloadJob?.cancel()
+        downloadJob = null
+        _download.value = null
+    }
+
+    fun playDownloaded(game: Game) {
+        _download.value = null
+        play(game)
+    }
+
+    fun deleteGame(game: Game) {
+        viewModelScope.launch { app.library.deleteLocal(game) }
+    }
 
     fun addFolder(uri: Uri) {
         val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
@@ -123,8 +216,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun importBios(uris: List<Uri>) {
         viewModelScope.launch(Dispatchers.IO) {
-            bios.import(uris)
+            val results = bios.import(uris)
             _biosVersion.value++
+            if (results.isNotEmpty()) {
+                _download.value = DownloadState.Done(
+                    DownloadKind.Bios,
+                    if (results.size == 1) results[0].name else "${results.size} BIOS files installed",
+                    results.joinToString("\n") { "${it.name} · ${if (it.verified) "verified ✓" else "unverified"}" },
+                )
+            }
         }
     }
 

@@ -43,7 +43,8 @@ data class CoreInfo(
     val license: String,
 )
 
-data class BiosFile(val fileName: String, val description: String, val required: Boolean)
+/** A BIOS file a core may need. [md5] identifies the known good dump (null = any file accepted). */
+data class BiosFile(val fileName: String, val description: String, val required: Boolean, val md5: String? = null)
 
 data class GameSystem(
     val id: String,
@@ -167,7 +168,7 @@ object Systems {
             thumbnailDb = "Nintendo - Nintendo Entertainment System",
             layout = Layouts.nes, color = Color(0xFFE53935),
             folderHints = setOf("nes", "famicom", "fds"),
-            bios = listOf(BiosFile("disksys.rom", "Famicom Disk System BIOS", false)),
+            bios = listOf(BiosFile("disksys.rom", "Famicom Disk System BIOS", false, md5 = "ca30b50f880eb660a320674ed365ef7a")),
         ),
         GameSystem(
             id = "snes", name = "Super Nintendo", shortName = "SNES", manufacturer = "Nintendo",
@@ -200,7 +201,7 @@ object Systems {
             thumbnailDb = "Nintendo - Game Boy Advance",
             layout = Layouts.gba, color = Color(0xFF5C6BC0),
             folderHints = setOf("gba"),
-            bios = listOf(BiosFile("gba_bios.bin", "GBA BIOS (optional, improves accuracy)", false)),
+            bios = listOf(BiosFile("gba_bios.bin", "GBA BIOS (optional, improves accuracy)", false, md5 = "a860e8c0b6d573d191e4ec7db1b1e4f6")),
         ),
         GameSystem(
             id = "nds", name = "Nintendo DS", shortName = "NDS", manufacturer = "Nintendo",
@@ -210,8 +211,8 @@ object Systems {
             layout = Layouts.nds, color = Color(0xFF90A4AE),
             folderHints = setOf("nds", "ds"),
             bios = listOf(
-                BiosFile("bios7.bin", "DS ARM7 BIOS (melonDS)", false),
-                BiosFile("bios9.bin", "DS ARM9 BIOS (melonDS)", false),
+                BiosFile("bios7.bin", "DS ARM7 BIOS (melonDS)", false, md5 = "df692a80a5b1bc90728bc3dfc76cd948"),
+                BiosFile("bios9.bin", "DS ARM9 BIOS (melonDS)", false, md5 = "a392174eb3e572fed6447e956bde4b25"),
                 BiosFile("firmware.bin", "DS firmware (melonDS)", false),
             ),
             touchScreen = true,
@@ -256,9 +257,9 @@ object Systems {
             layout = Layouts.genesis, color = Color(0xFF3949AB),
             folderHints = setOf("segacd", "megacd", "sega cd", "mega cd"),
             bios = listOf(
-                BiosFile("bios_CD_U.bin", "Sega CD BIOS (USA)", true),
-                BiosFile("bios_CD_E.bin", "Mega-CD BIOS (Europe)", false),
-                BiosFile("bios_CD_J.bin", "Mega-CD BIOS (Japan)", false),
+                BiosFile("bios_CD_U.bin", "Sega CD BIOS (USA)", true, md5 = "2efd74e3232ff260e371b99f84024f7f"),
+                BiosFile("bios_CD_E.bin", "Mega-CD BIOS (Europe)", false, md5 = "e66fa1dc5820d254611fdcdba0662372"),
+                BiosFile("bios_CD_J.bin", "Mega-CD BIOS (Japan)", false, md5 = "278a9397d192149e84e820ac621a8edd"),
             ),
         ),
         GameSystem(
@@ -277,9 +278,9 @@ object Systems {
             layout = Layouts.psx, color = Color(0xFF9E9E9E),
             folderHints = setOf("psx", "ps1", "playstation"),
             bios = listOf(
-                BiosFile("scph5501.bin", "PS1 BIOS (USA) — optional for PCSX ReARMed", false),
-                BiosFile("scph5500.bin", "PS1 BIOS (Japan)", false),
-                BiosFile("scph5502.bin", "PS1 BIOS (Europe)", false),
+                BiosFile("scph5501.bin", "PS1 BIOS (USA) — optional for PCSX ReARMed", false, md5 = "490f666e1afb15b7362b406ed1cea246"),
+                BiosFile("scph5500.bin", "PS1 BIOS (Japan)", false, md5 = "8dd7d5296a650fac7319bce665a6a53c"),
+                BiosFile("scph5502.bin", "PS1 BIOS (Europe)", false, md5 = "32736f17079d0b2b7024407c39bd3050"),
             ),
         ),
         GameSystem(
@@ -297,7 +298,7 @@ object Systems {
             thumbnailDb = "NEC - PC Engine CD - TurboGrafx-CD",
             layout = Layouts.pce, color = Color(0xFFBF360C),
             folderHints = setOf("pcecd", "pce-cd", "tgcd", "turbografxcd", "turbografx-cd"),
-            bios = listOf(BiosFile("syscard3.pce", "Super CD-ROM² System Card 3", true)),
+            bios = listOf(BiosFile("syscard3.pce", "Super CD-ROM² System Card 3", true, md5 = "38179df8f4ac870017db21ebcbf53114")),
         ),
         GameSystem(
             id = "ngp", name = "Neo Geo Pocket (Color)", shortName = "NGP", manufacturer = "SNK",
@@ -322,7 +323,7 @@ object Systems {
             thumbnailDb = "Atari - Lynx",
             layout = Layouts.lynx, color = Color(0xFFFF7043),
             folderHints = setOf("lynx"),
-            bios = listOf(BiosFile("lynxboot.img", "Lynx boot ROM", true)),
+            bios = listOf(BiosFile("lynxboot.img", "Lynx boot ROM", true, md5 = "fcd403db69f54290b51035d82f835e7b")),
         ),
         GameSystem(
             id = "atari2600", name = "Atari 2600", shortName = "2600", manufacturer = "Atari",
@@ -339,7 +340,7 @@ object Systems {
             thumbnailDb = "Atari - 7800",
             layout = Layouts.atari7800, color = Color(0xFFA1887F),
             folderHints = setOf("atari7800", "7800"),
-            bios = listOf(BiosFile("7800 BIOS (U).rom", "Atari 7800 BIOS (optional)", false)),
+            bios = listOf(BiosFile("7800 BIOS (U).rom", "Atari 7800 BIOS (optional)", false, md5 = "0763f1ffb006ddbe32e52d497ee848ae")),
         ),
         GameSystem(
             id = "arcade", name = "Arcade", shortName = "Arcade", manufacturer = "Various",

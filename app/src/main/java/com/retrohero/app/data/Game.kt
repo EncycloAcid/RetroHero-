@@ -12,6 +12,9 @@ data class Game(
     val parentDocId: String,
     val size: Long,
 ) {
+    /** Downloaded into the app (a plain file) rather than found in a user folder via SAF. */
+    val isLocal: Boolean get() = treeUri == LOCAL
+
     val extension: String get() = fileName.substringAfterLast('.', "").lowercase()
 
     /** File name without extension, safe to use for save files. */
@@ -40,6 +43,8 @@ data class Game(
         .put("treeUri", treeUri).put("parentDocId", parentDocId).put("size", size)
 
     companion object {
+        const val LOCAL = "local"
+
         private fun enc(s: String) = android.net.Uri.encode(s)
 
         fun fromJson(o: JSONObject) = Game(

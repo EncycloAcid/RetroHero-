@@ -20,7 +20,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.ToggleButton
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -43,6 +45,7 @@ fun GameSheet(
     currentCore: CoreInfo,
     onSelectCore: (CoreInfo) -> Unit,
     onPlay: () -> Unit,
+    onDelete: (() -> Unit)?,
     onDismiss: () -> Unit,
 ) {
     val system = game.system ?: return
@@ -108,6 +111,18 @@ fun GameSheet(
                 Icon(Icons.Default.PlayArrow, null, Modifier.size(ButtonDefaults.iconSizeFor(ButtonDefaults.MediumContainerHeight)))
                 Spacer(Modifier.width(ButtonDefaults.iconSpacingFor(ButtonDefaults.MediumContainerHeight)))
                 Text("Play", style = ButtonDefaults.textStyleFor(ButtonDefaults.MediumContainerHeight))
+            }
+            if (onDelete != null) {
+                var confirm by remember { mutableStateOf(false) }
+                TextButton(
+                    onClick = { if (confirm) onDelete() else confirm = true },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                ) {
+                    Icon(Icons.Outlined.Delete, null, Modifier.size(ButtonDefaults.IconSize))
+                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
+                    Text(if (confirm) "Tap again to delete the downloaded file" else "Delete download")
+                }
             }
         }
     }

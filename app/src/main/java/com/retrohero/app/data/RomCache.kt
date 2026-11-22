@@ -22,6 +22,12 @@ class RomCache(private val context: Context, private val paths: AppPaths) {
 
         val result = if (game.extension == "zip" && !system.keepZipped) {
             extractZip(game, system, dir)
+        } else if (game.isLocal) {
+            val file = File(Uri.parse(game.id).path ?: throw IOException("Bad path"))
+            if (!file.exists()) throw IOException("${game.fileName} was deleted")
+            // Downloaded games are already plain files; arcade sets get a private copy so BIOS
+            // zips can sit next to them.
+            if (system.keepZipped) file.copyTo(File(dir, file.name), overwrite = true) else file
         } else {
             copyWithReferences(tree, game.parentDocId, game.fileName, dir, onProgress, depth = 0)
             File(dir, game.fileName)

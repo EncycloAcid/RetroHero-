@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onRoot
@@ -79,8 +80,14 @@ class ScreenshotTest {
             tab("Cores"); shot("3_cores")
             tab("Settings"); shot("4_settings")
             tab("Games")
+            compose.onAllNodesWithContentDescription("Add games").onFirst().performClick()
+            shot("5_fab_menu")
+            compose.onAllNodesWithText("Download from link").onFirst().performClick()
+            shot("6_download_sheet")
+            compose.onAllNodesWithText("Cancel").onFirst().performClick()
+            compose.waitForIdle()
             compose.onAllNodesWithText("Castle Climb").onFirst().performTouchInput { longClick() }
-            shot("5_game_sheet")
+            shot("7_game_sheet")
         }
     }
 }

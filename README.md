@@ -11,7 +11,8 @@ An all-in-one retro game emulator for Android. RetroHero is a native **libretro 
 - **Saves.** Battery saves (SRAM) are written automatically, with 4 save-state slots and auto-save/resume on quit.
 - **Fast-forward** (hold or toggle, 2–8×), reset, and per-core options editable in-game.
 - **Sharp pixels.** Optional integer nearest-neighbour pre-scaling keeps pixel art crisp.
-- **BIOS manager.** Import BIOS files and see which ones each system needs.
+- **BIOS manager.** Import BIOS files or download them from a link. Each file is identified by MD5 checksum, so it's saved under the exact name the core expects and marked as verified.
+- **Game downloader.** Paste a direct, Google Drive or Dropbox link to a game file (for example your own backup or a homebrew release). It's saved in the app's `Android/data/com.retrohero.app/files/Games` folder and added to your library straight away.
 - Each game runs in its **own process**, so every core starts from a clean state.
 
 ## Supported systems

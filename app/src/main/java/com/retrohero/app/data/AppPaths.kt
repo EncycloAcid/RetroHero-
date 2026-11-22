@@ -5,6 +5,9 @@ import java.io.File
 
 /** All on-disk locations used by RetroHero. Everything lives in app-private storage. */
 class AppPaths(context: Context) {
+    /** Games downloaded inside the app. Visible to file managers under Android/data. */
+    val downloads: File = (context.getExternalFilesDir("Games") ?: File(context.filesDir, "Games")).apply { mkdirs() }
+    val downloadTmp = File(context.cacheDir, "downloads").apply { mkdirs() }
     val cores = File(context.filesDir, "cores").apply { mkdirs() }
     val system = File(context.filesDir, "system").apply { mkdirs() }
     val saves = File(context.filesDir, "saves").apply { mkdirs() }

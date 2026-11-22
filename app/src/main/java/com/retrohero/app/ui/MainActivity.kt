@@ -34,6 +34,17 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.FloatingActionButtonMenu
+import androidx.compose.material3.FloatingActionButtonMenuItem
+import androidx.compose.material3.ToggleFloatingActionButton
+import androidx.compose.material3.ToggleFloatingActionButtonDefaults.animateIcon
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.outlined.CreateNewFolder
+import androidx.compose.material.icons.outlined.Download
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.remember
+import com.retrohero.app.ui.components.DownloadSheet
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LargeFlexibleTopAppBar
@@ -103,6 +114,8 @@ private fun App(vm: AppViewModel) {
     val launchState by vm.launchState.collectAsStateWithLifecycle()
     val biosVersion by vm.biosVersion.collectAsStateWithLifecycle()
     val dynamicColor by vm.dynamicColor.collectAsStateWithLifecycle()
+    val download by vm.download.collectAsStateWithLifecycle()
+    var fabExpanded by rememberSaveable { mutableStateOf(false) }
 
     var tab by rememberSaveable { mutableStateOf(Tab.Games) }
     var openSystemId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -164,6 +177,31 @@ private fun App(vm: AppViewModel) {
                 if (scanning) LinearWavyProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp))
             }
         },
+        floatingActionButton = {
+            if (openSystem == null && tab == Tab.Games && (folders.isNotEmpty() || games.isNotEmpty())) {
+                BackHandler(enabled = fabExpanded) { fabExpanded = false }
+                FloatingActionButtonMenu(
+                    expanded = fabExpanded,
+                    button = {
+                        ToggleFloatingActionButton(checked = fabExpanded, onCheckedChange = { fabExpanded = it }) {
+                            val icon by remember { derivedStateOf { if (checkedProgress > 0.5f) Icons.Filled.Close else Icons.Filled.Add } }
+                            Icon(icon, if (fabExpanded) "Close menu" else "Add games", Modifier.animateIcon({ checkedProgress }))
+                        }
+                    },
+                ) {
+                    FloatingActionButtonMenuItem(
+                        onClick = { fabExpanded = false; vm.openDownload(AppViewModel.DownloadKind.Game) },
+                        text = { Text("Download from link") },
+                        icon = { Icon(Icons.Outlined.Download, null) },
+                    )
+                    FloatingActionButtonMenuItem(
+                        onClick = { fabExpanded = false; folderPicker.launch(null) },
+                        text = { Text("Add game folder") },
+                        icon = { Icon(Icons.Outlined.CreateNewFolder, null) },
+                    )
+                }
+            }
+        },
         bottomBar = {
             if (openSystem == null) {
                 ShortNavigationBar {
@@ -196,6 +234,7 @@ private fun App(vm: AppViewModel) {
                     hasFolders = folders.isNotEmpty(),
                     scanning = scanning,
                     onAddFolder = { folderPicker.launch(null) },
+                    onDownload = { vm.openDownload(AppViewModel.DownloadKind.Game) },
                     onPlay = vm::play,
                     onGameOptions = { sheetFor = it.id },
                     showSystemFilter = false,
@@ -206,6 +245,7 @@ private fun App(vm: AppViewModel) {
                     hasFolders = folders.isNotEmpty(),
                     scanning = scanning,
                     onAddFolder = { folderPicker.launch(null) },
+                    onDownload = { vm.openDownload(AppViewModel.DownloadKind.Game) },
                     onPlay = vm::play,
                     onGameOptions = { sheetFor = it.id },
                 )
@@ -223,6 +263,7 @@ private fun App(vm: AppViewModel) {
                     onRemoveFolder = vm::removeFolder,
                     onRescan = vm::rescan,
                     onImportBios = { biosPicker.launch(arrayOf("*/*")) },
+                    onDownloadBios = { vm.openDownload(AppViewModel.DownloadKind.Bios) },
                     onDeleteBios = vm::deleteBios,
                 )
             }
@@ -236,7 +277,20 @@ private fun App(vm: AppViewModel) {
             currentCore = vm.settings.coreFor(system),
             onSelectCore = { vm.setCore(system, it) },
             onPlay = { sheetFor = null; vm.play(game) },
+            onDelete = if (game.isLocal) {
+                { sheetFor = null; vm.deleteGame(game) }
+            } else null,
             onDismiss = { sheetFor = null },
+        )
+    }
+
+    download?.let { state ->
+        DownloadSheet(
+            state = state,
+            onStart = vm::startDownload,
+            onRetry = vm::openDownload,
+            onPlay = vm::playDownloaded,
+            onDismiss = vm::cancelDownload,
         )
     }
 
