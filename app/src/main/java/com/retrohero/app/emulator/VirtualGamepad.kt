@@ -19,7 +19,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
-import com.retrohero.app.ui.theme.GoogleSansDisplay
+import com.retrohero.app.ui.theme.InterDisplay
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -345,7 +345,7 @@ private fun RoundButton(button: PadButton, regions: Regions, pressed: Set<Int>, 
             button.label,
             color = Color.White,
             style = TextStyle(
-                fontFamily = GoogleSansDisplay,
+                fontFamily = InterDisplay,
                 fontWeight = FontWeight.ExtraBold,
                 fontSize = if (button.label.length > 2) 12.sp else 22.sp,
                 shadow = Shadow(Color.Black.copy(alpha = 0.35f), Offset(0f, 2f), 4f),
@@ -366,7 +366,7 @@ private fun Shoulders(buttons: List<PadButton>, regions: Regions, pressed: Set<I
                 isPressed = b.id in pressed,
                 shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp, bottomStart = 12.dp, bottomEnd = 12.dp),
                 modifier = Modifier.width(if (buttons.size > 1) 68.dp else 84.dp).height(42.dp),
-            ) { Text(b.label, color = Color.White, style = TextStyle(fontFamily = GoogleSansDisplay, fontWeight = FontWeight.Bold, fontSize = 16.sp)) }
+            ) { Text(b.label, color = Color.White, style = TextStyle(fontFamily = InterDisplay, fontWeight = FontWeight.Bold, fontSize = 16.sp)) }
         }
     }
 }
@@ -392,7 +392,7 @@ private fun Pill(label: String, id: Int, regions: Regions, pressed: Set<Int>) {
         Text(
             label,
             color = Color.White.copy(alpha = 0.9f),
-            style = TextStyle(fontFamily = GoogleSansDisplay, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 1.2.sp),
+            style = TextStyle(fontFamily = InterDisplay, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 1.2.sp),
         )
     }
 }

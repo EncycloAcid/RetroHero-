@@ -130,14 +130,8 @@ fun SettingsScreen(
         }
 
         // ---- Appearance & controls ------------------------------------------------------
-        val dynamicAvailable = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
-        SegmentedGroup("Look & feel", if (dynamicAvailable) 7 else 6) {
+        SegmentedGroup("Look & feel", 6) {
             var i = 0
-            if (dynamicAvailable) {
-                ToggleRow(shapes(i++), Icons.Outlined.Palette, "Wallpaper colours", "Match the app to your device theme", dynamicColor) {
-                    settings.setDynamicColor(it)
-                }
-            }
             ToggleRow(shapes(i++), Icons.Outlined.GridOn, "Sharp pixels", "Crisp scaling for pixel art", settings.sharpPixels) { settings.sharpPixels = it }
             ToggleRow(shapes(i++), Icons.Outlined.Vibration, "Haptic feedback", "Buzz when touch buttons are pressed", settings.haptics) { settings.haptics = it }
             ToggleRow(shapes(i++), Icons.Outlined.Gamepad, "Stick moves D-pad", "Left stick acts as D-pad on controllers", settings.stickAsDpad) { settings.stickAsDpad = it }

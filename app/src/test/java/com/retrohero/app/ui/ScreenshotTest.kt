@@ -67,6 +67,11 @@ class ScreenshotTest {
         File(outDir, "$name.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
+    private fun saveNow(name: String) {
+        val bmp = compose.onRoot().captureToImage().asAndroidBitmap()
+        File(outDir, "$name.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
     private fun tab(label: String) {
         // Icon-only floating bar exposes labels as content descriptions; the rail shows text.
         val byDescription = compose.onAllNodesWithContentDescription(label).fetchSemanticsNodes()
@@ -100,6 +105,14 @@ class ScreenshotTest {
         seed()
         ActivityScenario.launch(MainActivity::class.java).use {
             shot("1_home")
+            // Roll the gacha: mid-spin, then after it lands.
+            compose.onAllNodesWithText("roll!!").onFirst().performClick()
+            compose.mainClock.autoAdvance = false
+            compose.mainClock.advanceTimeBy(1400)
+            saveNow("1b_rolling")
+            compose.mainClock.advanceTimeBy(9500)
+            saveNow("1c_landed")
+            compose.mainClock.autoAdvance = true
             tab("Search"); shot("2_search")
             tab("Systems"); shot("3_systems")
             tab("Cores"); shot("4_cores")

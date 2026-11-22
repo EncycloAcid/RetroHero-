@@ -286,7 +286,6 @@ private fun App(vm: AppViewModel) {
                     recents = recents,
                     onPlay = vm::play,
                     onOptions = { sheetFor = it.id },
-                    onRandom = vm::playRandom,
                     onOpenSystem = { openSystemId = it.id },
                     onSeeAllGames = { tab = Tab.Games },
                     topActions = {
@@ -294,7 +293,11 @@ private fun App(vm: AppViewModel) {
                             FilledIconButton(
                                 onClick = { addMenu = true },
                                 shapes = IconButtonDefaults.shapes(),
-                                modifier = Modifier.size(48.dp),
+                                colors = IconButtonDefaults.filledIconButtonColors(
+                                    containerColor = Color.White.copy(alpha = 0.16f),
+                                    contentColor = Color.White,
+                                ),
+                                modifier = Modifier.size(46.dp),
                             ) { Icon(Icons.Rounded.Add, "Add games") }
                             DropdownMenu(expanded = addMenu, onDismissRequest = { addMenu = false }, shape = MaterialTheme.shapes.large) {
                                 DropdownMenuItem(

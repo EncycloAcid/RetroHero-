@@ -1,140 +1,110 @@
 package com.retrohero.app.ui.theme
 
-import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 
-private val DarkBrand = darkColorScheme(
-    primary = Color(0xFFFFB0C8),
-    onPrimary = Color(0xFF5E1133),
-    primaryContainer = Color(0xFF7C2949),
-    onPrimaryContainer = Color(0xFFFFD9E2),
-    secondary = Color(0xFFC9BFFF),
-    onSecondary = Color(0xFF31236F),
-    secondaryContainer = Color(0xFF483B87),
-    onSecondaryContainer = Color(0xFFE6DEFF),
-    tertiary = Color(0xFF7FD0FF),
-    onTertiary = Color(0xFF00344B),
-    tertiaryContainer = Color(0xFF004C6B),
-    onTertiaryContainer = Color(0xFFC6E7FF),
-    background = Color(0xFF15111A),
-    onBackground = Color(0xFFE9E0E8),
-    surface = Color(0xFF15111A),
-    onSurface = Color(0xFFE9E0E8),
-    surfaceVariant = Color(0xFF4E4350),
-    onSurfaceVariant = Color(0xFFD2C2D0),
-    surfaceContainerLowest = Color(0xFF100C14),
-    surfaceContainerLow = Color(0xFF1D1922),
-    surfaceContainer = Color(0xFF221D26),
-    surfaceContainerHigh = Color(0xFF2C2731),
-    surfaceContainerHighest = Color(0xFF37323C),
-    outline = Color(0xFF9B8D9A),
-    outlineVariant = Color(0xFF4E4350),
-)
-
-private val LightBrand = lightColorScheme(
-    primary = Color(0xFFA0305A),
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFFFFD9E2),
-    onPrimaryContainer = Color(0xFF3E0020),
-    secondary = Color(0xFF5F52A0),
-    onSecondary = Color.White,
-    secondaryContainer = Color(0xFFE6DEFF),
-    onSecondaryContainer = Color(0xFF1B0C59),
-    tertiary = Color(0xFF00658E),
-    onTertiary = Color.White,
-    tertiaryContainer = Color(0xFFC6E7FF),
-    onTertiaryContainer = Color(0xFF001E2E),
-    background = Color(0xFFFFF8F9),
-    onBackground = Color(0xFF1F1A1F),
-    surface = Color(0xFFFFF8F9),
-    onSurface = Color(0xFF1F1A1F),
-    surfaceVariant = Color(0xFFEFDEEB),
-    onSurfaceVariant = Color(0xFF4E4350),
-    surfaceContainerLowest = Color.White,
-    surfaceContainerLow = Color(0xFFFBF1F6),
-    surfaceContainer = Color(0xFFF5EBF0),
-    surfaceContainerHigh = Color(0xFFEFE5EA),
-    surfaceContainerHighest = Color(0xFFE9DFE5),
-    outline = Color(0xFF7F7381),
-    outlineVariant = Color(0xFFD2C2D0),
-)
-
-private val Base = Typography()
-
-private fun TextStyle.text(weight: FontWeight = fontWeight ?: FontWeight.Normal) =
-    copy(fontFamily = GoogleSans, fontWeight = weight)
-
-private fun TextStyle.display(weight: FontWeight, tracking: Double) =
-    copy(fontFamily = GoogleSansDisplay, fontWeight = weight, letterSpacing = tracking.sp)
+/** Salmon accent used for the gacha pointer and small highlights. */
+val Salmon = Color(0xFFF0908D)
 
 /**
- * Material 3 Expressive type scale in Google Sans Flex. Display/headline styles use the fully
- * rounded display cut; the *Emphasized* variants are heavier for hero moments.
+ * Dark-only, monochrome palette on pure black: the interface stays greyscale and colour comes
+ * from the games themselves (cover art and each system's colour).
  */
-private val ExpressiveTypography = Typography(
-    displayLarge = Base.displayLarge.display(FontWeight.Medium, -0.5),
-    displayMedium = Base.displayMedium.display(FontWeight.Medium, -0.25),
-    displaySmall = Base.displaySmall.display(FontWeight.Medium, 0.0),
-    headlineLarge = Base.headlineLarge.display(FontWeight.Medium, 0.0),
-    headlineMedium = Base.headlineMedium.display(FontWeight.Medium, 0.0),
-    headlineSmall = Base.headlineSmall.display(FontWeight.Medium, 0.0),
-    titleLarge = Base.titleLarge.display(FontWeight.Medium, 0.0),
-    titleMedium = Base.titleMedium.text(FontWeight.SemiBold),
-    titleSmall = Base.titleSmall.text(FontWeight.SemiBold),
-    bodyLarge = Base.bodyLarge.text(),
-    bodyMedium = Base.bodyMedium.text(),
-    bodySmall = Base.bodySmall.text(),
-    labelLarge = Base.labelLarge.text(FontWeight.SemiBold),
-    labelMedium = Base.labelMedium.text(FontWeight.SemiBold),
-    labelSmall = Base.labelSmall.text(FontWeight.SemiBold),
-    displayLargeEmphasized = Base.displayLarge.display(FontWeight.ExtraBold, -0.5),
-    displayMediumEmphasized = Base.displayMedium.display(FontWeight.ExtraBold, -0.25),
-    displaySmallEmphasized = Base.displaySmall.display(FontWeight.ExtraBold, 0.0),
-    headlineLargeEmphasized = Base.headlineLarge.display(FontWeight.Bold, 0.0),
-    headlineMediumEmphasized = Base.headlineMedium.display(FontWeight.Bold, 0.0),
-    headlineSmallEmphasized = Base.headlineSmall.display(FontWeight.Bold, 0.0),
-    titleLargeEmphasized = Base.titleLarge.display(FontWeight.Bold, 0.0),
-    titleMediumEmphasized = Base.titleMedium.text(FontWeight.Bold),
-    titleSmallEmphasized = Base.titleSmall.text(FontWeight.Bold),
-    bodyLargeEmphasized = Base.bodyLarge.text(FontWeight.SemiBold),
-    bodyMediumEmphasized = Base.bodyMedium.text(FontWeight.SemiBold),
-    bodySmallEmphasized = Base.bodySmall.text(FontWeight.SemiBold),
-    labelLargeEmphasized = Base.labelLarge.text(FontWeight.Bold),
-    labelMediumEmphasized = Base.labelMedium.text(FontWeight.Bold),
-    labelSmallEmphasized = Base.labelSmall.text(FontWeight.Bold),
+private val Mono = darkColorScheme(
+    primary = Color(0xFFE0E0E0),
+    onPrimary = Color.Black,
+    primaryContainer = Color(0xFF333333),
+    onPrimaryContainer = Color.White,
+    secondary = Color(0xFFB0B0B0),
+    onSecondary = Color.Black,
+    secondaryContainer = Color(0xFF2C2C2C),
+    onSecondaryContainer = Color.White,
+    tertiary = Salmon,
+    onTertiary = Color.Black,
+    tertiaryContainer = Color(0xFF3B2524),
+    onTertiaryContainer = Color(0xFFFFDAD8),
+    error = Color(0xFFFF6B6B),
+    onError = Color.Black,
+    errorContainer = Color(0xFF4A1A1A),
+    onErrorContainer = Color(0xFFFFDADA),
+    background = Color.Black,
+    onBackground = Color.White,
+    surface = Color.Black,
+    onSurface = Color.White,
+    surfaceVariant = Color(0xFF1A1A1A),
+    onSurfaceVariant = Color(0xFFA3A3A3),
+    surfaceTint = Color.Black,
+    surfaceContainerLowest = Color.Black,
+    surfaceContainerLow = Color(0xFF0D0D0D),
+    surfaceContainer = Color(0xFF141414),
+    surfaceContainerHigh = Color(0xFF1E1E1E),
+    surfaceContainerHighest = Color(0xFF2A2A2A),
+    surfaceBright = Color(0xFF2A2A2A),
+    outline = Color(0xFF4A4A4A),
+    outlineVariant = Color(0xFF262626),
+    inverseSurface = Color.White,
+    inverseOnSurface = Color.Black,
 )
 
+private val Tight = (-0.05).em
+
+private fun style(size: TextUnit, line: TextUnit, weight: FontWeight = FontWeight.SemiBold, family: FontFamily = Inter) =
+    TextStyle(fontFamily = family, fontWeight = weight, fontSize = size, lineHeight = line, letterSpacing = Tight)
+
+/** Inter, SemiBold throughout with tight tracking; Bold for emphasized styles. */
+private val MonoTypography = Typography(
+    displayLarge = style(57.sp, 62.sp, family = InterDisplay),
+    displayMedium = style(45.sp, 50.sp, family = InterDisplay),
+    displaySmall = style(36.sp, 42.sp, family = InterDisplay),
+    headlineLarge = style(32.sp, 38.sp, family = InterDisplay),
+    headlineMedium = style(28.sp, 34.sp, family = InterDisplay),
+    headlineSmall = style(24.sp, 28.sp, family = InterDisplay),
+    titleLarge = style(22.sp, 27.sp),
+    titleMedium = style(16.sp, 21.sp),
+    titleSmall = style(14.sp, 17.sp),
+    bodyLarge = style(16.sp, 22.sp, FontWeight.Medium),
+    bodyMedium = style(14.sp, 19.sp, FontWeight.Medium),
+    bodySmall = style(12.sp, 15.sp, FontWeight.Medium),
+    labelLarge = style(14.sp, 18.sp),
+    labelMedium = style(12.sp, 16.sp),
+    labelSmall = style(11.sp, 14.sp),
+    displayLargeEmphasized = style(57.sp, 62.sp, FontWeight.Bold, InterDisplay),
+    displayMediumEmphasized = style(45.sp, 50.sp, FontWeight.Bold, InterDisplay),
+    displaySmallEmphasized = style(36.sp, 42.sp, FontWeight.Bold, InterDisplay),
+    headlineLargeEmphasized = style(32.sp, 38.sp, FontWeight.Bold, InterDisplay),
+    headlineMediumEmphasized = style(28.sp, 34.sp, FontWeight.Bold, InterDisplay),
+    headlineSmallEmphasized = style(24.sp, 28.sp, FontWeight.Bold, InterDisplay),
+    titleLargeEmphasized = style(22.sp, 27.sp, FontWeight.Bold),
+    titleMediumEmphasized = style(16.sp, 19.sp, FontWeight.Bold),
+    titleSmallEmphasized = style(14.sp, 17.sp, FontWeight.Bold),
+    bodyLargeEmphasized = style(16.sp, 22.sp, FontWeight.SemiBold),
+    bodyMediumEmphasized = style(14.sp, 19.sp, FontWeight.SemiBold),
+    bodySmallEmphasized = style(12.sp, 15.sp, FontWeight.SemiBold),
+    labelLargeEmphasized = style(14.sp, 18.sp, FontWeight.Bold),
+    labelMediumEmphasized = style(12.sp, 16.sp, FontWeight.Bold),
+    labelSmallEmphasized = style(11.sp, 14.sp, FontWeight.Bold),
+)
+
+/** RetroHero is dark-only; [dynamicColor] is accepted for compatibility but not used. */
 @Composable
 fun RetroHeroTheme(
-    dynamicColor: Boolean = true,
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    @Suppress("UNUSED_PARAMETER") dynamicColor: Boolean = false,
     content: @Composable () -> Unit,
 ) {
-    val context = LocalContext.current
-    val scheme: ColorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        darkTheme -> DarkBrand
-        else -> LightBrand
-    }
     MaterialExpressiveTheme(
-        colorScheme = scheme,
+        colorScheme = Mono,
         motionScheme = MotionScheme.expressive(),
-        typography = ExpressiveTypography,
+        typography = MonoTypography,
         content = content,
     )
 }
