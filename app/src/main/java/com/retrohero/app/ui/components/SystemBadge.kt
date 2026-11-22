@@ -14,10 +14,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.retrohero.app.data.GameSystem
-import com.retrohero.app.ui.theme.InterDisplay
+import com.retrohero.app.ui.theme.GoogleSansDisplay
 import com.retrohero.app.ui.theme.PixelFont
-import com.retrohero.app.ui.theme.tag
 import com.retrohero.app.ui.theme.badgeShape
+import com.retrohero.app.ui.theme.tag
 
 /** A system's short name inside its signature Material shape. */
 @Composable
@@ -32,7 +32,7 @@ fun SystemBadge(system: GameSystem, size: Dp = 56.dp, modifier: Modifier = Modif
             TextStyle(fontFamily = PixelFont, fontSize = (size.value * 0.58f / 3f).sp)
         } else {
             TextStyle(
-                fontFamily = InterDisplay,
+                fontFamily = GoogleSansDisplay,
                 fontWeight = FontWeight.ExtraBold,
                 fontSize = (size.value * 0.95f / label.length).coerceAtMost(size.value / 3.4f).sp,
                 letterSpacing = (-0.3).sp,

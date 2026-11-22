@@ -14,136 +14,127 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
 
-/*
- * Colour roles follow iOS's grouped-content palette, mapped onto Material roles:
- *   background             → systemGroupedBackground
- *   surfaceContainer       → secondarySystemGroupedBackground (cards, list rows)
- *   surfaceContainerHigh   → tertiary fill (search field, segmented track, gray buttons)
- *   surfaceContainerHighest→ quaternary fill / selected segment (dark)
- *   onSurfaceVariant       → secondaryLabel
- *   outlineVariant         → separator
- */
-private val Dark = darkColorScheme(
-    primary = Color(0xFFFF375F),
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFF4A1322),
-    onPrimaryContainer = Color(0xFFFFD9E0),
-    secondary = Color(0xFF5E5CE6),
-    onSecondary = Color.White,
-    secondaryContainer = Color(0xFF2C2C2E),
-    onSecondaryContainer = Color.White,
-    tertiary = Color(0xFF64D2FF),
-    onTertiary = Color.Black,
-    tertiaryContainer = Color(0xFF0B3A4D),
-    onTertiaryContainer = Color(0xFFCDEFFF),
-    error = Color(0xFFFF453A),
-    onError = Color.White,
-    errorContainer = Color(0xFF4A1512),
-    onErrorContainer = Color(0xFFFFDAD6),
-    background = Color.Black,
-    onBackground = Color.White,
-    surface = Color.Black,
-    onSurface = Color.White,
-    surfaceVariant = Color(0xFF2C2C2E),
-    onSurfaceVariant = Color(0xFF98989F),
-    surfaceContainerLowest = Color.Black,
-    surfaceContainerLow = Color(0xFF0F0F11),
-    surfaceContainer = Color(0xFF1C1C1E),
-    surfaceContainerHigh = Color(0xFF2C2C2E),
-    surfaceContainerHighest = Color(0xFF3A3A3C),
-    surfaceBright = Color(0xFF3A3A3C),
-    outline = Color(0xFF545458),
-    outlineVariant = Color(0xFF38383A),
-    inverseSurface = Color.White,
-    inverseOnSurface = Color.Black,
+private val DarkBrand = darkColorScheme(
+    primary = Color(0xFFFFB0C8),
+    onPrimary = Color(0xFF5E1133),
+    primaryContainer = Color(0xFF7C2949),
+    onPrimaryContainer = Color(0xFFFFD9E2),
+    secondary = Color(0xFFC9BFFF),
+    onSecondary = Color(0xFF31236F),
+    secondaryContainer = Color(0xFF483B87),
+    onSecondaryContainer = Color(0xFFE6DEFF),
+    tertiary = Color(0xFF7FD0FF),
+    onTertiary = Color(0xFF00344B),
+    tertiaryContainer = Color(0xFF004C6B),
+    onTertiaryContainer = Color(0xFFC6E7FF),
+    background = Color(0xFF15111A),
+    onBackground = Color(0xFFE9E0E8),
+    surface = Color(0xFF15111A),
+    onSurface = Color(0xFFE9E0E8),
+    surfaceVariant = Color(0xFF4E4350),
+    onSurfaceVariant = Color(0xFFD2C2D0),
+    surfaceContainerLowest = Color(0xFF100C14),
+    surfaceContainerLow = Color(0xFF1D1922),
+    surfaceContainer = Color(0xFF221D26),
+    surfaceContainerHigh = Color(0xFF2C2731),
+    surfaceContainerHighest = Color(0xFF37323C),
+    outline = Color(0xFF9B8D9A),
+    outlineVariant = Color(0xFF4E4350),
 )
 
-private val Light = lightColorScheme(
-    primary = Color(0xFFFF2D55),
+private val LightBrand = lightColorScheme(
+    primary = Color(0xFFA0305A),
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFFFD9E0),
-    onPrimaryContainer = Color(0xFF3F0014),
-    secondary = Color(0xFF5856D6),
+    primaryContainer = Color(0xFFFFD9E2),
+    onPrimaryContainer = Color(0xFF3E0020),
+    secondary = Color(0xFF5F52A0),
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFFE5E5EA),
-    onSecondaryContainer = Color.Black,
-    tertiary = Color(0xFF32ADE6),
+    secondaryContainer = Color(0xFFE6DEFF),
+    onSecondaryContainer = Color(0xFF1B0C59),
+    tertiary = Color(0xFF00658E),
     onTertiary = Color.White,
-    tertiaryContainer = Color(0xFFCDEFFF),
-    onTertiaryContainer = Color(0xFF00344B),
-    error = Color(0xFFFF3B30),
-    onError = Color.White,
-    errorContainer = Color(0xFFFFDAD6),
-    onErrorContainer = Color(0xFF410002),
-    background = Color(0xFFF2F2F7),
-    onBackground = Color.Black,
-    surface = Color(0xFFF2F2F7),
-    onSurface = Color.Black,
-    surfaceVariant = Color(0xFFE5E5EA),
-    onSurfaceVariant = Color(0xFF6C6C70),
+    tertiaryContainer = Color(0xFFC6E7FF),
+    onTertiaryContainer = Color(0xFF001E2E),
+    background = Color(0xFFFFF8F9),
+    onBackground = Color(0xFF1F1A1F),
+    surface = Color(0xFFFFF8F9),
+    onSurface = Color(0xFF1F1A1F),
+    surfaceVariant = Color(0xFFEFDEEB),
+    onSurfaceVariant = Color(0xFF4E4350),
     surfaceContainerLowest = Color.White,
-    surfaceContainerLow = Color(0xFFF7F7FA),
-    surfaceContainer = Color.White,
-    surfaceContainerHigh = Color(0xFFEEEEF0),
-    surfaceContainerHighest = Color(0xFFE3E3E8),
-    surfaceBright = Color.White,
-    outline = Color(0xFF8E8E93),
-    outlineVariant = Color(0xFFC6C6C8),
-    inverseSurface = Color(0xFF1C1C1E),
-    inverseOnSurface = Color.White,
+    surfaceContainerLow = Color(0xFFFBF1F6),
+    surfaceContainer = Color(0xFFF5EBF0),
+    surfaceContainerHigh = Color(0xFFEFE5EA),
+    surfaceContainerHighest = Color(0xFFE9DFE5),
+    outline = Color(0xFF7F7381),
+    outlineVariant = Color(0xFFD2C2D0),
 )
 
-private fun ui(size: TextUnit, weight: FontWeight, tracking: Double, line: TextUnit, family: FontFamily = Inter) =
-    TextStyle(fontFamily = family, fontSize = size, fontWeight = weight, letterSpacing = tracking.sp, lineHeight = line)
+private val Base = Typography()
 
-/** iOS Dynamic Type sizes (Large Title → Caption 2) set in Inter. */
-private val IosTypography = Typography(
-    displayLarge = ui(56.sp, FontWeight.ExtraBold, -1.6, 60.sp, InterDisplay),
-    displayMedium = ui(44.sp, FontWeight.ExtraBold, -1.2, 48.sp, InterDisplay),
-    displaySmall = ui(34.sp, FontWeight.Bold, -0.9, 41.sp, InterDisplay), // Large Title
-    headlineLarge = ui(28.sp, FontWeight.Bold, -0.7, 34.sp, InterDisplay), // Title 1
-    headlineMedium = ui(22.sp, FontWeight.Bold, -0.5, 28.sp, InterDisplay), // Title 2
-    headlineSmall = ui(20.sp, FontWeight.SemiBold, -0.4, 25.sp, InterDisplay), // Title 3
-    titleLarge = ui(20.sp, FontWeight.SemiBold, -0.4, 25.sp),
-    titleMedium = ui(17.sp, FontWeight.SemiBold, -0.4, 22.sp), // Headline
-    titleSmall = ui(15.sp, FontWeight.SemiBold, -0.2, 20.sp),
-    bodyLarge = ui(17.sp, FontWeight.Normal, -0.4, 22.sp), // Body
-    bodyMedium = ui(15.sp, FontWeight.Normal, -0.2, 20.sp), // Subheadline
-    bodySmall = ui(13.sp, FontWeight.Normal, -0.1, 18.sp), // Footnote
-    labelLarge = ui(15.sp, FontWeight.SemiBold, -0.2, 20.sp),
-    labelMedium = ui(12.sp, FontWeight.Medium, 0.0, 16.sp), // Caption 1
-    labelSmall = ui(11.sp, FontWeight.Medium, 0.05, 13.sp), // Caption 2
+private fun TextStyle.text(weight: FontWeight = fontWeight ?: FontWeight.Normal) =
+    copy(fontFamily = GoogleSans, fontWeight = weight)
+
+private fun TextStyle.display(weight: FontWeight, tracking: Double) =
+    copy(fontFamily = GoogleSansDisplay, fontWeight = weight, letterSpacing = tracking.sp)
+
+/**
+ * Material 3 Expressive type scale in Google Sans Flex. Display/headline styles use the fully
+ * rounded display cut; the *Emphasized* variants are heavier for hero moments.
+ */
+private val ExpressiveTypography = Typography(
+    displayLarge = Base.displayLarge.display(FontWeight.Medium, -0.5),
+    displayMedium = Base.displayMedium.display(FontWeight.Medium, -0.25),
+    displaySmall = Base.displaySmall.display(FontWeight.Medium, 0.0),
+    headlineLarge = Base.headlineLarge.display(FontWeight.Medium, 0.0),
+    headlineMedium = Base.headlineMedium.display(FontWeight.Medium, 0.0),
+    headlineSmall = Base.headlineSmall.display(FontWeight.Medium, 0.0),
+    titleLarge = Base.titleLarge.display(FontWeight.Medium, 0.0),
+    titleMedium = Base.titleMedium.text(FontWeight.SemiBold),
+    titleSmall = Base.titleSmall.text(FontWeight.SemiBold),
+    bodyLarge = Base.bodyLarge.text(),
+    bodyMedium = Base.bodyMedium.text(),
+    bodySmall = Base.bodySmall.text(),
+    labelLarge = Base.labelLarge.text(FontWeight.SemiBold),
+    labelMedium = Base.labelMedium.text(FontWeight.SemiBold),
+    labelSmall = Base.labelSmall.text(FontWeight.SemiBold),
+    displayLargeEmphasized = Base.displayLarge.display(FontWeight.ExtraBold, -0.5),
+    displayMediumEmphasized = Base.displayMedium.display(FontWeight.ExtraBold, -0.25),
+    displaySmallEmphasized = Base.displaySmall.display(FontWeight.ExtraBold, 0.0),
+    headlineLargeEmphasized = Base.headlineLarge.display(FontWeight.Bold, 0.0),
+    headlineMediumEmphasized = Base.headlineMedium.display(FontWeight.Bold, 0.0),
+    headlineSmallEmphasized = Base.headlineSmall.display(FontWeight.Bold, 0.0),
+    titleLargeEmphasized = Base.titleLarge.display(FontWeight.Bold, 0.0),
+    titleMediumEmphasized = Base.titleMedium.text(FontWeight.Bold),
+    titleSmallEmphasized = Base.titleSmall.text(FontWeight.Bold),
+    bodyLargeEmphasized = Base.bodyLarge.text(FontWeight.SemiBold),
+    bodyMediumEmphasized = Base.bodyMedium.text(FontWeight.SemiBold),
+    bodySmallEmphasized = Base.bodySmall.text(FontWeight.SemiBold),
+    labelLargeEmphasized = Base.labelLarge.text(FontWeight.Bold),
+    labelMediumEmphasized = Base.labelMedium.text(FontWeight.Bold),
+    labelSmallEmphasized = Base.labelSmall.text(FontWeight.Bold),
 )
 
 @Composable
 fun RetroHeroTheme(
-    dynamicColor: Boolean = false,
+    dynamicColor: Boolean = true,
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
-    val base = if (darkTheme) Dark else Light
     val context = LocalContext.current
-    // Wallpaper colours only replace the accent roles; iOS-style neutrals stay put.
-    val scheme: ColorScheme = if (dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        val d = if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        base.copy(
-            primary = d.primary, onPrimary = d.onPrimary,
-            primaryContainer = d.primaryContainer, onPrimaryContainer = d.onPrimaryContainer,
-            secondary = d.secondary, onSecondary = d.onSecondary,
-            tertiary = d.tertiary, onTertiary = d.onTertiary,
-        )
-    } else {
-        base
+    val scheme: ColorScheme = when {
+        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ->
+            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        darkTheme -> DarkBrand
+        else -> LightBrand
     }
     MaterialExpressiveTheme(
         colorScheme = scheme,
         motionScheme = MotionScheme.expressive(),
-        typography = IosTypography,
+        typography = ExpressiveTypography,
         content = content,
     )
 }

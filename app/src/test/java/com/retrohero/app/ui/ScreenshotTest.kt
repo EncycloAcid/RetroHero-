@@ -68,7 +68,7 @@ class ScreenshotTest {
     }
 
     private fun tab(label: String) {
-        compose.onAllNodesWithContentDescription(label).onFirst().performClick()
+        compose.onAllNodesWithText(label).onFirst().performClick()
     }
 
     @Test
@@ -83,17 +83,27 @@ class ScreenshotTest {
     }
 
     @Test
+    @Config(qualifiers = "w891dp-h411dp-night-xxhdpi")
+    fun captureLandscape() {
+        seed()
+        ActivityScenario.launch(MainActivity::class.java).use {
+            shot("land_1_games")
+            tab("Settings"); shot("land_2_settings")
+        }
+    }
+
+    @Test
     fun captureScreens() {
         seed()
         ActivityScenario.launch(MainActivity::class.java).use {
             shot("1_games")
             tab("Systems"); shot("2_systems")
-            tab("Emulators"); shot("3_cores")
+            tab("Cores"); shot("3_cores")
             tab("Settings"); shot("4_settings")
-            tab("Library")
+            tab("Games")
             compose.onAllNodesWithContentDescription("Add games").onFirst().performClick()
-            shot("5_add_menu")
-            compose.onAllNodesWithText("Download from Link").onFirst().performClick()
+            shot("5_fab_menu")
+            compose.onAllNodesWithText("Download from link").onFirst().performClick()
             shot("6_download_sheet")
             compose.onAllNodesWithText("Cancel").onFirst().performClick()
             compose.waitForIdle()

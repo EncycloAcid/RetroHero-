@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import com.retrohero.app.ui.theme.polygon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -93,6 +96,34 @@ class PolishScreenshotTest {
         }
         compose.mainClock.advanceTimeBy(400)
         save("skeleton")
+    }
+
+    @Test
+    fun systemMorph() {
+        val systems = listOf("nes", "snes", "nds", "psx").map { Systems.get(it)!! }
+        compose.setContent {
+            RetroHeroTheme(dynamicColor = false) {
+                Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                    systems.forEach { system ->
+                        androidx.compose.foundation.layout.Row {
+                            val morph = com.retrohero.app.ui.components.rememberMorph(
+                                system.polygon,
+                                androidx.compose.material3.MaterialShapes.Circle,
+                            )
+                            listOf(0f, 0.33f, 0.66f, 1f).forEach { p ->
+                                Box(
+                                    Modifier
+                                        .padding(12.dp)
+                                        .size(80.dp)
+                                        .background(system.color, com.retrohero.app.ui.components.MorphShape(morph, p)),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        save("morph")
     }
 
     @Test
