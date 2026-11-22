@@ -12,6 +12,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -40,17 +41,22 @@ import com.retrohero.app.ui.theme.badgeShape
  */
 @Composable
 fun GameArt(game: Game, modifier: Modifier = Modifier, showTitle: Boolean = false, showTag: Boolean = true) {
-    var failed by remember(game.id) { mutableStateOf(false) }
+    // Walk the artwork sources (box art -> title screen -> snapshot) until one loads.
+    val urls = remember(game.id) { game.artUrls }
+    var attempt by remember(game.id) { mutableIntStateOf(0) }
+    var loaded by remember(game.id) { mutableStateOf(false) }
     Box(modifier) {
-        if (failed) {
-            GeneratedCover(game, showTitle, showTag)
-        } else {
+        // The generated cover shows while artwork loads and stays if none is found.
+        if (!loaded) GeneratedCover(game, showTitle, showTag)
+        val url = urls.getOrNull(attempt)
+        if (url != null) {
             AsyncImage(
-                model = game.boxArtUrl,
+                model = url,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                onError = { failed = true },
-                modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surfaceContainerHighest),
+                onError = { attempt++ },
+                onSuccess = { loaded = true },
+                modifier = Modifier.fillMaxSize(),
             )
         }
     }

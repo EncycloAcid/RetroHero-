@@ -41,6 +41,8 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridScope
@@ -74,6 +76,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -201,6 +204,7 @@ fun HomeScreen(
     onPlay: (Game) -> Unit,
     onOpen: (Game) -> Unit,
     onOptions: (Game) -> Unit,
+    favorites: List<Game> = emptyList(),
     onOpenSystem: (GameSystem) -> Unit,
     onSeeAllGames: () -> Unit,
     topActions: @Composable () -> Unit,
@@ -220,7 +224,7 @@ fun HomeScreen(
         verticalArrangement = Arrangement.spacedBy(20.dp),
         modifier = Modifier.fillMaxSize().background(Color.Black),
     ) {
-        full { GachaHero(candidates, onPlay, topActions) }
+        full { HeroCarousel(candidates, games, recents, favorites, onPlay, onOpen, topActions) }
 
         if (recents.isNotEmpty()) {
             full { Box(Modifier.launchRise(2)) { SectionHeader("Recently Played") } }
@@ -258,7 +262,7 @@ private fun Modifier.bleed(horizontal: Dp): Modifier = layout { measurable, cons
 // ---- Gacha hero -----------------------------------------------------------------------------------
 
 @Composable
-private fun GachaHero(candidates: List<Game>, onPlay: (Game) -> Unit, topActions: @Composable () -> Unit) {
+private fun GachaHero(candidates: List<Game>, onPlay: (Game) -> Unit) {
     val state = remember { GachaState() }
     val scope = rememberCoroutineScope()
     val view = LocalView.current
@@ -445,27 +449,6 @@ private fun GachaHero(candidates: List<Game>, onPlay: (Game) -> Unit, topActions
 
         }
 
-        Row(
-            Modifier.windowInsetsPadding(WindowInsets.statusBars).fillMaxWidth().padding(start = ContentInset, end = ContentInset - 4.dp, top = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // Glyph (keeps its own colours) and wordmark.
-            androidx.compose.foundation.Image(
-                painterResource(R.drawable.ic_logo_mark),
-                contentDescription = null,
-                modifier = Modifier.size(width = 38.dp, height = 26.dp).launchMarkTarget(),
-            )
-            Spacer(Modifier.width(10.dp))
-            Text(
-                "RetroHero",
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 20.sp, letterSpacing = (-0.03).em),
-                color = Color.White,
-                modifier = Modifier.launchRise(0),
-            )
-            Spacer(Modifier.weight(1f))
-            topActions()
-        }
-
         HeroText(
             label = when (state.phase) {
                 Phase.Idle -> "Gacha here!"
@@ -495,6 +478,189 @@ private fun GachaHero(candidates: List<Game>, onPlay: (Game) -> Unit, topActions
                     Spacer(Modifier.width(8.dp))
                     Text("roll!!", style = LabelStyle, color = PipColor)
                 }
+            }
+        }
+    }
+}
+
+// ---- Hero carousel: Gacha / Speed dial / Because you played -----------------------------------
+
+/**
+ * The top of Home, as a swipeable set of pages: the gacha, a speed dial of favourites, and picks
+ * based on the last game played. The logo row stays put while the pages move under it.
+ */
+@Composable
+private fun HeroCarousel(
+    candidates: List<Game>,
+    games: List<Game>,
+    recents: List<Game>,
+    favorites: List<Game>,
+    onPlay: (Game) -> Unit,
+    onOpen: (Game) -> Unit,
+    topActions: @Composable () -> Unit,
+) {
+    val last = recents.firstOrNull()
+    val picks = remember(games, recents) {
+        if (last == null) emptyList()
+        else {
+            val played = recents.mapTo(HashSet()) { it.id }
+            val same = games.filter { it.systemId == last.systemId && it.id !in played }
+            (same + games.filter { it.id !in played && it.systemId != last.systemId }).take(3)
+        }
+    }
+    val pages = buildList {
+        add(0)
+        add(1)
+        if (last != null && picks.isNotEmpty()) add(2)
+    }
+    val pager = rememberPagerState { pages.size }
+    Box(Modifier.fillMaxWidth().height(HeroHeight)) {
+        HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1) { index ->
+            // Pages ease in from the side, like a card being dealt.
+            val offset = (pager.currentPage - index) + pager.currentPageOffsetFraction
+            Box(
+                Modifier.fillMaxSize().graphicsLayer {
+                    alpha = 1f - (abs(offset) * 0.6f).coerceAtMost(0.6f)
+                    translationX = offset * size.width * 0.25f
+                },
+            ) {
+                when (pages[index]) {
+                    0 -> GachaHero(candidates, onPlay)
+                    1 -> SpeedDialPage(favorites, onPlay, onOpen)
+                    else -> BecausePage(last!!, picks, onPlay, onOpen)
+                }
+            }
+        }
+        Row(
+            Modifier.windowInsetsPadding(WindowInsets.statusBars).fillMaxWidth().padding(start = ContentInset, end = ContentInset - 4.dp, top = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // Glyph (keeps its own colours) and wordmark.
+            androidx.compose.foundation.Image(
+                painterResource(R.drawable.ic_logo_mark),
+                contentDescription = null,
+                modifier = Modifier.size(width = 38.dp, height = 26.dp).launchMarkTarget(),
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
+                "RetroHero",
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 20.sp, letterSpacing = (-0.03).em),
+                color = Color.White,
+                modifier = Modifier.launchRise(0),
+            )
+            Spacer(Modifier.weight(1f))
+            topActions()
+        }
+
+        // Page dots
+        Row(
+            Modifier.align(Alignment.BottomEnd).padding(end = ContentInset, bottom = 52.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            repeat(pages.size) { i ->
+                val active = pager.currentPage == i
+                val w by androidx.compose.animation.core.animateDpAsState(if (active) 18.dp else 6.dp, spring(dampingRatio = 0.7f), label = "heroDot")
+                Box(Modifier.height(6.dp).width(w).clip(CircleShape).background(Color.White.copy(alpha = if (active) 0.9f else 0.35f)))
+            }
+        }
+    }
+}
+
+/** A soft colour wash used behind the non-gacha pages. */
+@Composable
+private fun PageWash(base: Color) {
+    val light = lerp(base, Color.White, 0.45f)
+    val deep = lerp(lerp(base, Color(0xFF7C82B4), 0.3f), Color.Black, 0.35f)
+    Box(
+        Modifier.fillMaxSize().background(
+            Brush.linearGradient(listOf(deep, lerp(deep, light, 0.5f), light), start = Offset(0f, Float.POSITIVE_INFINITY), end = Offset(Float.POSITIVE_INFINITY, 0f)),
+        ),
+    )
+    Box(
+        Modifier.fillMaxSize().background(
+            Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.85f), 0.22f to Color.Black.copy(alpha = 0.3f), 0.44f to Color.Transparent, 0.62f to Color.Transparent, 1f to Color.Black),
+        ),
+    )
+}
+
+@Composable
+private fun SpeedDialPage(favorites: List<Game>, onPlay: (Game) -> Unit, onOpen: (Game) -> Unit) {
+    PageWash(favorites.firstOrNull()?.system?.color ?: Color(0xFF6E6A86))
+    Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars).padding(top = 72.dp)) {
+        val tiles = favorites.take(6)
+        Column(Modifier.padding(horizontal = ContentInset), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            for (row in 0..1) Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                for (col in 0..2) {
+                    val game = tiles.getOrNull(row * 3 + col)
+                    Box(Modifier.weight(1f).aspectRatio(1f)) {
+                        if (game != null) {
+                            Box(
+                                Modifier
+                                    .fillMaxSize()
+                                    .press3D()
+                                    .clip(RoundedCornerShape(22.dp))
+                                    .combinedClickable(onClick = { onPlay(game) }, onLongClick = { onOpen(game) }),
+                            ) { GameArt(game, Modifier.fillMaxSize(), showTitle = true, showTag = false) }
+                        } else {
+                            Box(Modifier.fillMaxSize().clip(RoundedCornerShape(22.dp)).background(Color.White.copy(alpha = 0.07f)))
+                        }
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.weight(1f))
+        Column(Modifier.padding(start = ContentInset, end = ContentInset, bottom = 48.dp)) {
+            Text("Your favourites", style = LabelStyle, color = LabelColor)
+            Text("Speed dial", style = HeroTitleStyle, color = Color.White)
+            Text(
+                if (favorites.isEmpty()) "Swipe a game left in a system's list, or long-press it, to pin it here."
+                else "Tap to play, hold for details.",
+                style = CardSubtitleStyle,
+                color = Color.White.copy(alpha = 0.6f),
+                modifier = Modifier.padding(top = 6.dp).fillMaxWidth(0.7f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun BecausePage(last: Game, picks: List<Game>, onPlay: (Game) -> Unit, onOpen: (Game) -> Unit) {
+    PageWash(last.system?.color ?: Color(0xFF6E6A86))
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val card = (maxWidth * 0.42f).coerceAtMost(180.dp)
+        // A fanned hand of covers on the right.
+        picks.take(3).forEachIndexed { i, game ->
+            val angle = (i - 1) * 9f
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = (ContentInset + card * (0.42f * (2 - i))) * -1f, y = if (i == 1) 96.dp else 110.dp)
+                    .size(card, card * 1.3f)
+                    .graphicsLayer { rotationZ = angle }
+                    .press3D()
+                    .shadow(18.dp, RoundedCornerShape(22.dp))
+                    .clip(RoundedCornerShape(22.dp))
+                    .combinedClickable(onClick = { onOpen(game) }, onLongClick = { onOpen(game) }),
+            ) { GameArt(game, Modifier.fillMaxSize(), showTitle = true, showTag = false) }
+        }
+        Column(Modifier.align(Alignment.BottomStart).padding(start = ContentInset, end = ContentInset, bottom = 48.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Because you played", style = LabelStyle, color = LabelColor)
+                Spacer(Modifier.width(6.dp))
+                GameArt(last, Modifier.size(18.dp).clip(RoundedCornerShape(5.dp)), showTag = false)
+                Spacer(Modifier.width(6.dp))
+                Text(last.title, style = LabelStyle, color = Color.White.copy(alpha = 0.88f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Text(
+                if (picks.all { it.systemId == last.systemId }) "More ${last.system?.shortName} games" else "Try something new",
+                style = HeroTitleStyle,
+                color = Color.White,
+            )
+            Spacer(Modifier.height(11.dp))
+            HeroPill(onClick = { picks.firstOrNull()?.let(onPlay) }) {
+                Icon(Icons.Rounded.PlayArrow, null, tint = PipColor, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("play", style = LabelStyle, color = PipColor)
             }
         }
     }

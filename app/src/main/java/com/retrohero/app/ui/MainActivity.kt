@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
 import com.retrohero.app.ui.components.FloatingNavBar
+import com.retrohero.app.ui.components.GameMenuSheet
 import com.retrohero.app.ui.components.FloatingNavHeight
 import com.retrohero.app.ui.components.NavItem
 import com.retrohero.app.ui.screens.HomeScreen
@@ -179,6 +180,9 @@ private fun App(vm: AppViewModel) {
     var tab by rememberSaveable { mutableStateOf(Tab.Home) }
     var openSystemId by rememberSaveable { mutableStateOf<String?>(null) }
     var sheetFor by rememberSaveable { mutableStateOf<String?>(null) }
+    var menuFor by rememberSaveable { mutableStateOf<String?>(null) }
+    val favorites by vm.favorites.collectAsStateWithLifecycle()
+    val favoriteIds by vm.favoriteIds.collectAsStateWithLifecycle()
 
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) vm.addFolder(uri)
@@ -317,13 +321,17 @@ private fun App(vm: AppViewModel) {
                     onOpenGame = { sheetFor = it.id },
                     onPlay = { vm.play(it) },
                     onPlayRandom = { vm.playRandom(system.id) },
+                    favorites = favoriteIds,
+                    onToggleFavorite = { vm.toggleFavorite(it) },
+                    onOptions = { menuFor = it.id },
                 )
                 key == Tab.Home.name && games.isNotEmpty() -> HomeScreen(
                     games = games,
                     recents = recents,
                     onPlay = vm::play,
                     onOpen = { sheetFor = it.id },
-                    onOptions = { sheetFor = it.id },
+                    onOptions = { menuFor = it.id },
+                    favorites = favorites,
                     onOpenSystem = { openSystemId = it.id },
                     onSeeAllGames = { tab = Tab.Games },
                     topActions = {
@@ -374,7 +382,7 @@ private fun App(vm: AppViewModel) {
                     onAddFolder = { folderPicker.launch(null) },
                     onDownload = { vm.openDownload(AppViewModel.DownloadKind.Game) },
                     onPlay = { sheetFor = it.id },
-                    onGameOptions = { sheetFor = it.id },
+                    onGameOptions = { menuFor = it.id },
                 )
                 key == Tab.Systems.name -> SystemsScreen(games) { openSystemId = it.id }
                 key == Tab.Cores.name -> CoresScreen(coreStates, vm::downloadCore, vm::deleteCore)
@@ -439,6 +447,25 @@ private fun App(vm: AppViewModel) {
                 onClose = { sheetFor = null },
             )
         }
+    }
+
+    // Long-press menu: a grid of big action tiles.
+    val menuGame = menuFor?.let { id -> games.firstOrNull { it.id == id } }
+    if (menuGame != null) {
+        val close = { menuFor = null }
+        GameMenuSheet(
+            game = menuGame,
+            hasResume = remember(menuGame.id, launchState) { vm.saveSlots(menuGame).any { it.first == com.retrohero.app.data.AppPaths.AUTO_SLOT } },
+            isFavorite = menuGame.id in favoriteIds,
+            onPlay = { close(); vm.play(menuGame) },
+            onResume = { close(); vm.play(menuGame) },
+            onFresh = { close(); vm.play(menuGame, com.retrohero.app.ui.screens.FreshStart) },
+            onToggleFavorite = { vm.toggleFavorite(menuGame) },
+            onDetails = { close(); sheetFor = menuGame.id },
+            onOpenSystem = { close(); sheetFor = null; menuGame.system?.let { openSystemId = it.id } },
+            onDelete = if (menuGame.isLocal) { { close(); vm.deleteGame(menuGame) } } else null,
+            onDismiss = close,
+        )
     }
 
     // First run: a short setup, only for a fresh install with nothing added yet.

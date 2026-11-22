@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,6 +34,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Casino
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +46,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
@@ -60,9 +63,11 @@ import androidx.compose.ui.unit.sp
 import com.retrohero.app.data.Game
 import com.retrohero.app.data.GameSystem
 import com.retrohero.app.ui.components.GameArt
+import com.retrohero.app.ui.components.SwipeRow
 import com.retrohero.app.ui.components.frostedGlass
 import com.retrohero.app.ui.components.press3D
 import com.retrohero.app.ui.theme.PixelFont
+import com.retrohero.app.ui.theme.Salmon
 import com.retrohero.app.ui.theme.badgeShape
 import com.retrohero.app.ui.theme.tag
 import dev.chrisbanes.haze.hazeSource
@@ -83,6 +88,9 @@ fun SystemDetailScreen(
     onOpenGame: (Game) -> Unit,
     onPlay: (Game) -> Unit,
     onPlayRandom: () -> Unit,
+    favorites: Set<String> = emptySet(),
+    onToggleFavorite: (Game) -> Unit = {},
+    onOptions: (Game) -> Unit = {},
 ) {
     val density = LocalDensity.current
     val headerHeight = (LocalConfiguration.current.screenHeightDp * 0.55f).dp
@@ -126,7 +134,13 @@ fun SystemDetailScreen(
                 Header(system, games, tint, headerHeight, onPlayRandom)
             }
             items(games, key = { it.id }) { game ->
-                GameRow(game, onOpen = { onOpenGame(game) }, onPlay = { onPlay(game) })
+                SwipeRow(
+                    isFavorite = game.id in favorites,
+                    onPlay = { onPlay(game) },
+                    onToggleFavorite = { onToggleFavorite(game) },
+                ) {
+                    GameRow(game, game.id in favorites, onOpen = { onOpenGame(game) }, onPlay = { onPlay(game) }, onLongPress = { onOptions(game) })
+                }
             }
         }
 
@@ -159,7 +173,7 @@ fun SystemDetailScreen(
 
 @Composable
 private fun Header(system: GameSystem, games: List<Game>, tint: Color, height: androidx.compose.ui.unit.Dp, onPlayRandom: () -> Unit) {
-    Box(Modifier.fillMaxWidth().height(height)) {
+    Box(Modifier.fillMaxWidth().height(height).clipToBounds()) {
         val covers = games.take(4)
         when {
             covers.size >= 4 -> Column(Modifier.fillMaxSize()) {
@@ -230,18 +244,21 @@ private fun Header(system: GameSystem, games: List<Game>, tint: Color, height: a
 }
 
 @Composable
-private fun GameRow(game: Game, onOpen: () -> Unit, onPlay: () -> Unit) {
+private fun GameRow(game: Game, isFavorite: Boolean, onOpen: () -> Unit, onPlay: () -> Unit, onLongPress: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .clickable(onClick = onOpen)
+            .combinedClickable(onClick = onOpen, onLongClick = onLongPress)
             .padding(horizontal = 22.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         GameArt(game, Modifier.size(52.dp).clip(RoundedCornerShape(12.dp)), showTag = false)
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(game.title, style = MaterialTheme.typography.titleMedium, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(game.title, style = MaterialTheme.typography.titleMedium, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                if (isFavorite) Icon(Icons.Rounded.Favorite, "Pinned", tint = Salmon, modifier = Modifier.padding(start = 6.dp).size(14.dp))
+            }
             Text(
                 game.fileName.substringAfterLast('.').uppercase() + if (game.isLocal) " · Downloaded" else "",
                 style = MaterialTheme.typography.bodySmall,

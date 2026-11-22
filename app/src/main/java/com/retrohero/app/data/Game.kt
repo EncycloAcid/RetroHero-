@@ -31,11 +31,26 @@ data class Game(
     val system: GameSystem? get() = Systems.get(systemId)
 
     /** libretro-thumbnails box art URL (named after the No-Intro/Redump file name). */
-    val boxArtUrl: String?
+    val boxArtUrl: String? get() = artUrls.firstOrNull()
+
+    /**
+     * Artwork to try, best first, from the libretro-thumbnails sets: box art, then the title
+     * screen, then an in-game snapshot. Each is tried under the exact file name and, if that
+     * name carries extra tags like "[!]" or "(Rev 1)", under its plain "(Region)" form too.
+     */
+    val artUrls: List<String>
         get() {
-            val sys = system ?: return null
-            val name = fileName.substringBeforeLast('.').replace(Regex("[&*/:`<>?\\\\|\"]"), "_")
-            return "https://thumbnails.libretro.com/${enc(sys.thumbnailDb)}/Named_Boxarts/${enc(name)}.png"
+            val sys = system ?: return emptyList()
+            val raw = fileName.substringBeforeLast('.')
+            val names = linkedSetOf(raw)
+            // "Game (USA) (Rev 1) [!]" -> "Game (USA)": the most common naming in the sets.
+            Regex("""^(.*?\([^)]*\))""").find(raw)?.groupValues?.get(1)?.trim()?.let { names += it }
+            return listOf("Named_Boxarts", "Named_Titles", "Named_Snaps").flatMap { set ->
+                names.map { n ->
+                    val safe = n.replace(Regex("[&*/:`<>?\\\\|\"]"), "_")
+                    "https://thumbnails.libretro.com/${enc(sys.thumbnailDb)}/$set/${enc(safe)}.png"
+                }
+            }
         }
 
     fun toJson(): JSONObject = JSONObject()

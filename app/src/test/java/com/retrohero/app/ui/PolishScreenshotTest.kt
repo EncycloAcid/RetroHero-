@@ -22,6 +22,8 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import com.retrohero.app.R
@@ -221,5 +223,64 @@ class PolishScreenshotTest {
         icon.setBounds(0, 0, 432, 432)
         icon.draw(Canvas(bmp))
         File(outDir, "icon.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
+    private fun sample(name: String, sys: String): com.retrohero.app.data.Game {
+        val tree = "content://com.android.externalstorage.documents/tree/primary%3ARoms"
+        return com.retrohero.app.data.Game("$tree/document/primary%3ARoms%2F$name", name, sys, tree, "primary:Roms", 1L)
+    }
+
+    @Test
+    fun gameMenu() {
+        val g = sample("Thwaite (USA).nes", "nes")
+        compose.setContent {
+            RetroHeroTheme {
+                Box(Modifier.fillMaxSize().background(Color.Black)) {
+                    com.retrohero.app.ui.components.GameMenuSheet(
+                        game = g, hasResume = true, isFavorite = false,
+                        onPlay = {}, onResume = {}, onFresh = {}, onToggleFavorite = {}, onDetails = {}, onOpenSystem = {},
+                        onDelete = {}, onDismiss = {},
+                    )
+                }
+            }
+        }
+        compose.mainClock.advanceTimeBy(1000)
+        save("game_menu")
+    }
+
+    @Test
+    fun heroPages() {
+        val games = listOf("Thwaite (USA).nes" to "nes", "Libbet.gb" to "gb", "Micro City.gba" to "gba", "Sonic.md" to "genesis", "Mario.sfc" to "snes", "Zelda.nes" to "nes").map { sample(it.first, it.second) }
+        compose.setContent {
+            RetroHeroTheme {
+                com.retrohero.app.ui.screens.HomeScreen(
+                    games = games, recents = listOf(games[0]), onPlay = {}, onOpen = {}, onOptions = {}, onOpenSystem = {}, onSeeAllGames = {},
+                    topActions = {}, favorites = games.take(4), bottomPadding = 100.dp,
+                )
+            }
+        }
+        compose.mainClock.advanceTimeBy(1500)
+        save("hero_page1")
+        compose.onRoot().performTouchInput { swipeLeft() }
+        compose.mainClock.advanceTimeBy(1500)
+        save("hero_page2")
+        compose.onRoot().performTouchInput { swipeLeft() }
+        compose.mainClock.advanceTimeBy(1500)
+        save("hero_page3")
+    }
+
+    @Test
+    fun systemSwipeRows() {
+        val games = listOf("Thwaite (USA).nes", "Zelda.nes", "Metroid.nes", "Kirby.nes", "Tetris.nes").map { sample(it, "nes") }
+        compose.setContent {
+            RetroHeroTheme {
+                com.retrohero.app.ui.screens.SystemDetailScreen(
+                    system = Systems.get("nes")!!, games = games, onBack = {}, onOpenGame = {}, onPlay = {}, onPlayRandom = {},
+                    favorites = setOf(games[1].id),
+                )
+            }
+        }
+        compose.mainClock.advanceTimeBy(800)
+        save("system_rows")
     }
 }

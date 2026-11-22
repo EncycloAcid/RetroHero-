@@ -77,6 +77,19 @@ class Settings(context: Context) {
         get() = prefs.getBoolean("stick_as_dpad", true)
         set(v) = prefs.edit { putBoolean("stick_as_dpad", v) }
 
+    private val _favorites = MutableStateFlow(prefs.getStringSet(KEY_FAVORITES, emptySet())!!.toSet())
+    /** Pinned games, shown in the home "Speed dial". */
+    val favorites: StateFlow<Set<String>> = _favorites
+
+    /** Toggles [gameId] in Favourites; returns true if it is now a favourite. */
+    fun toggleFavorite(gameId: String): Boolean {
+        val now = gameId !in _favorites.value
+        val updated = if (now) _favorites.value + gameId else _favorites.value - gameId
+        prefs.edit { putStringSet(KEY_FAVORITES, updated) }
+        _favorites.value = updated
+        return now
+    }
+
     fun markPlayed(gameId: String) {
         val updated = (listOf(gameId) + _recents.value.filter { it != gameId }).take(MAX_RECENTS)
         prefs.edit { putString(KEY_RECENTS, JSONArray(updated).toString()) }
@@ -94,6 +107,7 @@ class Settings(context: Context) {
     private companion object {
         const val KEY_FOLDERS = "rom_folders"
         const val KEY_RECENTS = "recents"
+        const val KEY_FAVORITES = "favorites"
         const val MAX_RECENTS = 20
     }
 }

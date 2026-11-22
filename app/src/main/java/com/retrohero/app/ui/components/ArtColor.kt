@@ -35,12 +35,14 @@ fun rememberArtColor(game: Game?): Color {
     LaunchedEffect(game?.id) {
         val g = game ?: return@LaunchedEffect
         if (artColorCache.containsKey(g.id)) return@LaunchedEffect
-        val url = g.boxArtUrl ?: return@LaunchedEffect
-        val result = runCatching {
-            context.imageLoader.execute(
-                ImageRequest.Builder(context).data(url).allowHardware(false).size(160).build(),
-            )
-        }.getOrNull() as? SuccessResult ?: return@LaunchedEffect
+        // First artwork source that actually loads.
+        val result = g.artUrls.firstNotNullOfOrNull { url ->
+            runCatching {
+                context.imageLoader.execute(
+                    ImageRequest.Builder(context).data(url).allowHardware(false).size(160).build(),
+                )
+            }.getOrNull() as? SuccessResult
+        } ?: return@LaunchedEffect
         val bitmap: Bitmap = (result.drawable as? BitmapDrawable)?.bitmap ?: return@LaunchedEffect
         val picked = withContext(Dispatchers.Default) {
             val palette = Palette.from(bitmap).maximumColorCount(16).generate()

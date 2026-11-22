@@ -45,6 +45,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         ids.mapNotNull { byId[it] }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    val favoriteIds = settings.favorites
+
+    val favorites: StateFlow<List<Game>> = combine(games, settings.favorites) { all, ids ->
+        all.filter { it.id in ids }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    fun toggleFavorite(game: Game) = settings.toggleFavorite(game.id)
+
     sealed interface LaunchState {
         data class NeedsCore(val game: Game, val core: CoreInfo, val slot: Int? = null) : LaunchState
         data class Downloading(val game: Game, val core: CoreInfo) : LaunchState
