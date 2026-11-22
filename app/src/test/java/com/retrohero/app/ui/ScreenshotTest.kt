@@ -72,6 +72,17 @@ class ScreenshotTest {
     }
 
     @Test
+    @Config(qualifiers = "w411dp-h891dp-notnight-xxhdpi")
+    fun captureLightTheme() {
+        seed()
+        ActivityScenario.launch(MainActivity::class.java).use {
+            shot("light_1_games")
+            tab("Systems"); shot("light_2_systems")
+            tab("Settings"); shot("light_3_settings")
+        }
+    }
+
+    @Test
     fun captureScreens() {
         seed()
         ActivityScenario.launch(MainActivity::class.java).use {

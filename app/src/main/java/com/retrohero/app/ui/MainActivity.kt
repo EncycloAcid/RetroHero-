@@ -1,6 +1,8 @@
 package com.retrohero.app.ui
 
+import android.app.ActivityOptions
 import android.os.Bundle
+import com.retrohero.app.R
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -129,7 +131,12 @@ private fun App(vm: AppViewModel) {
     val biosPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) vm.importBios(uris)
     }
-    LaunchedEffect(Unit) { vm.launchIntents.collect { context.startActivity(it) } }
+    LaunchedEffect(Unit) {
+        vm.launchIntents.collect {
+            val options = ActivityOptions.makeCustomAnimation(context, R.anim.game_enter, R.anim.hold)
+            context.startActivity(it, options.toBundle())
+        }
+    }
 
     val openSystem = openSystemId?.let { Systems.get(it) }
     BackHandler(enabled = openSystem != null) { openSystemId = null }

@@ -27,10 +27,15 @@ fun SystemBadge(system: GameSystem, size: Dp = 56.dp, modifier: Modifier = Modif
     ) {
         val label = system.shortName.uppercase()
         // Pixel font for short tags; longer names fall back to the display face so they fit.
-        val style = if (label.length <= 4) {
-            TextStyle(fontFamily = PixelFont, fontSize = (size.value * 0.5f / label.length.coerceAtLeast(3)).sp)
+        val style = if (label.length <= 3) {
+            TextStyle(fontFamily = PixelFont, fontSize = (size.value * 0.58f / 3f).sp)
         } else {
-            TextStyle(fontFamily = Bricolage, fontWeight = FontWeight.ExtraBold, fontSize = (size.value / 5f).sp)
+            TextStyle(
+                fontFamily = Bricolage,
+                fontWeight = FontWeight.ExtraBold,
+                fontSize = (size.value * 0.95f / label.length).coerceAtMost(size.value / 3.4f).sp,
+                letterSpacing = (-0.3).sp,
+            )
         }
         Text(label, style = style, color = Color.Black.copy(alpha = 0.8f), maxLines = 1)
     }

@@ -1,6 +1,15 @@
 package com.retrohero.app.ui.screens
 
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.ui.graphics.graphicsLayer
+import com.retrohero.app.ui.components.rememberPressFeedback
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -102,6 +111,10 @@ fun GamesScreen(
                 Text("Download from a link")
             }
         }
+        return
+    }
+    if (games.isEmpty() && scanning) {
+        SkeletonGrid()
         return
     }
     if (games.isEmpty() && !scanning) {
@@ -213,11 +226,28 @@ private fun RecentCarousel(recents: List<Game>, onPlay: (Game) -> Unit, onOption
         modifier = Modifier.fillMaxWidth().height(300.dp),
     ) { index ->
         val game = recents[index]
+        val info = carouselItemDrawInfo
+        // Text fades out as an item shrinks toward the edge, so it never shows clipped.
+        val reveal = {
+            val f = ((info.size - info.minSize) / (info.maxSize - info.minSize).coerceAtLeast(1f)).coerceIn(0f, 1f)
+            ((f - 0.75f) / 0.25f).coerceIn(0f, 1f) // only the focused (near full-size) item shows text
+        }
+        val interaction = remember { MutableInteractionSource() }
+        val press = rememberPressFeedback(interaction, restCorner = 28.dp, pressedCorner = 28.dp, pressedScale = 0.96f)
         Box(
             Modifier
                 .fillMaxSize()
+                .graphicsLayer {
+                    scaleX = press.scale.value
+                    scaleY = press.scale.value
+                }
                 .maskClip(MaterialTheme.shapes.extraLarge)
-                .combinedClickable(onClick = { onPlay(game) }, onLongClick = { onOptions(game) }),
+                .combinedClickable(
+                    interactionSource = interaction,
+                    indication = null,
+                    onClick = { onPlay(game) },
+                    onLongClick = { onOptions(game) },
+                ),
         ) {
             GameArt(game, Modifier.fillMaxSize(), showTag = false)
             Box(
@@ -225,7 +255,12 @@ private fun RecentCarousel(recents: List<Game>, onPlay: (Game) -> Unit, onOption
                     Brush.verticalGradient(0.35f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.88f)),
                 ),
             )
-            Column(Modifier.align(Alignment.BottomStart).padding(18.dp)) {
+            Column(
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .graphicsLayer { alpha = reveal() }
+                    .padding(18.dp),
+            ) {
                 Text(
                     game.system?.shortName.orEmpty().uppercase(),
                     style = TextStyle(fontFamily = PixelFont, fontSize = 9.sp, color = game.system?.color ?: Color.White),
@@ -242,6 +277,7 @@ private fun RecentCarousel(recents: List<Game>, onPlay: (Game) -> Unit, onOption
             Box(
                 Modifier
                     .align(Alignment.TopEnd)
+                    .graphicsLayer { alpha = reveal() }
                     .padding(14.dp)
                     .size(46.dp)
                     .background(Color.White.copy(alpha = 0.22f), CircleShape)
@@ -249,6 +285,34 @@ private fun RecentCarousel(recents: List<Game>, onPlay: (Game) -> Unit, onOption
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(Icons.Default.PlayArrow, "Play", tint = Color.White)
+            }
+        }
+    }
+}
+
+/** Shimmering placeholder cards shown while the first scan runs. */
+@Composable
+private fun SkeletonGrid() {
+    val pulse by rememberInfiniteTransition(label = "skeleton").animateFloat(
+        initialValue = 0.35f,
+        targetValue = 0.75f,
+        animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
+        label = "skeletonAlpha",
+    )
+    val tone = MaterialTheme.colorScheme.surfaceContainerHighest
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(124.dp),
+        contentPadding = PaddingValues(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        userScrollEnabled = false,
+        modifier = Modifier.fillMaxSize().graphicsLayer { alpha = pulse },
+    ) {
+        items(12) {
+            Column {
+                Box(Modifier.fillMaxWidth().aspectRatio(0.74f).background(tone, MaterialTheme.shapes.extraLarge))
+                Box(Modifier.padding(top = 10.dp).fillMaxWidth(0.8f).height(14.dp).background(tone, CircleShape))
+                Box(Modifier.padding(top = 6.dp).fillMaxWidth(0.4f).height(10.dp).background(tone, CircleShape))
             }
         }
     }

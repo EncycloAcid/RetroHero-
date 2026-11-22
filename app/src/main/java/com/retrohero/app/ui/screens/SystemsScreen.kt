@@ -102,9 +102,9 @@ private fun SystemCard(system: GameSystem, count: Int, onOpen: (GameSystem) -> U
             Text(
                 system.shortName.uppercase(),
                 style = TextStyle(fontFamily = PixelFont, fontSize = 10.sp),
-                color = if (active) lerp(system.color, Color.White, 0.35f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = Color.White.copy(alpha = if (active) 1f else 0.7f),
                 modifier = Modifier
-                    .background(Color.Black.copy(alpha = 0.35f), RoundedCornerShape(8.dp))
+                    .background(lerp(system.color, Color.Black, 0.5f).copy(alpha = if (active) 0.9f else 0.45f), RoundedCornerShape(8.dp))
                     .padding(horizontal = 8.dp, vertical = 6.dp),
             )
             Spacer(Modifier.weight(1f))

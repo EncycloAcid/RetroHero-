@@ -4,7 +4,9 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
+import android.os.Build
 import android.os.Bundle
+import com.retrohero.app.R
 import android.os.Process
 import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
@@ -226,6 +228,16 @@ class EmulatorActivity : ComponentActivity() {
         if (started && !shutDown && !menuOpen) NativeBridge.setPaused(false)
     }
 
+    override fun finish() {
+        super.finish()
+        if (Build.VERSION.SDK_INT >= 34) {
+            overrideActivityTransition(OVERRIDE_TRANSITION_CLOSE, R.anim.hold, R.anim.game_exit)
+        } else {
+            @Suppress("DEPRECATION")
+            overridePendingTransition(R.anim.hold, R.anim.game_exit)
+        }
+    }
+
     private fun quit() {
         lifecycleScope.launch {
             withContext(Dispatchers.IO) { shutdownCore() }
@@ -333,6 +345,7 @@ class EmulatorActivity : ComponentActivity() {
             },
             onPress = { if (settings.haptics) view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP) },
             modifier = modifier,
+            accent = system.color,
         )
     }
 
