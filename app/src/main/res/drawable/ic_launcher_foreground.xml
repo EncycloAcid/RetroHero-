@@ -1,29 +1,32 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <group android:pivotX="54" android:pivotY="58" android:scaleX="0.74" android:scaleY="0.74">
-        <!-- Shadow -->
-        <path
-            android:fillColor="#33000000"
-            android:pathData="M38,41h32c9.4,0 15.6,6.2 17.4,15.6l3.2,17c1.2,6.3 -3.6,12.4 -10,12.4c-3.8,0 -7.2,-2.1 -8.9,-5.4L68,75H40l-3.7,5.6C34.6,83.9 31.2,86 27.4,86c-6.4,0 -11.2,-6.1 -10,-12.4l3.2,-17C22.4,47.2 28.6,41 38,41z" />
-        <!-- Controller body -->
-        <path
-            android:fillColor="#FFFFFFFF"
-            android:pathData="M38,38h32c9.4,0 15.6,6.2 17.4,15.6l3.2,17c1.2,6.3 -3.6,12.4 -10,12.4c-3.8,0 -7.2,-2.1 -8.9,-5.4L68,72H40l-3.7,5.6C34.6,80.9 31.2,83 27.4,83c-6.4,0 -11.2,-6.1 -10,-12.4l3.2,-17C22.4,44.2 28.6,38 38,38z" />
-        <!-- D-pad -->
-        <path
-            android:fillColor="#FF2A1748"
-            android:pathData="M33.5,48.5h5a1,1 0,0 1,1 1v5h5a1,1 0,0 1,1 1v5a1,1 0,0 1,-1 1h-5v5a1,1 0,0 1,-1 1h-5a1,1 0,0 1,-1 -1v-5h-5a1,1 0,0 1,-1 -1v-5a1,1 0,0 1,1 -1h5v-5a1,1 0,0 1,1 -1z" />
-        <!-- Face buttons -->
-        <path android:fillColor="#FF4C7DFF" android:pathData="M71,52m-4.2,0a4.2,4.2 0,1 1,8.4 0a4.2,4.2 0,1 1,-8.4 0" />
-        <path android:fillColor="#FF30C26B" android:pathData="M63,60m-4.2,0a4.2,4.2 0,1 1,8.4 0a4.2,4.2 0,1 1,-8.4 0" />
-        <path android:fillColor="#FFE5484D" android:pathData="M79,60m-4.2,0a4.2,4.2 0,1 1,8.4 0a4.2,4.2 0,1 1,-8.4 0" />
-        <path android:fillColor="#FFF5B83D" android:pathData="M71,68m-4.2,0a4.2,4.2 0,1 1,8.4 0a4.2,4.2 0,1 1,-8.4 0" />
-        <!-- Hero star -->
-        <path
-            android:fillColor="#FFFFD84D"
-            android:pathData="M54,14l4.1,8.9 9.7,1.1 -7.3,6.6 2.1,9.6L54,35.3l-8.6,4.9 2.1,-9.6 -7.3,-6.6 9.7,-1.1z" />
-    </group>
+    <!-- Pixel hero shield: everything sits inside the 66dp safe zone. -->
+    <!-- Shadow -->
+    <path
+        android:fillColor="#38200A5C"
+        android:pathData="M54,32.5C61.5,36.5 69,37.5 76,36.5L76,56C76,69.5 66.5,78.5 54,84C41.5,78.5 32,69.5 32,56L32,36.5C39,37.5 46.5,36.5 54,32.5Z" />
+    <!-- Shield -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M54,29.5C61.5,33.5 69,34.5 76,33.5L76,53C76,66.5 66.5,75.5 54,81C41.5,75.5 32,66.5 32,53L32,33.5C39,34.5 46.5,33.5 54,29.5Z" />
+    <!-- 8-bit play triangle -->
+    <path android:pathData="M46.5,41h5.4v3.6h5.4v3.6h5.4v3.6h5.4v3.6h-5.4v3.6h-5.4v3.6h-5.4v3.6h-5.4z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="47" android:startY="41"
+                android:endX="68" android:endY="66">
+                <item android:offset="0" android:color="#FFFF4D7A" />
+                <item android:offset="1" android:color="#FF6A35E8" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- Hero glint -->
+    <path
+        android:fillColor="#FFFFE066"
+        android:pathData="M71.0,27.5Q72.0,34.0 78.5,35.0Q72.0,36.0 71.0,42.5Q70.0,36.0 63.5,35.0Q70.0,34.0 71.0,27.5Z" />
 </vector>

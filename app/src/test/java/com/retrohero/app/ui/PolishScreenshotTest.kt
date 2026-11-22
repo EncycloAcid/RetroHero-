@@ -96,6 +96,44 @@ class PolishScreenshotTest {
     }
 
     @Test
+    fun launcherIconShapes() {
+        val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val fg = ctx.getDrawable(R.drawable.ic_launcher_foreground)!!
+        val bg = ctx.getDrawable(R.drawable.ic_launcher_background)!!
+        val mono = ctx.getDrawable(R.drawable.ic_launcher_monochrome)!!
+        val px = 432
+        val out = Bitmap.createBitmap(px * 4 + 90, px, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(out)
+        canvas.drawColor(android.graphics.Color.rgb(36, 36, 40))
+        // Launcher masks: circle, squircle-ish rounded square, teardrop-free square, themed (mono on tonal).
+        val masks = listOf<(android.graphics.Path) -> Unit>(
+            { it.addCircle(px / 2f, px / 2f, px / 2f * 0.92f, android.graphics.Path.Direction.CW) },
+            { it.addRoundRect(px * 0.04f, px * 0.04f, px * 0.96f, px * 0.96f, px * 0.24f, px * 0.24f, android.graphics.Path.Direction.CW) },
+            { it.addRoundRect(px * 0.04f, px * 0.04f, px * 0.96f, px * 0.96f, px * 0.08f, px * 0.08f, android.graphics.Path.Direction.CW) },
+        )
+        // Adaptive icons render a 108dp canvas scaled so the 72dp viewport fills the mask.
+        val full = (px * 1.5f).toInt()
+        val inset = (full - px) / 2
+        masks.forEachIndexed { i, mask ->
+            canvas.save()
+            canvas.translate(i * (px + 30f), 0f)
+            val path = android.graphics.Path().also(mask)
+            canvas.clipPath(path)
+            bg.setBounds(-inset, -inset, px + inset, px + inset); bg.draw(canvas)
+            fg.setBounds(-inset, -inset, px + inset, px + inset); fg.draw(canvas)
+            canvas.restore()
+        }
+        canvas.save()
+        canvas.translate(3 * (px + 30f), 0f)
+        canvas.clipPath(android.graphics.Path().also(masks[0]))
+        canvas.drawColor(android.graphics.Color.rgb(222, 214, 255))
+        mono.setTint(android.graphics.Color.rgb(60, 40, 150))
+        mono.setBounds(-inset, -inset, px + inset, px + inset); mono.draw(canvas)
+        canvas.restore()
+        File(outDir, "icon_shapes.png").outputStream().use { out.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
+    @Test
     fun launcherIcon() {
         val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
         val icon = ctx.getDrawable(R.mipmap.ic_launcher)!!
