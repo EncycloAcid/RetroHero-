@@ -95,6 +95,38 @@ class Settings(context: Context) {
         return now
     }
 
+    private val _collections = MutableStateFlow(GameCollection.listFromJson(prefs.getString(KEY_COLLECTIONS, null)))
+    /** Your own game lists. */
+    val collections: StateFlow<List<GameCollection>> = _collections
+
+    fun setCollections(list: List<GameCollection>) {
+        prefs.edit { putString(KEY_COLLECTIONS, GameCollection.listToJson(list)) }
+        _collections.value = list
+    }
+
+    fun createCollection(name: String, firstGame: String? = null): GameCollection {
+        val c = GameCollection.new(name).let { if (firstGame != null) it.copy(gameIds = listOf(firstGame)) else it }
+        setCollections(_collections.value + c)
+        return c
+    }
+
+    fun renameCollection(id: String, name: String) =
+        setCollections(_collections.value.map { if (it.id == id) it.copy(name = name.trim()) else it })
+
+    fun deleteCollection(id: String) = setCollections(_collections.value.filter { it.id != id })
+
+    /** Adds or removes [gameId] from collection [id]. */
+    fun setInCollection(id: String, gameId: String, inIt: Boolean) = setCollections(
+        _collections.value.map { c ->
+            when {
+                c.id != id -> c
+                inIt && gameId !in c.gameIds -> c.copy(gameIds = c.gameIds + gameId)
+                !inIt -> c.copy(gameIds = c.gameIds - gameId)
+                else -> c
+            }
+        },
+    )
+
     fun markPlayed(gameId: String) {
         val updated = (listOf(gameId) + _recents.value.filter { it != gameId }).take(MAX_RECENTS)
         prefs.edit { putString(KEY_RECENTS, JSONArray(updated).toString()) }
@@ -113,6 +145,7 @@ class Settings(context: Context) {
         const val KEY_FOLDERS = "rom_folders"
         const val KEY_RECENTS = "recents"
         const val KEY_FAVORITES = "favorites"
+        const val KEY_COLLECTIONS = "collections"
         const val MAX_RECENTS = 20
     }
 }

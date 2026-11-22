@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
@@ -64,6 +65,7 @@ fun GameMenuSheet(
     onOpenSystem: () -> Unit,
     onDelete: (() -> Unit)?,
     onDismiss: () -> Unit,
+    onAddTo: (() -> Unit)? = null,
 ) {
     var confirmDelete by remember { mutableStateOf(false) }
     val tiles = buildList {
@@ -74,6 +76,7 @@ fun GameMenuSheet(
             add(MenuTile(Icons.Rounded.PlayArrow, "Play") { onPlay() })
         }
         add(MenuTile(if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder, if (isFavorite) "Unpin" else "Pin", Salmon) { onToggleFavorite() })
+        if (onAddTo != null) add(MenuTile(Icons.AutoMirrored.Rounded.PlaylistAdd, "Add to…") { onAddTo() })
         add(MenuTile(Icons.Rounded.Info, "Details") { onDetails() })
         add(MenuTile(Icons.Rounded.ViewModule, game.system?.shortName ?: "System") { onOpenSystem() })
         if (onDelete != null) {

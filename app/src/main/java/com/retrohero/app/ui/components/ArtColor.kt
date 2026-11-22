@@ -23,6 +23,11 @@ import java.util.concurrent.ConcurrentHashMap
 
 private val artColorCache = ConcurrentHashMap<String, Int>()
 
+/** Forget the colour picked for [gameId], e.g. after its cover changes. */
+fun forgetArtColor(gameId: String) {
+    artColorCache.remove(gameId)
+}
+
 /**
  * A colour taken from the game's box art (vibrant, else dominant swatch), darkened if it's too
  * light to sit behind white text. Generated covers use the system's colour.
@@ -31,12 +36,13 @@ private val artColorCache = ConcurrentHashMap<String, Int>()
 fun rememberArtColor(game: Game?): Color {
     val fallback = game?.system?.color?.let { lerp(it, Color.Black, 0.35f) } ?: Color(0xFF2A2A2E)
     val context = LocalContext.current
-    var color by remember(game?.id) { mutableStateOf(artColorCache[game?.id]?.let { Color(it) } ?: fallback) }
-    LaunchedEffect(game?.id) {
+    val sources = game?.let { rememberArtSources(it) }.orEmpty()
+    var color by remember(game?.id, sources) { mutableStateOf(artColorCache[game?.id]?.let { Color(it) } ?: fallback) }
+    LaunchedEffect(game?.id, sources) {
         val g = game ?: return@LaunchedEffect
         if (artColorCache.containsKey(g.id)) return@LaunchedEffect
         // First artwork source that actually loads.
-        val result = g.artUrls.firstNotNullOfOrNull { url ->
+        val result = sources.firstNotNullOfOrNull { url ->
             runCatching {
                 context.imageLoader.execute(
                     ImageRequest.Builder(context).data(url).allowHardware(false).size(160).build(),

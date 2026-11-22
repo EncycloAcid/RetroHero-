@@ -62,6 +62,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.retrohero.app.data.Game
 import com.retrohero.app.data.GameSystem
+import com.retrohero.app.data.GameCollection
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.Shape
 import com.retrohero.app.ui.components.GameArt
 import com.retrohero.app.ui.components.SwipeRow
 import com.retrohero.app.ui.components.frostedGlass
@@ -91,11 +100,90 @@ fun SystemDetailScreen(
     favorites: Set<String> = emptySet(),
     onToggleFavorite: (Game) -> Unit = {},
     onOptions: (Game) -> Unit = {},
+) = AlbumScreen(
+    title = system.name,
+    tag = system.tag,
+    subtitle = "${system.manufacturer} · ${if (games.size == 1) "1 game" else "${games.size} games"}",
+    color = system.color,
+    emptyShape = { system.badgeShape() },
+    games = games,
+    onBack = onBack,
+    onOpenGame = onOpenGame,
+    onPlay = onPlay,
+    onPlayRandom = onPlayRandom,
+    favorites = favorites,
+    onSwipeLeft = onToggleFavorite,
+    onOptions = onOptions,
+)
+
+/** Your own collection, shown the same way as a system. */
+@Composable
+fun CollectionScreen(
+    collection: GameCollection,
+    games: List<Game>,
+    onBack: () -> Unit,
+    onOpenGame: (Game) -> Unit,
+    onPlay: (Game) -> Unit,
+    onPlayRandom: () -> Unit,
+    onRemove: (Game) -> Unit,
+    onOptions: (Game) -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit,
+    favorites: Set<String> = emptySet(),
+) = AlbumScreen(
+    title = collection.name,
+    tag = "LIST",
+    subtitle = "Your collection · ${if (games.size == 1) "1 game" else "${games.size} games"}",
+    color = games.firstOrNull()?.system?.color ?: Color(0xFF6E6A86),
+    emptyShape = { CircleShape },
+    games = games,
+    onBack = onBack,
+    onOpenGame = onOpenGame,
+    onPlay = onPlay,
+    onPlayRandom = onPlayRandom,
+    favorites = favorites,
+    onSwipeLeft = onRemove,
+    removeLabel = "Remove",
+    onOptions = onOptions,
+    emptyText = "Nothing here yet. Long-press any game and choose “Add to…”.",
+    barActions = {
+        var menu by remember { mutableStateOf(false) }
+        Box {
+            Box(
+                Modifier.size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.3f)).clickable { menu = true },
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Rounded.MoreVert, "Collection options", tint = Color.White) }
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                DropdownMenuItem(text = { Text("Rename") }, leadingIcon = { Icon(Icons.Rounded.Edit, null) }, onClick = { menu = false; onRename() })
+                DropdownMenuItem(text = { Text("Delete collection") }, leadingIcon = { Icon(Icons.Rounded.Delete, null) }, onClick = { menu = false; onDelete() })
+            }
+        }
+    },
+)
+
+@Composable
+private fun AlbumScreen(
+    title: String,
+    tag: String,
+    subtitle: String,
+    color: Color,
+    emptyShape: @Composable () -> Shape,
+    games: List<Game>,
+    onBack: () -> Unit,
+    onOpenGame: (Game) -> Unit,
+    onPlay: (Game) -> Unit,
+    onPlayRandom: () -> Unit,
+    favorites: Set<String>,
+    onSwipeLeft: (Game) -> Unit,
+    onOptions: (Game) -> Unit,
+    removeLabel: String? = null,
+    emptyText: String? = null,
+    barActions: @Composable () -> Unit = {},
 ) {
     val density = LocalDensity.current
     val headerHeight = (LocalConfiguration.current.screenHeightDp * 0.55f).dp
     val headerPx = with(density) { headerHeight.toPx() }
-    val tint = lerp(system.color, Color.Black, 0.45f)
+    val tint = lerp(color, Color.Black, 0.45f)
     val list = rememberLazyListState()
     val glass = rememberHazeState()
     val statusTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
@@ -131,13 +219,22 @@ fun SystemDetailScreen(
                 },
         ) {
             item(key = "header") {
-                Header(system, games, tint, headerHeight, onPlayRandom)
+                Header(title, tag, subtitle, color, emptyShape(), games, tint, headerHeight, onPlayRandom)
+            }
+            if (games.isEmpty() && emptyText != null) item(key = "empty") {
+                Text(
+                    emptyText,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Color.White.copy(alpha = 0.6f),
+                    modifier = Modifier.padding(horizontal = 22.dp, vertical = 28.dp),
+                )
             }
             items(games, key = { it.id }) { game ->
                 SwipeRow(
                     isFavorite = game.id in favorites,
                     onPlay = { onPlay(game) },
-                    onToggleFavorite = { onToggleFavorite(game) },
+                    onToggleFavorite = { onSwipeLeft(game) },
+                    removeLabel = removeLabel,
                 ) {
                     GameRow(game, game.id in favorites, onOpen = { onOpenGame(game) }, onPlay = { onPlay(game) }, onLongPress = { onOptions(game) })
                 }
@@ -163,16 +260,27 @@ fun SystemDetailScreen(
                 contentAlignment = Alignment.Center,
             ) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = Color.White) }
             Spacer(Modifier.width(12.dp))
-            Column(Modifier.graphicsLayer { alpha = progress }) {
-                Text(system.name, style = MaterialTheme.typography.titleMediumEmphasized, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Column(Modifier.weight(1f).graphicsLayer { alpha = progress }) {
+                Text(title, style = MaterialTheme.typography.titleMediumEmphasized, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text("${games.size} games", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.7f))
             }
+            barActions()
         }
     }
 }
 
 @Composable
-private fun Header(system: GameSystem, games: List<Game>, tint: Color, height: androidx.compose.ui.unit.Dp, onPlayRandom: () -> Unit) {
+private fun Header(
+    title: String,
+    tag: String,
+    subtitle: String,
+    color: Color,
+    emptyShape: Shape,
+    games: List<Game>,
+    tint: Color,
+    height: androidx.compose.ui.unit.Dp,
+    onPlayRandom: () -> Unit,
+) {
     Box(Modifier.fillMaxWidth().height(height).clipToBounds()) {
         val covers = games.take(4)
         when {
@@ -183,10 +291,10 @@ private fun Header(system: GameSystem, games: List<Game>, tint: Color, height: a
             }
             covers.isNotEmpty() -> GameArt(covers.first(), Modifier.fillMaxSize(), showTag = false)
             else -> Box(
-                Modifier.fillMaxSize().background(Brush.linearGradient(listOf(lerp(system.color, Color.White, 0.15f), tint))),
+                Modifier.fillMaxSize().background(Brush.linearGradient(listOf(lerp(color, Color.White, 0.15f), tint))),
                 contentAlignment = Alignment.Center,
             ) {
-                Box(Modifier.size(220.dp).offset(x = 60.dp, y = (-30).dp).rotate(14f).background(Color.White.copy(alpha = 0.16f), system.badgeShape()))
+                Box(Modifier.size(220.dp).offset(x = 60.dp, y = (-30).dp).rotate(14f).background(Color.White.copy(alpha = 0.16f), emptyShape))
             }
         }
         Box(
@@ -202,7 +310,7 @@ private fun Header(system: GameSystem, games: List<Game>, tint: Color, height: a
         )
         Column(Modifier.align(Alignment.BottomStart).padding(start = 22.dp, end = 22.dp, bottom = 22.dp)) {
             Text(
-                system.tag,
+                tag,
                 style = TextStyle(fontFamily = PixelFont, fontSize = 10.sp),
                 color = Color.White,
                 modifier = Modifier
@@ -211,7 +319,7 @@ private fun Header(system: GameSystem, games: List<Game>, tint: Color, height: a
                     .padding(horizontal = 8.dp, vertical = 6.dp),
             )
             Text(
-                system.name,
+                title,
                 style = MaterialTheme.typography.headlineLargeEmphasized,
                 color = Color.White,
                 maxLines = 2,
@@ -219,7 +327,7 @@ private fun Header(system: GameSystem, games: List<Game>, tint: Color, height: a
                 modifier = Modifier.padding(top = 10.dp),
             )
             Text(
-                "${system.manufacturer} · ${if (games.size == 1) "1 game" else "${games.size} games"}",
+                subtitle,
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color.White.copy(alpha = 0.8f),
             )

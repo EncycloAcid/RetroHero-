@@ -96,6 +96,12 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.retrohero.app.R
 import com.retrohero.app.data.Game
+import com.retrohero.app.data.GameCollection
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.layout.fillMaxHeight
+import com.retrohero.app.data.PlayStat
+import com.retrohero.app.data.PlayTime
+import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import com.retrohero.app.data.GameSystem
 import com.retrohero.app.data.Systems
 import com.retrohero.app.ui.components.GameArt
@@ -209,7 +215,13 @@ fun HomeScreen(
     onSeeAllGames: () -> Unit,
     topActions: @Composable () -> Unit,
     bottomPadding: Dp,
+    stats: Map<String, PlayStat> = emptyMap(),
+    collections: List<Pair<GameCollection, List<Game>>> = emptyList(),
+    onOpenCollection: (GameCollection) -> Unit = {},
 ) {
+    val mostPlayed = remember(games, stats) {
+        games.filter { (stats[it.id]?.seconds ?: 0) >= 60 }.sortedByDescending { stats[it.id]?.seconds ?: 0 }.take(10)
+    }
     val counts = remember(games) { games.groupingBy { it.systemId }.eachCount() }
     val systems = remember(counts) { Systems.all.filter { (counts[it.id] ?: 0) > 0 } }
     // The reel: recent games first, then a shuffle of the rest.
@@ -224,13 +236,31 @@ fun HomeScreen(
         verticalArrangement = Arrangement.spacedBy(20.dp),
         modifier = Modifier.fillMaxSize().background(Color.Black),
     ) {
-        full { HeroCarousel(candidates, games, recents, favorites, onPlay, onOpen, topActions) }
+        full { HeroCarousel(candidates, games, recents, favorites, onPlay, onOpen, topActions, stats) }
 
         if (recents.isNotEmpty()) {
             full { Box(Modifier.launchRise(2)) { SectionHeader("Recently Played") } }
             full {
                 LazyRow(modifier = Modifier.launchRise(3), contentPadding = PaddingValues(horizontal = ContentInset), horizontalArrangement = Arrangement.spacedBy(CardSpacing)) {
                     items(recents, key = { "r_" + it.id }) { game -> RowCard(game, onOpen, onOptions) }
+                }
+            }
+        }
+        if (mostPlayed.size >= 2) {
+            full { SectionHeader("Most Played") }
+            full {
+                LazyRow(contentPadding = PaddingValues(horizontal = ContentInset), horizontalArrangement = Arrangement.spacedBy(CardSpacing)) {
+                    items(mostPlayed, key = { "m_" + it.id }) { game ->
+                        RowCard(game, onOpen, onOptions, subtitle = PlayTime.format(stats[game.id]?.seconds ?: 0))
+                    }
+                }
+            }
+        }
+        if (collections.isNotEmpty()) {
+            full { SectionHeader("Your Collections") }
+            full {
+                LazyRow(contentPadding = PaddingValues(horizontal = ContentInset), horizontalArrangement = Arrangement.spacedBy(CardSpacing)) {
+                    items(collections, key = { "c_" + it.first.id }) { (c, list) -> CollectionCard(c, list, onOpenCollection) }
                 }
             }
         }
@@ -498,8 +528,10 @@ private fun HeroCarousel(
     onPlay: (Game) -> Unit,
     onOpen: (Game) -> Unit,
     topActions: @Composable () -> Unit,
+    stats: Map<String, PlayStat> = emptyMap(),
 ) {
     val last = recents.firstOrNull()
+    val totalSeconds = stats.values.sumOf { it.seconds }
     val picks = remember(games, recents) {
         if (last == null) emptyList()
         else {
@@ -512,6 +544,7 @@ private fun HeroCarousel(
         add(0)
         add(1)
         if (last != null && picks.isNotEmpty()) add(2)
+        if (totalSeconds >= 60) add(3)
     }
     val pager = rememberPagerState { pages.size }
     Box(Modifier.fillMaxWidth().height(HeroHeight)) {
@@ -527,7 +560,8 @@ private fun HeroCarousel(
                 when (pages[index]) {
                     0 -> GachaHero(candidates, onPlay)
                     1 -> SpeedDialPage(favorites, onPlay, onOpen)
-                    else -> BecausePage(last!!, picks, onPlay, onOpen)
+                    2 -> BecausePage(last!!, picks, onPlay, onOpen)
+                    else -> StatsPage(games, stats, onOpen)
                 }
             }
         }
@@ -752,7 +786,72 @@ private fun SectionHeader(text: String, onClick: (() -> Unit)? = null) {
 }
 
 @Composable
-private fun RowCard(game: Game, onPlay: (Game) -> Unit, onOptions: (Game) -> Unit) {
+private fun StatsPage(games: List<Game>, stats: Map<String, PlayStat>, onOpen: (Game) -> Unit) {
+    val ranked = remember(games, stats) {
+        games.filter { (stats[it.id]?.seconds ?: 0) > 0 }.sortedByDescending { stats[it.id]!!.seconds }
+    }
+    val total = stats.values.sumOf { it.seconds }
+    PageWash(ranked.firstOrNull()?.system?.color ?: Color(0xFF6E6A86))
+    Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars).padding(top = 76.dp, start = ContentInset, end = ContentInset)) {
+        ranked.take(3).forEachIndexed { i, game ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 10.dp)
+                    .press3D()
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(Color.Black.copy(alpha = 0.28f))
+                    .clickable { onOpen(game) }
+                    .padding(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("${i + 1}", style = TitleStyle, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.width(30.dp), textAlign = TextAlign.Center)
+                GameArt(game, Modifier.size(54.dp).clip(RoundedCornerShape(14.dp)), showTag = false)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(game.title, style = CardTitleStyle, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(PlayTime.format(stats[game.id]?.seconds ?: 0), style = CardSubtitleStyle, color = Color.White.copy(alpha = 0.7f))
+                }
+            }
+        }
+        Spacer(Modifier.weight(1f))
+        Text("Your play time", style = LabelStyle, color = LabelColor)
+        Text(PlayTime.format(total).replaceFirstChar { it.uppercase() }, style = HeroTitleStyle, color = Color.White)
+        Text(
+            if (ranked.size == 1) "on 1 game" else "across ${ranked.size} games",
+            style = CardSubtitleStyle,
+            color = Color.White.copy(alpha = 0.7f),
+            modifier = Modifier.padding(top = 4.dp, bottom = 58.dp),
+        )
+    }
+}
+
+@Composable
+private fun CollectionCard(collection: GameCollection, games: List<Game>, onOpen: (GameCollection) -> Unit) {
+    Column(Modifier.width(RowCardWidth).press3D().clickable { onOpen(collection) }) {
+        Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(28.dp)).background(Color(0xFF1C1C1F))) {
+            val covers = games.take(4)
+            when {
+                covers.size >= 4 -> Column(Modifier.fillMaxSize()) {
+                    for (r in 0..1) Row(Modifier.weight(1f).fillMaxWidth()) {
+                        for (c in 0..1) GameArt(covers[r * 2 + c], Modifier.weight(1f).fillMaxHeight(), showTag = false)
+                    }
+                }
+                covers.isNotEmpty() -> GameArt(covers.first(), Modifier.fillMaxSize(), showTag = false)
+                else -> Icon(
+                    Icons.AutoMirrored.Rounded.QueueMusic, null,
+                    tint = Color.White.copy(alpha = 0.4f),
+                    modifier = Modifier.align(Alignment.Center).size(48.dp),
+                )
+            }
+        }
+        Text(collection.name, style = CardTitleStyle, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 9.dp))
+        Text(if (games.size == 1) "1 game" else "${games.size} games", style = CardSubtitleStyle, color = SubtleColor)
+    }
+}
+
+@Composable
+private fun RowCard(game: Game, onPlay: (Game) -> Unit, onOptions: (Game) -> Unit, subtitle: String? = null) {
     val interaction = remember { MutableInteractionSource() }
     val press = rememberPressFeedback(interaction, restCorner = 28.dp, pressedCorner = 40.dp, pressedScale = 0.95f)
     Column(
@@ -763,7 +862,7 @@ private fun RowCard(game: Game, onPlay: (Game) -> Unit, onOptions: (Game) -> Uni
     ) {
         GameArt(game, Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(press.corner.value)))
         Text(game.title, style = CardTitleStyle, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 9.dp))
-        Text(game.system?.name.orEmpty(), style = CardSubtitleStyle, color = SubtleColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(subtitle ?: game.system?.name.orEmpty(), style = CardSubtitleStyle, color = SubtleColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

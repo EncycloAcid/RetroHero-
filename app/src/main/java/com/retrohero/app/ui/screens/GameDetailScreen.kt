@@ -59,6 +59,18 @@ import androidx.compose.ui.unit.dp
 import com.retrohero.app.data.AppPaths
 import com.retrohero.app.data.CoreInfo
 import com.retrohero.app.data.Game
+import com.retrohero.app.data.PlayStat
+import com.retrohero.app.data.PlayTime
+import android.text.format.DateUtils
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Share
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
+import java.io.File
 import com.retrohero.app.ui.components.GameArt
 import com.retrohero.app.ui.components.press3D
 import com.retrohero.app.ui.components.rememberArtColor
@@ -83,6 +95,13 @@ fun GameDetailScreen(
     onSelectCore: (CoreInfo) -> Unit,
     onDelete: (() -> Unit)?,
     onClose: () -> Unit,
+    stat: PlayStat = PlayStat.None,
+    screenshots: List<File> = emptyList(),
+    hasCustomCover: Boolean = false,
+    onUseAsCover: (File) -> Unit = {},
+    onClearCover: () -> Unit = {},
+    onShareScreenshot: (File) -> Unit = {},
+    onDeleteScreenshot: (File) -> Unit = {},
 ) {
     val system = game.system ?: return
     val art = rememberArtColor(game)
@@ -155,6 +174,24 @@ fun GameDetailScreen(
             Column(Modifier.padding(horizontal = 24.dp).padding(top = 28.dp)) {
                 Text(game.title, style = MaterialTheme.typography.headlineMediumEmphasized, color = Color.White, maxLines = 3, overflow = TextOverflow.Ellipsis)
                 Text(system.name, style = MaterialTheme.typography.bodyLarge, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(top = 4.dp))
+                if (stat.seconds > 0 || stat.sessions > 0) {
+                    Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Rounded.Schedule, null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            buildString {
+                                append(PlayTime.format(stat.seconds))
+                                append(" played")
+                                if (stat.lastPlayed > 0) {
+                                    append(" · ")
+                                    append(DateUtils.getRelativeTimeSpanString(stat.lastPlayed, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS).toString().lowercase(Locale.getDefault()))
+                                }
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White.copy(alpha = 0.7f),
+                        )
+                    }
+                }
 
                 // Primary action: a light pill, like the hero's.
                 Row(
@@ -211,6 +248,49 @@ fun GameDetailScreen(
                             Text(time.format(Date(modified)), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f), maxLines = 1)
                         }
                     }
+                }
+            }
+
+            if (screenshots.isNotEmpty()) {
+                var viewing by remember { mutableStateOf<File?>(null) }
+                SectionLabel("Screenshots")
+                LazyRow(contentPadding = PaddingValues(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    items(screenshots, key = { it.path }) { shot ->
+                        AsyncImage(
+                            model = shot,
+                            contentDescription = "Screenshot",
+                            contentScale = ContentScale.Crop,
+                            filterQuality = FilterQuality.None,
+                            modifier = Modifier
+                                .height(110.dp)
+                                .aspectRatio(4f / 3f)
+                                .press3D()
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(Color.White.copy(alpha = 0.06f))
+                                .clickable { viewing = shot },
+                        )
+                    }
+                }
+                if (hasCustomCover) {
+                    Text(
+                        "Go back to the original cover",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = Color.White.copy(alpha = 0.7f),
+                        modifier = Modifier
+                            .padding(start = 14.dp, top = 6.dp)
+                            .clip(CircleShape)
+                            .clickable(onClick = onClearCover)
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                    )
+                }
+                viewing?.let { shot ->
+                    ScreenshotDialog(
+                        shot,
+                        onDismiss = { viewing = null },
+                        onUseAsCover = { onUseAsCover(shot); viewing = null },
+                        onShare = { onShareScreenshot(shot) },
+                        onDelete = { onDeleteScreenshot(shot); viewing = null },
+                    )
                 }
             }
 
@@ -276,6 +356,46 @@ fun GameDetailScreen(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun ScreenshotDialog(shot: File, onDismiss: () -> Unit, onUseAsCover: () -> Unit, onShare: () -> Unit, onDelete: () -> Unit) {
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Column(
+            Modifier
+                .clip(RoundedCornerShape(28.dp))
+                .background(Color(0xFF161618))
+                .padding(16.dp),
+        ) {
+            AsyncImage(
+                model = shot,
+                contentDescription = "Screenshot",
+                contentScale = ContentScale.Fit,
+                filterQuality = FilterQuality.None,
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)),
+            )
+            Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ShotAction(Icons.Rounded.Image, "Use as cover", Modifier.weight(1f), onUseAsCover)
+                ShotAction(Icons.Rounded.Share, "Share", Modifier.weight(1f), onShare)
+                ShotAction(Icons.Rounded.Delete, "Delete", Modifier.weight(1f), onDelete)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ShotAction(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, modifier: Modifier, onClick: () -> Unit) {
+    Column(
+        modifier
+            .clip(RoundedCornerShape(18.dp))
+            .background(Color.White.copy(alpha = 0.08f))
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Icon(icon, null, tint = Color.White)
+        Text(label, style = MaterialTheme.typography.labelMedium, color = Color.White, modifier = Modifier.padding(top = 6.dp), maxLines = 1)
     }
 }
 

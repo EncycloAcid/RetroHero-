@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.HeartBroken
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.RemoveCircle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SwipeToDismissBox
@@ -45,6 +46,8 @@ fun SwipeRow(
     onPlay: () -> Unit,
     onToggleFavorite: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Swiping left removes the game from a list instead of pinning it. */
+    removeLabel: String? = null,
     content: @Composable () -> Unit,
 ) {
     val state = rememberSwipeToDismissBoxState()
@@ -72,7 +75,8 @@ fun SwipeRow(
             val pop by animateFloatAsState(if (armed) 1.15f else 0.85f, spring(dampingRatio = 0.45f), label = "swipeIcon")
             val (color, icon, label) = when (dir) {
                 SwipeToDismissBoxValue.StartToEnd -> Triple(Color(0xFFE6E6E6), Icons.Rounded.PlayArrow, "Play")
-                else -> Triple(Salmon, if (isFavorite) Icons.Rounded.HeartBroken else Icons.Rounded.Favorite, if (isFavorite) "Unpin" else "Pin")
+                else -> if (removeLabel != null) Triple(Color(0xFFE5484D), Icons.Rounded.RemoveCircle, removeLabel)
+                else Triple(Salmon, if (isFavorite) Icons.Rounded.HeartBroken else Icons.Rounded.Favorite, if (isFavorite) "Unpin" else "Pin")
             }
             Box(
                 Modifier

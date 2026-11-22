@@ -10,6 +10,9 @@ import com.retrohero.app.data.AppPaths
 import com.retrohero.app.data.CoreInfo
 import com.retrohero.app.data.Game
 import com.retrohero.app.data.GameSystem
+import com.retrohero.app.data.GameCollection
+import com.retrohero.app.data.PlayStat
+import com.retrohero.app.data.PlayTime
 import com.retrohero.app.emulator.EmulatorActivity
 import com.retrohero.app.data.Downloader
 import com.retrohero.app.data.HomebrewGame
@@ -52,6 +55,64 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     fun toggleFavorite(game: Game) = settings.toggleFavorite(game.id)
+
+    val paths: AppPaths get() = app.paths
+
+    // ---- Collections ----
+    val collections = settings.collections
+
+    fun createCollection(name: String, first: Game? = null) = settings.createCollection(name, first?.id)
+    fun renameCollection(c: GameCollection, name: String) = settings.renameCollection(c.id, name)
+    fun deleteCollection(c: GameCollection) = settings.deleteCollection(c.id)
+    fun setInCollection(c: GameCollection, game: Game, inIt: Boolean) = settings.setInCollection(c.id, game.id, inIt)
+
+    // ---- Play time ----
+    private val _stats = MutableStateFlow<Map<String, PlayStat>>(emptyMap())
+    /** Play time per game id (only games that have been played). */
+    val stats: StateFlow<Map<String, PlayStat>> = _stats
+
+    /** Re-reads play time; the game process writes it, so call this when returning to the app. */
+    fun refreshStats() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _stats.value = games.value.mapNotNull { g ->
+                val f = app.paths.playtimeFile(g)
+                if (f.exists()) g.id to PlayTime.read(f) else null
+            }.toMap()
+            _artVersion.value++  // new screenshots may have arrived too
+        }
+    }
+
+    // ---- Screenshots and covers ----
+    private val _artVersion = MutableStateFlow(0)
+    /** Changes whenever covers or screenshots change, so artwork reloads. */
+    val artVersion: StateFlow<Int> = _artVersion
+
+    fun screenshots(game: Game): List<File> = app.paths.screenshotsOf(game)
+
+    fun useAsCover(game: Game, shot: File) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val cover = app.paths.coverFile(game)
+            cover.parentFile?.mkdirs()
+            shot.copyTo(cover, overwrite = true)
+            com.retrohero.app.ui.components.forgetArtColor(game.id)
+            _artVersion.value++
+        }
+    }
+
+    fun clearCover(game: Game) {
+        viewModelScope.launch(Dispatchers.IO) {
+            app.paths.coverFile(game).delete()
+            com.retrohero.app.ui.components.forgetArtColor(game.id)
+            _artVersion.value++
+        }
+    }
+
+    fun deleteScreenshot(game: Game, shot: File) {
+        viewModelScope.launch(Dispatchers.IO) {
+            shot.delete()
+            _artVersion.value++
+        }
+    }
 
     sealed interface LaunchState {
         data class NeedsCore(val game: Game, val core: CoreInfo, val slot: Int? = null) : LaunchState

@@ -34,6 +34,7 @@ import androidx.compose.material.icons.outlined.Opacity
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Save
+import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.Vibration
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -132,9 +133,9 @@ fun SettingsScreen(
         }
 
         // ---- Appearance & controls ------------------------------------------------------
-        SegmentedGroup("Look & feel", 6) {
+        SegmentedGroup("Look & feel", 7) {
             var i = 0
-            ToggleRow(shapes(i++), Icons.Outlined.GridOn, "Sharp pixels", "Crisp scaling for pixel art", settings.sharpPixels) { settings.sharpPixels = it }
+            ToggleRow(shapes(i++), Icons.Outlined.GridOn, "Sharp pixels", "Default look; pick CRT or LCD per system in-game", settings.sharpPixels) { settings.sharpPixels = it }
             ToggleRow(shapes(i++), Icons.Outlined.Vibration, "Haptic feedback", "Buzz when touch buttons are pressed", settings.haptics) { settings.haptics = it }
             ToggleRow(shapes(i++), Icons.Outlined.Gamepad, "Stick moves D-pad", "Left stick acts as D-pad on controllers", settings.stickAsDpad) { settings.stickAsDpad = it }
             SliderRow(shapes(i++), Icons.Outlined.Opacity, "Touch controls opacity", settings.overlayOpacity, 0.2f..1f, { "${(it * 100).toInt()}%" }) {
@@ -143,7 +144,8 @@ fun SettingsScreen(
             SliderRow(shapes(i++), Icons.Outlined.FastForward, "Fast-forward speed", settings.fastForwardSpeed, 2f..8f, { "${it.toInt()}×" }, steps = 5) {
                 settings.fastForwardSpeed = it
             }
-            ToggleRow(shapes(i), Icons.Outlined.Save, "Auto save & resume", "Pick up exactly where you left off", settings.autoSave) { settings.autoSave = it }
+            ToggleRow(shapes(i++), Icons.Outlined.Save, "Auto save & resume", "Pick up exactly where you left off", settings.autoSave) { settings.autoSave = it }
+            ToggleRow(shapes(i), Icons.Outlined.PhotoLibrary, "Screenshots to Gallery", "Also save in-game screenshots to Pictures", settings.screenshotsToGallery) { settings.screenshotsToGallery = it }
         }
 
         // ---- BIOS -------------------------------------------------------------------------

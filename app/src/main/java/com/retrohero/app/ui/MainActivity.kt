@@ -26,6 +26,13 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
 import com.retrohero.app.ui.components.FloatingNavBar
 import com.retrohero.app.ui.components.GameMenuSheet
+import com.retrohero.app.ui.components.CollectionPickerSheet
+import com.retrohero.app.ui.components.NameDialog
+import com.retrohero.app.ui.components.LocalArtPaths
+import com.retrohero.app.ui.components.LocalArtVersion
+import com.retrohero.app.ui.screens.CollectionScreen
+import com.retrohero.app.data.GameCollection
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.retrohero.app.ui.components.FloatingNavHeight
 import com.retrohero.app.ui.components.NavItem
 import com.retrohero.app.ui.screens.HomeScreen
@@ -140,7 +147,12 @@ class MainActivity : ComponentActivity() {
         val intro = LaunchIntroState(plays = savedInstanceState == null)
         setContent {
             RetroHeroTheme {
-                CompositionLocalProvider(LocalLaunchIntro provides intro) {
+                val artVersion by vm.artVersion.collectAsStateWithLifecycle()
+                CompositionLocalProvider(
+                    LocalLaunchIntro provides intro,
+                    LocalArtPaths provides vm.paths,
+                    LocalArtVersion provides artVersion,
+                ) {
                     Box(Modifier.fillMaxSize()) {
                         App(vm)
                         LaunchIntroOverlay(intro)
@@ -149,6 +161,16 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+}
+
+/** Shares a screenshot through the system share sheet. */
+private fun shareScreenshot(context: android.content.Context, file: java.io.File) {
+    val uri = androidx.core.content.FileProvider.getUriForFile(context, context.packageName + ".files", file)
+    val send = android.content.Intent(android.content.Intent.ACTION_SEND)
+        .setType("image/png")
+        .putExtra(android.content.Intent.EXTRA_STREAM, uri)
+        .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    context.startActivity(android.content.Intent.createChooser(send, "Share screenshot"))
 }
 
 private enum class Tab(val label: String, val title: String, val selected: ImageVector, val unselected: ImageVector) {
@@ -179,6 +201,18 @@ private fun App(vm: AppViewModel) {
 
     var tab by rememberSaveable { mutableStateOf(Tab.Home) }
     var openSystemId by rememberSaveable { mutableStateOf<String?>(null) }
+    var openCollectionId by rememberSaveable { mutableStateOf<String?>(null) }
+    var pickCollectionsFor by rememberSaveable { mutableStateOf<String?>(null) }
+    var renaming by remember { mutableStateOf<GameCollection?>(null) }
+    val collections by vm.collections.collectAsStateWithLifecycle()
+    val stats by vm.stats.collectAsStateWithLifecycle()
+    val artVersion by vm.artVersion.collectAsStateWithLifecycle()
+    // Play time and screenshots are written by the game process; pick them up on return.
+    LifecycleResumeEffect(Unit) {
+        vm.refreshStats()
+        onPauseOrDispose { }
+    }
+    LaunchedEffect(games.size) { vm.refreshStats() }
     var sheetFor by rememberSaveable { mutableStateOf<String?>(null) }
     var menuFor by rememberSaveable { mutableStateOf<String?>(null) }
     val favorites by vm.favorites.collectAsStateWithLifecycle()
@@ -198,14 +232,18 @@ private fun App(vm: AppViewModel) {
     }
 
     val openSystem = openSystemId?.let { Systems.get(it) }
-    BackHandler(enabled = openSystem != null) { openSystemId = null }
+    val openCollection = openCollectionId?.let { id -> collections.firstOrNull { it.id == id } }
+    val albumOpen = openSystem != null || openCollection != null
+    BackHandler(enabled = albumOpen) { openSystemId = null; openCollectionId = null }
+    val byId = remember(games) { games.associateBy { it.id } }
+    val collectionGames = remember(collections, byId) { collections.map { c -> c to c.gameIds.mapNotNull { byId[it] } } }
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     // Home is immersive: no top app bar, content runs under the status bar.
-    val isHome = openSystem == null && tab == Tab.Home && games.isNotEmpty()
+    val isHome = !albumOpen && tab == Tab.Home && games.isNotEmpty()
     val navBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val glass = rememberHazeState()
-    val floatingNavSpace = if (wide || openSystem != null) 0.dp else FloatingNavHeight + 16.dp + navBarInset
+    val floatingNavSpace = if (wide || albumOpen) 0.dp else FloatingNavHeight + 16.dp + navBarInset
     val systemCount = games.mapTo(HashSet()) { it.systemId }.size
 
     val accent = when {
@@ -226,7 +264,7 @@ private fun App(vm: AppViewModel) {
             .topGlow(glowL, glowR, 340.dp) { 1f - scrollBehavior.state.collapsedFraction },
     ) {
     Row(Modifier.fillMaxSize()) {
-        if (wide && openSystem == null) {
+        if (wide && !albumOpen) {
             // Landscape / large screens: an expressive navigation rail instead of the bottom bar.
             WideNavigationRail(modifier = Modifier.fillMaxHeight(), colors = WideNavigationRailDefaults.colors(containerColor = Color.Transparent)) {
                 Tab.entries.forEach { t ->
@@ -246,7 +284,7 @@ private fun App(vm: AppViewModel) {
         contentColor = MaterialTheme.colorScheme.onBackground,
         modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            if (!isHome && openSystem == null) Column {
+            if (!isHome && !albumOpen) Column {
                 val barTitle: @Composable () -> Unit = {
                         Text(openSystem?.name ?: tab.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
@@ -299,10 +337,10 @@ private fun App(vm: AppViewModel) {
         },
     ) { padding ->
       Row(
-          (if (isHome || openSystem != null) Modifier else Modifier.padding(top = padding.calculateTopPadding()))
+          (if (isHome || albumOpen) Modifier else Modifier.padding(top = padding.calculateTopPadding()))
               .fillMaxSize(),
       ) {
-        val screen = openSystem?.id ?: tab.name
+        val screen = openSystem?.id ?: openCollection?.let { "col:" + it.id } ?: tab.name
         val effects = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
         val spatial = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
         CompositionLocalProvider(LocalNavSpace provides floatingNavSpace) {
@@ -313,7 +351,23 @@ private fun App(vm: AppViewModel) {
             modifier = Modifier.weight(1f).fillMaxHeight().hazeSource(glass),
         ) { key ->
             val system = Systems.get(key)
+            val collection = if (key.startsWith("col:")) collections.firstOrNull { "col:" + it.id == key } else null
             when {
+                collection != null -> CollectionScreen(
+                    collection = collection,
+                    games = collection.gameIds.mapNotNull { byId[it] },
+                    onBack = { openCollectionId = null },
+                    onOpenGame = { sheetFor = it.id },
+                    onPlay = { vm.play(it) },
+                    onPlayRandom = {
+                        collection.gameIds.mapNotNull { byId[it] }.randomOrNull()?.let { vm.play(it) }
+                    },
+                    onRemove = { vm.setInCollection(collection, it, false) },
+                    onOptions = { menuFor = it.id },
+                    onRename = { renaming = collection },
+                    onDelete = { openCollectionId = null; vm.deleteCollection(collection) },
+                    favorites = favoriteIds,
+                )
                 system != null -> SystemDetailScreen(
                     system = system,
                     games = games.filter { it.systemId == system.id },
@@ -332,6 +386,9 @@ private fun App(vm: AppViewModel) {
                     onOpen = { sheetFor = it.id },
                     onOptions = { menuFor = it.id },
                     favorites = favorites,
+                    stats = stats,
+                    collections = collectionGames,
+                    onOpenCollection = { openCollectionId = it.id },
                     onOpenSystem = { openSystemId = it.id },
                     onSeeAllGames = { tab = Tab.Games },
                     topActions = {
@@ -406,7 +463,7 @@ private fun App(vm: AppViewModel) {
         }
       }
     }
-        if (!wide && openSystem == null) {
+        if (!wide && !albumOpen) {
             FloatingNavBar(
                 glass = glass,
                 items = Tab.entries.map { NavItem(it.label, it.selected, it.unselected) },
@@ -445,6 +502,13 @@ private fun App(vm: AppViewModel) {
                     { sheetFor = null; vm.deleteGame(game) }
                 } else null,
                 onClose = { sheetFor = null },
+                stat = stats[game.id] ?: com.retrohero.app.data.PlayStat.None,
+                screenshots = remember(game.id, artVersion) { vm.screenshots(game) },
+                hasCustomCover = remember(game.id, artVersion) { vm.paths.coverFile(game).exists() },
+                onUseAsCover = { vm.useAsCover(game, it) },
+                onClearCover = { vm.clearCover(game) },
+                onShareScreenshot = { shareScreenshot(context, it) },
+                onDeleteScreenshot = { vm.deleteScreenshot(game, it) },
             )
         }
     }
@@ -465,7 +529,25 @@ private fun App(vm: AppViewModel) {
             onOpenSystem = { close(); sheetFor = null; menuGame.system?.let { openSystemId = it.id } },
             onDelete = if (menuGame.isLocal) { { close(); vm.deleteGame(menuGame) } } else null,
             onDismiss = close,
+            onAddTo = { close(); pickCollectionsFor = menuGame.id },
         )
+    }
+
+    val pickGame = pickCollectionsFor?.let { id -> games.firstOrNull { it.id == id } }
+    if (pickGame != null) {
+        CollectionPickerSheet(
+            game = pickGame,
+            collections = collections,
+            onToggle = { c, inIt -> vm.setInCollection(c, pickGame, inIt) },
+            onCreate = { name -> vm.createCollection(name, pickGame) },
+            onDismiss = { pickCollectionsFor = null },
+        )
+    }
+    renaming?.let { c ->
+        NameDialog("Rename collection", c.name, "Rename", onDismiss = { renaming = null }) {
+            vm.renameCollection(c, it)
+            renaming = null
+        }
     }
 
     // First run: a short setup, only for a fresh install with nothing added yet.

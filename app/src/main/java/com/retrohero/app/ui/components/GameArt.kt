@@ -42,9 +42,9 @@ import com.retrohero.app.ui.theme.badgeShape
 @Composable
 fun GameArt(game: Game, modifier: Modifier = Modifier, showTitle: Boolean = false, showTag: Boolean = true) {
     // Walk the artwork sources (box art -> title screen -> snapshot) until one loads.
-    val urls = remember(game.id) { game.artUrls }
-    var attempt by remember(game.id) { mutableIntStateOf(0) }
-    var loaded by remember(game.id) { mutableStateOf(false) }
+    val urls = rememberArtSources(game)
+    var attempt by remember(urls) { mutableIntStateOf(0) }
+    var loaded by remember(urls) { mutableStateOf(false) }
     Box(modifier) {
         // The generated cover shows while artwork loads and stays if none is found.
         if (!loaded) GeneratedCover(game, showTitle, showTag)
