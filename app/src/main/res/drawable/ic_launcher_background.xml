@@ -4,25 +4,23 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Near-black base -->
-    <path android:fillColor="#FF0C0C0F" android:pathData="M0,0h108v108h-108z" />
-    <!-- Salmon glow rising from the bottom left -->
+    <!-- Deep indigo fading to black -->
     <path android:pathData="M0,0h108v108h-108z">
         <aapt:attr name="android:fillColor">
-            <gradient android:type="radial" android:centerX="22" android:centerY="96" android:gradientRadius="86">
-                <item android:offset="0" android:color="#D9F0908D" />
-                <item android:offset="0.55" android:color="#40F0908D" />
-                <item android:offset="1" android:color="#00F0908D" />
+            <gradient android:type="linear" android:startX="0" android:startY="0" android:endX="108" android:endY="108">
+                <item android:offset="0" android:color="#FF231A47" />
+                <item android:offset="0.55" android:color="#FF0E0B1C" />
+                <item android:offset="1" android:color="#FF050507" />
             </gradient>
         </aapt:attr>
     </path>
-    <!-- Cool violet glow from the top right -->
+    <!-- Salmon glow behind the glyph -->
     <path android:pathData="M0,0h108v108h-108z">
         <aapt:attr name="android:fillColor">
-            <gradient android:type="radial" android:centerX="92" android:centerY="12" android:gradientRadius="80">
-                <item android:offset="0" android:color="#B37C82B4" />
-                <item android:offset="0.6" android:color="#267C82B4" />
-                <item android:offset="1" android:color="#007C82B4" />
+            <gradient android:type="radial" android:centerX="60" android:centerY="56" android:gradientRadius="42">
+                <item android:offset="0" android:color="#66F0908D" />
+                <item android:offset="0.55" android:color="#1F9C8CFF" />
+                <item android:offset="1" android:color="#009C8CFF" />
             </gradient>
         </aapt:attr>
     </path>

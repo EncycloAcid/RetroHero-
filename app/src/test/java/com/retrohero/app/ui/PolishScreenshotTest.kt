@@ -186,7 +186,7 @@ class PolishScreenshotTest {
         canvas.drawColor(android.graphics.Color.BLACK)
         var x = 30
         for (h in listOf(30, 60, 120, 200)) {
-            val w = h * 71 / 31
+            val w = h * 56 / 38
             mark.setBounds(x, 20, x + w, 20 + h)
             mark.draw(canvas)
             x += w + 30

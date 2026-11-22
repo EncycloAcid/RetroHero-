@@ -448,11 +448,18 @@ private fun GachaHero(candidates: List<Game>, onPlay: (Game) -> Unit, topActions
             Modifier.windowInsetsPadding(WindowInsets.statusBars).fillMaxWidth().padding(start = ContentInset, end = ContentInset - 4.dp, top = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            androidx.compose.material3.Icon(
+            // Glyph (keeps its own colours) and wordmark.
+            androidx.compose.foundation.Image(
                 painterResource(R.drawable.ic_logo_mark),
+                contentDescription = null,
+                modifier = Modifier.size(width = 38.dp, height = 26.dp).launchMarkTarget(),
+            )
+            Spacer(Modifier.width(10.dp))
+            Text(
                 "RetroHero",
-                tint = Color.White,
-                modifier = Modifier.size(width = 55.dp, height = 24.dp).launchMarkTarget(),
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 20.sp, letterSpacing = (-0.03).em),
+                color = Color.White,
+                modifier = Modifier.launchRise(0),
             )
             Spacer(Modifier.weight(1f))
             topActions()

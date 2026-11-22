@@ -126,13 +126,13 @@ fun LaunchIntroOverlay(state: LaunchIntroState) {
         val backdrop = 1f - smoothstep(0.18f, 0.7f, f)
         if (backdrop > 0f) drawRect(Color.Black.copy(alpha = backdrop))
         if (state.landed) return@Canvas
-        // Where the mask sits on the splash: the 108-unit icon drawn at 288dp, with the mask scaled
-        // 0.68 about (54, 52) -> a 128.7 x 56.2 dp box centred 5.3 dp above the screen centre.
+        // Where the glyph sits on the splash: the 108-unit icon drawn at 288dp; the glyph spans
+        // x 22.8..78, y 35..73 of it, so its box is centred 3.6 units left of the screen centre.
         val unit = SplashIconSize.toPx() / 108f
-        val startW = 48.28f * unit
-        val startH = 21.08f * unit
+        val startW = 55.2f * unit
+        val startH = 38f * unit
         val start = Rect(
-            Offset(size.width / 2f - startW / 2f, size.height / 2f - 2f * unit - startH / 2f),
+            Offset(size.width / 2f - 3.6f * unit - startW / 2f, size.height / 2f - startH / 2f),
             Size(startW, startH),
         )
         val target = state.markBounds ?: Rect(start.center - Offset(startW / 6f, startH / 6f), Size(startW / 3f, startH / 3f))
@@ -143,7 +143,7 @@ fun LaunchIntroOverlay(state: LaunchIntroState) {
         val cx = start.center.x + (target.center.x - start.center.x) * m
         val cy = start.center.y + (target.center.y - start.center.y) * m
         translate(cx - w / 2f, cy - h / 2f) {
-            with(mark) { draw(Size(w, h), colorFilter = ColorFilter.tint(Color.White)) }
+            with(mark) { draw(Size(w, h)) }
         }
     }
 }
