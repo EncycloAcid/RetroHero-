@@ -68,7 +68,10 @@ class ScreenshotTest {
     }
 
     private fun tab(label: String) {
-        compose.onAllNodesWithText(label).onFirst().performClick()
+        // Icon-only floating bar exposes labels as content descriptions; the rail shows text.
+        val byDescription = compose.onAllNodesWithContentDescription(label).fetchSemanticsNodes()
+        if (byDescription.isNotEmpty()) compose.onAllNodesWithContentDescription(label).onFirst().performClick()
+        else compose.onAllNodesWithText(label).onFirst().performClick()
     }
 
     @Test
@@ -76,7 +79,7 @@ class ScreenshotTest {
     fun captureLightTheme() {
         seed()
         ActivityScenario.launch(MainActivity::class.java).use {
-            shot("light_1_games")
+            shot("light_1_home")
             tab("Systems"); shot("light_2_systems")
             tab("Settings"); shot("light_3_settings")
         }
@@ -87,7 +90,7 @@ class ScreenshotTest {
     fun captureLandscape() {
         seed()
         ActivityScenario.launch(MainActivity::class.java).use {
-            shot("land_1_games")
+            shot("land_1_home")
             tab("Settings"); shot("land_2_settings")
         }
     }
@@ -96,19 +99,20 @@ class ScreenshotTest {
     fun captureScreens() {
         seed()
         ActivityScenario.launch(MainActivity::class.java).use {
-            shot("1_games")
-            tab("Systems"); shot("2_systems")
-            tab("Cores"); shot("3_cores")
-            tab("Settings"); shot("4_settings")
-            tab("Games")
+            shot("1_home")
+            tab("Search"); shot("2_search")
+            tab("Systems"); shot("3_systems")
+            tab("Cores"); shot("4_cores")
+            tab("Settings"); shot("5_settings")
+            tab("Home")
             compose.onAllNodesWithContentDescription("Add games").onFirst().performClick()
-            shot("5_fab_menu")
+            shot("6_add_menu")
             compose.onAllNodesWithText("Download from link").onFirst().performClick()
-            shot("6_download_sheet")
+            shot("7_download_sheet")
             compose.onAllNodesWithText("Cancel").onFirst().performClick()
             compose.waitForIdle()
             compose.onAllNodesWithText("Dungeon Dash").onFirst().performTouchInput { longClick() }
-            shot("7_game_sheet")
+            shot("8_game_sheet")
         }
     }
 }

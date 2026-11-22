@@ -2,6 +2,22 @@ package com.retrohero.app.ui
 
 import android.app.ActivityOptions
 import android.os.Bundle
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.navigationBars
+import com.retrohero.app.ui.components.FloatingNavBar
+import com.retrohero.app.ui.components.FloatingNavHeight
+import com.retrohero.app.ui.components.NavItem
+import com.retrohero.app.ui.screens.HomeScreen
 import com.retrohero.app.R
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -108,7 +124,8 @@ class MainActivity : ComponentActivity() {
 }
 
 private enum class Tab(val label: String, val title: String, val selected: ImageVector, val unselected: ImageVector) {
-    Games("Games", "RetroHero", Icons.Filled.SportsEsports, Icons.Outlined.SportsEsports),
+    Home("Home", "RetroHero", Icons.Filled.Home, Icons.Outlined.Home),
+    Games("Search", "Search", Icons.Filled.Search, Icons.Outlined.Search),
     Systems("Systems", "Systems", Icons.Filled.ViewModule, Icons.Outlined.ViewModule),
     Cores("Cores", "Emulators", Icons.Filled.Extension, Icons.Outlined.Extension),
     Settings("Settings", "Settings", Icons.Filled.Settings, Icons.Outlined.Settings),
@@ -129,9 +146,9 @@ private fun App(vm: AppViewModel) {
     val download by vm.download.collectAsStateWithLifecycle()
     val wide = LocalConfiguration.current.screenWidthDp >= 600
     val short = LocalConfiguration.current.screenHeightDp < 500
-    var fabExpanded by rememberSaveable { mutableStateOf(false) }
+    var addMenu by remember { mutableStateOf(false) }
 
-    var tab by rememberSaveable { mutableStateOf(Tab.Games) }
+    var tab by rememberSaveable { mutableStateOf(Tab.Home) }
     var openSystemId by rememberSaveable { mutableStateOf<String?>(null) }
     var sheetFor by rememberSaveable { mutableStateOf<String?>(null) }
 
@@ -152,11 +169,15 @@ private fun App(vm: AppViewModel) {
     BackHandler(enabled = openSystem != null) { openSystemId = null }
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    // Home is immersive: no top app bar, content runs under the status bar.
+    val isHome = openSystem == null && tab == Tab.Home && games.isNotEmpty()
+    val navBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val floatingNavSpace = if (wide || openSystem != null) 0.dp else FloatingNavHeight + 16.dp + navBarInset
     val systemCount = games.mapTo(HashSet()) { it.systemId }.size
 
     val accent = when {
         openSystem != null -> openSystem.color
-        tab == Tab.Games -> recents.firstOrNull()?.system?.color ?: MaterialTheme.colorScheme.primary
+        tab == Tab.Games || tab == Tab.Home -> recents.firstOrNull()?.system?.color ?: MaterialTheme.colorScheme.primary
         tab == Tab.Systems -> MaterialTheme.colorScheme.tertiary
         else -> MaterialTheme.colorScheme.primary
     }
@@ -176,12 +197,13 @@ private fun App(vm: AppViewModel) {
                 }
             }
         }
+    Box(Modifier.weight(1f).fillMaxHeight()) {
     Scaffold(
         containerColor = Color.Transparent,
         contentColor = MaterialTheme.colorScheme.onBackground,
-        modifier = Modifier.weight(1f).nestedScroll(scrollBehavior.nestedScrollConnection),
+        modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            Column {
+            if (!isHome) Column {
                 val barTitle: @Composable () -> Unit = {
                         Text(openSystem?.name ?: tab.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
@@ -191,7 +213,7 @@ private fun App(vm: AppViewModel) {
                                 val n = games.count { it.systemId == openSystem.id }
                                 "${openSystem.manufacturer} · $n ${if (n == 1) "game" else "games"}"
                             }
-                            tab == Tab.Games && games.isNotEmpty() -> "${games.size} games · $systemCount systems"
+                            tab == Tab.Games && games.isNotEmpty() -> "Find games across ${systemCount} systems"
                             tab == Tab.Games -> "Your retro game library"
                             tab == Tab.Systems -> "${Systems.all.size} systems supported"
                             tab == Tab.Cores -> "Emulator engines"
@@ -208,7 +230,7 @@ private fun App(vm: AppViewModel) {
                 }
                 val barActions: @Composable RowScope.() -> Unit = {
                         if (openSystem != null) SystemBadge(openSystem, 40.dp, Modifier.padding(end = 12.dp))
-                        if (openSystem == null && tab == Tab.Games && folders.isNotEmpty()) {
+                        if (openSystem == null && (tab == Tab.Games || tab == Tab.Home) && folders.isNotEmpty()) {
                             FilledTonalIconButton(onClick = vm::rescan, enabled = !scanning, shapes = IconButtonDefaults.shapes()) {
                                 Icon(Icons.Outlined.Refresh, "Rescan library")
                             }
@@ -232,47 +254,11 @@ private fun App(vm: AppViewModel) {
                 if (scanning) LinearWavyProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp))
             }
         },
-        floatingActionButton = {
-            if (openSystem == null && tab == Tab.Games && (folders.isNotEmpty() || games.isNotEmpty())) {
-                BackHandler(enabled = fabExpanded) { fabExpanded = false }
-                FloatingActionButtonMenu(
-                    expanded = fabExpanded,
-                    button = {
-                        ToggleFloatingActionButton(checked = fabExpanded, onCheckedChange = { fabExpanded = it }) {
-                            val icon by remember { derivedStateOf { if (checkedProgress > 0.5f) Icons.Filled.Close else Icons.Filled.Add } }
-                            Icon(icon, if (fabExpanded) "Close menu" else "Add games", Modifier.animateIcon({ checkedProgress }))
-                        }
-                    },
-                ) {
-                    FloatingActionButtonMenuItem(
-                        onClick = { fabExpanded = false; vm.openDownload(AppViewModel.DownloadKind.Game) },
-                        text = { Text("Download from link") },
-                        icon = { Icon(Icons.Outlined.Download, null) },
-                    )
-                    FloatingActionButtonMenuItem(
-                        onClick = { fabExpanded = false; folderPicker.launch(null) },
-                        text = { Text("Add game folder") },
-                        icon = { Icon(Icons.Outlined.CreateNewFolder, null) },
-                    )
-                }
-            }
-        },
-        bottomBar = {
-            if (openSystem == null && !wide) {
-                ShortNavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.96f)) {
-                    Tab.entries.forEach { t ->
-                        ShortNavigationBarItem(
-                            selected = tab == t,
-                            onClick = { tab = t },
-                            icon = { Icon(if (tab == t) t.selected else t.unselected, null) },
-                            label = { Text(t.label) },
-                        )
-                    }
-                }
-            }
-        },
     ) { padding ->
-      Row(Modifier.padding(padding).fillMaxSize()) {
+      Row(
+          (if (isHome) Modifier else Modifier.padding(top = padding.calculateTopPadding(), bottom = floatingNavSpace))
+              .fillMaxSize(),
+      ) {
         val screen = openSystem?.id ?: tab.name
         val effects = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
         val spatial = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
@@ -295,9 +281,48 @@ private fun App(vm: AppViewModel) {
                     onGameOptions = { sheetFor = it.id },
                     showSystemFilter = false,
                 )
-                key == Tab.Games.name -> GamesScreen(
+                key == Tab.Home.name && games.isNotEmpty() -> HomeScreen(
                     games = games,
                     recents = recents,
+                    onPlay = vm::play,
+                    onOptions = { sheetFor = it.id },
+                    onRandom = vm::playRandom,
+                    onOpenSystem = { openSystemId = it.id },
+                    onSeeAllGames = { tab = Tab.Games },
+                    topActions = {
+                        Box {
+                            FilledIconButton(
+                                onClick = { addMenu = true },
+                                shapes = IconButtonDefaults.shapes(),
+                                modifier = Modifier.size(48.dp),
+                            ) { Icon(Icons.Rounded.Add, "Add games") }
+                            DropdownMenu(expanded = addMenu, onDismissRequest = { addMenu = false }, shape = MaterialTheme.shapes.large) {
+                                DropdownMenuItem(
+                                    text = { Text("Download from link") },
+                                    leadingIcon = { Icon(Icons.Outlined.Download, null) },
+                                    onClick = { addMenu = false; vm.openDownload(AppViewModel.DownloadKind.Game) },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Add game folder") },
+                                    leadingIcon = { Icon(Icons.Outlined.CreateNewFolder, null) },
+                                    onClick = { addMenu = false; folderPicker.launch(null) },
+                                )
+                                if (folders.isNotEmpty()) {
+                                    DropdownMenuItem(
+                                        text = { Text("Rescan library") },
+                                        leadingIcon = { Icon(Icons.Outlined.Refresh, null) },
+                                        enabled = !scanning,
+                                        onClick = { addMenu = false; vm.rescan() },
+                                    )
+                                }
+                            }
+                        }
+                    },
+                    bottomPadding = floatingNavSpace,
+                )
+                key == Tab.Games.name || key == Tab.Home.name -> GamesScreen(
+                    games = games,
+                    recents = if (key == Tab.Home.name) recents else emptyList(),
                     hasFolders = folders.isNotEmpty(),
                     scanning = scanning,
                     onAddFolder = { folderPicker.launch(null) },
@@ -325,6 +350,17 @@ private fun App(vm: AppViewModel) {
             }
         }
       }
+    }
+        if (!wide && openSystem == null) {
+            FloatingNavBar(
+                items = Tab.entries.map { NavItem(it.label, it.selected, it.unselected) },
+                selected = tab.ordinal,
+                onSelect = { tab = Tab.entries[it] },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(start = 24.dp, end = 24.dp, bottom = navBarInset + 12.dp),
+            )
+        }
     }
     }
 

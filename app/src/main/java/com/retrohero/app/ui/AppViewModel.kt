@@ -175,6 +175,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         else _launch.value = LaunchState.NeedsCore(game, core)
     }
 
+    /** "Gacha" pick: play a random game, avoiding the one played last when possible. */
+    fun playRandom() {
+        val all = games.value
+        if (all.isEmpty()) return
+        val last = settings.recents.value.firstOrNull()
+        val pool = all.filter { it.id != last }.ifEmpty { all }
+        play(pool.random())
+    }
+
     fun confirmCoreDownload() {
         val state = _launch.value as? LaunchState.NeedsCore ?: return
         _launch.value = LaunchState.Downloading(state.game, state.core)
