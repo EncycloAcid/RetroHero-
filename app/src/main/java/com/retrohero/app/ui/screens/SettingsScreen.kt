@@ -1,6 +1,15 @@
 package com.retrohero.app.ui.screens
 
 import com.retrohero.app.ui.components.LocalNavSpace
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.saveable.rememberSaveable
 import android.net.Uri
 import android.os.Build
 import androidx.compose.foundation.layout.Arrangement
@@ -95,15 +104,28 @@ fun SettingsScreen(
     remapCount: Int = 0,
     onBackUp: (includeBios: Boolean) -> Unit = {},
     onRestore: () -> Unit = {},
+    looks: List<com.retrohero.app.data.Look> = emptyList(),
+    onImportLook: () -> Unit = {},
+    onLookChanged: () -> Unit = {},
+    onOpenStats: () -> Unit = {},
 ) {
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 24.dp + LocalNavSpace.current),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
-    ) {
+    var page by rememberSaveable { mutableStateOf<String?>(null) }
+    BackHandler(enabled = page != null) { page = null }
+    AnimatedContent(
+        targetState = page,
+        transitionSpec = {
+            if (targetState != null) (slideInHorizontally(tween(420, easing = MochyEase)) { it / 3 } + fadeIn(tween(260))) togetherWith fadeOut(tween(160))
+            else fadeIn(tween(260)) togetherWith (slideOutHorizontally(tween(320, easing = MochyEase)) { it / 3 } + fadeOut(tween(200)))
+        },
+        label = "settingsPage",
+    ) { p ->
+        when (p) {
+            null -> SettingsHome(onOpen = { page = it }, onOpenStats = onOpenStats)
+            "library" -> SubSettings("Game folders", onBack = { page = null }) {
         // ---- Library -------------------------------------------------------------------
         Column {
             val folderList = folders.toList()
-            SegmentedGroup("Game folders", folderList.size + if (scanning) 1 else 0) {
+            SegmentedGroup(null, folderList.size + if (scanning) 1 else 0) {
                 folderList.forEachIndexed { i, uri ->
                     val name = remember(uri) { runCatching { Saf.folderName(Uri.parse(uri)) }.getOrDefault(uri) }
                     SegmentedListItem(
@@ -140,8 +162,10 @@ fun SettingsScreen(
             }
         }
 
+            }
+            "gameplay" -> SubSettings("Gameplay", onBack = { page = null }) {
         // ---- Appearance & controls ------------------------------------------------------
-        SegmentedGroup("Look & feel", 7) {
+        SegmentedGroup(null, 7) {
             var i = 0
             ToggleRow(shapes(i++), Icons.Outlined.GridOn, "Sharp pixels", "Default look; pick CRT or LCD per system in-game", settings.sharpPixels) { settings.sharpPixels = it }
             ToggleRow(shapes(i++), Icons.Outlined.Vibration, "Haptic feedback", "Buzz when touch buttons are pressed", settings.haptics) { settings.haptics = it }
@@ -156,8 +180,10 @@ fun SettingsScreen(
             ToggleRow(shapes(i), Icons.Outlined.PhotoLibrary, "Screenshots to Gallery", "Also save in-game screenshots to Pictures", settings.screenshotsToGallery) { settings.screenshotsToGallery = it }
         }
 
+            }
+            "controls" -> SubSettings("Controls", onBack = { page = null }) {
         // ---- Controllers ------------------------------------------------------------------
-        SegmentedGroup("Controllers", 1) {
+        SegmentedGroup(null, 1) {
             SegmentedListItem(
                 onClick = onOpenControllers,
                 shapes = shapes(0),
@@ -177,10 +203,15 @@ fun SettingsScreen(
             modifier = Modifier.padding(horizontal = 8.dp),
         )
 
+            }
+            "looks" -> SubSettings("Customisation", onBack = { page = null }) {
+                LooksSettings(settings, looks, onImportLook, onLookChanged)
+            }
+            "backup" -> SubSettings("Backup & restore", onBack = { page = null }) {
         // ---- Backup -----------------------------------------------------------------------
         Column {
             var includeBios by remember { mutableStateOf(false) }
-            SegmentedGroup("Backup & restore", 1) {
+            SegmentedGroup(null, 1) {
                 ToggleRow(shapes(0), Icons.Outlined.Memory, "Include BIOS files", "Bigger backup; handy when moving to a new phone", includeBios) { includeBios = it }
             }
             Text(
@@ -203,11 +234,13 @@ fun SettingsScreen(
             }
         }
 
+            }
+            "bios" -> SubSettings("BIOS & system files", onBack = { page = null }) {
         // ---- BIOS -------------------------------------------------------------------------
         Column {
             key(biosVersion) {
                 val files = Systems.all.flatMap { s -> s.bios.map { s to it } }
-                SegmentedGroup("BIOS & system files", files.size) {
+                SegmentedGroup(null, files.size) {
                     files.forEachIndexed { i, (system, file) ->
                         val status = remember(biosVersion, file) { bios.status(file) }
                         val present = status != BiosManager.Status.Missing
@@ -262,8 +295,10 @@ fun SettingsScreen(
             }
         }
 
+            }
+            else -> SubSettings("About", onBack = { page = null }) {
         // ---- About ------------------------------------------------------------------------
-        SegmentedGroup("About", 2) {
+        SegmentedGroup(null, 2) {
             SegmentedListItem(
                 shapes = shapes(0),
                 colors = segmentColors(),
@@ -276,6 +311,8 @@ fun SettingsScreen(
                 leadingContent = { ShapeIcon(Icons.Outlined.Info) },
                 supportingContent = { Text("No games or BIOS files are included. Play games you own.") },
             ) { Text("Powered by libretro") }
+        }
+            }
         }
     }
 }

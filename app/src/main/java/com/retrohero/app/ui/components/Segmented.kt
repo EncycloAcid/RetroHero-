@@ -10,6 +10,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 
 /** Scope handed to a segmented group so each row gets the right first/middle/last shape. */
 class SegmentScope(private val count: Int) {
@@ -29,12 +33,18 @@ fun SegmentedGroup(
         if (title != null) {
             Text(
                 title,
-                style = MaterialTheme.typography.titleSmall,
+                style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(start = 16.dp, bottom = 8.dp, top = 8.dp),
             )
         }
-        Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
+        // Mochy's grouped style: one dark card, rows flush inside it.
+        Column(
+            Modifier
+                .clip(RoundedCornerShape(28.dp))
+                .background(GroupFill)
+                .padding(vertical = 6.dp),
+        ) {
             SegmentScope(count).content()
         }
     }
@@ -42,4 +52,6 @@ fun SegmentedGroup(
 
 /** Segmented rows sit on a raised container so the group reads clearly against the page. */
 @Composable
-fun segmentColors() = ListItemDefaults.segmentedColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+fun segmentColors() = ListItemDefaults.segmentedColors(containerColor = Color.Transparent)
+
+private val GroupFill = Color(0xFF141416)

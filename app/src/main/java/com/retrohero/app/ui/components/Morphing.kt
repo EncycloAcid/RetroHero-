@@ -45,18 +45,12 @@ private val IconShapes = listOf(
 
 /** An icon on a tonal Material shape; the shape and tone vary per icon for an expressive rhythm. */
 @Composable
-fun ShapeIcon(icon: ImageVector, size: Dp = 40.dp, tint: Color? = null) {
-    val scheme = MaterialTheme.colorScheme
-    val i = (icon.name.hashCode() and 0x7fffffff)
-    val (container, content) = when (i % 3) {
-        0 -> scheme.primaryContainer to scheme.onPrimaryContainer
-        1 -> scheme.secondaryContainer to scheme.onSecondaryContainer
-        else -> scheme.tertiaryContainer to scheme.onTertiaryContainer
-    }
+fun ShapeIcon(icon: ImageVector, size: Dp = 32.dp, tint: Color? = null) {
+    // Mochy's row icon: an iOS-style light circle with a dark glyph, on a dark card.
     Box(
-        Modifier.size(size).background(container, IconShapes[i % IconShapes.size].toShape()),
+        Modifier.size(size).background(Color(0xFFE5E5EA), androidx.compose.foundation.shape.CircleShape),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, null, tint = tint ?: content, modifier = Modifier.size(size * 0.5f))
+        Icon(icon, null, tint = tint ?: Color(0xFF1C1C1E), modifier = Modifier.size(size * 0.62f))
     }
 }

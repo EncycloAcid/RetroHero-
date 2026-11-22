@@ -828,7 +828,7 @@ private fun StatsPage(games: List<Game>, stats: Map<String, PlayStat>, onOpen: (
 }
 
 @Composable
-private fun CollectionCard(collection: GameCollection, games: List<Game>, onOpen: (GameCollection) -> Unit) {
+internal fun CollectionCard(collection: GameCollection, games: List<Game>, onOpen: (GameCollection) -> Unit) {
     Column(Modifier.width(RowCardWidth).press3D().clickable { onOpen(collection) }) {
         Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(28.dp)).background(Color(0xFF1C1C1F))) {
             val covers = games.take(4)
