@@ -99,6 +99,19 @@ class PolishScreenshotTest {
     }
 
     @Test
+    fun homebrewSheet() {
+        compose.setContent {
+            RetroHeroTheme {
+                Box(Modifier.fillMaxSize().background(Color.Black)) {
+                    com.retrohero.app.ui.components.HomebrewSheet(installed = setOf("libbet.gb"), onGet = {}, onDismiss = {})
+                }
+            }
+        }
+        compose.mainClock.advanceTimeBy(800)
+        save("homebrew")
+    }
+
+    @Test
     fun systemMorph() {
         val systems = listOf("nes", "snes", "nds", "psx").map { Systems.get(it)!! }
         compose.setContent {

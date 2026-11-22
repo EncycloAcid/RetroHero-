@@ -11,6 +11,8 @@ import com.retrohero.app.data.Game
 import com.retrohero.app.data.GameSystem
 import com.retrohero.app.emulator.EmulatorActivity
 import com.retrohero.app.data.Downloader
+import com.retrohero.app.data.HomebrewGame
+import com.retrohero.app.data.Systems
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -66,7 +68,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val kind: DownloadKind
 
         data class Input(override val kind: DownloadKind, val error: String? = null) : DownloadState
-        data class Running(override val kind: DownloadKind, val read: Long, val total: Long?) : DownloadState
+        data class Running(override val kind: DownloadKind, val read: Long, val total: Long?, val label: String? = null) : DownloadState
+        /** The link was a folder listing; the user picks which game files to fetch. */
+        data class Folder(override val kind: DownloadKind, val url: String, val entries: List<Downloader.FolderEntry>) : DownloadState
         data class Done(override val kind: DownloadKind, val title: String, val detail: String, val game: Game? = null) : DownloadState
         data class Failed(override val kind: DownloadKind, val message: String) : DownloadState
     }
@@ -96,8 +100,88 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 }
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: Downloader.PageNotFileException) {
+                // Probably a folder on your own server: list the games in it.
+                _download.value = if (kind == DownloadKind.Game) {
+                    runCatching { Downloader.listFolder(e.url, gameExtensions) }.fold(
+                        onSuccess = { entries ->
+                            if (entries.isEmpty()) DownloadState.Failed(kind, "That page doesn't list any game files RetroHero can play.")
+                            else DownloadState.Folder(kind, e.url, entries)
+                        },
+                        onFailure = { DownloadState.Failed(kind, it.message ?: "Couldn't read that folder") },
+                    )
+                } else {
+                    DownloadState.Failed(kind, e.message ?: "Download failed")
+                }
             } catch (e: Exception) {
                 _download.value = DownloadState.Failed(kind, e.message ?: "Download failed")
+            }
+        }
+    }
+
+    private val gameExtensions: Set<String> by lazy { Systems.all.flatMap { it.extensions }.toSet() + setOf("zip", "7z") }
+
+    /** Downloads the chosen files from a folder listing, one after another. */
+    fun downloadFolderEntries(entries: List<Downloader.FolderEntry>) {
+        if (entries.isEmpty()) return
+        downloadJob = viewModelScope.launch {
+            val added = ArrayList<String>()
+            val failed = ArrayList<String>()
+            entries.forEachIndexed { i, entry ->
+                val label = "${i + 1} of ${entries.size} · ${entry.name}"
+                _download.value = DownloadState.Running(DownloadKind.Game, 0, null, label)
+                try {
+                    val file = Downloader.fetch(entry.url, app.paths.downloadTmp) { read, total ->
+                        _download.value = DownloadState.Running(DownloadKind.Game, read, total, label)
+                    }
+                    when (val result = finishGame(file)) {
+                        is DownloadState.Done -> added += result.title
+                        else -> failed += entry.name
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    failed += entry.name
+                }
+            }
+            _download.value = if (added.isEmpty()) {
+                DownloadState.Failed(DownloadKind.Game, "None of the files could be added.")
+            } else {
+                DownloadState.Done(
+                    DownloadKind.Game,
+                    if (added.size == 1) added.first() else "${added.size} games added",
+                    buildString {
+                        append(added.joinToString(", "))
+                        if (failed.isNotEmpty()) append("\nSkipped: ").append(failed.joinToString(", "))
+                    },
+                )
+            }
+        }
+    }
+
+    // ---- Free homebrew --------------------------------------------------------------------
+
+    fun installedHomebrew(games: List<Game>): Set<String> =
+        games.filter { it.isLocal }.mapTo(HashSet()) { it.fileName }
+
+    fun installHomebrew(entry: HomebrewGame) {
+        _download.value = DownloadState.Running(DownloadKind.Game, 0, null, entry.title)
+        downloadJob = viewModelScope.launch {
+            try {
+                val file = Downloader.fetch(entry.url, app.paths.downloadTmp) { read, total ->
+                    _download.value = DownloadState.Running(DownloadKind.Game, read, total, entry.title)
+                }
+                val expected = entry.sha256
+                if (expected != null && withContext(Dispatchers.IO) { Downloader.sha256(file) } != expected) {
+                    file.delete()
+                    _download.value = DownloadState.Failed(DownloadKind.Game, "The download didn't match the author's checksum, so it was discarded.")
+                    return@launch
+                }
+                _download.value = finishGame(file)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _download.value = DownloadState.Failed(DownloadKind.Game, e.message ?: "Download failed")
             }
         }
     }

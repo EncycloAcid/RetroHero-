@@ -71,6 +71,8 @@ import androidx.compose.foundation.background
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.lerp
 import com.retrohero.app.ui.components.DownloadSheet
+import com.retrohero.app.ui.components.HomebrewSheet
+import androidx.compose.material.icons.rounded.CardGiftcard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LargeFlexibleTopAppBar
@@ -162,6 +164,7 @@ private fun App(vm: AppViewModel) {
     val wide = LocalConfiguration.current.screenWidthDp >= 600
     val short = LocalConfiguration.current.screenHeightDp < 500
     var addMenu by remember { mutableStateOf(false) }
+    var homebrewOpen by rememberSaveable { mutableStateOf(false) }
 
     var tab by rememberSaveable { mutableStateOf(Tab.Home) }
     var openSystemId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -331,6 +334,11 @@ private fun App(vm: AppViewModel) {
                                     onClick = { addMenu = false; vm.openDownload(AppViewModel.DownloadKind.Game) },
                                 )
                                 DropdownMenuItem(
+                                    text = { Text("Free homebrew games") },
+                                    leadingIcon = { Icon(Icons.Rounded.CardGiftcard, null) },
+                                    onClick = { addMenu = false; homebrewOpen = true },
+                                )
+                                DropdownMenuItem(
                                     text = { Text("Add game folder") },
                                     leadingIcon = { Icon(Icons.Outlined.CreateNewFolder, null) },
                                     onClick = { addMenu = false; folderPicker.launch(null) },
@@ -408,10 +416,19 @@ private fun App(vm: AppViewModel) {
         )
     }
 
+    if (homebrewOpen) {
+        HomebrewSheet(
+            installed = vm.installedHomebrew(games),
+            onGet = { vm.installHomebrew(it) },
+            onDismiss = { homebrewOpen = false },
+        )
+    }
+
     download?.let { state ->
         DownloadSheet(
             state = state,
             onStart = vm::startDownload,
+            onDownloadEntries = vm::downloadFolderEntries,
             onRetry = vm::openDownload,
             onPlay = vm::playDownloaded,
             onDismiss = vm::cancelDownload,

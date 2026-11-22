@@ -81,4 +81,59 @@ class DownloaderTest {
         }
         assertTrue(tmp.root.listFiles()!!.isEmpty())
     }
+
+    @Test
+    fun recognisesLocalNetworkHosts() {
+        for (h in listOf("192.168.1.20", "10.0.0.5", "172.16.3.4", "172.31.255.1", "127.0.0.1", "nas.local", "mypc", "media.lan", "fe80::1")) {
+            assertTrue(h, Downloader.isLocalHost(h))
+        }
+        for (h in listOf("example.com", "8.8.8.8", "172.32.0.1", "192.169.1.1", "github.com")) {
+            assertFalse(h, Downloader.isLocalHost(h))
+        }
+    }
+
+    @Test
+    fun httpOnlyAllowedOnLocalNetwork() {
+        assertNull(Downloader.validate("http://192.168.1.20/games/"))
+        assertNull(Downloader.validate("http://nas.local:8080/roms/a.gba"))
+        assertNotNull(Downloader.validate("http://example.com/a.gba"))
+    }
+
+    @Test
+    fun htmlPageBecomesFolderListing() = runBlocking {
+        val page = """
+            <html><body><h1>Index of /roms</h1>
+            <a href="?C=N;O=D">Name</a> <a href="../">Parent Directory</a>
+            <a href="Space%20Shooter%20(World).nes">Space Shooter (World).nes</a>
+            <a href='sub/Puzzle.gba'>Puzzle.gba</a>
+            <a href="readme.txt">readme.txt</a>
+            <a href="https://elsewhere.example/evil.nes">elsewhere</a>
+            <a href="Racer.zip">Racer.zip</a>
+            </body></html>
+        """.trimIndent()
+        server.enqueue(MockResponse().setHeader("Content-Type", "text/html").setBody(page))
+        val url = server.url("/roms/").toString()
+        try {
+            Downloader.fetch(url, tmp.root) { _, _ -> }
+            fail("expected a folder page")
+        } catch (e: Downloader.PageNotFileException) {
+            assertEquals(url, e.url)
+        }
+        server.enqueue(MockResponse().setHeader("Content-Type", "text/html").setBody(page))
+        val entries = Downloader.listFolder(url, setOf("nes", "gba", "zip"))
+        assertEquals(listOf("Puzzle.gba", "Racer.zip", "Space Shooter (World).nes"), entries.map { it.name })
+        assertTrue(entries.first().url.endsWith("/roms/sub/Puzzle.gba"))
+    }
+
+    @Test
+    fun homebrewCatalogIsWellFormed() {
+        assertTrue(Homebrew.catalog.isNotEmpty())
+        for (g in Homebrew.catalog) {
+            assertTrue(g.url, g.url.startsWith("https://github.com/") && "/releases/download/" in g.url)
+            val system = g.system
+            assertNotNull(g.title, system)
+            assertTrue(g.fileName, g.fileName.substringAfterLast('.').lowercase() in system!!.extensions)
+            g.sha256?.let { assertEquals(64, it.length) }
+        }
+    }
 }

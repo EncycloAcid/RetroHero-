@@ -3,6 +3,17 @@ package com.retrohero.app.ui.components
 import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Checkbox
+import androidx.compose.runtime.remember
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextOverflow
+import com.retrohero.app.data.Downloader
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -63,6 +74,7 @@ import java.util.Locale
 fun DownloadSheet(
     state: DownloadState,
     onStart: (DownloadKind, String) -> Unit,
+    onDownloadEntries: (List<Downloader.FolderEntry>) -> Unit,
     onRetry: (DownloadKind) -> Unit,
     onPlay: (Game) -> Unit,
     onDismiss: () -> Unit,
@@ -77,6 +89,7 @@ fun DownloadSheet(
             when (state) {
                 is DownloadState.Input -> InputPage(state, onStart, onDismiss)
                 is DownloadState.Running -> RunningPage(state, onDismiss)
+                is DownloadState.Folder -> FolderPage(state, onDownloadEntries, onDismiss)
                 is DownloadState.Done -> ResultPage(
                     icon = Icons.Outlined.Done,
                     polygon = MaterialShapes.Cookie9Sided,
@@ -161,6 +174,7 @@ private fun InputPage(state: DownloadState.Input, onStart: (DownloadKind, String
     Text(
         if (state.kind == DownloadKind.Game) {
             "Paste a direct link, or a Google Drive or Dropbox share link, to a game file (.zip, .gba, .chd…). " +
+                "A link to a folder on your own computer or NAS (http:// works on your home network) lets you pick several games. " +
                 "It's saved in RetroHero's Games folder and added to your library. " +
                 "Only download games you own or that are free to share, such as homebrew."
         } else {
@@ -179,7 +193,7 @@ private fun InputPage(state: DownloadState.Input, onStart: (DownloadKind, String
 
 @Composable
 private fun RunningPage(state: DownloadState.Running, onCancel: () -> Unit) {
-    Header(state.kind, "Downloading…")
+    Header(state.kind, state.label ?: "Downloading…")
     val total = state.total
     if (total != null) {
         LinearWavyProgressIndicator(
@@ -236,4 +250,58 @@ private fun size(bytes: Long): String = when {
     bytes >= 1L shl 30 -> String.format(Locale.US, "%.2f GB", bytes / (1L shl 30).toDouble())
     bytes >= 1L shl 20 -> String.format(Locale.US, "%.1f MB", bytes / (1L shl 20).toDouble())
     else -> String.format(Locale.US, "%d KB", bytes / 1024)
+}
+
+@Composable
+private fun FolderPage(state: DownloadState.Folder, onDownload: (List<Downloader.FolderEntry>) -> Unit, onDismiss: () -> Unit) {
+    var selected by remember(state) { mutableStateOf(state.entries.map { it.url }.toSet()) }
+    Text("Pick games", style = MaterialTheme.typography.headlineSmall)
+    Text(
+        "${state.entries.size} game files in this folder",
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Row(Modifier.padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        val all = selected.size == state.entries.size
+        Text(
+            if (all) "Select none" else "Select all",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .clip(CircleShape)
+                .clickable { selected = if (all) emptySet() else state.entries.map { it.url }.toSet() }
+                .padding(horizontal = 4.dp, vertical = 6.dp),
+        )
+    }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(max = 360.dp)
+            .verticalScroll(rememberScrollState()),
+    ) {
+        state.entries.forEach { entry ->
+            val checked = entry.url in selected
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(MaterialTheme.shapes.medium)
+                    .clickable { selected = if (checked) selected - entry.url else selected + entry.url }
+                    .padding(vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(checked = checked, onCheckedChange = null)
+                Spacer(Modifier.width(8.dp))
+                Text(entry.name, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+    Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(onClick = onDismiss, shapes = ButtonDefaults.shapes(), modifier = Modifier.weight(1f)) { Text("Cancel") }
+        Button(
+            onClick = { onDownload(state.entries.filter { it.url in selected }) },
+            enabled = selected.isNotEmpty(),
+            shapes = ButtonDefaults.shapes(),
+            modifier = Modifier.weight(1f),
+        ) { Text(if (selected.size == 1) "Download 1 game" else "Download ${selected.size} games") }
+    }
 }
