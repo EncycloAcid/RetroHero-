@@ -59,7 +59,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.Stable
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -116,12 +118,35 @@ import kotlin.random.Random
 
 // ---- Layout & type ------------------------------------------------------------------------------
 
-private val ContentInset = 36.dp
-private val CardSpacing = 15.dp
-private val Tracking = (-0.06).em
+/** Side margin that suits the screen: tighter on phones, roomier on large screens. */
+private val ContentInset: Dp
+    @Composable @ReadOnlyComposable get() {
+        val w = LocalConfiguration.current.screenWidthDp
+        return when {
+            w < 380 -> 18.dp
+            w < 600 -> 22.dp
+            else -> 36.dp
+        }
+    }
+
+/** Row cards show about two and a half per screen, hinting that the row scrolls. */
+private val RowCardWidth: Dp
+    @Composable @ReadOnlyComposable get() {
+        val w = LocalConfiguration.current.screenWidthDp.dp
+        return ((w - ContentInset * 2 - CardSpacing * 2) / 2.45f).coerceIn(112.dp, 168.dp)
+    }
+
+/** The gacha scales with the screen height so short phones still see the rows below it. */
+private val HeroHeight: Dp
+    @Composable @ReadOnlyComposable get() =
+        (LocalConfiguration.current.screenHeightDp * 0.6f).coerceIn(430f, GachaHeight).dp
+
+private val CardSpacing = 12.dp
+private val Tracking = (-0.04).em
 
 private val LabelStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 16.sp, lineHeight = 19.sp, letterSpacing = Tracking)
-private val TitleStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 24.sp, lineHeight = 28.sp, letterSpacing = Tracking)
+private val TitleStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 22.sp, lineHeight = 27.sp, letterSpacing = Tracking)
+private val HeroTitleStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 26.sp, lineHeight = 30.sp, letterSpacing = Tracking)
 private val CardTitleStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, lineHeight = 17.sp, letterSpacing = (-0.03).em)
 private val CardSubtitleStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 12.sp, lineHeight = 15.sp, letterSpacing = (-0.02).em)
 private val LabelColor = Color.White.copy(alpha = 0.69f)
@@ -188,7 +213,7 @@ fun HomeScreen(
     }
 
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(118.dp),
+        columns = GridCells.Adaptive(100.dp),
         contentPadding = PaddingValues(start = ContentInset, end = ContentInset, bottom = bottomPadding + 24.dp),
         horizontalArrangement = Arrangement.spacedBy(CardSpacing),
         verticalArrangement = Arrangement.spacedBy(20.dp),
@@ -306,7 +331,7 @@ private fun GachaHero(candidates: List<Game>, onPlay: (Game) -> Unit, topActions
     val deep by animateColorAsState(lerp(lerp(base, Color(0xFF7C82B4), 0.35f), Color.Black, 0.25f), tween(700), label = "washDeep")
     val rush by animateFloatAsState(if (state.phase == Phase.Rolling) 1f else 0f, tween(600), label = "rush")
 
-    BoxWithConstraints(Modifier.fillMaxWidth().height(GachaHeight.dp).clipToBounds()) {
+    BoxWithConstraints(Modifier.fillMaxWidth().height(HeroHeight).clipToBounds()) {
         val unit = maxHeight / GachaHeight
         val focus = unit * FocusSize
         val coverShape = RoundedCornerShape(unit * CoverCorner)
@@ -420,14 +445,14 @@ private fun GachaHero(candidates: List<Game>, onPlay: (Game) -> Unit, topActions
         }
 
         Row(
-            Modifier.windowInsetsPadding(WindowInsets.statusBars).fillMaxWidth().padding(start = ContentInset - 8.dp, end = 24.dp, top = 8.dp),
+            Modifier.windowInsetsPadding(WindowInsets.statusBars).fillMaxWidth().padding(start = ContentInset, end = ContentInset - 4.dp, top = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             androidx.compose.material3.Icon(
-                painterResource(R.drawable.ic_launcher_monochrome),
+                painterResource(R.drawable.ic_logo_mark),
                 "RetroHero",
                 tint = Color.White,
-                modifier = Modifier.size(52.dp).launchMarkTarget(),
+                modifier = Modifier.size(width = 55.dp, height = 24.dp).launchMarkTarget(),
             )
             Spacer(Modifier.weight(1f))
             topActions()
@@ -469,7 +494,7 @@ private fun GachaHero(candidates: List<Game>, onPlay: (Game) -> Unit, topActions
 
 @Composable
 private fun HeroText(label: String, title: String, modifier: Modifier, pills: @Composable () -> Unit) {
-    Column(modifier.padding(start = ContentInset, end = ContentInset, bottom = 64.dp)) {
+    Column(modifier.padding(start = ContentInset, end = ContentInset, bottom = 48.dp)) {
         AnimatedContent(
             targetState = label,
             transitionSpec = {
@@ -485,7 +510,7 @@ private fun HeroText(label: String, title: String, modifier: Modifier, pills: @C
                     .togetherWith(slideOutVertically(tween(160)) { -it / 3 } + fadeOut(tween(140)))
             },
             label = "heroTitle",
-        ) { Text(it, style = TitleStyle, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth(0.62f)) }
+        ) { Text(it, style = HeroTitleStyle, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth(0.6f)) }
         Spacer(Modifier.height(11.dp))
         Row(verticalAlignment = Alignment.CenterVertically) { pills() }
     }
@@ -541,7 +566,7 @@ private fun Die(spinning: Boolean) {
 private fun SectionHeader(text: String, onClick: (() -> Unit)? = null) {
     Row(
         Modifier
-            .padding(start = ContentInset - 4.dp, top = 6.dp)
+            .padding(start = ContentInset - 4.dp, top = 14.dp)
             .clip(CircleShape)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = 4.dp),
@@ -558,7 +583,7 @@ private fun RowCard(game: Game, onPlay: (Game) -> Unit, onOptions: (Game) -> Uni
     val press = rememberPressFeedback(interaction, restCorner = 28.dp, pressedCorner = 40.dp, pressedScale = 0.95f)
     Column(
         Modifier
-            .width(138.dp)
+            .width(RowCardWidth)
             .press3D()
             .combinedClickable(interactionSource = interaction, indication = null, onClick = { onPlay(game) }, onLongClick = { onOptions(game) }),
     ) {
@@ -574,7 +599,7 @@ private fun SystemCard(system: GameSystem, count: Int, onOpen: (GameSystem) -> U
     val pressed by interaction.collectIsPressedAsState()
     val p by animateFloatAsState(if (pressed) 1f else 0f, spring(0.5f, Spring.StiffnessMediumLow), label = "sysMorph")
     val morph = rememberMorph(system.polygon, MaterialShapes.Circle)
-    Column(Modifier.width(138.dp).press3D().clickable(interactionSource = interaction, indication = null) { onOpen(system) }) {
+    Column(Modifier.width(RowCardWidth).press3D().clickable(interactionSource = interaction, indication = null) { onOpen(system) }) {
         Box(
             Modifier
                 .fillMaxWidth()

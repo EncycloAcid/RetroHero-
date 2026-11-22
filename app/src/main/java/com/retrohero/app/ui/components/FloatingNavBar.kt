@@ -42,7 +42,7 @@ import androidx.compose.ui.unit.dp
 
 class NavItem(val label: String, val selectedIcon: ImageVector, val icon: ImageVector)
 
-val FloatingNavHeight = 68.dp
+val FloatingNavHeight = 62.dp
 
 /**
  * Detached pill navigation bar with icon-only items. The selection pill slides between items
@@ -66,7 +66,7 @@ fun FloatingNavBar(items: List<NavItem>, selected: Int, onSelect: (Int) -> Unit,
             // Dark frosted chrome: a translucent graphite fill with a faint light edge on top.
             .background(Brush.verticalGradient(listOf(Color(0xFF2A2A2A).copy(alpha = 0.94f), Color(0xFF1B1B1B).copy(alpha = 0.94f))))
             .border(1.dp, Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.14f), Color.White.copy(alpha = 0.03f))), CircleShape)
-            .padding(8.dp),
+            .padding(6.dp),
     ) {
         val itemWidth: Dp = maxWidth / items.size
         val x by animateDpAsState(

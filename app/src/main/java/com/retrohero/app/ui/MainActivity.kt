@@ -394,7 +394,7 @@ private fun App(vm: AppViewModel) {
                 onSelect = { tab = Tab.entries[it] },
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(start = 24.dp, end = 24.dp, bottom = navBarInset + 12.dp),
+                    .padding(start = 20.dp, end = 20.dp, bottom = navBarInset + 10.dp),
             )
         }
     }

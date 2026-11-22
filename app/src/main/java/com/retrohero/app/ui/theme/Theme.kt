@@ -56,10 +56,18 @@ private val Mono = darkColorScheme(
     inverseOnSurface = Color.Black,
 )
 
-private val Tight = (-0.05).em
+private val Tight = (-0.035).em
+private val Text = (-0.01).em
 
+/** Headings (display font) are tracked tighter; running text stays close to normal for readability. */
 private fun style(size: TextUnit, line: TextUnit, weight: FontWeight = FontWeight.SemiBold, family: FontFamily = Inter) =
-    TextStyle(fontFamily = family, fontWeight = weight, fontSize = size, lineHeight = line, letterSpacing = Tight)
+    TextStyle(
+        fontFamily = family,
+        fontWeight = weight,
+        fontSize = size,
+        lineHeight = line,
+        letterSpacing = if (family == InterDisplay) Tight else Text,
+    )
 
 /** Inter, SemiBold throughout with tight tracking; Bold for emphasized styles. */
 private val MonoTypography = Typography(
@@ -72,9 +80,9 @@ private val MonoTypography = Typography(
     titleLarge = style(22.sp, 27.sp),
     titleMedium = style(16.sp, 21.sp),
     titleSmall = style(14.sp, 17.sp),
-    bodyLarge = style(16.sp, 22.sp, FontWeight.Medium),
-    bodyMedium = style(14.sp, 19.sp, FontWeight.Medium),
-    bodySmall = style(12.sp, 15.sp, FontWeight.Medium),
+    bodyLarge = style(16.sp, 22.sp, FontWeight.Normal),
+    bodyMedium = style(14.sp, 20.sp, FontWeight.Normal),
+    bodySmall = style(12.sp, 16.sp, FontWeight.Normal),
     labelLarge = style(14.sp, 18.sp),
     labelMedium = style(12.sp, 16.sp),
     labelSmall = style(11.sp, 14.sp),

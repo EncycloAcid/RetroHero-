@@ -178,6 +178,23 @@ class PolishScreenshotTest {
     }
 
     @Test
+    fun logoMark() {
+        val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val mark = ctx.getDrawable(R.drawable.ic_logo_mark)!!
+        val bmp = Bitmap.createBitmap(900, 260, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bmp)
+        canvas.drawColor(android.graphics.Color.BLACK)
+        var x = 30
+        for (h in listOf(30, 60, 120, 200)) {
+            val w = h * 71 / 31
+            mark.setBounds(x, 20, x + w, 20 + h)
+            mark.draw(canvas)
+            x += w + 30
+        }
+        File(outDir, "logo_mark.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+    }
+
+    @Test
     fun launcherIcon() {
         val ctx = ApplicationProvider.getApplicationContext<android.content.Context>()
         val icon = ctx.getDrawable(R.mipmap.ic_launcher)!!

@@ -97,7 +97,7 @@ fun Modifier.launchMarkTarget(): Modifier = composed {
 @Composable
 fun LaunchIntroOverlay(state: LaunchIntroState) {
     if (state.done) return
-    val mark = painterResource(R.drawable.ic_launcher_monochrome)
+    val mark = painterResource(R.drawable.ic_logo_mark)
     LaunchedEffect(state) {
         // Wait for Home's logo (or give up and land in place), then let its first heavy frame draw.
         withTimeoutOrNull(2_500) { snapshotFlow { state.markBounds != null }.first { it } }
@@ -126,16 +126,24 @@ fun LaunchIntroOverlay(state: LaunchIntroState) {
         val backdrop = 1f - smoothstep(0.18f, 0.7f, f)
         if (backdrop > 0f) drawRect(Color.Black.copy(alpha = backdrop))
         if (state.landed) return@Canvas
-        val startSize = SplashIconSize.toPx()
-        val start = Rect(Offset(size.width / 2f - startSize / 2f, size.height / 2f - startSize / 2f), Size(startSize, startSize))
-        val target = state.markBounds ?: Rect(start.center - Offset(startSize / 8f, startSize / 8f), Size(startSize / 4f, startSize / 4f))
+        // Where the mask sits on the splash: the 108-unit icon drawn at 288dp, with the mask scaled
+        // 0.68 about (54, 52) -> a 128.7 x 56.2 dp box centred 5.3 dp above the screen centre.
+        val unit = SplashIconSize.toPx() / 108f
+        val startW = 48.28f * unit
+        val startH = 21.08f * unit
+        val start = Rect(
+            Offset(size.width / 2f - startW / 2f, size.height / 2f - 2f * unit - startH / 2f),
+            Size(startW, startH),
+        )
+        val target = state.markBounds ?: Rect(start.center - Offset(startW / 6f, startH / 6f), Size(startW / 3f, startH / 3f))
         val m = MoveEasing.transform(f)
         val s = ScaleEasing.transform(f)
-        val side = start.width + (target.width - start.width) * s
+        val w = start.width + (target.width - start.width) * s
+        val h = start.height + (target.height - start.height) * s
         val cx = start.center.x + (target.center.x - start.center.x) * m
         val cy = start.center.y + (target.center.y - start.center.y) * m
-        translate(cx - side / 2f, cy - side / 2f) {
-            with(mark) { draw(Size(side, side), colorFilter = ColorFilter.tint(Color.White)) }
+        translate(cx - w / 2f, cy - h / 2f) {
+            with(mark) { draw(Size(w, h), colorFilter = ColorFilter.tint(Color.White)) }
         }
     }
 }

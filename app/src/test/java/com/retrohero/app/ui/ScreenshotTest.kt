@@ -101,6 +101,15 @@ class ScreenshotTest {
     }
 
     @Test
+    @Config(qualifiers = "w360dp-h740dp-night-xhdpi")
+    fun captureSmallPhone() {
+        seed()
+        ActivityScenario.launch(MainActivity::class.java).use {
+            shot("small_1_home")
+        }
+    }
+
+    @Test
     fun captureScreens() {
         seed()
         compose.mainClock.autoAdvance = false
