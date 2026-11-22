@@ -166,7 +166,7 @@ class EmulatorActivity : ComponentActivity() {
     private lateinit var optionsStore: CoreOptionsStore
     private lateinit var gamePrefs: GamePrefs
     private lateinit var padLayouts: PadLayouts
-    private var padSkin: PadSkin = Looks.Glass
+    private var padSkin: PadSkin = Looks.Console
 
     private var phase by mutableStateOf<Phase>(Phase.Loading)
     private var menuOpen by mutableStateOf(false)
@@ -531,6 +531,7 @@ class EmulatorActivity : ComponentActivity() {
             modifier = modifier,
             accent = system.color,
             skin = padSkin,
+            systemId = system.id,
             onRewind = if (rewindOn) { held -> NativeBridge.setRewinding(held) } else null,
             adjust = remember(editingPad, landscape) { padLayouts.get(system.id, landscape) },
             edit = if (editingPad) {

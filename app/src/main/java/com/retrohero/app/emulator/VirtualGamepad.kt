@@ -49,6 +49,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
@@ -152,8 +153,9 @@ fun VirtualGamepad(
     onPress: () -> Unit,
     modifier: Modifier = Modifier,
     accent: Color = Color(0xFFFF4F8B),
-    skin: PadSkin = Looks.Glass,
+    skin: PadSkin = Looks.Console,
     onRewind: ((Boolean) -> Unit)? = null,
+    systemId: String = "",
     adjust: Map<String, PadAdjust> = emptyMap(),
     edit: PadEditState? = null,
 ) {
@@ -210,11 +212,14 @@ fun VirtualGamepad(
         CompositionLocalProvider(
             LocalPadAccent provides accent,
             LocalPadSkin provides skin,
+            LocalConsole provides (if (skin.faces == "console") ConsoleStyles.forSystem(systemId, accent) else null),
             LocalPadEdit provides edit,
             LocalPadAdjust provides adjust,
             LocalShowRewind provides (onRewind != null),
         ) {
-            Box(Modifier.fillMaxSize().alpha(if (edit != null) maxOf(opacity, 0.85f) else opacity)) {
+            // The console skin in portrait is a solid controller under the game, so it ignores opacity.
+            val solid = skin.faces == "console" && !landscape
+            Box(Modifier.fillMaxSize().alpha(if (solid) 1f else if (edit != null) maxOf(opacity, 0.85f) else opacity)) {
                 if (landscape) LandscapeControls(layout, regions, pressed) else PortraitControls(layout, regions, pressed)
             }
         }
@@ -236,7 +241,31 @@ private fun SpeedControls(regions: Regions, pressed: Set<Int>, modifier: Modifie
 }
 
 // Frosted-glass look shared by every control.
-private val LocalPadSkin = staticCompositionLocalOf { Looks.Glass }
+private val LocalPadSkin = staticCompositionLocalOf { Looks.Console }
+private val LocalConsole = staticCompositionLocalOf<ConsoleStyle?> { null }
+
+/** The controller body behind the buttons: a plate, plus the NES's black inset panel. */
+@Composable
+private fun ControllerPlate(style: ConsoleStyle) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .clip(RoundedCornerShape(topStart = 34.dp, topEnd = 34.dp))
+            .background(Brush.verticalGradient(listOf(style.plateTop, style.plateBottom)))
+            .border(1.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(topStart = 34.dp, topEnd = 34.dp)),
+    ) {
+        if (style.band != null) {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(start = 12.dp, end = 12.dp, top = 56.dp, bottom = 14.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(Brush.verticalGradient(listOf(style.band, lerp(style.band, Color.Black, 0.4f))))
+                    .border(2.dp, Color.Black.copy(alpha = 0.35f), RoundedCornerShape(18.dp)),
+            )
+        }
+    }
+}
 
 // The current skin's colours.
 private val GlassFill: Color @Composable get() = LocalPadSkin.current.fill
@@ -278,6 +307,7 @@ private fun pressScale(pressed: Boolean): Float {
 
 @Composable
 private fun PortraitControls(layout: PadLayout, regions: Regions, pressed: Set<Int>) {
+    LocalConsole.current?.let { ControllerPlate(it) }
     Column(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 8.dp)) {
         Row(Modifier.fillMaxWidth().height(42.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.padGroup("l")) { Shoulders(layout.leftShoulders, regions, pressed, "l") }
@@ -325,6 +355,11 @@ private fun Dpad(regions: Regions, pressed: Set<Int>, size: Dp) {
     val edge = GlassEdge
     val label = PadLabel
     val glow = LocalPadSkin.current.glow
+    val console = LocalConsole.current
+    if (console != null) {
+        ConsoleDpad(console, regions, pressed, size, scale)
+        return
+    }
     Canvas(
         Modifier
             .size(size)
@@ -361,6 +396,50 @@ private fun Dpad(regions: Regions, pressed: Set<Int>, size: Dp) {
         val arrow = label.copy(alpha = label.alpha * 0.65f)
         fun tri(ax: Float, ay: Float, bx: Float, by: Float, cx: Float, cy: Float) =
             drawPath(Path().apply { moveTo(ax, ay); lineTo(bx, by); lineTo(cx, cy); close() }, arrow)
+        tri(c, e, c - t, e + t, c + t, e + t)
+        tri(c, w - e, c - t, w - e - t, c + t, w - e - t)
+        tri(e, c, e + t, c - t, e + t, c + t)
+        tri(w - e, c, w - e - t, c - t, w - e - t, c + t)
+    }
+}
+
+/** A moulded plastic cross: lit from above, dark rim, the held arm pressed in. */
+@Composable
+private fun ConsoleDpad(style: ConsoleStyle, regions: Regions, pressed: Set<Int>, size: Dp, scale: Float) {
+    Canvas(
+        Modifier
+            .size(size)
+            .onGloballyPositioned { regions.map["dpad"] = Region.Dpad(it.boundsInRoot()) }
+            .graphicsLayer {
+                scaleX = 0.97f + 0.03f * scale
+                scaleY = 0.97f + 0.03f * scale
+            },
+    ) {
+        val w = this.size.width
+        val arm = w / 3f
+        val r = arm * 0.16f
+        val cross = Path().apply {
+            addRoundRect(RoundRect(arm, 0f, arm * 2, w, CornerRadius(r)))
+            addRoundRect(RoundRect(0f, arm, w, arm * 2, CornerRadius(r)))
+        }
+        // Recess in the body, drop shadow, then the cross itself.
+        translate(top = 4.dp.toPx()) { drawPath(cross, Color.Black.copy(alpha = 0.45f)) }
+        drawPath(cross, Brush.verticalGradient(listOf(lerp(style.dpad, Color.White, 0.18f), style.dpad, lerp(style.dpad, Color.Black, 0.35f))))
+        fun held(rect: Rect, id: Int) {
+            if (id in pressed) drawRoundRect(Color.Black.copy(alpha = 0.35f), rect.topLeft, rect.size, CornerRadius(r))
+        }
+        held(Rect(arm, 0f, arm * 2, arm * 1.1f), RetroPad.UP)
+        held(Rect(arm, arm * 1.9f, arm * 2, w), RetroPad.DOWN)
+        held(Rect(0f, arm, arm * 1.1f, arm * 2), RetroPad.LEFT)
+        held(Rect(arm * 1.9f, arm, w, arm * 2), RetroPad.RIGHT)
+        drawPath(cross, lerp(style.dpad, Color.Black, 0.55f), style = Stroke(1.5.dp.toPx()))
+        // Shallow dimple in the middle and moulded arrows.
+        drawCircle(Brush.radialGradient(listOf(lerp(style.dpad, Color.Black, 0.25f), style.dpad), center = center, radius = arm * 0.34f), arm * 0.34f, center)
+        val c = w / 2f
+        val t = arm * 0.16f
+        val e = arm * 0.36f
+        fun tri(ax: Float, ay: Float, bx: Float, by: Float, cx: Float, cy: Float) =
+            drawPath(Path().apply { moveTo(ax, ay); lineTo(bx, by); lineTo(cx, cy); close() }, style.arrow)
         tri(c, e, c - t, e + t, c + t, e + t)
         tri(c, w - e, c - t, w - e - t, c + t, w - e - t)
         tri(e, c, e + t, c - t, e + t, c + t)
@@ -418,6 +497,10 @@ private fun FaceButtons(layout: PadLayout, regions: Regions, pressed: Set<Int>) 
 
 @Composable
 private fun RoundButton(button: PadButton, regions: Regions, pressed: Set<Int>, size: Dp, modifier: Modifier = Modifier) {
+    LocalConsole.current?.let {
+        ConsoleButton(it, button, regions, button.id in pressed, size, modifier)
+        return
+    }
     val isPressed = button.id in pressed
     val color = skinFace(button.label, LocalPadAccent.current)
     val labelColor = if (LocalPadSkin.current.faces == "color") Color.White else PadLabel
@@ -456,6 +539,59 @@ private fun RoundButton(button: PadButton, regions: Regions, pressed: Set<Int>, 
     }
 }
 
+/** A convex plastic button with a highlight; the letter printed on it or below it, like the real pad. */
+@Composable
+private fun ConsoleButton(style: ConsoleStyle, button: PadButton, regions: Regions, isPressed: Boolean, size: Dp, modifier: Modifier) {
+    val color = style.face(button.label)
+    val scale = pressScale(isPressed)
+    Box(modifier.size(size)) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .onGloballyPositioned { regions.map["btn_${button.id}"] = Region.Buttons(it.boundsInRoot(), listOf(button.id)) }
+                .graphicsLayer {
+                    scaleX = 0.94f + 0.06f * scale
+                    scaleY = 0.94f + 0.06f * scale
+                    translationY = (1f - scale) * 18f
+                }
+                .shadow(if (isPressed) 1.dp else 6.dp, CircleShape)
+                .background(
+                    Brush.radialGradient(
+                        listOf(
+                            lerp(color, Color.White, if (isPressed) 0.05f else 0.22f),
+                            color,
+                            lerp(color, Color.Black, 0.38f),
+                        ),
+                        center = Offset.Unspecified,
+                        radius = Float.POSITIVE_INFINITY,
+                    ),
+                    CircleShape,
+                )
+                .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = if (isPressed) 0.05f else 0.22f), Color.Transparent, Color.Black.copy(alpha = 0.25f))), CircleShape)
+                .border(1.5.dp, lerp(color, Color.Black, 0.5f), CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            val onButton = style.faceLabel(button.label)
+            if (onButton != null) {
+                val symbol = button.label in setOf("△", "○", "✕", "□")
+                Text(
+                    button.label,
+                    color = onButton,
+                    style = TextStyle(fontFamily = InterDisplay, fontWeight = FontWeight.ExtraBold, fontSize = if (symbol) 28.sp else if (button.label.length > 2) 12.sp else 21.sp),
+                )
+            }
+        }
+        if (style.labelBelow != null) {
+            Text(
+                button.label,
+                color = style.labelBelow,
+                style = TextStyle(fontFamily = InterDisplay, fontWeight = FontWeight.ExtraBold, fontSize = 17.sp),
+                modifier = Modifier.align(Alignment.BottomEnd).offset(x = 4.dp, y = 24.dp),
+            )
+        }
+    }
+}
+
 @Composable
 private fun Shoulders(buttons: List<PadButton>, regions: Regions, pressed: Set<Int>, side: String) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -468,7 +604,8 @@ private fun Shoulders(buttons: List<PadButton>, regions: Regions, pressed: Set<I
                 isPressed = b.id in pressed,
                 shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp, bottomStart = 12.dp, bottomEnd = 12.dp),
                 modifier = Modifier.width(if (buttons.size > 1) 68.dp else 84.dp).height(42.dp),
-            ) { Text(b.label, color = PadLabel, style = TextStyle(fontFamily = InterDisplay, fontWeight = FontWeight.Bold, fontSize = 16.sp)) }
+                kind = "shoulder",
+            ) { Text(b.label, color = LocalConsole.current?.shoulderLabel ?: PadLabel, style = TextStyle(fontFamily = InterDisplay, fontWeight = FontWeight.Bold, fontSize = 16.sp)) }
         }
     }
 }
@@ -483,6 +620,28 @@ private fun SelectStart(layout: PadLayout, regions: Regions, pressed: Set<Int>, 
 
 @Composable
 private fun Pill(label: String, id: Int, regions: Regions, pressed: Set<Int>) {
+    val console = LocalConsole.current
+    if (console != null) {
+        // A rubber pill with its name printed on the body beside it.
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            GlassControl(
+                key = "pill_$id",
+                id = id,
+                regions = regions,
+                isPressed = id in pressed,
+                shape = CircleShape,
+                modifier = Modifier.graphicsLayer { rotationZ = console.pillTilt }.width(64.dp).height(20.dp),
+                kind = "pill",
+            ) {}
+            Text(
+                label,
+                color = console.pillLabel,
+                style = TextStyle(fontFamily = InterDisplay, fontWeight = FontWeight.ExtraBold, fontSize = 11.sp, letterSpacing = 1.2.sp),
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+        return
+    }
     GlassControl(
         key = "pill_$id",
         id = id,
@@ -508,7 +667,8 @@ private fun IconControl(key: String, id: Int, regions: Regions, pressed: Set<Int
         isPressed = id in pressed,
         shape = CircleShape,
         modifier = Modifier.size(42.dp),
-    ) { Icon(icon, description, tint = PadLabel) }
+        kind = "icon",
+    ) { Icon(icon, description, tint = LocalConsole.current?.iconTint ?: PadLabel) }
 }
 
 @Composable
@@ -519,11 +679,33 @@ private fun GlassControl(
     isPressed: Boolean,
     shape: Shape,
     modifier: Modifier,
+    kind: String = "",
     content: @Composable () -> Unit,
 ) {
     val accent = LocalPadAccent.current
     val skin = LocalPadSkin.current
     val scale = pressScale(isPressed)
+    val console = LocalConsole.current
+    if (console != null) {
+        val base = when (kind) {
+            "shoulder" -> console.shoulder
+            "pill" -> console.pill
+            else -> console.iconFill
+        }
+        Box(
+            modifier
+                .onGloballyPositioned { regions.map[key] = Region.Buttons(it.boundsInRoot(), listOf(id)) }
+                .graphicsLayer {
+                    scaleX = 0.95f + 0.05f * scale
+                    scaleY = 0.95f + 0.05f * scale
+                }
+                .shadow(if (isPressed) 1.dp else 4.dp, shape)
+                .background(Brush.verticalGradient(listOf(lerp(base, Color.White, if (isPressed) 0.02f else 0.16f), lerp(base, Color.Black, if (isPressed) 0.3f else 0.15f))), shape)
+                .border(1.dp, lerp(base, Color.Black, 0.45f), shape),
+            contentAlignment = Alignment.Center,
+        ) { content() }
+        return
+    }
     Box(
         modifier
             .onGloballyPositioned { regions.map[key] = Region.Buttons(it.boundsInRoot(), listOf(id)) }

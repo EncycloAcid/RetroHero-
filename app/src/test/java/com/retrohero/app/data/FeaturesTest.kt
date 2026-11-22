@@ -89,4 +89,16 @@ class FeaturesTest {
         assertEquals(shot, sources.last())
         assertEquals(game.artUrls, sources.subList(1, sources.size - 1))
     }
+
+    @Test
+    fun artComesFromTheLibretroThumbnailsMirror() {
+        val g = Game("content://x/smb", "Super Mario Bros. (World).nes", "nes", "t", "p", 1)
+        org.junit.Assert.assertEquals(
+            "https://raw.githubusercontent.com/libretro-thumbnails/Nintendo_-_Nintendo_Entertainment_System/HEAD/Named_Boxarts/Super%20Mario%20Bros.%20(World).png",
+            g.artUrls.first(),
+        )
+        // No region in the name: common regions are guessed for box art.
+        val plain = Game("content://x/t", "Tetris.gb", "gb", "t", "p", 1)
+        org.junit.Assert.assertTrue(plain.artUrls.any { it.endsWith("/Named_Boxarts/Tetris%20(World).png") })
+    }
 }

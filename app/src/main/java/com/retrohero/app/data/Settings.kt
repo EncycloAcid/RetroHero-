@@ -81,7 +81,7 @@ class Settings(context: Context) {
 
     /** Touch-pad skin id from [Looks.skins], or "look:<id>" for an imported look. */
     var padSkin: String
-        get() = prefs.getString("pad_skin", "glass")!!
+        get() = prefs.getString("pad_skin", "console")!!
         set(v) = prefs.edit { putString("pad_skin", v) }
 
     /** Also copy in-game screenshots to Pictures/RetroHero. */

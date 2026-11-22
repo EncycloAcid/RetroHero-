@@ -78,6 +78,8 @@ class PolishScreenshotTest {
                         onPress = {},
                         accent = system.color,
                         modifier = Modifier.fillMaxWidth().height(400.dp),
+                        systemId = systemId,
+                        onRewind = {},
                     )
                 }
             }
@@ -88,6 +90,9 @@ class PolishScreenshotTest {
     @Test fun gamepadSnes() = gamepad("snes", "pad_snes")
     @Test fun gamepadPsx() = gamepad("psx", "pad_psx")
     @Test fun gamepadGenesis() = gamepad("genesis", "pad_genesis")
+    @Test fun gamepadNes() = gamepad("nes", "pad_nes")
+    @Test fun gamepadGb() = gamepad("gb", "pad_gb")
+    @Test fun gamepadGba() = gamepad("gba", "pad_gba")
 
     @Test
     fun scanningSkeleton() {

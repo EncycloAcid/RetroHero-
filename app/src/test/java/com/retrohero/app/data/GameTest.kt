@@ -34,4 +34,5 @@ class GameTest {
             assertEquals(ext, 1, Systems.all.count { ext in it.extensions })
         }
     }
+
 }
