@@ -84,6 +84,22 @@ class Settings(context: Context) {
         get() = prefs.getString("pad_skin", "console")!!
         set(v) = prefs.edit { putString("pad_skin", v) }
 
+    private val _reducedMotion = MutableStateFlow(prefs.getBoolean("reduced_motion", false))
+    /** Fewer and calmer animations: no tilt, no spinning, instant transitions where possible. */
+    val reducedMotion: StateFlow<Boolean> = _reducedMotion
+    fun setReducedMotion(on: Boolean) {
+        prefs.edit { putBoolean("reduced_motion", on) }
+        _reducedMotion.value = on
+    }
+
+    private val _tiltEffects = MutableStateFlow(prefs.getBoolean("tilt_effects", true))
+    /** Game boxes on the Shelf move when you tilt your phone. */
+    val tiltEffects: StateFlow<Boolean> = _tiltEffects
+    fun setTiltEffects(on: Boolean) {
+        prefs.edit { putBoolean("tilt_effects", on) }
+        _tiltEffects.value = on
+    }
+
     /** Also copy in-game screenshots to Pictures/RetroHero. */
     var screenshotsToGallery: Boolean
         get() = prefs.getBoolean("screenshots_to_gallery", false)

@@ -22,6 +22,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeUp
@@ -527,4 +528,50 @@ class PolishScreenshotTest {
         compose.mainClock.advanceTimeBy(500)
         save("pad_neon")
     }
+
+    private fun shelfGames() = listOf(
+        "Thwaite (USA).nes" to "nes", "Crystal Quest (USA).sfc" to "snes", "Libbet.gb" to "gb",
+        "Micro City (World).gba" to "gba", "Night Runner (USA).cue" to "psx", "Sonic Blast (USA).md" to "genesis",
+    ).map { sample(it.first, it.second) }
+
+    @Test
+    fun shelf() {
+        val games = shelfGames()
+        compose.setContent {
+            RetroHeroTheme {
+                com.retrohero.app.ui.screens.ShelfScreen(
+                    games = games, stats = emptyMap(), recentIds = emptyList(), favorites = setOf(games[0].id),
+                    tiltEnabled = false, reducedMotion = false, onPlay = {}, onDetails = {},
+                )
+            }
+        }
+        compose.mainClock.advanceTimeBy(800)
+        save("shelf_1")
+        compose.onRoot().performTouchInput { swipe(androidx.compose.ui.geometry.Offset(right * 0.8f, centerY), androidx.compose.ui.geometry.Offset(right * 0.45f, centerY), 400) }
+        compose.mainClock.advanceTimeBy(80)
+        save("shelf_mid_swipe")
+        compose.mainClock.advanceTimeBy(1500)
+        save("shelf_2")
+    }
+
+    private fun openShelf(index: Int, name: String) {
+        val games = shelfGames()
+        compose.setContent {
+            RetroHeroTheme {
+                com.retrohero.app.ui.screens.ShelfScreen(
+                    games = listOf(games[index]), stats = emptyMap(), recentIds = emptyList(), favorites = emptySet(),
+                    tiltEnabled = false, reducedMotion = false, onPlay = {}, onDetails = {},
+                )
+            }
+        }
+        compose.mainClock.advanceTimeBy(800)
+        compose.onRoot().performTouchInput { click(center) }
+        compose.mainClock.advanceTimeBy(500)
+        save(name + "_opening")
+        compose.mainClock.advanceTimeBy(3500)
+        save(name)
+    }
+
+    @Test fun shelfOpenNes() = openShelf(0, "shelf_open_nes")
+    @Test fun shelfOpenPsx() = openShelf(4, "shelf_open_psx")
 }

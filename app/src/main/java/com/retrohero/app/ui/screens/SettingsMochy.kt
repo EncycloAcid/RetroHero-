@@ -95,7 +95,7 @@ private class Category(val id: String, val title: String, val icon: ImageVector,
 
 private val categories = listOf(
     Category("library", "Game folders", Icons.Rounded.Folder, listOf("folders", "add folder", "rescan", "library", "scan")),
-    Category("gameplay", "Gameplay", Icons.Rounded.Tune, listOf("sharp pixels", "haptic", "vibration", "opacity", "touch controls", "fast-forward speed", "auto save", "resume", "screenshots", "gallery", "stick", "d-pad")),
+    Category("gameplay", "Gameplay & comfort", Icons.Rounded.Tune, listOf("reduce motion", "animations", "tilt", "gyroscope", "accessibility", "sharp pixels", "haptic", "vibration", "opacity", "touch controls", "fast-forward speed", "auto save", "resume", "screenshots", "gallery", "stick", "d-pad")),
     Category("controls", "Controls", Icons.Rounded.SportsEsports, listOf("controller", "buttons", "remap", "rebind", "rewind", "gamepad")),
     Category("looks", "Customisation", Icons.Rounded.Palette, listOf("look", "theme", "accent", "colour", "color", "pad skin", "touch buttons", "import look")),
     Category("bios", "BIOS & system files", Icons.Rounded.Memory, listOf("bios", "system files", "playstation", "import bios", "download bios")),

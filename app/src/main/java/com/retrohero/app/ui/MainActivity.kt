@@ -35,6 +35,9 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import com.retrohero.app.ui.components.MiniPlayerSpace
 import com.retrohero.app.ui.screens.LibraryScreen
+import com.retrohero.app.ui.screens.ShelfScreen
+import androidx.compose.material.icons.filled.ViewCarousel
+import androidx.compose.material.icons.outlined.ViewCarousel
 import com.retrohero.app.ui.screens.StatsScreen
 import com.retrohero.app.ui.screens.RecapScreen
 import com.retrohero.app.data.Looks
@@ -196,6 +199,7 @@ private fun shareScreenshot(context: android.content.Context, file: java.io.File
 
 private enum class Tab(val label: String, val title: String, val selected: ImageVector, val unselected: ImageVector) {
     Home("Home", "RetroHero", Icons.Filled.Home, Icons.Outlined.Home),
+    Shelf("Shelf", "Shelf", Icons.Filled.ViewCarousel, Icons.Outlined.ViewCarousel),
     Games("Search", "Search", Icons.Filled.Search, Icons.Outlined.Search),
     Library("Library", "Library", Icons.Filled.VideoLibrary, Icons.Outlined.VideoLibrary),
     Cores("Cores", "Emulators", Icons.Filled.Extension, Icons.Outlined.Extension),
@@ -230,6 +234,8 @@ private fun App(vm: AppViewModel) {
     var recap by remember { mutableStateOf<Pair<com.retrohero.app.ui.screens.Period, com.retrohero.app.data.PlaySummary>?>(null) }
     var naming by remember { mutableStateOf(false) }
     val shots by vm.shots.collectAsStateWithLifecycle()
+    val reducedMotion by vm.settings.reducedMotion.collectAsStateWithLifecycle()
+    val tiltEffects by vm.settings.tiltEffects.collectAsStateWithLifecycle()
     val history by vm.history.collectAsStateWithLifecycle()
     // Dragging the mini player down hides it until you play something else.
     var miniHidden by rememberSaveable(recents.firstOrNull()?.id) { mutableStateOf(false) }
@@ -296,7 +302,7 @@ private fun App(vm: AppViewModel) {
     val isHome = !albumOpen && tab == Tab.Home && games.isNotEmpty()
     // Pages that run under the status bar with their own big titles, like the music app's.
     val immersive = isHome || (!albumOpen && (tab == Tab.Library || tab == Tab.Settings))
-    val miniGame = recents.firstOrNull()?.takeIf { !miniHidden && !albumOpen && tab != Tab.Settings && sheetFor == null && !statsOpen && recap == null }
+    val miniGame = recents.firstOrNull()?.takeIf { !miniHidden && !albumOpen && tab != Tab.Settings && tab != Tab.Shelf && sheetFor == null && !statsOpen && recap == null }
     val navBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val glass = rememberHazeState()
     val floatingNavSpace = (if (wide || albumOpen) 0.dp else FloatingNavHeight + 16.dp + navBarInset) +
@@ -498,6 +504,16 @@ private fun App(vm: AppViewModel) {
                     onDownload = { vm.openDownload(AppViewModel.DownloadKind.Game) },
                     onPlay = { sheetFor = it.id },
                     onGameOptions = { menuFor = it.id },
+                )
+                key == Tab.Shelf.name -> ShelfScreen(
+                    games = games,
+                    stats = stats,
+                    recentIds = recents.map { it.id },
+                    favorites = favoriteIds,
+                    tiltEnabled = tiltEffects,
+                    reducedMotion = reducedMotion,
+                    onPlay = { vm.play(it) },
+                    onDetails = { sheetFor = it.id },
                 )
                 key == Tab.Library.name -> LibraryScreen(
                     games = games,
