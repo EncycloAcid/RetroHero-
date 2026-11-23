@@ -164,7 +164,7 @@ fun LibraryScreen(
                     span {
                         com.retrohero.app.ui.components.SectionTitle(
                             "Pinned",
-                            Modifier.padding(top = 20.dp),
+                            Modifier.padding(top = 12.dp),
                             count = favorites.size,
                             index = 1,
                             verticalPadding = 0.dp,
@@ -172,6 +172,27 @@ fun LibraryScreen(
                     }
                     items(favorites.take(9), key = { "pin_" + it.id }) { g ->
                         com.retrohero.app.ui.components.GameCard(g, onClick = { onOpenGame(g) }, subtitle = g.system?.shortName, onLongClick = { onOptions(g) }, onPlay = { onPlay(g) })
+                    }
+                }
+                if (systems.isNotEmpty()) {
+                    span {
+                        com.retrohero.app.ui.components.SectionTitle(
+                            "Consoles",
+                            Modifier.padding(top = 12.dp),
+                            count = systems.size,
+                            index = 2,
+                            onClick = { tab = LibraryTab.Systems },
+                            verticalPadding = 0.dp,
+                        )
+                    }
+                    itemsIndexed(systems, key = { _, s -> "all_sys_" + s.id }, span = { _, _ -> GridItemSpan(maxLineSpan) }) { index, s ->
+                        ListRow(
+                            index = index + 1,
+                            art = { SystemTile(s) },
+                            title = s.name,
+                            subtitle = "${s.manufacturer} · ${counts[s.id] ?: 0} ${if ((counts[s.id] ?: 0) == 1) "game" else "games"}",
+                            onClick = { onOpenSystem(s) },
+                        )
                     }
                 }
             }
@@ -351,31 +372,29 @@ private fun StatsCard(history: List<HistoryEntry>, onClick: () -> Unit) {
 
 @Composable
 private fun ListRow(index: Int, art: @Composable () -> Unit, title: String, subtitle: String, onClick: () -> Unit, onLongClick: (() -> Unit)? = null) {
-    Column(Modifier.fillMaxWidth()) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(Ascend.Radius.Card))
-                .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-                .padding(vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            ArchiveLabel(index.toString().padStart(2, '0'), Modifier.width(24.dp), color = com.retrohero.app.ui.theme.Tone.Faint)
-            Spacer(Modifier.width(16.dp))
-            val thumbnailShape = RoundedCornerShape(Ascend.Radius.Cover)
-            Box(
-                Modifier.size(44.dp).clip(thumbnailShape).background(com.retrohero.app.ui.theme.Tone.Raised)
-                    .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, thumbnailShape),
-            ) { art() }
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleMedium, color = com.retrohero.app.ui.theme.Tone.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = com.retrohero.app.ui.theme.Tone.Muted, maxLines = 1)
-            }
-            Spacer(Modifier.width(8.dp))
-            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = com.retrohero.app.ui.theme.Tone.Faint, modifier = Modifier.size(18.dp))
+    val cardShape = RoundedCornerShape(Ascend.Radius.Card)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(cardShape)
+            .background(com.retrohero.app.ui.theme.Tone.Surface)
+            .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, cardShape)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .padding(horizontal = 14.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val thumbnailShape = RoundedCornerShape(Ascend.Radius.Cover)
+        Box(
+            Modifier.size(44.dp).clip(thumbnailShape).background(com.retrohero.app.ui.theme.Tone.Raised)
+                .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, thumbnailShape),
+        ) { art() }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, color = com.retrohero.app.ui.theme.Tone.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = com.retrohero.app.ui.theme.Tone.Muted, maxLines = 1)
         }
-        HorizontalDivider(color = Page.Divider)
+        Spacer(Modifier.width(8.dp))
+        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = com.retrohero.app.ui.theme.Tone.Muted, modifier = Modifier.size(18.dp))
     }
 }
 

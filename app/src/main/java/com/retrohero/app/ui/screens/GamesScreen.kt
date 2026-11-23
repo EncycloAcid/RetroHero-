@@ -182,7 +182,7 @@ fun GamesScreen(
                     Box(Modifier.weight(1f)) { SearchField(query, games.size) { query = it } }
                     val filtersActive = systemFilter != null || onlyFavourites || onlyUnplayed
                     Box {
-                        com.retrohero.app.ui.components.Key("Filters", { filtersOpen = !filtersOpen })
+                        com.retrohero.app.ui.components.Key("Sort", { filtersOpen = !filtersOpen })
                         if (filtersActive) {
                             Box(
                                 Modifier
@@ -236,18 +236,31 @@ fun GamesScreen(
             fullWidth {
                 com.retrohero.app.ui.components.SectionTitle(
                     "Jump back in",
-                    Modifier.padding(top = 20.dp),
+                    Modifier.padding(top = 8.dp),
                     count = recents.size,
                     index = 1,
                     verticalPadding = 0.dp,
                 )
             }
-            fullWidth { RecentCarousel(recents, onPlay, onGameOptions) }
+            fullWidth {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    items(recents, key = { "rec_" + it.id }) { game ->
+                        GameCard(
+                            game = game,
+                            onClick = { onPlay(game) },
+                            width = 116.dp,
+                            subtitle = game.system?.shortName,
+                            onLongClick = { onGameOptions(game) },
+                            onPlay = onQuickPlay?.let { { it(game) } },
+                        )
+                    }
+                }
+            }
         }
         fullWidth {
             com.retrohero.app.ui.components.SectionTitle(
                 if (browsing) "All games" else "Results",
-                Modifier.padding(top = 20.dp),
+                Modifier.padding(top = 8.dp),
                 count = filtered.size,
                 index = 2,
                 verticalPadding = 0.dp,

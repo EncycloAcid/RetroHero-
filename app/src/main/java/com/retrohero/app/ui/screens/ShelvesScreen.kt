@@ -1,6 +1,7 @@
 package com.retrohero.app.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -116,10 +117,19 @@ fun ShelvesScreen(
 
 @Composable
 private fun Shelf(row: ShelfRow, index: Int, onOpenGame: (Game) -> Unit, onPlay: (Game) -> Unit, onOptions: (Game) -> Unit, subtitle: (Game) -> String?) {
-    Column(Modifier.fillMaxWidth().padding(top = 24.dp)) {
+    val panelShape = RoundedCornerShape(Ascend.Radius.Hero)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = Page.Gutter, end = Page.Gutter, top = 16.dp)
+            .clip(panelShape)
+            .background(com.retrohero.app.ui.theme.Tone.Surface)
+            .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, panelShape)
+            .padding(vertical = 14.dp),
+    ) {
         SectionTitle(
             row.title,
-            Modifier.padding(horizontal = Page.Gutter),
+            Modifier.padding(horizontal = 14.dp),
             count = row.count,
             index = index,
             onClick = row.onOpen,
@@ -128,25 +138,27 @@ private fun Shelf(row: ShelfRow, index: Int, onOpenGame: (Game) -> Unit, onPlay:
         if (row.games.isEmpty()) {
             Box(
                 Modifier
-                    .padding(start = Page.Gutter, end = Page.Gutter, top = 12.dp)
+                    .padding(start = 14.dp, end = 14.dp, top = 12.dp)
                     .fillMaxWidth()
-                    .height(72.dp)
-                    .ascendCard(),
+                    .height(64.dp)
+                    .clip(RoundedCornerShape(Ascend.Radius.Card))
+                    .background(com.retrohero.app.ui.theme.Tone.Bg)
+                    .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, RoundedCornerShape(Ascend.Radius.Card)),
                 contentAlignment = Alignment.Center,
             ) {
                 Text("Long-press a game and choose Add to put it here", style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = Ascend.Muted)
             }
         } else {
             LazyRow(
-                contentPadding = PaddingValues(horizontal = Page.Gutter),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(horizontal = 14.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
                 modifier = Modifier.padding(top = 12.dp),
             ) {
                 items(row.games, key = { it.id }) { game ->
                     GameCard(
                         game,
                         onClick = { onOpenGame(game) },
-                        width = 118.dp,
+                        width = 114.dp,
                         subtitle = subtitle(game),
                         onLongClick = { onOptions(game) },
                         onPlay = { onPlay(game) },
