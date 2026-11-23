@@ -23,6 +23,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.graphics.Color
 import com.retrohero.app.ui.components.glossCard
@@ -111,15 +114,29 @@ private fun CoreGroup(
                     when (state) {
                         is CoreState.Downloading -> CircularWavyProgressIndicator(
                             progress = { state.progress },
-                            modifier = Modifier.size(40.dp),
+                            modifier = Modifier.size(38.dp),
                         )
                         is CoreState.Installed -> if (!state.bundled) {
-                            IconButton(onClick = { onDelete(core) }, shapes = IconButtonDefaults.shapes()) {
-                                Icon(Icons.Outlined.Delete, "Delete ${core.displayName}")
+                            IconButton(
+                                onClick = { onDelete(core) },
+                                shapes = IconButtonDefaults.shapes(),
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .background(com.retrohero.app.ui.theme.Tone.Raised, CircleShape)
+                                    .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, CircleShape),
+                            ) {
+                                Icon(Icons.Outlined.Delete, "Delete ${core.displayName}", tint = com.retrohero.app.ui.theme.Tone.Ink, modifier = Modifier.size(18.dp))
                             }
                         }
-                        else -> FilledTonalIconButton(onClick = { onDownload(core) }, shapes = IconButtonDefaults.shapes()) {
-                            Icon(Icons.Outlined.CloudDownload, "Download ${core.displayName}")
+                        else -> IconButton(
+                            onClick = { onDownload(core) },
+                            shapes = IconButtonDefaults.shapes(),
+                            modifier = Modifier
+                                .size(38.dp)
+                                .background(com.retrohero.app.ui.theme.Tone.Raised, CircleShape)
+                                .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, CircleShape),
+                        ) {
+                            Icon(Icons.Outlined.CloudDownload, "Download ${core.displayName}", tint = com.retrohero.app.ui.theme.Tone.Ink, modifier = Modifier.size(18.dp))
                         }
                     }
                 },

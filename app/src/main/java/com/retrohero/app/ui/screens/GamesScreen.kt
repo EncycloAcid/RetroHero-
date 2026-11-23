@@ -164,12 +164,13 @@ fun GamesScreen(
         )
     }
     val browsing = query.isBlank() && systemFilter == null && !onlyFavourites && !onlyUnplayed
+    val showScroller = sort == com.retrohero.app.data.GameSort.Name && filtered.size > 12
 
     Box(Modifier.fillMaxSize().background(com.retrohero.app.ui.theme.Tone.Bg)) {
     LazyVerticalGrid(
         state = grid,
         columns = GridCells.Adaptive(108.dp),
-        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp + LocalNavSpace.current),
+        contentPadding = PaddingValues(start = 20.dp, end = if (showScroller) 28.dp else 20.dp, bottom = 24.dp + LocalNavSpace.current),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxSize(),
@@ -279,11 +280,11 @@ fun GamesScreen(
         }
     }
     // A–Z fast scroller along the right edge when sorted by name.
-    if (sort == com.retrohero.app.data.GameSort.Name && filtered.size > 12) {
+    if (showScroller) {
         AlphabetScroller(
             letters = filtered.map { it.title.firstOrNull()?.uppercaseChar()?.let { c -> if (c.isLetter()) c else '#' } ?: '#' },
             onJump = { index -> scope.launch { grid.scrollToItem((grid.layoutInfo.totalItemsCount - filtered.size + index).coerceAtLeast(0)) } },
-            modifier = Modifier.align(Alignment.CenterEnd).padding(bottom = LocalNavSpace.current),
+            modifier = Modifier.align(Alignment.CenterEnd).padding(top = 88.dp, bottom = LocalNavSpace.current + 12.dp),
         )
     }
     }
@@ -301,7 +302,8 @@ private fun AlphabetScroller(letters: List<Char>, onJump: (Int) -> Unit, modifie
         modifier
             .padding(end = 4.dp)
             .clip(CircleShape)
-            .background(com.retrohero.app.ui.theme.Tone.Ink.copy(alpha = if (active != null) 0.1f else 0.04f))
+            .background(com.retrohero.app.ui.theme.Tone.Surface.copy(alpha = if (active != null) 0.96f else 0.82f))
+            .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, CircleShape)
             .pointerInput(present) {
                 fun pick(y: Float) {
                     val i = ((y / size.height) * present.size).toInt().coerceIn(0, present.lastIndex)
@@ -322,15 +324,15 @@ private fun AlphabetScroller(letters: List<Char>, onJump: (Int) -> Unit, modifie
                     active = null
                 }
             }
-            .padding(vertical = 8.dp, horizontal = 4.dp),
+            .padding(vertical = 6.dp, horizontal = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         present.forEach { c ->
             Text(
                 c.toString(),
-                style = MaterialTheme.typography.labelSmall,
-                color = if (c == active) com.retrohero.app.ui.theme.Tone.Ink else com.retrohero.app.ui.theme.Tone.Muted,
-                modifier = Modifier.padding(vertical = 1.dp).semantics { contentDescription = "Jump to $c" },
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                color = if (c == active) com.retrohero.app.ui.components.Ascend.accent else com.retrohero.app.ui.theme.Tone.Muted,
+                modifier = Modifier.padding(vertical = 0.5.dp).semantics { contentDescription = "Jump to $c" },
             )
         }
     }

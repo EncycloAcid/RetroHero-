@@ -5,6 +5,7 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -151,10 +152,20 @@ fun CollectionScreen(
         var menu by remember { mutableStateOf(false) }
         Box {
             Box(
-                Modifier.size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.3f)).clickable { menu = true },
+                Modifier
+                    .size(42.dp)
+                    .clip(CircleShape)
+                    .background(lerp(Color.Black.copy(alpha = 0.35f), com.retrohero.app.ui.theme.Tone.Raised, progress))
+                    .clickable { menu = true },
                 contentAlignment = Alignment.Center,
             ) { Icon(Icons.Rounded.MoreVert, "Collection options", tint = lerp(Color.White, com.retrohero.app.ui.theme.Tone.Ink, progress)) }
-            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            DropdownMenu(
+                expanded = menu,
+                onDismissRequest = { menu = false },
+                shape = RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card),
+                containerColor = com.retrohero.app.ui.theme.Tone.Raised,
+                border = androidx.compose.foundation.BorderStroke(1.dp, com.retrohero.app.ui.theme.Tone.Line),
+            ) {
                 DropdownMenuItem(text = { Text("Rename") }, leadingIcon = { Icon(Icons.Rounded.Edit, null) }, onClick = { menu = false; onRename() })
                 DropdownMenuItem(text = { Text("Delete collection") }, leadingIcon = { Icon(Icons.Rounded.Delete, null) }, onClick = { menu = false; onDelete() })
             }
@@ -182,7 +193,7 @@ private fun AlbumScreen(
     barActions: @Composable (Float) -> Unit = {},
 ) {
     val density = LocalDensity.current
-    val headerHeight = (LocalConfiguration.current.screenHeightDp * 0.55f).dp
+    val headerHeight = (LocalConfiguration.current.screenHeightDp * 0.50f).dp
     val headerPx = with(density) { headerHeight.toPx() }
     val tint = lerp(color, Color.Black, 0.45f)
     val list = rememberLazyListState()
@@ -201,23 +212,7 @@ private fun AlbumScreen(
             contentPadding = PaddingValues(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp),
             modifier = Modifier
                 .fillMaxSize()
-                .hazeSource(glass)
-                .drawBehind {
-                    // The system colour continues below the header and fades to black.
-                    val top = if (list.firstVisibleItemIndex == 0) headerPx - list.firstVisibleItemScrollOffset else -1f
-                    if (top > -headerPx) {
-                        drawRect(
-                            Brush.verticalGradient(
-                                0f to tint,
-                                0.4f to tint.copy(alpha = 0.35f),
-                                1f to Color.Transparent,
-                                startY = top,
-                                endY = top + 420.dp.toPx(),
-                            ),
-                            topLeft = Offset(0f, top),
-                        )
-                    }
-                },
+                .hazeSource(glass),
         ) {
             item(key = "header") {
                 Header(title, tag, subtitle, color, emptyShape(), games, tint, headerHeight, onPlayRandom)
@@ -230,42 +225,55 @@ private fun AlbumScreen(
                     modifier = Modifier.padding(horizontal = 22.dp, vertical = 28.dp),
                 )
             }
-            items(games, key = { it.id }) { game ->
+            items(games.size, key = { games[it].id }) { index ->
+                val game = games[index]
                 SwipeRow(
                     isFavorite = game.id in favorites,
                     onPlay = { onPlay(game) },
                     onToggleFavorite = { onSwipeLeft(game) },
                     removeLabel = removeLabel,
                 ) {
-                    GameRow(game, game.id in favorites, onOpen = { onOpenGame(game) }, onPlay = { onPlay(game) }, onLongPress = { onOptions(game) })
+                    GameRow(
+                        index = index + 1,
+                        game = game,
+                        isFavorite = game.id in favorites,
+                        onOpen = { onOpenGame(game) },
+                        onPlay = { onPlay(game) },
+                        onLongPress = { onOptions(game) },
+                    )
                 }
             }
         }
 
         // The bar: clear over the header, frosted with a title once the header has gone.
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .height(statusTop + 60.dp)
-                .frostedGlass(glass, RectangleShape) { progress }
-                .windowInsetsPadding(WindowInsets.statusBars)
-                .padding(horizontal = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
+        Column(Modifier.fillMaxWidth()) {
+            Row(
                 Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.3f * (1f - 0.5f * progress)))
-                    .clickable(onClick = onBack),
-                contentAlignment = Alignment.Center,
-            ) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = lerp(Color.White, com.retrohero.app.ui.theme.Tone.Ink, progress)) }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f).graphicsLayer { alpha = progress }) {
-                Text(title, style = MaterialTheme.typography.titleMediumEmphasized, color = com.retrohero.app.ui.theme.Tone.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("${games.size} games", style = MaterialTheme.typography.bodySmall, color = com.retrohero.app.ui.theme.Tone.Muted)
+                    .fillMaxWidth()
+                    .height(statusTop + 60.dp)
+                    .frostedGlass(glass, RectangleShape) { progress }
+                    .windowInsetsPadding(WindowInsets.statusBars)
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    Modifier
+                        .size(42.dp)
+                        .clip(CircleShape)
+                        .background(lerp(Color.Black.copy(alpha = 0.35f), com.retrohero.app.ui.theme.Tone.Raised, progress))
+                        .clickable(onClick = onBack),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = lerp(Color.White, com.retrohero.app.ui.theme.Tone.Ink, progress)) }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f).graphicsLayer { alpha = progress }) {
+                    Text(title, style = MaterialTheme.typography.titleMediumEmphasized, color = com.retrohero.app.ui.theme.Tone.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text("${games.size} games", style = MaterialTheme.typography.bodySmall, color = com.retrohero.app.ui.theme.Tone.Muted)
+                }
+                barActions(progress)
             }
-            barActions(progress)
+            if (progress > 0.5f) {
+                Box(Modifier.fillMaxWidth().height(1.dp).background(com.retrohero.app.ui.components.Page.Divider.copy(alpha = progress)))
+            }
         }
     }
 }
@@ -353,30 +361,67 @@ private fun Header(
 }
 
 @Composable
-private fun GameRow(game: Game, isFavorite: Boolean, onOpen: () -> Unit, onPlay: () -> Unit, onLongPress: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .combinedClickable(onClick = onOpen, onLongClick = onLongPress)
-            .padding(horizontal = 22.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        GameArt(game, Modifier.size(52.dp).clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Cover)), showTag = false)
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(game.title, style = MaterialTheme.typography.titleMedium, color = com.retrohero.app.ui.theme.Tone.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                if (isFavorite) Icon(Icons.Rounded.Favorite, "Pinned", tint = Salmon, modifier = Modifier.padding(start = 6.dp).size(14.dp))
-            }
-            Text(
-                game.fileName.substringAfterLast('.').uppercase() + if (game.isLocal) " · Downloaded" else "",
-                style = MaterialTheme.typography.bodySmall,
-                color = com.retrohero.app.ui.theme.Tone.Muted,
+private fun GameRow(
+    index: Int,
+    game: Game,
+    isFavorite: Boolean,
+    onOpen: () -> Unit,
+    onPlay: () -> Unit,
+    onLongPress: () -> Unit,
+) {
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .combinedClickable(onClick = onOpen, onLongClick = onLongPress)
+                .padding(horizontal = 20.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            com.retrohero.app.ui.components.ArchiveLabel(
+                index.toString().padStart(2, '0'),
+                Modifier.width(24.dp),
+                color = com.retrohero.app.ui.theme.Tone.Faint,
             )
+            Spacer(Modifier.width(10.dp))
+            val coverShape = RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Cover)
+            GameArt(
+                game,
+                Modifier
+                    .size(50.dp)
+                    .clip(coverShape)
+                    .background(com.retrohero.app.ui.theme.Tone.Raised)
+                    .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, coverShape),
+                showTag = false,
+            )
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(game.title, style = MaterialTheme.typography.titleMedium, color = com.retrohero.app.ui.theme.Tone.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    if (isFavorite) Icon(Icons.Rounded.Favorite, "Pinned", tint = Salmon, modifier = Modifier.padding(start = 6.dp).size(14.dp))
+                }
+                Text(
+                    game.fileName.substringAfterLast('.').uppercase() + if (game.isLocal) " · Downloaded" else "",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = com.retrohero.app.ui.theme.Tone.Muted,
+                )
+            }
+            Spacer(Modifier.width(10.dp))
+            Box(
+                Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(com.retrohero.app.ui.theme.Tone.Raised)
+                    .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, CircleShape)
+                    .clickable(onClick = onPlay),
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Rounded.PlayArrow, "Play ${game.title}", tint = com.retrohero.app.ui.theme.Tone.Ink, modifier = Modifier.size(20.dp)) }
         }
         Box(
-            Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onPlay),
-            contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Rounded.PlayArrow, "Play ${game.title}", tint = com.retrohero.app.ui.theme.Tone.Ink) }
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .height(1.dp)
+                .background(com.retrohero.app.ui.components.Page.Divider),
+        )
     }
 }

@@ -45,8 +45,10 @@ import com.retrohero.app.ui.theme.Tone
 import dev.chrisbanes.haze.HazeState
 import kotlinx.coroutines.launch
 
+import androidx.compose.ui.draw.shadow
+
 /** Height of the mini player pill, plus the gap above the nav bar. */
-val MiniPlayerSpace = 64.dp + 10.dp
+val MiniPlayerSpace = 64.dp + 12.dp
 
 /**
  * The last game you played as a floating frosted pill above the nav bar, like the music app's
@@ -75,7 +77,13 @@ fun MiniPlayer(
                 translationY = drag.value
                 alpha = 1f - (drag.value / 120.dp.toPx()).coerceIn(0f, 0.8f)
             }
-            .background(Ascend.Surface, shape)
+            .shadow(
+                elevation = if (Tone.isDark) 10.dp else 6.dp,
+                shape = shape,
+                ambientColor = Color.Black.copy(alpha = if (Tone.isDark) 0.45f else 0.14f),
+                spotColor = Color.Black.copy(alpha = if (Tone.isDark) 0.55f else 0.18f),
+            )
+            .background(Tone.Raised, shape)
             .border(1.dp, Tone.Line, shape)
             .clip(shape)
             .then(if (glass != null) Modifier.frostedGlass(glass, shape) { 1f } else Modifier)
@@ -106,7 +114,14 @@ fun MiniPlayer(
             .padding(start = 8.dp, end = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        GameArt(game, Modifier.size(48.dp).clip(RoundedCornerShape(Ascend.Radius.Cover)), showTag = false)
+        GameArt(
+            game,
+            Modifier
+                .size(48.dp)
+                .clip(RoundedCornerShape(Ascend.Radius.Cover))
+                .border(1.dp, Tone.Line, RoundedCornerShape(Ascend.Radius.Cover)),
+            showTag = false,
+        )
         Spacer(Modifier.width(12.dp))
         Column(
             Modifier
@@ -130,8 +145,12 @@ fun MiniPlayer(
         }
         Spacer(Modifier.width(8.dp))
         Box(
-            Modifier.size(48.dp).clip(CircleShape).clickable(onClick = onPlay),
+            Modifier
+                .size(38.dp)
+                .clip(CircleShape)
+                .background(Ascend.accent)
+                .clickable(onClick = onPlay),
             contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Rounded.PlayArrow, "Resume ${game.title}", tint = Tone.Ink, modifier = Modifier.size(26.dp)) }
+        ) { Icon(Icons.Rounded.PlayArrow, "Resume ${game.title}", tint = Ascend.onAccent, modifier = Modifier.size(22.dp)) }
     }
 }

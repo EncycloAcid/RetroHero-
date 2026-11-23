@@ -33,6 +33,8 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.rememberCoroutineScope
@@ -445,18 +447,11 @@ private fun App(vm: AppViewModel) {
     Box(Modifier.fillMaxSize().emberBackground()) {
     Row(Modifier.fillMaxSize()) {
         if (wide && !albumOpen) {
-            // Landscape / large screens: an expressive navigation rail instead of the bottom bar.
-            WideNavigationRail(modifier = Modifier.fillMaxHeight(), colors = WideNavigationRailDefaults.colors(containerColor = Color.Transparent)) {
-                Tab.entries.forEach { t ->
-                    WideNavigationRailItem(
-                        selected = tab == t,
-                        onClick = { tab = t },
-                        icon = { Icon(if (tab == t) t.selected else t.unselected, null) },
-                        label = { Text(t.label) },
-                        railExpanded = false,
-                    )
-                }
-            }
+            com.retrohero.app.ui.components.InstrumentNavRail(
+                items = navigationItems,
+                selected = tab.ordinal,
+                onSelect = { tab = Tab.entries[it] },
+            )
         }
     Box(Modifier.weight(1f).fillMaxHeight()) {
     Scaffold(
@@ -589,9 +584,15 @@ private fun App(vm: AppViewModel) {
                                     containerColor = com.retrohero.app.ui.theme.Tone.Raised,
                                     contentColor = com.retrohero.app.ui.theme.Tone.Ink,
                                 ),
-                                modifier = Modifier.size(46.dp),
+                                modifier = Modifier.size(46.dp).border(1.dp, com.retrohero.app.ui.theme.Tone.Line, CircleShape),
                             ) { Icon(Icons.Rounded.Add, "Add games") }
-                            DropdownMenu(expanded = addMenu, onDismissRequest = { addMenu = false }, shape = MaterialTheme.shapes.large) {
+                            DropdownMenu(
+                                expanded = addMenu,
+                                onDismissRequest = { addMenu = false },
+                                shape = RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card),
+                                containerColor = com.retrohero.app.ui.theme.Tone.Raised,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, com.retrohero.app.ui.theme.Tone.Line),
+                            ) {
                                 DropdownMenuItem(
                                     text = { Text("Download from link") },
                                     leadingIcon = { Icon(Icons.Outlined.Download, null) },

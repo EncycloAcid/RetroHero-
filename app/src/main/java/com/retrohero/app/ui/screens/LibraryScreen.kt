@@ -68,6 +68,7 @@ import com.retrohero.app.ui.components.glossCard
 import com.retrohero.app.ui.components.LocalNavSpace
 import com.retrohero.app.ui.components.press3D
 import com.retrohero.app.ui.theme.Inter
+import com.retrohero.app.ui.theme.tag
 import java.io.File
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -324,28 +325,31 @@ private fun StatsCard(history: List<HistoryEntry>, onClick: () -> Unit) {
 
 @Composable
 private fun ListRow(index: Int, art: @Composable () -> Unit, title: String, subtitle: String, onClick: () -> Unit, onLongClick: (() -> Unit)? = null) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(Ascend.Radius.Card))
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(vertical = 3.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        ArchiveLabel(index.toString().padStart(2, '0'), Modifier.width(24.dp), color = com.retrohero.app.ui.theme.Tone.Faint)
-        Spacer(Modifier.width(16.dp))
-        val thumbnailShape = RoundedCornerShape(Ascend.Radius.Cover)
-        Box(
-            Modifier.size(44.dp).clip(thumbnailShape).background(com.retrohero.app.ui.theme.Tone.Raised)
-                .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, thumbnailShape),
-        ) { art() }
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, color = com.retrohero.app.ui.theme.Tone.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = com.retrohero.app.ui.theme.Tone.Muted, maxLines = 1)
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(Ascend.Radius.Card))
+                .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+                .padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ArchiveLabel(index.toString().padStart(2, '0'), Modifier.width(24.dp), color = com.retrohero.app.ui.theme.Tone.Faint)
+            Spacer(Modifier.width(16.dp))
+            val thumbnailShape = RoundedCornerShape(Ascend.Radius.Cover)
+            Box(
+                Modifier.size(44.dp).clip(thumbnailShape).background(com.retrohero.app.ui.theme.Tone.Raised)
+                    .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, thumbnailShape),
+            ) { art() }
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium, color = com.retrohero.app.ui.theme.Tone.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = com.retrohero.app.ui.theme.Tone.Muted, maxLines = 1)
+            }
+            Spacer(Modifier.width(8.dp))
+            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = com.retrohero.app.ui.theme.Tone.Faint, modifier = Modifier.size(18.dp))
         }
-        Spacer(Modifier.width(8.dp))
-        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = com.retrohero.app.ui.theme.Tone.Faint, modifier = Modifier.size(18.dp))
+        HorizontalDivider(color = Page.Divider)
     }
 }
 
@@ -355,6 +359,10 @@ private fun SystemTile(system: GameSystem) {
         Modifier.fillMaxSize().background(com.retrohero.app.ui.theme.Tone.Surface).border(1.dp, com.retrohero.app.ui.theme.Tone.Line, RoundedCornerShape(Ascend.Radius.Card)),
         contentAlignment = Alignment.Center,
     ) {
-        Text(system.shortName.take(4), style = TextStyle(fontFamily = com.retrohero.app.ui.theme.PixelFont, fontSize = 9.sp), color = com.retrohero.app.ui.theme.Tone.Ink)
+        Text(
+            system.tag,
+            style = TextStyle(fontFamily = com.retrohero.app.ui.theme.PixelFont, fontSize = 9.sp),
+            color = com.retrohero.app.ui.theme.Tone.Ink,
+        )
     }
 }
