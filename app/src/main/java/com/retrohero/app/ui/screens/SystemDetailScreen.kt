@@ -1,5 +1,6 @@
 package com.retrohero.app.ui.screens
 
+import com.retrohero.app.ui.components.emberBackground
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -194,7 +195,7 @@ private fun AlbumScreen(
     }
     val progress by animateFloatAsState(if (collapsed) 1f else 0f, tween(700, easing = CollapseEasing), label = "collapse")
 
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    Box(Modifier.fillMaxSize().emberBackground()) {
         LazyColumn(
             state = list,
             contentPadding = PaddingValues(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 24.dp),

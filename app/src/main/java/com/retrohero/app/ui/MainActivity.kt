@@ -43,7 +43,11 @@ import kotlinx.coroutines.Dispatchers
 import com.retrohero.app.ui.components.MiniPlayerSpace
 import com.retrohero.app.ui.screens.LibraryScreen
 import com.retrohero.app.ui.screens.ShelfScreen
+import androidx.compose.material.icons.filled.ViewAgenda
+import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.filled.ViewCarousel
+import androidx.compose.material.icons.outlined.ViewAgenda
 import androidx.compose.material.icons.outlined.ViewCarousel
 import com.retrohero.app.ui.screens.StatsScreen
 import com.retrohero.app.ui.screens.RecapScreen
@@ -109,6 +113,8 @@ import com.retrohero.app.ui.components.LaunchIntroOverlay
 import com.retrohero.app.ui.components.LaunchIntroState
 import com.retrohero.app.ui.components.LocalLaunchIntro
 import com.retrohero.app.ui.components.topGlow
+import com.retrohero.app.ui.components.emberBackground
+import com.retrohero.app.ui.screens.ShelvesScreen
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -209,9 +215,9 @@ private fun shareScreenshot(context: android.content.Context, file: java.io.File
 
 private enum class Tab(val label: String, val title: String, val selected: ImageVector, val unselected: ImageVector) {
     Home("Home", "RetroHero", Icons.Filled.Home, Icons.Outlined.Home),
-    Shelf("Shelf", "Shelf", Icons.Filled.ViewCarousel, Icons.Outlined.ViewCarousel),
+    Shelf("Shelves", "Shelves", Icons.Filled.ViewAgenda, Icons.Outlined.ViewAgenda),
     Games("Search", "Search", Icons.Filled.Search, Icons.Outlined.Search),
-    Library("Library", "Library", Icons.Filled.VideoLibrary, Icons.Outlined.VideoLibrary),
+    Library("Library", "Library", Icons.Filled.Layers, Icons.Outlined.Layers),
     Cores("Cores", "Emulators", Icons.Filled.Extension, Icons.Outlined.Extension),
     Settings("Settings", "Settings", Icons.Filled.Settings, Icons.Outlined.Settings),
 }
@@ -236,6 +242,9 @@ private fun App(vm: AppViewModel) {
 
     var tab by rememberSaveable { mutableStateOf(Tab.entries.firstOrNull { it.name == vm.settings.lastTab } ?: Tab.Home) }
     LaunchedEffect(tab) { vm.settings.lastTab = tab.name }
+    // Shelves tab: rows of shelves, or the 3D cover flow / spine wall.
+    var shelfFlow by rememberSaveable { mutableStateOf(false) }
+    BackHandler(enabled = shelfFlow && tab == Tab.Shelf) { shelfFlow = false }
     var openSystemId by rememberSaveable { mutableStateOf<String?>(null) }
     var openCollectionId by rememberSaveable { mutableStateOf<String?>(null) }
     var pickCollectionsFor by rememberSaveable { mutableStateOf<String?>(null) }
@@ -314,10 +323,10 @@ private fun App(vm: AppViewModel) {
     // Pages that run under the status bar with their own big titles, like the music app's.
     // Every tab draws its own big header, like the Shelf.
     val immersive = !albumOpen
-    val miniGame = recents.firstOrNull()?.takeIf { !miniHidden && !albumOpen && tab != Tab.Settings && tab != Tab.Shelf && sheetFor == null && !statsOpen && recap == null }
+    val miniGame = recents.firstOrNull()?.takeIf { !miniHidden && !albumOpen && tab != Tab.Settings && !(tab == Tab.Shelf && shelfFlow) && sheetFor == null && !statsOpen && recap == null }
     val navBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val glass = rememberHazeState()
-    val floatingNavSpace = (if (wide || albumOpen) 0.dp else FloatingNavHeight + 16.dp + navBarInset) +
+    val floatingNavSpace = (if (wide || albumOpen) 0.dp else FloatingNavHeight + 1.dp + navBarInset) +
         (if (miniGame != null && !wide) MiniPlayerSpace else 0.dp)
     val systemCount = games.mapTo(HashSet()) { it.systemId }.size
 
@@ -327,17 +336,7 @@ private fun App(vm: AppViewModel) {
         tab == Tab.Library -> MaterialTheme.colorScheme.tertiary
         else -> MaterialTheme.colorScheme.primary
     }
-    // Two corner glows from the last games played hang from the top and fade as the page scrolls.
-    val glowLeft = lerp(recents.getOrNull(0)?.system?.color ?: accent, Color.Black, 0.35f)
-    val glowRight = lerp(recents.getOrNull(1)?.system?.color ?: glowLeft, Color.Black, 0.35f)
-    val glowL by animateColorAsState(glowLeft, tween(700), label = "glowL")
-    val glowR by animateColorAsState(glowRight, tween(700), label = "glowR")
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .topGlow(glowL, glowR, 340.dp) { 1f - scrollBehavior.state.collapsedFraction },
-    ) {
+    Box(Modifier.fillMaxSize().emberBackground()) {
     Row(Modifier.fillMaxSize()) {
         if (wide && !albumOpen) {
             // Landscape / large screens: an expressive navigation rail instead of the bottom bar.
@@ -520,6 +519,18 @@ private fun App(vm: AppViewModel) {
                     stats = stats,
                     favorites = favoriteIds,
                 )
+                key == Tab.Shelf.name && !shelfFlow -> ShelvesScreen(
+                    games = games,
+                    recents = recents,
+                    favorites = favorites,
+                    collections = collectionGames,
+                    stats = stats,
+                    onOpenGame = { sheetFor = it.id },
+                    onOptions = { menuFor = it.id },
+                    onOpenCollection = { openCollectionId = it.id },
+                    onNewShelf = { naming = true },
+                    onCoverFlow = { shelfFlow = true },
+                )
                 key == Tab.Shelf.name -> ShelfScreen(
                     games = games,
                     stats = stats,
@@ -529,6 +540,7 @@ private fun App(vm: AppViewModel) {
                     reducedMotion = reducedMotion,
                     onPlay = { vm.play(it) },
                     onDetails = { sheetFor = it.id },
+                    onShowShelves = { shelfFlow = false },
                 )
                 key == Tab.Library.name -> LibraryScreen(
                     games = games,
@@ -584,7 +596,7 @@ private fun App(vm: AppViewModel) {
                 onOpen = { sheetFor = miniGame.id },
                 onPlay = { vm.play(miniGame) },
                 onHide = { miniHidden = true },
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = navBarInset + 10.dp + FloatingNavHeight + 10.dp),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = navBarInset + FloatingNavHeight + 1.dp + 10.dp),
             )
         }
         if (!wide && !albumOpen) {
@@ -593,9 +605,7 @@ private fun App(vm: AppViewModel) {
                 items = Tab.entries.map { NavItem(it.label, it.selected, it.unselected) },
                 selected = tab.ordinal,
                 onSelect = { tab = Tab.entries[it] },
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(start = 20.dp, end = 20.dp, bottom = navBarInset + 10.dp),
+                modifier = Modifier.align(Alignment.BottomCenter),
             )
         }
     }

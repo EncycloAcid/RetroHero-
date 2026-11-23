@@ -24,7 +24,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -39,13 +41,31 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.retrohero.app.data.Game
 import com.retrohero.app.ui.theme.Inter
+import com.retrohero.app.ui.theme.Salmon
 
 /** Shared look for every tab, taken from the Shelf: same header, same chips, same glossy cards. */
 object Page {
     /** Side padding for page content. */
     val Gutter = 22.dp
-    val CardTop = Color(0xFF1C1C20)
-    val CardBottom = Color(0xFF121215)
+    val CardTop = Color(0xFF1E1E22)
+    val CardBottom = Color(0xFF141417)
+    /** Warm charcoal behind every page. */
+    val Bg = Color(0xFF0E0E10)
+    val Divider = Color.White.copy(alpha = 0.07f)
+}
+
+/** Warm charcoal with a soft glow of the accent colour rising from the lower left. */
+fun Modifier.emberBackground(): Modifier = drawBehind {
+    drawRect(Page.Bg)
+    val accent = Salmon
+    val w = size.width
+    val h = size.height
+    val r1 = w * 1.05f
+    val c1 = Offset(-w * 0.2f, h * 0.62f)
+    drawCircle(Brush.radialGradient(listOf(accent.copy(alpha = 0.2f), Color.Transparent), center = c1, radius = r1), radius = r1, center = c1)
+    val r2 = w * 0.8f
+    val c2 = Offset(w * 1.1f, h * 0.02f)
+    drawCircle(Brush.radialGradient(listOf(accent.copy(alpha = 0.07f), Color.Transparent), center = c2, radius = r2), radius = r2, center = c2)
 }
 
 /** The page title block every tab uses: big title, a quiet subtitle, optional actions on the right. */
@@ -67,7 +87,7 @@ fun PageHeader(title: String, subtitle: String?, modifier: Modifier = Modifier, 
 @Composable
 fun PillChip(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, color: Color = Color.White, leading: (@Composable () -> Unit)? = null) {
     val fill by animateColorAsState(
-        if (!selected) Color.White.copy(alpha = 0.07f) else if (color == Color.White) Color.White.copy(alpha = 0.22f) else lerp(color, Color.Black, 0.3f),
+        if (!selected) Color.White.copy(alpha = 0.07f) else if (color == Color.White) lerp(Salmon, Color.Black, 0.25f) else lerp(color, Color.Black, 0.3f),
         label = "pill",
     )
     Row(

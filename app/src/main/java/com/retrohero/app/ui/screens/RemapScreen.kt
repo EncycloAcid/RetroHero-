@@ -1,5 +1,6 @@
 package com.retrohero.app.ui.screens
 
+import com.retrohero.app.ui.components.emberBackground
 import android.hardware.input.InputManager
 import android.view.InputDevice
 import android.view.KeyEvent
@@ -99,7 +100,7 @@ fun RemapScreen(
     var profile by remember { mutableStateOf(Remap.ANY) }
     var capturing by remember { mutableStateOf<Pair<Int, String>?>(null) }
 
-    Column(Modifier.fillMaxSize().background(Color.Black).windowInsetsPadding(WindowInsets.statusBars)) {
+    Column(Modifier.fillMaxSize().emberBackground().windowInsetsPadding(WindowInsets.statusBars)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onBack), contentAlignment = Alignment.Center) {
                 Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = Color.White)

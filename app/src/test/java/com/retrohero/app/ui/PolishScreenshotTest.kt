@@ -28,6 +28,8 @@ import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.swipe
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.outlined.Home
 import androidx.test.core.app.ApplicationProvider
 import com.retrohero.app.R
 import com.retrohero.app.data.Systems
@@ -373,6 +375,35 @@ class PolishScreenshotTest {
             compose.mainClock.advanceTimeBy(2000)
         }
         save("home_stats_page")
+    }
+
+    @Test
+    fun shelvesPage() {
+        val games = listOf("Thwaite (USA).nes" to "nes", "Libbet.gb" to "gb", "Micro City.gba" to "gba", "Sonic.md" to "genesis", "Mario.sfc" to "snes", "Zelda.nes" to "nes", "Tetris.gb" to "gb", "Metroid.gba" to "gba")
+            .map { sample(it.first, it.second) }
+        val stats = mapOf(games[0].id to com.retrohero.app.data.PlayStat(11_520, 6, 0), games[2].id to com.retrohero.app.data.PlayStat(4_200, 3, 0), games[4].id to com.retrohero.app.data.PlayStat(1_500, 2, 0))
+        val couch = com.retrohero.app.data.GameCollection("c1", "Couch co-op", games.take(4).map { it.id })
+        compose.setContent {
+            RetroHeroTheme {
+                Box(Modifier.fillMaxSize()) {
+                    androidx.compose.runtime.CompositionLocalProvider(com.retrohero.app.ui.components.LocalNavSpace provides com.retrohero.app.ui.components.FloatingNavHeight) {
+                        com.retrohero.app.ui.screens.ShelvesScreen(
+                            games = games, recents = listOf(games[0], games[2], games[4]), favorites = listOf(games[1], games[3]),
+                            collections = listOf(couch to games.take(4)), stats = stats,
+                            onOpenGame = {}, onOptions = {}, onOpenCollection = {}, onNewShelf = {}, onCoverFlow = {},
+                        )
+                    }
+                    com.retrohero.app.ui.components.FloatingNavBar(
+                        items = listOf("Home", "Shelves", "Games", "Library", "Cores", "Settings").map {
+                            com.retrohero.app.ui.components.NavItem(it, androidx.compose.material.icons.Icons.Filled.Home, androidx.compose.material.icons.Icons.Outlined.Home)
+                        },
+                        selected = 1, onSelect = {}, modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter),
+                    )
+                }
+            }
+        }
+        compose.mainClock.advanceTimeBy(1500)
+        save("shelves_page")
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.retrohero.app.ui.screens
 
+import com.retrohero.app.ui.components.emberBackground
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -109,7 +110,7 @@ fun GameDetailScreen(
     val hasAuto = saveSlots.any { it.first == AppPaths.AUTO_SLOT }
     val time = remember { DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT, Locale.getDefault()) }
 
-    BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
+    BoxWithConstraints(Modifier.fillMaxSize().emberBackground()) {
         val coverWidth = (maxWidth * 0.62f).coerceAtMost(300.dp)
 
         // The art, blurred, hanging behind the top of the page; then the art colour washing to black.

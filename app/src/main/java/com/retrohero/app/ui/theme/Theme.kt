@@ -13,10 +13,10 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 
-private val accentState = androidx.compose.runtime.mutableStateOf(Color(0xFFF0908D))
+private val accentState = androidx.compose.runtime.mutableStateOf(Color(0xFFFF6B2C))
 
 /**
- * The accent colour (salmon by default) used for the gacha pointer and small highlights.
+ * The accent colour (ember orange by default) used for the gacha pointer and small highlights.
  * It follows the chosen look; reading it in a composable recomposes when the look changes.
  */
 val Salmon: Color get() = accentState.value
@@ -26,8 +26,8 @@ fun setAccent(color: Color) {
 }
 
 /**
- * Dark-only, monochrome palette on pure black: the interface stays greyscale and colour comes
- * from the games themselves (cover art and each system's colour).
+ * Dark-only palette on warm charcoal with an ember-orange accent; colour otherwise comes from
+ * the games themselves (cover art and each system's colour).
  */
 private val Mono = darkColorScheme(
     primary = Color(0xFFE0E0E0),
@@ -40,24 +40,24 @@ private val Mono = darkColorScheme(
     onSecondaryContainer = Color.White,
     tertiary = Salmon,
     onTertiary = Color.Black,
-    tertiaryContainer = Color(0xFF3B2524),
-    onTertiaryContainer = Color(0xFFFFDAD8),
+    tertiaryContainer = Color(0xFF3D2116),
+    onTertiaryContainer = Color(0xFFFFDBCC),
     error = Color(0xFFFF6B6B),
     onError = Color.Black,
     errorContainer = Color(0xFF4A1A1A),
     onErrorContainer = Color(0xFFFFDADA),
-    background = Color.Black,
+    background = Color(0xFF0E0E10),
     onBackground = Color.White,
-    surface = Color.Black,
+    surface = Color(0xFF0E0E10),
     onSurface = Color.White,
     surfaceVariant = Color(0xFF1C1C1F),
     onSurfaceVariant = Color(0xFF9A9AA0),
-    surfaceTint = Color.Black,
-    surfaceContainerLowest = Color.Black,
-    surfaceContainerLow = Color(0xFF0C0C0D),
-    surfaceContainer = Color(0xFF141416),
-    surfaceContainerHigh = Color(0xFF1C1C1F),
-    surfaceContainerHighest = Color(0xFF232326),
+    surfaceTint = Color(0xFF0E0E10),
+    surfaceContainerLowest = Color(0xFF0A0A0B),
+    surfaceContainerLow = Color(0xFF131315),
+    surfaceContainer = Color(0xFF18181B),
+    surfaceContainerHigh = Color(0xFF1F1F23),
+    surfaceContainerHighest = Color(0xFF26262A),
     surfaceBright = Color(0xFF2A2A2A),
     outline = Color(0xFF77777D),
     outlineVariant = Color(0xFF232326),

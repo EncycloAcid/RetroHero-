@@ -1,5 +1,6 @@
 package com.retrohero.app.ui.screens
 
+import com.retrohero.app.ui.components.emberBackground
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
@@ -235,7 +236,7 @@ fun HomeScreen(
         contentPadding = PaddingValues(start = ContentInset, end = ContentInset, bottom = bottomPadding + 24.dp),
         horizontalArrangement = Arrangement.spacedBy(CardSpacing),
         verticalArrangement = Arrangement.spacedBy(20.dp),
-        modifier = Modifier.fillMaxSize().background(Color.Black),
+        modifier = Modifier.fillMaxSize().emberBackground(),
     ) {
         full { HeroCarousel(candidates, games, recents, favorites, onPlay, onOpen, topActions, stats, onOpenStats) }
 

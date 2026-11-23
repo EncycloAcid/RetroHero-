@@ -76,7 +76,7 @@ class Settings(context: Context) {
 
     /** Accent colour id from [Looks.accents], or "look:<id>" for an imported look. */
     var accent: String
-        get() = prefs.getString("accent", "salmon")!!
+        get() = prefs.getString("accent", "ember")!!
         set(v) = prefs.edit { putString("accent", v) }
 
     /** Touch-pad skin id from [Looks.skins], or "look:<id>" for an imported look. */

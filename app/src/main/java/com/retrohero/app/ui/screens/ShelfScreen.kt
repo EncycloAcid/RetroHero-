@@ -1,5 +1,6 @@
 package com.retrohero.app.ui.screens
 
+import com.retrohero.app.ui.components.emberBackground
 import android.view.HapticFeedbackConstants
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
@@ -40,6 +41,7 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SwapVert
+import androidx.compose.material.icons.rounded.ViewAgenda
 import androidx.compose.material.icons.rounded.ViewCarousel
 import androidx.compose.material.icons.rounded.ViewWeek
 import androidx.compose.material3.DropdownMenu
@@ -105,6 +107,7 @@ fun ShelfScreen(
     onPlay: (Game) -> Unit,
     onDetails: (Game) -> Unit,
     startWithSpines: Boolean = true,
+    onShowShelves: (() -> Unit)? = null,
 ) {
     var system by rememberSaveable { mutableStateOf<String?>(null) }
     var sort by rememberSaveable { mutableStateOf(GameSort.Recent) }
@@ -119,7 +122,7 @@ fun ShelfScreen(
     val tilt by rememberDeviceTilt(enabled = tiltEnabled && !reducedMotion && opened == null)
     val view = LocalView.current
 
-    Box(Modifier.fillMaxSize().background(Color.Black)) {
+    Box(Modifier.fillMaxSize().emberBackground()) {
         val focus = shown.getOrNull(0)
         Column(Modifier.fillMaxSize()) {
             com.retrohero.app.ui.components.PageHeader(
@@ -127,6 +130,10 @@ fun ShelfScreen(
                 "${shown.size} ${if (shown.size == 1) "game" else "games"} · ${sort.label}",
                 Modifier.padding(start = 22.dp, end = 12.dp),
             ) {
+                if (onShowShelves != null) Box(
+                    Modifier.padding(end = 8.dp).size(48.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f)).clickable(onClick = onShowShelves),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Icons.Rounded.ViewAgenda, "Show shelves", tint = Color.White) }
                 Box(
                     Modifier.padding(end = 8.dp).size(48.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f)).clickable { spines = !spines },
                     contentAlignment = Alignment.Center,

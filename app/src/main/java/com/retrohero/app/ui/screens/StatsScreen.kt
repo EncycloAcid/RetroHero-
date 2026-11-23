@@ -1,5 +1,6 @@
 package com.retrohero.app.ui.screens
 
+import com.retrohero.app.ui.components.emberBackground
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
@@ -113,7 +114,7 @@ fun StatsScreen(history: List<HistoryEntry>, onBack: () -> Unit, onRecap: (Perio
     val bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
 
     LazyColumn(
-        Modifier.fillMaxSize().background(Color.Black),
+        Modifier.fillMaxSize().emberBackground(),
         contentPadding = PaddingValues(bottom = bottom + 24.dp),
         verticalArrangement = Arrangement.spacedBy(7.dp),
     ) {

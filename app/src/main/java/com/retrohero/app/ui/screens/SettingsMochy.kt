@@ -1,5 +1,6 @@
 package com.retrohero.app.ui.screens
 
+import com.retrohero.app.ui.components.emberBackground
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.CubicBezierEasing
@@ -111,7 +112,7 @@ fun SettingsHome(onOpen: (String) -> Unit, onOpenStats: () -> Unit) {
     Column(
         Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .emberBackground()
             .verticalScroll(rememberScrollState())
             .padding(start = 20.dp, end = 20.dp, bottom = 24.dp + LocalNavSpace.current),
     ) {
@@ -224,7 +225,7 @@ fun SubSettings(title: String, onBack: () -> Unit, content: @Composable ColumnSc
     Column(
         Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .emberBackground()
             .verticalScroll(rememberScrollState())
             .windowInsetsPadding(WindowInsets.statusBars)
             .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 24.dp + LocalNavSpace.current),

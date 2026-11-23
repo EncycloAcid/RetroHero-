@@ -75,7 +75,7 @@ fun OnboardingScreen(
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color.Black)
+            .background(com.retrohero.app.ui.components.Page.Bg)
             .topGlow(Salmon.copy(alpha = 0.7f), Color(0xFF7C82B4), 420.dp) { 1f },
     ) {
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars).navigationBarsPadding()) {
