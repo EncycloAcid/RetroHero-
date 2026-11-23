@@ -69,24 +69,49 @@ fun PageHeader(
     index: Int = 1,
     trailing: @Composable () -> Unit = {},
 ) {
-    Column(modifier.windowInsetsPadding(WindowInsets.statusBars).fillMaxWidth().padding(top = 18.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            ArchiveLabel("${index.toString().padStart(2, '0')} — $title")
-            Row(verticalAlignment = Alignment.CenterVertically) {
+    Column(modifier.windowInsetsPadding(WindowInsets.statusBars).fillMaxWidth().padding(top = 12.dp)) {
+        Row(
+            Modifier.fillMaxWidth().padding(bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(
+                Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(11.dp))
+                    .background(Tone.Surface)
+                    .border(1.dp, Tone.Line, RoundedCornerShape(11.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
                 androidx.compose.foundation.Image(
                     androidx.compose.ui.res.painterResource(com.retrohero.app.R.drawable.ic_logo_mark),
                     null,
-                    Modifier.size(18.dp).launchMarkTarget(),
+                    Modifier.size(20.dp).launchMarkTarget(),
                     colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Tone.Ink),
                 )
-                Spacer(Modifier.width(7.dp))
-                ArchiveLabel("RetroHero")
             }
-        }
-        Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.displaySmallEmphasized, color = Tone.Ink)
-                if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Tone.Muted)
+                Text(
+                    title,
+                    style = TextStyle(
+                        fontFamily = Inter,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 24.sp,
+                        letterSpacing = (-0.03).em,
+                    ),
+                    color = Tone.Ink,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (subtitle != null) {
+                    Text(
+                        subtitle,
+                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 12.5.sp),
+                        color = Tone.Muted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
             trailing()
         }

@@ -52,6 +52,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalView
 import com.retrohero.app.data.Game
@@ -92,23 +93,55 @@ fun SectionTitle(
     onClick: (() -> Unit)? = null,
     verticalPadding: Dp = 6.dp,
 ) {
-    Row(modifier.fillMaxWidth().then(if (onClick == null) Modifier else Modifier.clickable(onClick = onClick))
-        .padding(vertical = verticalPadding), verticalAlignment = Alignment.CenterVertically) {
-        ArchiveLabel(index.toString().padStart(2, '0'), color = Tone.Faint)
+    Row(
+        modifier
+            .fillMaxWidth()
+            .then(if (onClick == null) Modifier else Modifier.clickable(onClick = onClick))
+            .padding(vertical = verticalPadding),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .size(width = 3.dp, height = 16.dp)
+                .clip(CircleShape)
+                .background(Ascend.accent),
+        )
         Text(
             title,
-            modifier = Modifier.weight(1f).padding(start = 12.dp),
-            style = androidx.compose.material3.MaterialTheme.typography.titleLargeEmphasized,
-            maxLines = 2,
+            modifier = Modifier.weight(1f).padding(start = 10.dp),
+            style = TextStyle(
+                fontFamily = Inter,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                letterSpacing = (-0.02).em,
+            ),
+            maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             color = Tone.Ink,
         )
-        if (count != null) ArchiveLabel(count.toString().padStart(2, '0'), Modifier.padding(start = 8.dp), color = Tone.Muted)
-        if (onClick != null) Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Tone.Muted, modifier = Modifier.size(18.dp))
+        if (count != null) {
+            Box(
+                Modifier
+                    .padding(start = 8.dp)
+                    .background(Tone.Surface, RoundedCornerShape(8.dp))
+                    .border(1.dp, Tone.Line, RoundedCornerShape(8.dp))
+                    .padding(horizontal = 8.dp, vertical = 3.dp),
+            ) {
+                ArchiveLabel(count.toString(), color = Tone.Muted)
+            }
+        }
+        if (onClick != null) {
+            Icon(
+                Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                null,
+                tint = Tone.Muted,
+                modifier = Modifier.padding(start = 4.dp).size(18.dp),
+            )
+        }
     }
 }
 
-/** Library card: cover with console tag & quick-play button, readable title, and info line. */
+/** Framed Instrument Game Card: bordered Tone.Surface container, cover art with console tag & Play button, and clean title/subtitle. */
 @Composable
 fun GameCard(
     game: Game,
@@ -126,20 +159,28 @@ fun GameCard(
         spring(dampingRatio = 0.7f, stiffness = 600f),
         label = "gameCardScale",
     )
+    val cardShape = RoundedCornerShape(Ascend.Radius.Card)
     val coverShape = RoundedCornerShape(Ascend.Radius.Cover)
     Box(
         modifier
             .then(if (width != null) Modifier.width(width) else Modifier.fillMaxWidth())
-            .graphicsLayer { scaleX = scale; scaleY = scale },
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(cardShape)
+            .background(Tone.Surface)
+            .border(1.dp, Tone.Line, cardShape),
     ) {
         Column(
-            Modifier.fillMaxWidth()
-                .combinedClickable(interactionSource = interaction, indication = null, onClick = onClick, onLongClick = onLongClick),
+            Modifier
+                .fillMaxWidth()
+                .combinedClickable(interactionSource = interaction, indication = null, onClick = onClick, onLongClick = onLongClick)
+                .padding(6.dp),
         ) {
             Box(
-                Modifier.fillMaxWidth().aspectRatio(0.75f)
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(0.78f)
                     .clip(coverShape)
-                    .border(1.dp, Tone.Line, coverShape),
+                    .border(0.5.dp, Tone.Line, coverShape),
             ) {
                 GameArt(game, Modifier.fillMaxSize(), showTag = false)
                 val sysTag = game.system?.shortName
@@ -148,7 +189,7 @@ fun GameCard(
                         Modifier
                             .align(Alignment.TopStart)
                             .padding(6.dp)
-                            .background(Color.Black.copy(alpha = 0.72f), RoundedCornerShape(6.dp))
+                            .background(Color.Black.copy(alpha = 0.75f), RoundedCornerShape(6.dp))
                             .border(0.5.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(6.dp))
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                     ) {
@@ -161,33 +202,34 @@ fun GameCard(
                 game.title,
                 style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, lineHeight = 16.sp),
                 color = Tone.Ink,
-                maxLines = 2,
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 2.dp),
             )
             if (!subtitle.isNullOrBlank()) {
                 Text(
                     subtitle,
-                    style = TextStyle(fontFamily = Inter, fontSize = 11.5.sp),
+                    style = TextStyle(fontFamily = Inter, fontSize = 11.sp),
                     color = Ascend.Muted,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 2.dp),
+                    modifier = Modifier.padding(top = 1.dp, start = 2.dp, end = 2.dp, bottom = 2.dp),
                 )
             }
         }
         if (onPlay != null) {
-            Box(Modifier.fillMaxWidth().aspectRatio(0.75f)) {
+            Box(Modifier.fillMaxWidth().padding(6.dp).aspectRatio(0.78f)) {
                 Box(
                     Modifier
                         .align(Alignment.BottomEnd)
                         .padding(6.dp)
                         .size(32.dp)
                         .clip(CircleShape)
-                        .background(Tone.Raised.copy(alpha = 0.96f))
-                        .border(1.dp, Tone.Line, CircleShape)
+                        .background(Ascend.accent)
+                        .border(1.dp, Color.White.copy(alpha = 0.25f), CircleShape)
                         .clickable(onClick = onPlay),
                     contentAlignment = Alignment.Center,
-                ) { Icon(Icons.Rounded.PlayArrow, "Play ${game.title}", tint = Tone.Ink, modifier = Modifier.size(18.dp)) }
+                ) { Icon(Icons.Rounded.PlayArrow, "Play ${game.title}", tint = Ascend.onAccent, modifier = Modifier.size(18.dp)) }
             }
         }
     }

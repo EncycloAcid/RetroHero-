@@ -40,6 +40,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -62,77 +63,91 @@ val FloatingNavHeight = 68.dp
 
 @Composable
 fun FloatingNavBar(items: List<NavItem>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
-    Column(modifier.fillMaxWidth().background(Ascend.Surface).windowInsetsPadding(WindowInsets.navigationBars)) {
-        Box(Modifier.fillMaxWidth().height(1.dp).background(Page.Divider))
-        BoxWithConstraints(Modifier.fillMaxWidth().height(FloatingNavHeight).padding(horizontal = 6.dp)) {
-            val itemWidth = maxWidth / items.size.coerceAtLeast(1)
-            val clamped = selected.coerceIn(0, items.lastIndex.coerceAtLeast(0))
-            val ledWidth = 18.dp
-            val indicatorX by animateDpAsState(
-                (itemWidth.value * clamped + (itemWidth.value - ledWidth.value) / 2f).dp,
-                spring(dampingRatio = 0.72f, stiffness = 620f),
-                label = "dockIndicator",
+    val dockShape = RoundedCornerShape(18.dp)
+    Box(
+        modifier
+            .fillMaxWidth()
+            .windowInsetsPadding(WindowInsets.navigationBars)
+            .padding(horizontal = 10.dp, vertical = 6.dp)
+            .shadow(
+                elevation = if (Tone.isDark) 10.dp else 6.dp,
+                shape = dockShape,
+                ambientColor = Color.Black.copy(alpha = if (Tone.isDark) 0.45f else 0.10f),
+                spotColor = Color.Black.copy(alpha = if (Tone.isDark) 0.55f else 0.16f),
             )
-            // Precision LED bar flush along the top edge of the active tab.
-            Box(
-                Modifier
-                    .offset(x = indicatorX, y = 0.dp)
-                    .size(width = ledWidth, height = 2.5.dp)
-                    .background(Ascend.accent, CircleShape),
-            )
-            Row(Modifier.fillMaxWidth().fillMaxHeight().selectableGroup()) {
-                items.forEachIndexed { index, item ->
-                    val active = index == selected
-                    val interaction = remember { MutableInteractionSource() }
-                    val pressed by interaction.collectIsPressedAsState()
-                    val scale by animateFloatAsState(
-                        if (pressed) 0.94f else 1f,
-                        spring(dampingRatio = 0.7f, stiffness = 650f),
-                        label = "navScale",
-                    )
-                    val tint by animateColorAsState(if (active) Tone.Ink else Tone.Muted, tween(160), label = "navTint")
-                    val pill by animateColorAsState(
-                        if (active) Tone.Raised else Color.Transparent,
-                        tween(160),
-                        label = "navPill",
-                    )
-                    val keyShape = RoundedCornerShape(10.dp)
-                    Box(
-                        Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .padding(start = 2.dp, end = 2.dp, top = 7.dp, bottom = 5.dp)
-                            .graphicsLayer { scaleX = scale; scaleY = scale }
-                            .clip(keyShape)
-                            .background(pill)
-                            .then(if (active) Modifier.border(1.dp, Tone.Line, keyShape) else Modifier)
-                            .selectable(
-                                selected = active,
-                                interactionSource = interaction,
-                                indication = null,
-                                role = Role.Tab,
-                                onClick = { onSelect(index) },
-                            ),
-                        contentAlignment = Alignment.Center,
+            .clip(dockShape)
+            .background(Tone.Surface)
+            .border(1.dp, Tone.Line, dockShape),
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .height(62.dp)
+                .padding(horizontal = 5.dp, vertical = 5.dp)
+                .selectableGroup(),
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            items.forEachIndexed { index, item ->
+                val active = index == selected
+                val interaction = remember { MutableInteractionSource() }
+                val pressed by interaction.collectIsPressedAsState()
+                val scale by animateFloatAsState(
+                    if (pressed) 0.94f else 1f,
+                    spring(dampingRatio = 0.7f, stiffness = 650f),
+                    label = "navScale",
+                )
+                val tint by animateColorAsState(
+                    if (active) Tone.Bg else Tone.Muted,
+                    tween(160),
+                    label = "navTint",
+                )
+                val pill by animateColorAsState(
+                    if (active) Tone.Ink else Color.Transparent,
+                    tween(160),
+                    label = "navPill",
+                )
+                val keyShape = RoundedCornerShape(13.dp)
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .graphicsLayer { scaleX = scale; scaleY = scale }
+                        .clip(keyShape)
+                        .background(pill)
+                        .selectable(
+                            selected = active,
+                            interactionSource = interaction,
+                            indication = null,
+                            role = Role.Tab,
+                            onClick = { onSelect(index) },
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (active) {
+                        Box(
+                            Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(top = 4.dp)
+                                .size(width = 12.dp, height = 2.dp)
+                                .background(Ascend.accent, CircleShape),
+                        )
+                    }
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
                     ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(3.dp),
-                        ) {
-                            Icon(if (active) item.selectedIcon else item.icon, null, tint = tint, modifier = Modifier.size(21.dp))
-                            Text(
-                                item.label.uppercase(),
-                                color = tint,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                style = TextStyle(
-                                    fontFamily = FontFamily.Monospace,
-                                    fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
-                                    fontSize = 9.sp,
-                                    letterSpacing = 0.04.em,
-                                ),
-                            )
-                        }
+                        Icon(if (active) item.selectedIcon else item.icon, null, tint = tint, modifier = Modifier.size(20.dp))
+                        Text(
+                            item.label,
+                            color = tint,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = TextStyle(
+                                fontFamily = com.retrohero.app.ui.theme.Inter,
+                                fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
+                                fontSize = 10.sp,
+                            ),
+                        )
                     }
                 }
             }

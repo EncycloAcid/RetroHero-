@@ -172,40 +172,48 @@ fun SettingsHome(settings: Settings, onOpen: (String) -> Unit, onOpenStats: () -
             return@Column
         }
 
-        Spacer(Modifier.height(18.dp))
-        // Your stats card, like Mochy's profile entry.
+        Spacer(Modifier.height(14.dp))
+        // Your stats card.
         Row(
             Modifier
                 .fillMaxWidth()
-                .press3D()
                 .glossCard(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card))
                 .clickable(onClick = onOpenStats)
-                .padding(horizontal = 18.dp, vertical = 16.dp),
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(Modifier.size(40.dp).clip(CircleShape).background(Salmon), contentAlignment = Alignment.Center) {
-                Icon(Icons.Rounded.Insights, null, tint = com.retrohero.app.ui.components.Ascend.onAccent, modifier = Modifier.size(20.dp))
+            Box(Modifier.size(38.dp).clip(CircleShape).background(Salmon), contentAlignment = Alignment.Center) {
+                Icon(Icons.Rounded.Insights, null, tint = com.retrohero.app.ui.components.Ascend.onAccent, modifier = Modifier.size(19.dp))
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text("Your stats & recap", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 17.sp), color = Tone.Ink)
+                Text("Your stats & recap", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 16.sp), color = Tone.Ink)
                 Text("Play time, favourite systems, your month", style = MaterialTheme.typography.bodySmall, color = Tone.Muted)
             }
             Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Tone.Muted)
         }
-        Spacer(Modifier.height(16.dp))
+
+        val groups = listOf(
+            "Library & Files" to categories.filter { it.id in setOf("library", "bios", "backup") },
+            "Gameplay & Controls" to categories.filter { it.id in setOf("gameplay", "controls", "looks") },
+            "System" to categories.filter { it.id == "about" },
+        )
         val groupShape = RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card)
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .clip(groupShape)
-                .background(Tone.Surface)
-                .border(1.dp, Tone.Line, groupShape),
-        ) {
-            categories.forEachIndexed { index, c ->
-                CategoryBubble(index + 1, c.title, c.subtitle, c.icon) { onOpen(c.id) }
-                if (index < categories.lastIndex) {
-                    androidx.compose.material3.HorizontalDivider(color = com.retrohero.app.ui.components.Page.Divider)
+        groups.forEach { (groupTitle, items) ->
+            Spacer(Modifier.height(16.dp))
+            ArchiveLabel(groupTitle, Modifier.padding(start = 4.dp, bottom = 6.dp), color = Tone.Muted)
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(groupShape)
+                    .background(Tone.Surface)
+                    .border(1.dp, Tone.Line, groupShape),
+            ) {
+                items.forEachIndexed { index, c ->
+                    CategoryBubble(index + 1, c.title, c.subtitle, c.icon) { onOpen(c.id) }
+                    if (index < items.lastIndex) {
+                        androidx.compose.material3.HorizontalDivider(color = com.retrohero.app.ui.components.Page.Divider)
+                    }
                 }
             }
         }
@@ -218,17 +226,15 @@ private fun CategoryBubble(index: Int, title: String, subtitle: String, icon: Im
         Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 13.dp),
+            .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ArchiveLabel(index.toString().padStart(2, '0'), color = Tone.Faint)
-        Spacer(Modifier.width(12.dp))
         Box(
             Modifier
                 .size(36.dp)
-                .clip(CircleShape)
+                .clip(RoundedCornerShape(10.dp))
                 .background(Tone.Raised)
-                .border(1.dp, Tone.Line, CircleShape),
+                .border(1.dp, Tone.Line, RoundedCornerShape(10.dp)),
             contentAlignment = Alignment.Center,
         ) {
             Icon(icon, null, tint = Tone.Ink, modifier = Modifier.size(18.dp))
