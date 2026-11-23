@@ -9,7 +9,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import com.retrohero.app.ui.theme.Tone
 
@@ -31,11 +33,19 @@ fun SegmentedGroup(
         if (title != null) {
             ArchiveLabel(title, Modifier.padding(start = 16.dp, bottom = 8.dp, top = 8.dp))
         }
-        // One surface card, with rows flush inside it.
+        val depth = if (Tone.isDark) Modifier else Modifier.shadow(
+            2.dp,
+            Ascend.CardShape,
+            ambientColor = Color.Black.copy(alpha = 0.05f),
+            spotColor = Color.Black.copy(alpha = 0.08f),
+        )
+        // One surface card with crisp Instrument hairline border.
         Column(
             Modifier
+                .then(depth)
                 .clip(Ascend.CardShape)
                 .background(GroupFill)
+                .border(1.dp, Tone.Line, Ascend.CardShape)
                 .padding(vertical = 6.dp),
         ) {
             SegmentScope(count).content()

@@ -99,18 +99,27 @@ fun Modifier.press3D(maxTilt: Float = 7f, pressedScale: Float = 0.97f): Modifier
         }
 }
 
-/** Monochrome switch: an outlined track when off, grey track and white thumb when on. */
+/** Tactile Instrument switch: recessed track when off, Ember accent track and crisp thumb when on. */
 @Composable
 fun MonoSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
     val alpha = if (enabled) 1f else 0.38f
-    val track by animateColorAsState(if (checked) Tone.Ink.copy(alpha = 0.24f * alpha) else Color.Transparent, tween(150), label = "track")
-    val border by animateColorAsState(if (checked) Color.Transparent else Tone.Line.copy(alpha = alpha), tween(150), label = "border")
-    val thumb by animateColorAsState(if (checked) Tone.Ink.copy(alpha = alpha) else Tone.Raised.copy(alpha = alpha), tween(150), label = "thumb")
+    val view = androidx.compose.ui.platform.LocalView.current
+    val track by animateColorAsState(if (checked) Ascend.accent.copy(alpha = alpha) else Tone.Bg.copy(alpha = alpha), tween(160), label = "track")
+    val border by animateColorAsState(if (checked) Color.Transparent else Tone.Line.copy(alpha = alpha), tween(160), label = "border")
+    val thumb by animateColorAsState(if (checked) Ascend.onAccent.copy(alpha = alpha) else Tone.Muted.copy(alpha = 0.55f * alpha), tween(160), label = "thumb")
     val x by animateDpAsState(if (checked) 52.dp - 24.dp - 4.dp else 4.dp, spring(dampingRatio = 0.7f, stiffness = 700f), label = "thumbX")
     Box(
         modifier
             .size(52.dp, 32.dp)
-            .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onCheckedChange)
+            .toggleable(
+                value = checked,
+                enabled = enabled,
+                role = Role.Switch,
+                onValueChange = {
+                    view.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+                    onCheckedChange(it)
+                },
+            )
             .clip(CircleShape)
             .background(track)
             .border(1.dp, border, CircleShape),
@@ -122,7 +131,7 @@ fun MonoSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit, modifier: M
             Icon(
                 if (checked) Icons.Rounded.Check else Icons.Rounded.Close,
                 null,
-                tint = if (checked) Tone.Bg else Tone.Ink,
+                tint = if (checked) Ascend.accent else Tone.Surface,
                 modifier = Modifier.size(14.dp),
             )
         }

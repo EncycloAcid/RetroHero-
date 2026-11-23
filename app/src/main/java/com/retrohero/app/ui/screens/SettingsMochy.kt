@@ -121,9 +121,9 @@ fun SettingsHome(settings: Settings, onOpen: (String) -> Unit, onOpenStats: () -
             .padding(start = 20.dp, end = 20.dp, bottom = 24.dp + LocalNavSpace.current),
     ) {
         com.retrohero.app.ui.components.PageHeader("Settings", "Library, controls and appearance", index = pageIndex)
-        AppearanceSwitch(settings)
-        Spacer(Modifier.height(18.dp))
         Spacer(Modifier.height(14.dp))
+        AppearanceSwitch(settings)
+        Spacer(Modifier.height(16.dp))
         // Search pill.
         val focused = query.isNotEmpty()
         val fill by animateColorAsState(if (focused) Tone.Raised else SearchFill, tween(200), label = "searchFill")
@@ -240,7 +240,7 @@ fun SubSettings(title: String, onBack: () -> Unit, content: @Composable ColumnSc
     ) {
         Column {
             Box(
-                Modifier.size(40.dp).clip(CircleShape).background(Tone.Raised).clickable(onClick = onBack),
+                Modifier.size(40.dp).clip(CircleShape).background(Tone.Raised).border(1.dp, Tone.Line, CircleShape).clickable(onClick = onBack),
                 contentAlignment = Alignment.Center,
             ) { Icon(Icons.AutoMirrored.Rounded.ArrowBackIos, "Back", tint = Tone.Ink, modifier = Modifier.size(18.dp).offset(x = 3.dp)) }
             Text(
