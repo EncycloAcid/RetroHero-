@@ -386,6 +386,13 @@ private fun SliderRow(
                 onValueChangeFinished = { onChange(value) },
                 valueRange = range,
                 steps = steps,
+                colors = androidx.compose.material3.SliderDefaults.colors(
+                    thumbColor = com.retrohero.app.ui.components.Ascend.accent,
+                    activeTrackColor = com.retrohero.app.ui.components.Ascend.accent,
+                    inactiveTrackColor = com.retrohero.app.ui.theme.Tone.Ink.copy(alpha = 0.14f),
+                    activeTickColor = com.retrohero.app.ui.components.Ascend.onAccent.copy(alpha = 0.7f),
+                    inactiveTickColor = com.retrohero.app.ui.theme.Tone.Muted.copy(alpha = 0.55f),
+                ),
             )
         },
     ) { Text(title) }
