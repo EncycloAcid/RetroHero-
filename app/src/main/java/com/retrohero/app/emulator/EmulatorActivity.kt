@@ -175,6 +175,8 @@ class EmulatorActivity : ComponentActivity() {
     private lateinit var padLayouts: PadLayouts
     private lateinit var audioHaptics: AudioHapticsEngine
     private var padSkin: PadSkin = Looks.Console
+    private var currentCoreId: String = ""
+    private var challengeBanner by mutableStateOf<String?>(null)
     private var deltaSkinsForSystem: List<DeltaSkin> = emptyList()
     private var activeDeltaSkin by mutableStateOf<DeltaSkin?>(null)
 
@@ -217,6 +219,8 @@ class EmulatorActivity : ComponentActivity() {
             finish()
             return
         }
+        currentCoreId = coreId
+        challengeBanner = intent.getStringExtra(EXTRA_CHALLENGE_TITLE)?.takeIf { it.isNotBlank() }
         game = Game.fromJson(JSONObject(gameJson))
         system = game.system ?: run { finish(); return }
         paths = AppPaths(this)
@@ -276,8 +280,10 @@ class EmulatorActivity : ComponentActivity() {
             if (!NativeBridge.loadGame(romPath, paths.saveRam(game).absolutePath)) {
                 return@withContext NativeBridge.getLastError()
             }
+            val externalState = intent.getStringExtra(EXTRA_STATE_PATH)?.let(::File)?.takeIf { it.isFile }
             val requested = if (intent.hasExtra(EXTRA_LOAD_SLOT)) intent.getIntExtra(EXTRA_LOAD_SLOT, AppPaths.AUTO_SLOT) else null
             val resume = when {
+                externalState != null -> externalState
                 requested != null -> paths.stateFile(game, requested)
                 settings.autoSave -> paths.stateFile(game, AppPaths.AUTO_SLOT)
                 else -> null
@@ -382,6 +388,55 @@ class EmulatorActivity : ComponentActivity() {
         }
         val uri = contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) ?: return
         contentResolver.openOutputStream(uri)?.use { out -> f.inputStream().use { it.copyTo(out) } }
+    }
+
+    /** Packages the current state + screenshot into a shareable `.rhclip` capsule and opens the share sheet. */
+    private fun shareMoment(title: String, note: String) {
+        lifecycleScope.launch {
+            val clipFile = withContext(Dispatchers.IO) {
+                runCatching {
+                    val tmpState = File(paths.clipTmp, "moment-${System.nanoTime()}.state")
+                    if (!NativeBridge.saveState(tmpState.absolutePath)) error("Couldn't save state")
+                    val tmpPng = NativeBridge.grabFrame()?.let { raw ->
+                        val w = raw[0]
+                        val h = raw[1]
+                        if (w > 0 && h > 0) {
+                            val bmp = Bitmap.createBitmap(raw, 2, w, w, h, Bitmap.Config.ARGB_8888)
+                            val k = (720 / maxOf(w, h)).coerceIn(1, 4)
+                            val out = if (k > 1) Bitmap.createScaledBitmap(bmp, w * k, h * k, false) else bmp
+                            File(paths.clipTmp, "moment-${System.nanoTime()}.png").also { f ->
+                                f.outputStream().use { out.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                            }
+                        } else null
+                    }
+                    val manifest = com.retrohero.app.data.MomentManifest(
+                        title = title.trim().ifEmpty { game.title },
+                        note = note.trim(),
+                        systemId = system.id,
+                        coreId = currentCoreId,
+                        gameTitle = game.title,
+                        gameBaseName = game.baseName,
+                    )
+                    val safeName = Regex("[^a-zA-Z0-9._-]+").replace(manifest.title, "_").trim('_').ifEmpty { "moment" }.take(40)
+                    val dest = File(paths.clips, "$safeName-${System.currentTimeMillis()}.rhclip")
+                    dest.outputStream().use { com.retrohero.app.data.MomentCapsule.export(it, manifest, tmpState, tmpPng) }
+                    tmpState.delete()
+                    tmpPng?.delete()
+                    dest
+                }.getOrNull()
+            }
+            if (clipFile == null) {
+                toast("Couldn't create .rhclip capsule")
+                return@launch
+            }
+            val uri = androidx.core.content.FileProvider.getUriForFile(this@EmulatorActivity, "$packageName.files", clipFile)
+            val send = Intent(Intent.ACTION_SEND)
+                .setType("application/octet-stream")
+                .putExtra(Intent.EXTRA_STREAM, uri)
+                .putExtra(Intent.EXTRA_SUBJECT, "RetroHero Moment: ${title.ifBlank { game.title }}")
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            startActivity(Intent.createChooser(send, "Share .rhclip moment"))
+        }
     }
 
     private fun startPadEdit() {
@@ -647,6 +702,27 @@ class EmulatorActivity : ComponentActivity() {
                     onDismiss = ::dismissTranslate,
                 )
             }
+            challengeBanner?.let { banner ->
+                LaunchedEffect(banner) {
+                    delay(4500)
+                    challengeBanner = null
+                }
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = Color.Black.copy(alpha = 0.82f),
+                    contentColor = Color.White,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .safeDrawingPadding()
+                        .padding(top = 12.dp, start = 16.dp, end = 16.dp),
+                ) {
+                    Text(
+                        "Challenge: $banner",
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                    )
+                }
+            }
             if (editingPad) PadEditBar(Modifier.align(Alignment.TopCenter))
             ScreenshotFlash(flash)
         }
@@ -776,6 +852,7 @@ class EmulatorActivity : ComponentActivity() {
                             "cheats" -> CheatsPage { page = "main" }
                             "screen" -> ScreenPage { page = "main" }
                             "skin" -> DeltaSkinPage { page = "main" }
+                            "share" -> ShareMomentPage { page = "main" }
                             else -> MainMenuPage { page = it }
                         }
                     }
@@ -823,8 +900,11 @@ class EmulatorActivity : ComponentActivity() {
                     setMenu(false)
                 }
             }
-            ActionTile(Icons.Default.AspectRatio, "Translate screen (${translateLang.label} → EN)", Modifier.fillMaxWidth()) {
-                runScreenTranslate(translateLang)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ActionTile(Icons.Default.AspectRatio, "Translate (${translateLang.label})", Modifier.weight(1f)) {
+                    runScreenTranslate(translateLang)
+                }
+                ActionTile(Icons.Default.Save, "Share moment", Modifier.weight(1f)) { navigate("share") }
             }
             val switchCount = if (deltaSkinsForSystem.isNotEmpty()) 5 else 4
             SegmentedGroup(null, switchCount) {
@@ -1241,14 +1321,62 @@ class EmulatorActivity : ComponentActivity() {
         private const val EXTRA_ROM_PATH = "rom_path"
 
         private const val EXTRA_LOAD_SLOT = "load_slot"
+        private const val EXTRA_STATE_PATH = "state_path"
+        private const val EXTRA_CHALLENGE_TITLE = "challenge_title"
 
-        /** [slot]: a save-state slot to resume from (AppPaths.AUTO_SLOT or 1..4); null uses the usual auto-resume. */
-        fun intent(context: Context, game: Game, coreId: String, corePath: String, romPath: String, slot: Int? = null) =
+        /** [slot] or [statePath]: resume from a save state instead of the usual auto-resume. */
+        fun intent(
+            context: Context,
+            game: Game,
+            coreId: String,
+            corePath: String,
+            romPath: String,
+            slot: Int? = null,
+            statePath: String? = null,
+            challengeTitle: String? = null,
+        ) =
             Intent(context, EmulatorActivity::class.java)
                 .putExtra(EXTRA_GAME, game.toJson().toString())
                 .putExtra(EXTRA_CORE_ID, coreId)
                 .putExtra(EXTRA_CORE_PATH, corePath)
                 .putExtra(EXTRA_ROM_PATH, romPath)
-                .apply { if (slot != null) putExtra(EXTRA_LOAD_SLOT, slot) }
+                .apply {
+                    if (slot != null) putExtra(EXTRA_LOAD_SLOT, slot)
+                    if (!statePath.isNullOrBlank()) putExtra(EXTRA_STATE_PATH, statePath)
+                    if (!challengeTitle.isNullOrBlank()) putExtra(EXTRA_CHALLENGE_TITLE, challengeTitle)
+                }
+    }
+
+    @Composable
+    private fun ShareMomentPage(back: () -> Unit) {
+        var title by remember { mutableStateOf(game.title) }
+        var note by remember { mutableStateOf("") }
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            PageHeader("Share moment", back)
+            Text(
+                "Exports your current save state + screenshot as a tiny .rhclip file (no ROM included) so a friend can jump right into this exact moment.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedTextField(
+                value = title,
+                onValueChange = { title = it.take(80) },
+                label = { Text("Moment or challenge title") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = note,
+                onValueChange = { note = it.take(240) },
+                label = { Text("Note for your friend (optional)") },
+                maxLines = 3,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Button(
+                onClick = { shareMoment(title, note) },
+                shapes = ButtonDefaults.shapes(),
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Create & share .rhclip") }
+        }
     }
 }

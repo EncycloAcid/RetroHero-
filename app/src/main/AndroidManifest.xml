@@ -34,6 +34,8 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="content" android:mimeType="*/*" android:pathPattern=".*\\.deltaskin" />
                 <data android:scheme="file" android:mimeType="*/*" android:pathPattern=".*\\.deltaskin" />
+                <data android:scheme="content" android:mimeType="*/*" android:pathPattern=".*\\.rhclip" />
+                <data android:scheme="file" android:mimeType="*/*" android:pathPattern=".*\\.rhclip" />
             </intent-filter>
         </activity>
 

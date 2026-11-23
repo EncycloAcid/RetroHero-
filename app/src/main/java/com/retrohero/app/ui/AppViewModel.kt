@@ -421,11 +421,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun gamesFor(system: GameSystem) = games.value.filter { it.systemId == system.id }
 
-    /** Starts [game]; with [slot], resumes from that save-state slot instead of the auto-save. */
-    fun play(game: Game, slot: Int? = null) {
+    /** Starts [game]; with [slot] or [statePath], resumes from that save state instead of the auto-save. */
+    fun play(game: Game, slot: Int? = null, statePath: String? = null, challengeTitle: String? = null) {
         val system = game.system ?: return
         val core = settings.coreFor(system)
-        if (app.cores.isInstalled(core.id)) prepareAndLaunch(game, core, slot)
+        if (app.cores.isInstalled(core.id)) prepareAndLaunch(game, core, slot, statePath, challengeTitle)
         else _launch.value = LaunchState.NeedsCore(game, core, slot)
     }
 
@@ -458,7 +458,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         if (_launch.value !is LaunchState.Downloading && _launch.value !is LaunchState.Preparing) _launch.value = null
     }
 
-    private fun prepareAndLaunch(game: Game, core: CoreInfo, slot: Int? = null) {
+    private fun prepareAndLaunch(
+        game: Game,
+        core: CoreInfo,
+        slot: Int? = null,
+        statePath: String? = null,
+        challengeTitle: String? = null,
+    ) {
         _launch.value = LaunchState.Preparing(game, game.fileName)
         viewModelScope.launch {
             try {
@@ -468,7 +474,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 val corePath = app.cores.coreFile(core.id) ?: error("Core not installed")
                 settings.markPlayed(game.id)
                 _launch.value = null
-                _launchIntents.send(EmulatorActivity.intent(app, game, core.id, corePath.absolutePath, rom.absolutePath, slot))
+                _launchIntents.send(
+                    EmulatorActivity.intent(app, game, core.id, corePath.absolutePath, rom.absolutePath, slot, statePath, challengeTitle),
+                )
             } catch (e: Exception) {
                 _launch.value = LaunchState.Error(e.message ?: "Couldn't open this game.")
             }
