@@ -209,16 +209,25 @@ fun VirtualGamepad(
                 }
             },
     ) {
+        val consoleStyle = when (skin.faces) {
+            "console" -> ConsoleStyles.forSystem(systemId, accent)
+            "instrument" -> ConsoleStyles.instrument(
+                dark = com.retrohero.app.ui.theme.Tone.isDark,
+                accent = com.retrohero.app.ui.components.Ascend.accent,
+                onAccent = com.retrohero.app.ui.components.Ascend.onAccent,
+            )
+            else -> null
+        }
         CompositionLocalProvider(
             LocalPadAccent provides accent,
             LocalPadSkin provides skin,
-            LocalConsole provides (if (skin.faces == "console") ConsoleStyles.forSystem(systemId, accent) else null),
+            LocalConsole provides consoleStyle,
             LocalPadEdit provides edit,
             LocalPadAdjust provides adjust,
             LocalShowRewind provides (onRewind != null),
         ) {
-            // The console skin in portrait is a solid controller under the game, so it ignores opacity.
-            val solid = skin.faces == "console" && !landscape
+            // Solid hardware decks (Console & Instrument) sit under the game in portrait and ignore opacity.
+            val solid = consoleStyle != null && !landscape
             Box(Modifier.fillMaxSize().alpha(if (solid) 1f else if (edit != null) maxOf(opacity, 0.85f) else opacity)) {
                 if (landscape) LandscapeControls(layout, regions, pressed) else PortraitControls(layout, regions, pressed)
             }

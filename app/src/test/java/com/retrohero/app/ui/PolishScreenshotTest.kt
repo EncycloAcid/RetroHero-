@@ -104,6 +104,80 @@ class PolishScreenshotTest {
     @Test fun gamepadGba() = gamepad("gba", "pad_gba")
 
     @Test
+    fun gamepadInstrumentLight() {
+        val prev = Tone.isDark
+        Tone.setDarkMode(false)
+        try {
+            val system = Systems.get("snes")!!
+            compose.setContent {
+                RetroHeroTheme(dynamicColor = false) {
+                    Column(Modifier.fillMaxSize().background(Color.Black)) {
+                        Box(
+                            Modifier.fillMaxWidth().weight(1f).background(
+                                Brush.verticalGradient(listOf(Color(0xFF3B6BD9), Color(0xFF79C1FF), Color(0xFF3E9A4C))),
+                            ),
+                        )
+                        VirtualGamepad(
+                            layout = system.layout,
+                            landscape = false,
+                            opacity = 1f,
+                            onButton = { _, _ -> },
+                            onMenu = {},
+                            onFastForward = {},
+                            onPress = {},
+                            accent = system.color,
+                            skin = com.retrohero.app.data.Looks.Instrument,
+                            modifier = Modifier.fillMaxWidth().height(400.dp),
+                            systemId = "snes",
+                            onRewind = {},
+                        )
+                    }
+                }
+            }
+            save("pad_instrument_light")
+        } finally {
+            Tone.setDarkMode(prev)
+        }
+    }
+
+    @Test
+    fun gamepadInstrumentDark() {
+        val prev = Tone.isDark
+        Tone.setDarkMode(true)
+        try {
+            val system = Systems.get("snes")!!
+            compose.setContent {
+                RetroHeroTheme(dynamicColor = false) {
+                    Column(Modifier.fillMaxSize().background(Color.Black)) {
+                        Box(
+                            Modifier.fillMaxWidth().weight(1f).background(
+                                Brush.verticalGradient(listOf(Color(0xFF3B6BD9), Color(0xFF79C1FF), Color(0xFF3E9A4C))),
+                            ),
+                        )
+                        VirtualGamepad(
+                            layout = system.layout,
+                            landscape = false,
+                            opacity = 1f,
+                            onButton = { _, _ -> },
+                            onMenu = {},
+                            onFastForward = {},
+                            onPress = {},
+                            accent = system.color,
+                            skin = com.retrohero.app.data.Looks.Instrument,
+                            modifier = Modifier.fillMaxWidth().height(400.dp),
+                            systemId = "snes",
+                            onRewind = {},
+                        )
+                    }
+                }
+            }
+            save("pad_instrument_dark")
+        } finally {
+            Tone.setDarkMode(prev)
+        }
+    }
+
+    @Test
     fun scanningSkeleton() {
         compose.setContent {
             RetroHeroTheme(dynamicColor = false) {

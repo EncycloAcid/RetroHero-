@@ -550,22 +550,69 @@ private fun GachaHero(candidates: List<Game>, onPlay: (Game) -> Unit) {
 @Composable
 private fun FeaturedGames(games: List<Game>, recent: Game?, onOpen: (Game) -> Unit, onPlay: (Game) -> Unit) {
     val pager = rememberPagerState { games.size }
-    HorizontalPager(state = pager, key = { games[it].id }, contentPadding = PaddingValues(horizontal = ContentInset),
-        pageSpacing = 12.dp, modifier = Modifier.fillMaxWidth()) { index ->
+    val heroShape = RoundedCornerShape(Ascend.Radius.Hero)
+    val depth = if (Tone.isDark) Modifier else Modifier.shadow(
+        6.dp,
+        heroShape,
+        ambientColor = Color.Black.copy(alpha = 0.08f),
+        spotColor = Color.Black.copy(alpha = 0.14f),
+    )
+    HorizontalPager(
+        state = pager,
+        key = { games[it].id },
+        contentPadding = PaddingValues(horizontal = ContentInset),
+        pageSpacing = 12.dp,
+        modifier = Modifier.fillMaxWidth(),
+    ) { index ->
         val game = games[index]
-        Box(Modifier.fillMaxWidth().heightIn(min = 238.dp).clip(RoundedCornerShape(Ascend.Radius.Hero)).clickable { onOpen(game) }) {
+        val isRecent = game.id == recent?.id
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(min = 238.dp)
+                .then(depth)
+                .clip(heroShape)
+                .border(1.dp, Color.White.copy(alpha = if (Tone.isDark) 0.10f else 0.18f), heroShape)
+                .clickable { onOpen(game) },
+        ) {
             GameArt(game, Modifier.matchParentSize(), showTag = false)
-            Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.16f), Color.Black.copy(alpha = 0.36f), Color.Black.copy(alpha = 0.94f)))))
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                Color.Black.copy(alpha = 0.14f),
+                                Color.Black.copy(alpha = 0.34f),
+                                Color.Black.copy(alpha = 0.92f),
+                            ),
+                        ),
+                    ),
+            )
             Column(Modifier.fillMaxWidth().padding(18.dp)) {
-                ArchiveLabel(if (game.id == recent?.id) "Continue playing" else "From your library",
-                    Modifier.background(Color.Black.copy(alpha = 0.75f), RoundedCornerShape(Ascend.Radius.Control)).padding(vertical = 4.dp, horizontal = 7.dp), Color.White)
+                Row(
+                    Modifier
+                        .background(Color.Black.copy(alpha = 0.68f), RoundedCornerShape(Ascend.Radius.Control))
+                        .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(Ascend.Radius.Control))
+                        .padding(vertical = 4.dp, horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    if (isRecent) {
+                        Box(Modifier.size(6.dp).clip(CircleShape).background(Ascend.accent))
+                    }
+                    ArchiveLabel(if (isRecent) "Continue playing" else "From your library", color = Color.White)
+                }
                 Spacer(Modifier.height(54.dp))
                 Text(game.title, style = MaterialTheme.typography.headlineLargeEmphasized, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(game.system?.name.orEmpty(), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.82f))
                 Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     AccentButton("Play", { onPlay(game) }, icon = Icons.Rounded.PlayArrow)
                     Spacer(Modifier.weight(1f))
-                    ArchiveLabel("${index + 1} / ${games.size}", color = Color.White)
+                    ArchiveLabel(
+                        "${(index + 1).toString().padStart(2, '0')} / ${games.size.toString().padStart(2, '0')}",
+                        color = Color.White.copy(alpha = 0.85f),
+                    )
                 }
             }
         }

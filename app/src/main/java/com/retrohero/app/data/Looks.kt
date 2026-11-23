@@ -26,12 +26,14 @@ data class Look(val id: String, val name: String, val accent: Color, val pad: Pa
 object Looks {
     /** Looks like the real controller of the system being played (see ConsoleStyles). */
     val Console = PadSkin("console", "Console", Color(0xFF232325), Color(0xFFD6D6D6), Color(0xFFD0203C), Color(0xFFD0203C), "console")
+    /** Tactile hardware-inspired deck matching RetroHero's Light/Dark Instrument theme. */
+    val Instrument = PadSkin("instrument", "Instrument", Color(0xFF1A1A1D), Color(0xFFEDECE8), Color(0xFFFF5A1F), Color(0xFF111111), "instrument")
     val Glass = PadSkin("glass", "Glass", Color(0xFF1A1622).copy(alpha = 0.55f), Color.White.copy(alpha = 0.22f), null, Color.White, "color")
     val Classic = PadSkin("classic", "Classic", Color(0xFFCFCFD6), Color(0xFF6E6E78), Color(0xFF9C9CA6), Color(0xFF2A2A30), "color")
     val Minimal = PadSkin("minimal", "Minimal", Color.Transparent, Color.White.copy(alpha = 0.5f), Color.White.copy(alpha = 0.25f), Color.White.copy(alpha = 0.85f), "mono")
     val Neon = PadSkin("neon", "Neon", Color.Black.copy(alpha = 0.55f), Color(0xFFF0908D), null, Color.White, "accent", glow = 1f)
     val Stealth = PadSkin("stealth", "Stealth", Color.White.copy(alpha = 0.06f), Color.White.copy(alpha = 0.08f), Color.White.copy(alpha = 0.2f), Color.White.copy(alpha = 0.55f), "mono")
-    val skins = listOf(Console, Glass, Classic, Minimal, Neon, Stealth)
+    val skins = listOf(Console, Instrument, Glass, Classic, Minimal, Neon, Stealth)
 
     val accents = listOf(
         "ember" to ("Ember" to Color(0xFFFF5A1F)),

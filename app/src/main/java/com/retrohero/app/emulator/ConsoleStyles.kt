@@ -113,6 +113,32 @@ object ConsoleStyles {
         iconFill = Color(0xFF3A3940), iconTint = Color(0xFFE2E1E8),
     )
 
+    /** Tactile hardware deck matching RetroHero's Light/Dark Instrument theme. */
+    fun instrument(dark: Boolean, accent: Color, onAccent: Color = Color.White): ConsoleStyle {
+        val isPrimary = { label: String -> label == "A" || label == "○" || label == "I" || label == "FIRE" }
+        return if (dark) {
+            ConsoleStyle(
+                plateTop = Color(0xFF1C1C20), plateBottom = Color(0xFF111113),
+                dpad = Color(0xFF2B2B30), arrow = Color(0xFF8E8E96),
+                face = { if (isPrimary(it)) accent else Color(0xFF2A2A30) },
+                faceLabel = { if (isPrimary(it)) onAccent else Color(0xFFF2F1EE) },
+                pill = Color(0xFF26262B), pillLabel = Color(0xFFD0CFCB),
+                shoulder = Color(0xFF26262B), shoulderLabel = Color(0xFFD0CFCB),
+                iconFill = Color(0xFF26262B), iconTint = Color(0xFFF2F1EE),
+            )
+        } else {
+            ConsoleStyle(
+                plateTop = Color(0xFFEDECE8), plateBottom = Color(0xFFDFDDD7),
+                dpad = Color(0xFF1C1C1F), arrow = Color(0xFF8A8A90),
+                face = { if (isPrimary(it)) accent else Color(0xFFF7F6F3) },
+                faceLabel = { if (isPrimary(it)) onAccent else Color(0xFF141416) },
+                pill = Color(0xFFDAD8D1), pillLabel = Color(0xFF26262A),
+                shoulder = Color(0xFFDAD8D1), shoulderLabel = Color(0xFF26262A),
+                iconFill = Color(0xFFDAD8D1), iconTint = Color(0xFF141416),
+            )
+        }
+    }
+
     fun forSystem(systemId: String, accent: Color): ConsoleStyle = when (systemId) {
         "nes" -> nes
         "gb", "gbc" -> gameBoy

@@ -560,17 +560,21 @@ private fun AccentPreview(color: Color) {
 @Composable
 private fun PadPreview(skin: PadSkin) {
     val faces = listOf(Color(0xFF4C7DFF), Color(0xFF30C26B), Color(0xFFE5484D), Color(0xFFF5B83D))
-    Box(Modifier.fillMaxSize().background(Tone.Surface).border(1.dp, Tone.Line, RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card)).padding(10.dp)) {
+    val isInstrument = skin.faces == "instrument"
+    val dpadFill = if (isInstrument) (if (Tone.isDark) Color(0xFF2B2B30) else Color(0xFF1C1C1F)) else skin.fill
+    val dpadEdge = if (isInstrument) Tone.Line else skin.edge
+    Box(Modifier.fillMaxSize().background(if (isInstrument) Tone.Bg else Tone.Surface).border(1.dp, Tone.Line, RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card)).padding(10.dp)) {
         // D-pad.
         Box(Modifier.align(Alignment.CenterStart).offset(y = (-10).dp).size(44.dp)) {
-            Box(Modifier.align(Alignment.Center).size(15.dp, 44.dp).clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Control)).background(skin.fill).border(1.dp, skin.edge, RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Control)))
-            Box(Modifier.align(Alignment.Center).size(44.dp, 15.dp).clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Control)).background(skin.fill).border(1.dp, skin.edge, RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Control)))
+            Box(Modifier.align(Alignment.Center).size(15.dp, 44.dp).clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Control)).background(dpadFill).border(1.dp, dpadEdge, RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Control)))
+            Box(Modifier.align(Alignment.Center).size(44.dp, 15.dp).clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Control)).background(dpadFill).border(1.dp, dpadEdge, RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Control)))
         }
         // Face buttons.
         Box(Modifier.align(Alignment.CenterEnd).offset(y = (-10).dp).size(48.dp)) {
             val pos = listOf(Alignment.TopCenter, Alignment.CenterStart, Alignment.CenterEnd, Alignment.BottomCenter)
             pos.forEachIndexed { i, a ->
                 val c = when (skin.faces) {
+                    "instrument" -> if (i == 2) com.retrohero.app.ui.components.Ascend.accent else Tone.Raised
                     "mono" -> skin.pressed ?: skin.edge
                     "accent" -> skin.edge
                     else -> faces[i]
@@ -579,7 +583,7 @@ private fun PadPreview(skin: PadSkin) {
             }
         }
         Row(Modifier.align(Alignment.BottomCenter).padding(bottom = 26.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            repeat(2) { Box(Modifier.size(26.dp, 8.dp).clip(CircleShape).background(skin.fill).border(1.dp, skin.edge, CircleShape)) }
+            repeat(2) { Box(Modifier.size(26.dp, 8.dp).clip(CircleShape).background(if (isInstrument) Tone.Raised else skin.fill).border(1.dp, dpadEdge, CircleShape)) }
         }
     }
 }
