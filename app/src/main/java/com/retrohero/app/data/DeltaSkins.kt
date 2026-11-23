@@ -405,6 +405,33 @@ object DeltaSkins {
     }
 
     /**
+     * Extracts any `.deltaskin` files bundled under `assets/default_skins/` into [rootDir] once,
+     * and sets each as the default skin for its compatible system(s) if no skin is selected yet.
+     */
+    fun installBundledDefaults(context: android.content.Context, rootDir: File, settings: Settings) {
+        val marker = File(rootDir, ".defaults_v1")
+        if (marker.isFile) return
+        val names = runCatching { context.assets.list("default_skins") }.getOrNull().orEmpty()
+            .filter { it.endsWith(".deltaskin", ignoreCase = true) || it.endsWith(".zip", ignoreCase = true) }
+            .sorted()
+        if (names.isEmpty()) return
+        rootDir.mkdirs()
+        for (name in names) {
+            runCatching {
+                context.assets.open("default_skins/$name").use { stream ->
+                    val skin = import(rootDir, stream)
+                    for (sysId in skin.systemIds) {
+                        if (settings.deltaSkinFor(sysId) == null) {
+                            settings.setDeltaSkinFor(sysId, skin.identifier)
+                        }
+                    }
+                }
+            }
+        }
+        runCatching { marker.writeText(names.joinToString("\n")) }
+    }
+
+    /**
      * Imports a `.deltaskin` (ZIP) stream into [rootDir].
      * Re-importing a skin with the same `identifier` replaces the previous copy.
      */
