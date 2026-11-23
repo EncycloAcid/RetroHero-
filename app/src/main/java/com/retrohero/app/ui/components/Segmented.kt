@@ -1,6 +1,5 @@
 package com.retrohero.app.ui.components
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ListItemDefaults
@@ -11,7 +10,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.background
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 
@@ -41,7 +39,7 @@ fun SegmentedGroup(
         // Mochy's grouped style: one dark card, rows flush inside it.
         Column(
             Modifier
-                .clip(RoundedCornerShape(28.dp))
+                .clip(Ascend.CardShape)
                 .background(GroupFill)
                 .padding(vertical = 6.dp),
         ) {
@@ -54,4 +52,4 @@ fun SegmentedGroup(
 @Composable
 fun segmentColors() = ListItemDefaults.segmentedColors(containerColor = Color.Transparent)
 
-private val GroupFill = Color(0xFF141416)
+private val GroupFill = Ascend.Surface

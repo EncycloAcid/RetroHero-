@@ -9,13 +9,13 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -24,11 +24,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.lerp
@@ -41,12 +36,11 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.retrohero.app.data.Game
 import com.retrohero.app.ui.theme.Inter
-import com.retrohero.app.ui.theme.Salmon
 
 /** Shared look for every tab, taken from the Shelf: same header, same chips, same glossy cards. */
 object Page {
     /** Side padding for page content. */
-    val Gutter = 22.dp
+    val Gutter = 20.dp
     val CardTop = Color(0xFF1E1E22)
     val CardBottom = Color(0xFF141417)
     /** Warm charcoal behind every page. */
@@ -54,32 +48,32 @@ object Page {
     val Divider = Color.White.copy(alpha = 0.07f)
 }
 
-/** Warm charcoal with a soft glow of the accent colour rising from the lower left. */
-fun Modifier.emberBackground(): Modifier = drawBehind {
-    drawRect(Page.Bg)
-    val accent = Salmon
-    val w = size.width
-    val h = size.height
-    val r1 = w * 1.05f
-    val c1 = Offset(-w * 0.2f, h * 0.62f)
-    drawCircle(Brush.radialGradient(listOf(accent.copy(alpha = 0.2f), Color.Transparent), center = c1, radius = r1), radius = r1, center = c1)
-    val r2 = w * 0.8f
-    val c2 = Offset(w * 1.1f, h * 0.02f)
-    drawCircle(Brush.radialGradient(listOf(accent.copy(alpha = 0.07f), Color.Transparent), center = c2, radius = r2), radius = r2, center = c2)
+fun Modifier.emberBackground(): Modifier = background(Page.Bg)
+
+@Composable
+fun ArchiveLabel(text: String, modifier: Modifier = Modifier, color: Color = Ascend.accent) {
+    Text(text.uppercase(), modifier, color = color,
+        style = TextStyle(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+            fontWeight = FontWeight.Medium, fontSize = 10.sp, letterSpacing = 0.1.em), maxLines = 1,
+        overflow = TextOverflow.Ellipsis)
 }
 
-/** The page title block every tab uses: big title, a quiet subtitle, optional actions on the right. */
 @Composable
 fun PageHeader(title: String, subtitle: String?, modifier: Modifier = Modifier, trailing: @Composable () -> Unit = {}) {
-    Row(
-        modifier.windowInsetsPadding(WindowInsets.statusBars).fillMaxWidth().padding(top = 14.dp, bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(title, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 34.sp, lineHeight = 40.sp, letterSpacing = (-0.03).em), color = Color.White)
-            if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.55f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Column(modifier.windowInsetsPadding(WindowInsets.statusBars).fillMaxWidth().padding(top = 18.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.retrohero.app.R.drawable.ic_logo_mark), null,
+                Modifier.size(width = 18.dp, height = 13.dp).launchMarkTarget())
+            ArchiveLabel("RetroHero  /  Archive", Modifier.padding(start = 7.dp))
         }
-        trailing()
+        Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.displaySmallEmphasized, color = Color.White)
+                if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Ascend.Muted)
+            }
+            trailing()
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Page.Divider))
     }
 }
 
@@ -87,11 +81,11 @@ fun PageHeader(title: String, subtitle: String?, modifier: Modifier = Modifier, 
 @Composable
 fun PillChip(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, color: Color = Color.White, leading: (@Composable () -> Unit)? = null) {
     val fill by animateColorAsState(
-        if (!selected) Color.White.copy(alpha = 0.07f) else if (color == Color.White) lerp(Salmon, Color.Black, 0.25f) else lerp(color, Color.Black, 0.3f),
+        if (!selected) Ascend.Surface else lerp(Ascend.Surface, if (color == Color.White) Ascend.accent else color, 0.20f),
         label = "pill",
     )
     Row(
-        modifier.height(40.dp).clip(CircleShape).background(fill).clickable(onClick = onClick).padding(horizontal = 16.dp),
+        modifier.height(40.dp).clip(Ascend.CardShape).background(fill).clickable(onClick = onClick).padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         leading?.invoke()
@@ -99,26 +93,8 @@ fun PillChip(text: String, selected: Boolean, onClick: () -> Unit, modifier: Mod
     }
 }
 
-/**
- * The glossy panel used for cards: a soft top-to-bottom gradient, a thin highlight along the top
- * edge like the lip of a plastic case, and a soft shadow.
- */
-fun Modifier.glossCard(shape: Shape = RoundedCornerShape(16.dp), tint: Color? = null): Modifier = this
-    .shadow(6.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
-    .clip(shape)
-    .background(
-        Brush.verticalGradient(
-            listOf(
-                tint?.let { lerp(Page.CardTop, it, 0.22f) } ?: Page.CardTop,
-                tint?.let { lerp(Page.CardBottom, it, 0.1f) } ?: Page.CardBottom,
-            ),
-        ),
-    )
-    .drawWithContent {
-        drawContent()
-        drawRect(Brush.verticalGradient(0f to Color.White.copy(alpha = 0.09f), 0.03f to Color.Transparent))
-    }
-    .border(1.dp, Color.White.copy(alpha = 0.06f), shape)
+fun Modifier.glossCard(shape: Shape = Ascend.CardShape, tint: Color? = null): Modifier =
+    clip(shape).background(tint?.let { lerp(Ascend.Surface, it, 0.08f) } ?: Ascend.Surface).border(1.dp, Page.Divider, shape)
 
 /** Video-store yellow, for the little Play buttons. */
 val StoreYellow = Color(0xFFF2C94C)

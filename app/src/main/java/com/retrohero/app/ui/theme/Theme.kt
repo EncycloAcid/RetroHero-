@@ -6,6 +6,8 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -120,7 +122,12 @@ fun RetroHeroTheme(
 ) {
     val accent = Salmon
     MaterialExpressiveTheme(
-        colorScheme = Mono.copy(tertiary = accent),
+        colorScheme = Mono.copy(
+            primary = if (accent.luminance() < 0.25f) lerp(accent, Color.White, 0.5f) else accent,
+            onPrimary = Color.Black,
+            primaryContainer = lerp(Mono.surfaceContainer, accent, 0.18f),
+            tertiary = accent,
+        ),
         motionScheme = MotionScheme.expressive(),
         typography = MonoTypography,
         content = content,

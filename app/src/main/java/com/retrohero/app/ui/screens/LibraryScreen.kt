@@ -1,15 +1,12 @@
 package com.retrohero.app.ui.screens
 
-import androidx.compose.material.icons.rounded.PushPin
+import androidx.activity.compose.BackHandler
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.HorizontalDivider
+import com.retrohero.app.ui.components.ArchiveLabel
+import com.retrohero.app.ui.components.Page
+import com.retrohero.app.ui.components.Ascend
 import com.retrohero.app.ui.components.emberBackground
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -19,24 +16,17 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridScope
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
@@ -54,19 +44,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.retrohero.app.data.Game
@@ -84,20 +70,13 @@ import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
-private val ChipTrack = Color(0xFF161618)
-private val Chip = Color(0xFF232326)
-private val ChipOn = Color(0xFF3D3D41)
-private val CardFill = Color(0xFF121214)
 
 enum class LibraryTab(val label: String) { All("All"), Systems("Systems"), Favourites("Favourites"), Collections("Collections"), Screenshots("Screenshots"), History("History") }
 
 /** A screenshot of a game, for the Screenshots tab. */
 data class Shot(val game: Game, val file: File)
 
-/**
- * Library, laid out like the music app's: a big title, segmented chips, then category cards,
- * pinned games and the rest. History lists every session by day.
- */
+/** Archive index and category drilldowns. History lists every session by day. */
 @Composable
 fun LibraryScreen(
     games: List<Game>,
@@ -114,41 +93,43 @@ fun LibraryScreen(
     onPlay: (Game) -> Unit = {},
 ) {
     var tab by rememberSaveable { mutableStateOf(LibraryTab.All) }
+    BackHandler(enabled = tab != LibraryTab.All) { tab = LibraryTab.All }
     val counts = remember(games) { games.groupingBy { it.systemId }.eachCount() }
     val systems = remember(counts) { com.retrohero.app.data.Systems.all.filter { (counts[it.id] ?: 0) > 0 } }
 
     LazyVerticalGrid(
-        columns = GridCells.Fixed(3),
-        contentPadding = PaddingValues(start = 24.dp, end = 24.dp, bottom = 24.dp + LocalNavSpace.current),
+        columns = GridCells.Adaptive(94.dp),
+        contentPadding = PaddingValues(start = Page.Gutter, end = Page.Gutter, bottom = 24.dp + LocalNavSpace.current),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxSize().emberBackground(),
     ) {
         span {
-            Column {
-                com.retrohero.app.ui.components.PageHeader("Library", "${games.size} games · ${favorites.size} pinned")
-                Spacer(Modifier.height(12.dp))
-                Chips(tab) { tab = it }
+            com.retrohero.app.ui.components.PageHeader(if (tab == LibraryTab.All) "Library" else tab.label,
+                "${games.size} games · ${systems.size} systems") {
+                if (tab != LibraryTab.All) TextButton(onClick = { tab = LibraryTab.All }) { Text("All library") }
             }
         }
         when (tab) {
             LibraryTab.All -> {
+                span { StatsCard(history, onOpenStats) }
                 span {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            CategoryCard("Favourites", favorites.size, favorites, Modifier.weight(1f)) { tab = LibraryTab.Favourites }
-                            CategoryCard("Collections", collections.size, collections.flatMap { it.second }, Modifier.weight(1f)) { tab = LibraryTab.Collections }
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            CategoryCard("Systems", systems.size, systems.mapNotNull { s -> games.firstOrNull { it.systemId == s.id } }, Modifier.weight(1f)) { tab = LibraryTab.Systems }
-                            CategoryCard("Screenshots", shots.size, shots.map { it.game }, Modifier.weight(1f)) { tab = LibraryTab.Screenshots }
+                    Column {
+                        ArchiveLabel("Browse the archive", Modifier.padding(vertical = 12.dp))
+                        LibraryTab.entries.filter { it != LibraryTab.All }.forEach { destination ->
+                            val (count, art) = when (destination) {
+                                LibraryTab.Systems -> systems.size to games.firstOrNull()
+                                LibraryTab.Favourites -> favorites.size to favorites.firstOrNull()
+                                LibraryTab.Collections -> collections.size to collections.firstNotNullOfOrNull { it.second.firstOrNull() }
+                                LibraryTab.Screenshots -> shots.size to shots.firstOrNull()?.game
+                                else -> history.size to history.firstOrNull()?.game
+                            }
+                            IndexRow(destination, count, art) { tab = destination }
                         }
                     }
                 }
-                span { WideCard("History", if (history.isEmpty()) "Games you play show up here" else "${history.size} sessions", history.map { it.game }.distinct()) { tab = LibraryTab.History } }
-                span { StatsCard(history, onOpenStats) }
                 if (favorites.isNotEmpty()) {
-                    span { com.retrohero.app.ui.components.SectionTitle("Pinned", Icons.Rounded.PushPin, Modifier.padding(top = 12.dp), count = favorites.size) }
+                    span { com.retrohero.app.ui.components.SectionTitle("Pinned", Modifier.padding(top = 12.dp), count = favorites.size) }
                     items(favorites.take(9), key = { "pin_" + it.id }) { g ->
                         com.retrohero.app.ui.components.GameCard(g, onClick = { onOpenGame(g) }, subtitle = g.system?.shortName, onLongClick = { onOptions(g) }, onPlay = { onPlay(g) })
                     }
@@ -265,58 +246,23 @@ private fun LazyGridScope.historyItems(history: List<HistoryEntry>, onOpen: (Gam
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun Chips(selected: LibraryTab, onSelect: (LibraryTab) -> Unit) {
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        LibraryTab.entries.forEach { t -> com.retrohero.app.ui.components.PillChip(t.label, t == selected, { onSelect(t) }) }
-    }
-}
-
-@Composable
-private fun SectionTitle(text: String) {
-    Text(text, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 20.sp), color = Color.White, modifier = Modifier.padding(top = 12.dp))
-}
-
 @Composable
 private fun Empty(text: String) {
     Text(text, style = MaterialTheme.typography.bodyLarge, color = Color.White.copy(alpha = 0.55f), modifier = Modifier.padding(vertical = 28.dp, horizontal = 4.dp))
 }
 
-/** 78 dp category card with a little fanned stack of covers spilling out of the corner. */
 @Composable
-private fun CategoryCard(label: String, count: Int, covers: List<Game>, modifier: Modifier, onClick: () -> Unit) {
-    Box(
-        modifier
-            .height(84.dp)
-            .press3D()
-            .glossCard(RoundedCornerShape(20.dp))
-            .clickable(onClick = onClick),
-    ) {
-        CoverStack(covers, 46.dp, Modifier.align(Alignment.BottomEnd).offset(x = 10.dp, y = 12.dp))
-        Column(Modifier.padding(start = 14.dp, top = 12.dp)) {
-            Text(label, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 15.sp), color = Color.White)
-            Text("$count", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.55f))
+private fun IndexRow(tab: LibraryTab, count: Int, game: Game?, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(44.dp).clip(Ascend.CardShape).background(Ascend.Surface), contentAlignment = Alignment.Center) {
+            if (game != null) GameArt(game, Modifier.fillMaxSize(), showTag = false)
+            else ArchiveLabel("–", color = Ascend.Muted)
         }
+        Text(tab.label, Modifier.weight(1f).padding(horizontal = 12.dp), style = MaterialTheme.typography.titleMedium, color = Color.White)
+        ArchiveLabel(count.toString().padStart(2, '0'), color = Ascend.Muted)
+        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Ascend.Muted)
     }
-}
-
-@Composable
-private fun WideCard(label: String, subtitle: String, covers: List<Game>, onClick: () -> Unit) {
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .height(104.dp)
-            .press3D()
-            .glossCard(RoundedCornerShape(22.dp))
-            .clickable(onClick = onClick),
-    ) {
-        CoverStack(covers, 60.dp, Modifier.align(Alignment.BottomEnd).padding(end = 34.dp).offset(y = 12.dp))
-        Column(Modifier.align(Alignment.CenterStart).padding(start = 18.dp)) {
-            Text(label, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 20.sp), color = Color.White)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.55f))
-        }
-    }
+    HorizontalDivider(color = Page.Divider)
 }
 
 @Composable
@@ -329,29 +275,18 @@ private fun StatsCard(history: List<HistoryEntry>, onClick: () -> Unit) {
         Modifier
             .fillMaxWidth()
             .press3D()
-            .glossCard(RoundedCornerShape(22.dp))
+            .glossCard(Ascend.CardShape)
             .clickable(onClick = onClick)
             .padding(horizontal = 18.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Rounded.Insights, null, tint = Color(0xFF88FF76))
+        Icon(Icons.Rounded.Insights, null, tint = Ascend.accent)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text("Stats & recap", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 17.sp), color = Color.White)
+            Text("Play journal", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 17.sp), color = Color.White)
             Text(if (week > 0) "${PlayTime.format(week)} this week" else "Play a game to start your stats", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.55f))
         }
         Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Color.White.copy(alpha = 0.5f))
-    }
-}
-
-/** Two covers, the back one tilted −9° and faded, the front one +7°. */
-@Composable
-private fun CoverStack(covers: List<Game>, size: Dp, modifier: Modifier) {
-    val back = covers.getOrNull(1)
-    val front = covers.getOrNull(0)
-    Box(modifier.size(size * 1.5f, size * 1.2f)) {
-        if (back != null) GameArt(back, Modifier.align(Alignment.TopStart).size(size).rotate(-9f).graphicsLayer { alpha = 0.55f }.clip(RoundedCornerShape(size / 5)), showTag = false)
-        if (front != null) GameArt(front, Modifier.align(Alignment.BottomEnd).size(size).rotate(7f).clip(RoundedCornerShape(size / 5)), showTag = false)
     }
 }
 

@@ -1,7 +1,5 @@
 package com.retrohero.app.ui.screens
 
-import androidx.compose.material.icons.rounded.History
-import androidx.compose.material.icons.rounded.GridView
 import com.retrohero.app.ui.components.ascendCard
 import com.retrohero.app.ui.components.LocalNavSpace
 import androidx.compose.animation.core.RepeatMode
@@ -19,6 +17,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -41,20 +40,15 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.SearchOff
-import androidx.compose.material.icons.filled.SportsEsports
-import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.carousel.HorizontalMultiBrowseCarousel
 import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.runtime.Composable
@@ -72,7 +66,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 import com.retrohero.app.ui.theme.PixelFont
 import androidx.compose.ui.unit.dp
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.draw.clip
 import androidx.compose.material3.DropdownMenu
@@ -92,8 +85,6 @@ import com.retrohero.app.ui.components.EmptyState
 import com.retrohero.app.ui.components.GameArt
 import com.retrohero.app.ui.components.PageHeader
 import com.retrohero.app.ui.components.PillChip
-import com.retrohero.app.ui.components.BoxTile
-import com.retrohero.app.ui.components.glossCard
 import com.retrohero.app.ui.components.GameCard
 
 @Composable
@@ -111,33 +102,25 @@ fun GamesScreen(
     favorites: Set<String> = emptySet(),
     title: String = "Search",
     onQuickPlay: ((Game) -> Unit)? = null,
+    onHomebrew: (() -> Unit)? = null,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var systemFilter by rememberSaveable { mutableStateOf<String?>(null) }
     var sort by rememberSaveable { mutableStateOf(com.retrohero.app.data.GameSort.Name) }
     var onlyFavourites by rememberSaveable { mutableStateOf(false) }
     var onlyUnplayed by rememberSaveable { mutableStateOf(false) }
+    var filtersOpen by rememberSaveable { mutableStateOf(false) }
     var sortMenu by remember { mutableStateOf(false) }
     val grid = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
     val scope = rememberCoroutineScope()
 
     if (!hasFolders && games.isEmpty()) {
         EmptyState(
-            icon = Icons.Default.SportsEsports,
-            title = "Let's find your games",
-            body = "Choose the folder where you keep your game files. RetroHero recognises 20+ systems " +
-                "and fetches the right emulator when you need it.",
+            title = "Start your library",
+            body = "Add a folder of games to build your first shelf. RetroHero finds the system and sets up its emulator when you play.",
         ) {
-            Button(
-                onClick = onAddFolder,
-                shapes = ButtonDefaults.shapes(),
-                modifier = Modifier.height(ButtonDefaults.MediumContainerHeight),
-                contentPadding = ButtonDefaults.contentPaddingFor(ButtonDefaults.MediumContainerHeight),
-            ) {
-                Icon(Icons.Default.CreateNewFolder, null)
-                Spacer(Modifier.width(8.dp))
-                Text("Choose folder", style = ButtonDefaults.textStyleFor(ButtonDefaults.MediumContainerHeight))
-            }
+            com.retrohero.app.ui.components.AccentButton("Choose game folder", onAddFolder, icon = Icons.Default.CreateNewFolder)
+            if (onHomebrew != null) androidx.compose.material3.TextButton(onClick = onHomebrew) { Text("Browse free homebrew") }
             OutlinedButton(onClick = onDownload, shapes = ButtonDefaults.shapes(), modifier = Modifier.padding(top = 12.dp)) {
                 Icon(Icons.Default.Download, null, Modifier.size(ButtonDefaults.IconSize))
                 Spacer(Modifier.width(ButtonDefaults.IconSpacing))
@@ -152,7 +135,6 @@ fun GamesScreen(
     }
     if (games.isEmpty() && !scanning) {
         EmptyState(
-            icon = Icons.Default.SearchOff,
             title = "No games yet",
             body = "Supported files include .nes .sfc .gba .md .cue .chd .zip and more. " +
                 "Tip: name folders after the system, like \"psx\" or \"genesis\".",
@@ -189,10 +171,15 @@ fun GamesScreen(
         modifier = Modifier.fillMaxSize(),
     ) {
         fullWidth { PageHeader(title, if (games.size == 1) "1 game" else "${games.size} games across ${systemsPresent.size} ${if (systemsPresent.size == 1) "system" else "systems"}") }
-        fullWidth { SearchField(query, games.size) { query = it } }
+        fullWidth {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.weight(1f)) { SearchField(query, games.size) { query = it } }
+                PillChip("Filters", filtersOpen || systemFilter != null || onlyFavourites || onlyUnplayed, { filtersOpen = !filtersOpen })
+            }
+        }
 
         // Sort and quick filters.
-        fullWidth {
+        if (filtersOpen) fullWidth {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 item {
                     Box {
@@ -218,7 +205,7 @@ fun GamesScreen(
                 }
             }
         }
-        if (showSystemFilter && systemsPresent.size > 1) {
+        if (filtersOpen && showSystemFilter && systemsPresent.size > 1) {
             fullWidth {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     item { PillChip("All", systemFilter == null, { systemFilter = null }) }
@@ -230,10 +217,10 @@ fun GamesScreen(
         }
 
         if (browsing && recents.isNotEmpty()) {
-            fullWidth { com.retrohero.app.ui.components.SectionTitle("Jump back in", Icons.Rounded.History, Modifier.padding(top = 8.dp), count = recents.size) }
+            fullWidth { com.retrohero.app.ui.components.SectionTitle("Jump back in", Modifier.padding(top = 8.dp), count = recents.size) }
             fullWidth { RecentCarousel(recents, onPlay, onGameOptions) }
-            fullWidth { com.retrohero.app.ui.components.SectionTitle("Library", Icons.Rounded.GridView, Modifier.padding(top = 8.dp), count = filtered.size) }
         }
+        fullWidth { com.retrohero.app.ui.components.SectionTitle(if (browsing) "All games" else "Results", count = filtered.size) }
 
         if (filtered.isEmpty()) {
             fullWidth {
@@ -262,10 +249,9 @@ fun GamesScreen(
     }
     // A–Z fast scroller along the right edge when sorted by name.
     if (sort == com.retrohero.app.data.GameSort.Name && filtered.size > 12) {
-        val headerItems = 3 + (if (showSystemFilter && systemsPresent.size > 1) 1 else 0) + (if (browsing && recents.isNotEmpty()) 3 else 0)
         AlphabetScroller(
             letters = filtered.map { it.title.firstOrNull()?.uppercaseChar()?.let { c -> if (c.isLetter()) c else '#' } ?: '#' },
-            onJump = { index -> scope.launch { grid.scrollToItem(headerItems + index) } },
+            onJump = { index -> scope.launch { grid.scrollToItem((grid.layoutInfo.totalItemsCount - filtered.size + index).coerceAtLeast(0)) } },
             modifier = Modifier.align(Alignment.CenterEnd).padding(bottom = LocalNavSpace.current),
         )
     }

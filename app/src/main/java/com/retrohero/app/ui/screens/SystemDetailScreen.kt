@@ -303,9 +303,9 @@ private fun Header(
                 Brush.verticalGradient(
                     0f to Color.Black.copy(alpha = 0.35f),
                     0.2f to Color.Transparent,
-                    0.55f to Color.Transparent,
-                    0.85f to tint.copy(alpha = 0.8f),
-                    1f to tint,
+                    0.4f to Color.Transparent,
+                    0.85f to Color.Black.copy(alpha = 0.8f),
+                    1f to com.retrohero.app.ui.components.Page.Bg,
                 ),
             ),
         )
@@ -337,15 +337,15 @@ private fun Header(
                     Modifier
                         .height(40.dp)
                         .press3D(maxTilt = 4f)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.9f))
+                        .clip(com.retrohero.app.ui.components.Ascend.CardShape)
+                        .background(com.retrohero.app.ui.theme.Salmon)
                         .clickable(enabled = games.isNotEmpty(), onClick = onPlayRandom)
                         .padding(horizontal = 18.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(Icons.Rounded.Casino, null, tint = Color(0xFF1A1A1A), modifier = Modifier.size(20.dp))
+                    Icon(Icons.Rounded.Casino, null, tint = com.retrohero.app.ui.components.Ascend.onAccent, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Play random", style = MaterialTheme.typography.labelLargeEmphasized, color = Color(0xFF1A1A1A))
+                    Text("Play random", style = MaterialTheme.typography.labelLargeEmphasized, color = com.retrohero.app.ui.components.Ascend.onAccent)
                 }
             }
         }

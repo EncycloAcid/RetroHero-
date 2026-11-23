@@ -4,6 +4,8 @@ import android.graphics.Bitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
@@ -77,10 +79,7 @@ class ScreenshotTest {
     }
 
     private fun tab(label: String) {
-        // Icon-only floating bar exposes labels as content descriptions; the rail shows text.
-        val byDescription = compose.onAllNodesWithContentDescription(label).fetchSemanticsNodes()
-        if (byDescription.isNotEmpty()) compose.onAllNodesWithContentDescription(label).onFirst().performClick()
-        else compose.onAllNodesWithText(label).onFirst().performClick()
+        compose.onAllNodes(hasText(label) and hasClickAction()).onFirst().performClick()
     }
 
     @Test
@@ -129,6 +128,7 @@ class ScreenshotTest {
             compose.waitForIdle()
             shot("1_home")
             // Roll the gacha: mid-spin, then after it lands.
+            compose.onAllNodesWithText("Shuffle").onFirst().performClick()
             compose.onAllNodesWithText("roll!!").onFirst().performClick()
             compose.mainClock.autoAdvance = false
             compose.mainClock.advanceTimeBy(1400)
@@ -136,6 +136,7 @@ class ScreenshotTest {
             compose.mainClock.advanceTimeBy(9500)
             saveNow("1c_landed")
             compose.mainClock.autoAdvance = true
+            compose.onAllNodesWithContentDescription("Close").onFirst().performClick()
             tab("Search"); shot("2_search")
             tab("Library"); shot("3_library")
             compose.onAllNodesWithText("Systems").onFirst().performClick()
@@ -165,6 +166,7 @@ class ScreenshotTest {
             shot("7_download_sheet")
             compose.onAllNodesWithText("Cancel").onFirst().performClick()
             compose.waitForIdle()
+            tab("Search")
             compose.onAllNodesWithText("Dungeon Dash").onFirst().performTouchInput { longClick() }
             shot("8_game_sheet")
         }

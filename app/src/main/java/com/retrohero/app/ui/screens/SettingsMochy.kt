@@ -1,13 +1,10 @@
 package com.retrohero.app.ui.screens
 
 import com.retrohero.app.ui.components.emberBackground
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -56,7 +53,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -65,7 +61,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
@@ -88,7 +83,6 @@ import com.retrohero.app.ui.theme.setAccent
 /** Mochy's emphasized easing. */
 val MochyEase = CubicBezierEasing(0.2f, 0f, 0f, 1f)
 
-private val BubbleFill = Color(0xFF1C1C1E)
 private val IconTile = Color(0xFF333338)
 private val SearchFill = Color(0xFF141416)
 private val Placeholder = Color(0xFF77777D)
@@ -116,7 +110,7 @@ fun SettingsHome(onOpen: (String) -> Unit, onOpenStats: () -> Unit) {
             .verticalScroll(rememberScrollState())
             .padding(start = 20.dp, end = 20.dp, bottom = 24.dp + LocalNavSpace.current),
     ) {
-        com.retrohero.app.ui.components.PageHeader("Settings", "Make RetroHero yours") {
+        com.retrohero.app.ui.components.PageHeader("Settings", "Library, controls and appearance") {
             Image(painterResource(R.drawable.ic_logo_mark), null, Modifier.size(width = 41.dp, height = 28.dp))
         }
         Spacer(Modifier.height(14.dp))
@@ -124,7 +118,7 @@ fun SettingsHome(onOpen: (String) -> Unit, onOpenStats: () -> Unit) {
         val focused = query.isNotEmpty()
         val fill by animateColorAsState(if (focused) Color(0xFF1E1E21) else SearchFill, tween(200), label = "searchFill")
         Row(
-            Modifier.fillMaxWidth().height(48.dp).glossCard(CircleShape).background(fill.copy(alpha = if (focused) 0.6f else 0f)).padding(horizontal = 16.dp),
+            Modifier.fillMaxWidth().height(48.dp).glossCard(RoundedCornerShape(8.dp)).background(fill.copy(alpha = if (focused) 0.6f else 0f)).padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(Icons.Rounded.Search, null, tint = Placeholder, modifier = Modifier.size(20.dp))
@@ -174,7 +168,7 @@ fun SettingsHome(onOpen: (String) -> Unit, onOpenStats: () -> Unit) {
             Modifier
                 .fillMaxWidth()
                 .press3D()
-                .glossCard(RoundedCornerShape(22.dp), tint = Salmon)
+                .glossCard(RoundedCornerShape(8.dp), tint = Salmon)
                 .clickable(onClick = onOpenStats)
                 .padding(horizontal = 18.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -192,8 +186,11 @@ fun SettingsHome(onOpen: (String) -> Unit, onOpenStats: () -> Unit) {
         Spacer(Modifier.height(18.dp))
         Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp).height(0.8.dp).background(Color.White.copy(alpha = 0.1f)))
         Spacer(Modifier.height(18.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            categories.forEach { c -> CategoryBubble(c.title, c.icon) { onOpen(c.id) } }
+        Column {
+            categories.forEach { c ->
+                CategoryBubble(c.title, c.icon) { onOpen(c.id) }
+                androidx.compose.material3.HorizontalDivider(color = com.retrohero.app.ui.components.Page.Divider)
+            }
         }
     }
 }
@@ -203,14 +200,12 @@ private fun CategoryBubble(title: String, icon: ImageVector, onClick: () -> Unit
     Row(
         Modifier
             .fillMaxWidth()
-            .height(64.dp)
-            .press3D()
-            .glossCard(RoundedCornerShape(22.dp))
+            .height(56.dp)
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(40.dp).clip(CircleShape).background(IconTile), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = Color.White, modifier = Modifier.size(20.dp))
         }
         Spacer(Modifier.width(12.dp))

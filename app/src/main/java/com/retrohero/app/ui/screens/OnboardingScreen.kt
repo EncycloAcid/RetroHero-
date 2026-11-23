@@ -1,7 +1,6 @@
 package com.retrohero.app.ui.screens
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -9,7 +8,12 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.Image
+import com.retrohero.app.ui.components.ArchiveLandscape
+import com.retrohero.app.ui.components.ArchiveLabel
+import com.retrohero.app.ui.components.Ascend
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -49,12 +53,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.retrohero.app.R
 import com.retrohero.app.ui.components.press3D
-import com.retrohero.app.ui.components.topGlow
 import com.retrohero.app.ui.theme.Salmon
 
 /**
@@ -75,12 +76,12 @@ fun OnboardingScreen(
     Box(
         Modifier
             .fillMaxSize()
-            .background(com.retrohero.app.ui.components.Page.Bg)
-            .topGlow(Salmon.copy(alpha = 0.7f), Color(0xFF7C82B4), 420.dp) { 1f },
+            .background(com.retrohero.app.ui.components.Page.Bg),
     ) {
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars).navigationBarsPadding()) {
             // Skip lives top-right on every page but the last.
             Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                ArchiveLabel("RetroHero  /  Setup", Modifier.padding(start = 8.dp))
                 Spacer(Modifier.weight(1f))
                 if (page < pages - 1) {
                     Text(
@@ -101,12 +102,13 @@ fun OnboardingScreen(
                 label = "onboardingPage",
                 modifier = Modifier.weight(1f),
             ) { p ->
-                Column(Modifier.fillMaxSize().padding(horizontal = 28.dp), verticalArrangement = Arrangement.Center) {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.Center) {
                     when (p) {
                         0 -> {
-                            Image(painterResource(R.drawable.ic_logo_mark), null, Modifier.size(width = 112.dp, height = 76.dp))
-                            Title("Your retro games,\nall in one place.")
-                            Body("RetroHero plays games from 20+ classic consoles, from NES and Game Boy to PlayStation and arcade, with the right emulator set up for you.")
+                            ArchiveLandscape(Modifier.fillMaxWidth().aspectRatio(1.55f).clip(RoundedCornerShape(8.dp)))
+                            ArchiveLabel("The personal game archive", Modifier.padding(top = 22.dp))
+                            Title("Your games. Your shelves.")
+                            Body("Bring your classic games together. Build shelves, revisit favourites, and pick up where you left off.")
                         }
                         1 -> {
                             Title("Add your games")
@@ -126,29 +128,22 @@ fun OnboardingScreen(
                             Icon(Icons.Rounded.SportsEsports, null, tint = Color.White, modifier = Modifier.size(64.dp))
                             Title(if (hasGames) "You're all set." else "Ready when you are.")
                             Body(
-                                if (hasGames) "Your games are in the library. Roll the gacha on Home for a random pick, or open a system to browse."
+                                if (hasGames) "Your games are in the library. Use Shuffle on Home for a random pick, or open a system to browse."
                                 else "Add games any time from the + on Home. Free homebrew is a good place to start.",
                             )
                         }
                     }
                 }
             }
-            // Page dots and the main button.
-            Row(Modifier.align(Alignment.CenterHorizontally).padding(bottom = 18.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                repeat(pages) { i ->
-                    val w by animateDpAsState(if (i == page) 22.dp else 7.dp, spring(dampingRatio = 0.7f), label = "dot")
-                    Box(Modifier.height(7.dp).width(w).clip(CircleShape).background(Color.White.copy(alpha = if (i == page) 0.9f else 0.25f)))
-                }
-            }
+            ArchiveLabel("Step ${page + 1} of $pages", Modifier.align(Alignment.CenterHorizontally).padding(vertical = 12.dp), Ascend.Muted)
             Row(
                 Modifier
                     .padding(horizontal = 28.dp)
                     .padding(bottom = 20.dp)
                     .fillMaxWidth()
                     .height(54.dp)
-                    .press3D(maxTilt = 3f)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.9f))
+                    .clip(Ascend.CardShape)
+                    .background(Salmon)
                     .clickable { if (page < pages - 1) page++ else onFinish() },
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
@@ -160,7 +155,7 @@ fun OnboardingScreen(
                         else -> "Continue"
                     },
                     style = MaterialTheme.typography.titleMediumEmphasized,
-                    color = Color(0xFF1A1A1A),
+                    color = Ascend.onAccent,
                 )
             }
         }

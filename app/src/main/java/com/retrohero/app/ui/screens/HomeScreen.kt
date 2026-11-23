@@ -1,10 +1,17 @@
 package com.retrohero.app.ui.screens
 
-import androidx.compose.material.icons.rounded.CollectionsBookmark
-import androidx.compose.material.icons.rounded.History
-import androidx.compose.material.icons.rounded.SportsEsports
-import androidx.compose.material.icons.rounded.GridView
-import androidx.compose.material.icons.automirrored.rounded.TrendingUp
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material.icons.rounded.Insights
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.window.Dialog
+import com.retrohero.app.ui.components.ArchiveLabel
+import com.retrohero.app.ui.components.AccentButton
+import com.retrohero.app.ui.components.SectionTitle
+import com.retrohero.app.ui.components.PageHeader
+import com.retrohero.app.ui.components.Ascend
 import com.retrohero.app.ui.components.emberBackground
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.AnimatedContent
@@ -25,7 +32,6 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -35,7 +41,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -43,9 +48,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -58,7 +61,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialShapes
@@ -82,7 +84,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -92,7 +93,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -100,10 +100,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
-import com.retrohero.app.R
 import com.retrohero.app.data.Game
 import com.retrohero.app.data.GameCollection
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.fillMaxHeight
 import com.retrohero.app.data.PlayStat
 import com.retrohero.app.data.PlayTime
@@ -114,10 +112,8 @@ import com.retrohero.app.ui.components.GameArt
 import com.retrohero.app.ui.components.GameCard
 import com.retrohero.app.ui.components.MorphShape
 import com.retrohero.app.ui.components.rememberMorph
-import com.retrohero.app.ui.components.launchMarkTarget
 import com.retrohero.app.ui.components.launchRise
 import com.retrohero.app.ui.components.press3D
-import com.retrohero.app.ui.components.rememberPressFeedback
 import com.retrohero.app.ui.theme.Inter
 import com.retrohero.app.ui.theme.PixelFont
 import com.retrohero.app.ui.theme.Salmon
@@ -144,11 +140,11 @@ private val ContentInset: Dp
         }
     }
 
-/** Row cards show about two and a half per screen, hinting that the row scrolls. */
+/** Three covers and a peek at the next one on phones. */
 private val RowCardWidth: Dp
     @Composable @ReadOnlyComposable get() {
         val w = LocalConfiguration.current.screenWidthDp.dp
-        return ((w - ContentInset * 2 - CardSpacing * 2) / 2.45f).coerceIn(112.dp, 168.dp)
+        return ((w - ContentInset * 2 - CardSpacing * 2) / 3.15f).coerceIn(94.dp, 146.dp)
     }
 
 /** The gacha scales with the screen height so short phones still see the rows below it. */
@@ -160,7 +156,6 @@ private val CardSpacing = 12.dp
 private val Tracking = (-0.04).em
 
 private val LabelStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 16.sp, lineHeight = 19.sp, letterSpacing = Tracking)
-private val TitleStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 22.sp, lineHeight = 27.sp, letterSpacing = Tracking)
 private val HeroTitleStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 26.sp, lineHeight = 30.sp, letterSpacing = Tracking)
 private val CardTitleStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, lineHeight = 17.sp, letterSpacing = (-0.03).em)
 private val CardSubtitleStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 12.sp, lineHeight = 15.sp, letterSpacing = (-0.02).em)
@@ -205,10 +200,7 @@ private fun reelDistance(index: Int, reel: Float, count: Int): Float {
     return d
 }
 
-/**
- * Home: a gacha hero (roll the reel, it lands on a random game), then rows of recently played
- * games and systems, then the whole library.
- */
+/** Featured games and shelves from the local library. */
 @Composable
 fun HomeScreen(
     games: List<Game>,
@@ -232,29 +224,64 @@ fun HomeScreen(
     val counts = remember(games) { games.groupingBy { it.systemId }.eachCount() }
     val systems = remember(counts) { Systems.all.filter { (counts[it.id] ?: 0) > 0 } }
     // The reel: recent games first, then a shuffle of the rest.
-    val candidates = remember(games) {
+    val candidates = remember(games, recents) {
         (recents + games.shuffled()).distinctBy { it.id }.take(MaxCandidates)
     }
 
+    var shuffleOpen by rememberSaveable { mutableStateOf(false) }
+    if (shuffleOpen) Dialog(onDismissRequest = { shuffleOpen = false }) {
+        Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))) {
+            GachaHero(candidates) { shuffleOpen = false; onPlay(it) }
+            IconButton({ shuffleOpen = false }, Modifier.align(Alignment.TopEnd)) { Icon(Icons.Rounded.Close, "Close", tint = Color.White) }
+        }
+    }
+    val featured = remember(games, recents, favorites) {
+        (recents.take(1) + favorites.take(2) + games.take(5)).distinctBy { it.id }.take(4)
+    }
     LazyVerticalGrid(
         columns = GridCells.Adaptive(100.dp),
         contentPadding = PaddingValues(start = ContentInset, end = ContentInset, bottom = bottomPadding + 24.dp),
         horizontalArrangement = Arrangement.spacedBy(CardSpacing),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxSize().emberBackground(),
     ) {
-        full { HeroCarousel(candidates, games, recents, favorites, onPlay, onOpen, topActions, stats, onOpenStats) }
+        full { PageHeader("Home", "${games.size} games · ${systems.size} systems", Modifier.padding(horizontal = ContentInset), trailing = topActions) }
+        if (featured.isNotEmpty()) full { FeaturedGames(featured, recents.firstOrNull(), onOpen, onPlay) }
+        full {
+            Row(Modifier.fillMaxWidth().padding(horizontal = ContentInset), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                ArchiveShortcut("Shuffle", Icons.Rounded.Shuffle, Modifier.weight(1f)) {
+                    if (candidates.size > 1) shuffleOpen = true else candidates.firstOrNull()?.let(onPlay)
+                }
+                ArchiveShortcut("Play stats", Icons.Rounded.Insights, Modifier.weight(1f), onOpenStats)
+            }
+        }
+        if (favorites.isNotEmpty()) {
+            full { SectionHeader("Pinned", favorites.size) }
+            full { LazyRow(contentPadding = PaddingValues(horizontal = ContentInset), horizontalArrangement = Arrangement.spacedBy(CardSpacing)) {
+                items(favorites, key = { it.id }) { game -> GameCard(game, { onOpen(game) }, width = RowCardWidth, onLongClick = { onOptions(game) }, onPlay = { onPlay(game) }) }
+            } }
+        }
 
         if (recents.isNotEmpty()) {
-            full { Box(Modifier.launchRise(2)) { SectionHeader("Recently Played", Icons.Rounded.History, recents.size) } }
+            full { Box(Modifier.launchRise(2)) { SectionHeader("Recently Played", recents.size) } }
             full {
                 LazyRow(modifier = Modifier.launchRise(3), contentPadding = PaddingValues(horizontal = ContentInset), horizontalArrangement = Arrangement.spacedBy(CardSpacing)) {
                     items(recents, key = { "r_" + it.id }) { game -> RowCard(game, onOpen, onOptions) }
                 }
             }
         }
+        val last = recents.firstOrNull()
+        if (last != null) {
+            val picks = games.filter { it.systemId == last.systemId && it !in recents }.take(4)
+            if (picks.isNotEmpty()) {
+                full { SectionHeader("More on ${last.system?.shortName ?: last.systemId}", picks.size) }
+                full { LazyRow(contentPadding = PaddingValues(horizontal = ContentInset), horizontalArrangement = Arrangement.spacedBy(CardSpacing)) {
+                    items(picks, key = { it.id }) { game -> RowCard(game, onOpen, onOptions) }
+                } }
+            }
+        }
         if (mostPlayed.size >= 2) {
-            full { SectionHeader("Most Played", Icons.AutoMirrored.Rounded.TrendingUp, mostPlayed.size) }
+            full { SectionHeader("Most Played", mostPlayed.size) }
             full {
                 LazyRow(contentPadding = PaddingValues(horizontal = ContentInset), horizontalArrangement = Arrangement.spacedBy(CardSpacing)) {
                     items(mostPlayed, key = { "m_" + it.id }) { game ->
@@ -264,7 +291,7 @@ fun HomeScreen(
             }
         }
         if (collections.isNotEmpty()) {
-            full { SectionHeader("Your Collections", Icons.Rounded.CollectionsBookmark, collections.size) }
+            full { SectionHeader("Your Collections", collections.size) }
             full {
                 LazyRow(contentPadding = PaddingValues(horizontal = ContentInset), horizontalArrangement = Arrangement.spacedBy(CardSpacing)) {
                     items(collections, key = { "c_" + it.first.id }) { (c, list) -> CollectionCard(c, list, onOpenCollection) }
@@ -272,14 +299,14 @@ fun HomeScreen(
             }
         }
         if (systems.size > 1) {
-            full { SectionHeader("Your Systems", Icons.Rounded.SportsEsports, systems.size) }
+            full { SectionHeader("Your Systems", systems.size) }
             full {
                 LazyRow(contentPadding = PaddingValues(horizontal = ContentInset), horizontalArrangement = Arrangement.spacedBy(CardSpacing)) {
                     items(systems, key = { "s_" + it.id }) { system -> SystemCard(system, counts[system.id] ?: 0, onOpenSystem) }
                 }
             }
         }
-        full { SectionHeader("All Games", Icons.Rounded.GridView, games.size, onSeeAllGames) }
+        full { SectionHeader("All Games", games.size, onSeeAllGames) }
         items(games, key = { it.id }) { game ->
             GameCard(game, onClick = { onOpen(game) }, onLongClick = { onOptions(game) }, modifier = Modifier.animateItem())
         }
@@ -488,11 +515,11 @@ private fun GachaHero(candidates: List<Game>, onPlay: (Game) -> Unit) {
 
         HeroText(
             label = when (state.phase) {
-                Phase.Idle -> "Gacha here!"
+                Phase.Idle -> "Shuffle"
                 Phase.Rolling -> "Rolling…"
                 Phase.Landed -> "You got"
             },
-            title = state.result?.title ?: "Random plays",
+            title = state.result?.title ?: "Random pick",
             modifier = Modifier.align(Alignment.BottomStart).launchRise(1),
         ) {
             when (state.phase) {
@@ -520,192 +547,40 @@ private fun GachaHero(candidates: List<Game>, onPlay: (Game) -> Unit) {
     }
 }
 
-// ---- Hero carousel: Gacha / Speed dial / Because you played -----------------------------------
+// ---- Featured games and shortcuts --------------------------------------------------------------
 
-/**
- * The top of Home, as a swipeable set of pages: the gacha, a speed dial of favourites, and picks
- * based on the last game played. The logo row stays put while the pages move under it.
- */
 @Composable
-private fun HeroCarousel(
-    candidates: List<Game>,
-    games: List<Game>,
-    recents: List<Game>,
-    favorites: List<Game>,
-    onPlay: (Game) -> Unit,
-    onOpen: (Game) -> Unit,
-    topActions: @Composable () -> Unit,
-    stats: Map<String, PlayStat> = emptyMap(),
-    onOpenStats: () -> Unit = {},
-) {
-    val last = recents.firstOrNull()
-    val totalSeconds = stats.values.sumOf { it.seconds }
-    val picks = remember(games, recents) {
-        if (last == null) emptyList()
-        else {
-            val played = recents.mapTo(HashSet()) { it.id }
-            val same = games.filter { it.systemId == last.systemId && it.id !in played }
-            (same + games.filter { it.id !in played && it.systemId != last.systemId }).take(3)
-        }
-    }
-    val pages = buildList {
-        add(0)
-        add(1)
-        if (last != null && picks.isNotEmpty()) add(2)
-        if (totalSeconds >= 60) add(3)
-    }
-    val pager = rememberPagerState { pages.size }
-    Box(Modifier.fillMaxWidth().height(HeroHeight)) {
-        HorizontalPager(state = pager, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1) { index ->
-            // Pages ease in from the side, like a card being dealt.
-            val offset = (pager.currentPage - index) + pager.currentPageOffsetFraction
-            Box(
-                Modifier.fillMaxSize().graphicsLayer {
-                    alpha = 1f - (abs(offset) * 0.6f).coerceAtMost(0.6f)
-                    // Neighbours trail behind (pushed outward), never pulled into view.
-                    translationX = -offset * size.width * 0.25f
-                },
-            ) {
-                when (pages[index]) {
-                    0 -> GachaHero(candidates, onPlay)
-                    1 -> SpeedDialPage(favorites, onPlay, onOpen)
-                    2 -> BecausePage(last!!, picks, onPlay, onOpen)
-                    else -> StatsPage(games, stats, onOpen, onOpenStats)
+private fun FeaturedGames(games: List<Game>, recent: Game?, onOpen: (Game) -> Unit, onPlay: (Game) -> Unit) {
+    val pager = rememberPagerState { games.size }
+    HorizontalPager(state = pager, key = { games[it].id }, contentPadding = PaddingValues(horizontal = ContentInset),
+        pageSpacing = 8.dp, modifier = Modifier.fillMaxWidth()) { index ->
+        val game = games[index]
+        Box(Modifier.fillMaxWidth().heightIn(min = 238.dp).clip(RoundedCornerShape(12.dp)).clickable { onOpen(game) }) {
+            GameArt(game, Modifier.matchParentSize(), showTag = false)
+            Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.16f), Color.Black.copy(alpha = 0.36f), Color.Black.copy(alpha = 0.94f)))))
+            Column(Modifier.fillMaxWidth().padding(18.dp)) {
+                ArchiveLabel(if (game.id == recent?.id) "Continue playing" else "From your library",
+                    Modifier.background(Color.Black.copy(alpha = 0.75f), RoundedCornerShape(4.dp)).padding(vertical = 4.dp, horizontal = 7.dp), Color.White)
+                Spacer(Modifier.height(54.dp))
+                Text(game.title, style = MaterialTheme.typography.headlineLargeEmphasized, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(game.system?.name.orEmpty(), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.82f))
+                Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    AccentButton("Play", { onPlay(game) }, icon = Icons.Rounded.PlayArrow)
+                    Spacer(Modifier.weight(1f))
+                    ArchiveLabel("${index + 1} / ${games.size}", color = Color.White)
                 }
             }
         }
-        Row(
-            Modifier.windowInsetsPadding(WindowInsets.statusBars).fillMaxWidth().padding(start = ContentInset, end = ContentInset - 4.dp, top = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // Glyph (keeps its own colours) and wordmark.
-            androidx.compose.foundation.Image(
-                painterResource(R.drawable.ic_logo_mark),
-                contentDescription = null,
-                modifier = Modifier.size(width = 38.dp, height = 26.dp).launchMarkTarget(),
-            )
-            Spacer(Modifier.width(10.dp))
-            Text(
-                "RetroHero",
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 20.sp, letterSpacing = (-0.03).em),
-                color = Color.White,
-                modifier = Modifier.launchRise(0),
-            )
-            Spacer(Modifier.weight(1f))
-            topActions()
-        }
-
-        // Page dots
-        Row(
-            Modifier.align(Alignment.BottomEnd).padding(end = ContentInset, bottom = 52.dp),
-            horizontalArrangement = Arrangement.spacedBy(5.dp),
-        ) {
-            repeat(pages.size) { i ->
-                val active = pager.currentPage == i
-                val w by androidx.compose.animation.core.animateDpAsState(if (active) 18.dp else 6.dp, spring(dampingRatio = 0.7f), label = "heroDot")
-                Box(Modifier.height(6.dp).width(w).clip(CircleShape).background(Color.White.copy(alpha = if (active) 0.9f else 0.35f)))
-            }
-        }
-    }
-}
-
-/** A soft colour wash used behind the non-gacha pages. */
-@Composable
-private fun PageWash(base: Color) {
-    val light = lerp(base, Color.White, 0.45f)
-    val deep = lerp(lerp(base, Color(0xFF7C82B4), 0.3f), Color.Black, 0.35f)
-    Box(
-        Modifier.fillMaxSize().background(
-            Brush.linearGradient(listOf(deep, lerp(deep, light, 0.5f), light), start = Offset(0f, Float.POSITIVE_INFINITY), end = Offset(Float.POSITIVE_INFINITY, 0f)),
-        ),
-    )
-    Box(
-        Modifier.fillMaxSize().background(
-            Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.85f), 0.22f to Color.Black.copy(alpha = 0.3f), 0.44f to Color.Transparent, 0.62f to Color.Transparent, 1f to Color.Black),
-        ),
-    )
-}
-
-@Composable
-private fun SpeedDialPage(favorites: List<Game>, onPlay: (Game) -> Unit, onOpen: (Game) -> Unit) {
-    PageWash(favorites.firstOrNull()?.system?.color ?: Color(0xFF6E6A86))
-    Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars).padding(top = 72.dp)) {
-        val tiles = favorites.take(6)
-        Column(Modifier.padding(horizontal = ContentInset), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            for (row in 0..1) Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                for (col in 0..2) {
-                    val game = tiles.getOrNull(row * 3 + col)
-                    Box(Modifier.weight(1f).aspectRatio(1f)) {
-                        if (game != null) {
-                            Box(
-                                Modifier
-                                    .fillMaxSize()
-                                    .press3D()
-                                    .clip(RoundedCornerShape(22.dp))
-                                    .combinedClickable(onClick = { onPlay(game) }, onLongClick = { onOpen(game) }),
-                            ) { GameArt(game, Modifier.fillMaxSize(), showTitle = true, showTag = false) }
-                        } else {
-                            Box(Modifier.fillMaxSize().clip(RoundedCornerShape(22.dp)).background(Color.White.copy(alpha = 0.07f)))
-                        }
-                    }
-                }
-            }
-        }
-        Spacer(Modifier.weight(1f))
-        Column(Modifier.padding(start = ContentInset, end = ContentInset, bottom = 48.dp)) {
-            Text("Your favourites", style = LabelStyle, color = LabelColor)
-            Text("Speed dial", style = HeroTitleStyle, color = Color.White)
-            Text(
-                if (favorites.isEmpty()) "Swipe a game left in a system's list, or long-press it, to pin it here."
-                else "Tap to play, hold for details.",
-                style = CardSubtitleStyle,
-                color = Color.White.copy(alpha = 0.6f),
-                modifier = Modifier.padding(top = 6.dp).fillMaxWidth(0.7f),
-            )
-        }
     }
 }
 
 @Composable
-private fun BecausePage(last: Game, picks: List<Game>, onPlay: (Game) -> Unit, onOpen: (Game) -> Unit) {
-    PageWash(last.system?.color ?: Color(0xFF6E6A86))
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val card = (maxWidth * 0.42f).coerceAtMost(180.dp)
-        // A fanned hand of covers on the right.
-        picks.take(3).forEachIndexed { i, game ->
-            val angle = (i - 1) * 9f
-            Box(
-                Modifier
-                    .align(Alignment.TopEnd)
-                    .offset(x = (ContentInset + card * (0.42f * (2 - i))) * -1f, y = if (i == 1) 96.dp else 110.dp)
-                    .size(card, card * 1.3f)
-                    .graphicsLayer { rotationZ = angle }
-                    .press3D()
-                    .shadow(18.dp, RoundedCornerShape(22.dp))
-                    .clip(RoundedCornerShape(22.dp))
-                    .combinedClickable(onClick = { onOpen(game) }, onLongClick = { onOpen(game) }),
-            ) { GameArt(game, Modifier.fillMaxSize(), showTitle = true, showTag = false) }
-        }
-        Column(Modifier.align(Alignment.BottomStart).padding(start = ContentInset, end = ContentInset, bottom = 48.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Because you played", style = LabelStyle, color = LabelColor)
-                Spacer(Modifier.width(6.dp))
-                GameArt(last, Modifier.size(18.dp).clip(RoundedCornerShape(5.dp)), showTag = false)
-                Spacer(Modifier.width(6.dp))
-                Text(last.title, style = LabelStyle, color = Color.White.copy(alpha = 0.88f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            Text(
-                if (picks.all { it.systemId == last.systemId }) "More ${last.system?.shortName} games" else "Try something new",
-                style = HeroTitleStyle,
-                color = Color.White,
-            )
-            Spacer(Modifier.height(11.dp))
-            HeroPill(onClick = { picks.firstOrNull()?.let(onPlay) }) {
-                Icon(Icons.Rounded.PlayArrow, null, tint = PipColor, modifier = Modifier.size(22.dp))
-                Spacer(Modifier.width(4.dp))
-                Text("play", style = LabelStyle, color = PipColor)
-            }
-        }
+private fun ArchiveShortcut(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier, onClick: () -> Unit) {
+    Row(modifier.height(48.dp).clip(Ascend.CardShape).background(Ascend.Surface).clickable(onClick = onClick),
+        horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, tint = Ascend.Muted, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(label, style = MaterialTheme.typography.labelLarge, color = Color.White)
     }
 }
 
@@ -780,55 +655,14 @@ private fun Die(spinning: Boolean) {
 // ---- Rows -----------------------------------------------------------------------------------------
 
 @Composable
-private fun SectionHeader(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector, count: Int, onClick: (() -> Unit)? = null) {
-    com.retrohero.app.ui.components.SectionTitle(text, icon, Modifier.padding(top = 14.dp), count = count, onClick = onClick)
-}
-
-@Composable
-private fun StatsPage(games: List<Game>, stats: Map<String, PlayStat>, onOpen: (Game) -> Unit, onOpenStats: () -> Unit) {
-    val ranked = remember(games, stats) {
-        games.filter { (stats[it.id]?.seconds ?: 0) > 0 }.sortedByDescending { stats[it.id]!!.seconds }
-    }
-    val total = stats.values.sumOf { it.seconds }
-    PageWash(ranked.firstOrNull()?.system?.color ?: Color(0xFF6E6A86))
-    Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars).padding(top = 76.dp, start = ContentInset, end = ContentInset)) {
-        ranked.take(3).forEachIndexed { i, game ->
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 10.dp)
-                    .press3D()
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(Color.Black.copy(alpha = 0.28f))
-                    .clickable { onOpen(game) }
-                    .padding(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("${i + 1}", style = TitleStyle, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.width(30.dp), textAlign = TextAlign.Center)
-                GameArt(game, Modifier.size(54.dp).clip(RoundedCornerShape(14.dp)), showTag = false)
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(game.title, style = CardTitleStyle, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Text(PlayTime.format(stats[game.id]?.seconds ?: 0), style = CardSubtitleStyle, color = Color.White.copy(alpha = 0.7f))
-                }
-            }
-        }
-        Spacer(Modifier.weight(1f))
-        Text("Your play time  ›", style = LabelStyle, color = LabelColor, modifier = Modifier.clip(CircleShape).clickable(onClick = onOpenStats))
-        Text(PlayTime.format(total).replaceFirstChar { it.uppercase() }, style = HeroTitleStyle, color = Color.White)
-        Text(
-            if (ranked.size == 1) "on 1 game" else "across ${ranked.size} games",
-            style = CardSubtitleStyle,
-            color = Color.White.copy(alpha = 0.7f),
-            modifier = Modifier.padding(top = 4.dp, bottom = 58.dp),
-        )
-    }
+private fun SectionHeader(text: String, count: Int, onClick: (() -> Unit)? = null) {
+    com.retrohero.app.ui.components.SectionTitle(text, Modifier.padding(horizontal = ContentInset), count = count, onClick = onClick)
 }
 
 @Composable
 internal fun CollectionCard(collection: GameCollection, games: List<Game>, onOpen: (GameCollection) -> Unit) {
     Column(Modifier.width(RowCardWidth).press3D().clickable { onOpen(collection) }) {
-        Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(28.dp)).background(Color(0xFF1C1C1F))) {
+        Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(8.dp)).background(Color(0xFF1C1C1F))) {
             val covers = games.take(4)
             when {
                 covers.size >= 4 -> Column(Modifier.fillMaxSize()) {
@@ -851,18 +685,7 @@ internal fun CollectionCard(collection: GameCollection, games: List<Game>, onOpe
 
 @Composable
 private fun RowCard(game: Game, onPlay: (Game) -> Unit, onOptions: (Game) -> Unit, subtitle: String? = null) {
-    val interaction = remember { MutableInteractionSource() }
-    val press = rememberPressFeedback(interaction, restCorner = 28.dp, pressedCorner = 40.dp, pressedScale = 0.95f)
-    Column(
-        Modifier
-            .width(RowCardWidth)
-            .press3D()
-            .combinedClickable(interactionSource = interaction, indication = null, onClick = { onPlay(game) }, onLongClick = { onOptions(game) }),
-    ) {
-        GameArt(game, Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(press.corner.value)))
-        Text(game.title, style = CardTitleStyle, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 9.dp))
-        Text(subtitle ?: game.system?.name.orEmpty(), style = CardSubtitleStyle, color = SubtleColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
+    GameCard(game, { onPlay(game) }, width = RowCardWidth, subtitle = subtitle ?: game.system?.shortName, onLongClick = { onOptions(game) })
 }
 
 @Composable
@@ -876,7 +699,7 @@ private fun SystemCard(system: GameSystem, count: Int, onOpen: (GameSystem) -> U
             Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
-                .clip(RoundedCornerShape(28.dp))
+                .clip(RoundedCornerShape(8.dp))
                 .background(Brush.linearGradient(listOf(lerp(system.color, Color.White, 0.15f), lerp(system.color, Color.Black, 0.55f)))),
             contentAlignment = Alignment.Center,
         ) {

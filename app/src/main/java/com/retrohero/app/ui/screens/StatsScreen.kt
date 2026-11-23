@@ -39,6 +39,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBackIos
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -85,7 +86,7 @@ private val Ink2 = Color(0xFFB8B8B8)
 private val Muted = Color(0xFF7A7A7A)
 private val Grid = Color(0xFF242424)
 private val BarRest = Color(0xFF3A3A3A)
-private val StatsCardFill = Color(0xFF0F0F0F)
+private val StatsCardFill = com.retrohero.app.ui.components.Ascend.Surface
 private val Donut = listOf(Color(0xFF3987E5), Color(0xFFD95926), Color(0xFF199E70), Color(0xFFC98500), Color(0xFFD55181))
 private val DonutOther = Color(0xFF5A5A5A)
 private val ChartEase = MochyEase
@@ -135,11 +136,12 @@ fun StatsScreen(history: List<HistoryEntry>, onBack: () -> Unit, onRecap: (Perio
                         .padding(start = 16.dp, end = 10.dp, top = 9.dp, bottom = 9.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Re'cap", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 14.sp), color = Color.White)
+                    Text("Recap", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 14.sp), color = Color.White)
                     Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Color.White, modifier = Modifier.size(20.dp))
                 }
             }
         }
+        item { Text("Play journal", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.displaySmallEmphasized, color = Color.White) }
         item { PeriodRuler(periods, index, history) { index = it } }
         item {
             StatCard("Play time", if (summary.totalSeconds > 0) PlayTime.format(summary.totalSeconds) else "Nothing yet", initiallyOpen = true) {
@@ -272,7 +274,7 @@ private fun StatCard(title: String, headline: String, initiallyOpen: Boolean = f
         Modifier
             .padding(horizontal = 16.dp)
             .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
+            .clip(RoundedCornerShape(10.dp))
             .background(StatsCardFill)
             .clickable { open = !open }
             .padding(start = 20.dp, end = 16.dp, top = 18.dp, bottom = 14.dp),
@@ -296,7 +298,7 @@ private fun StatCard(title: String, headline: String, initiallyOpen: Boolean = f
 
 @Composable
 private fun Habit(label: String, value: String, modifier: Modifier) {
-    Column(modifier.clip(RoundedCornerShape(22.dp)).background(StatsCardFill).padding(16.dp)) {
+    Column(modifier.clip(RoundedCornerShape(10.dp)).background(StatsCardFill).padding(16.dp)) {
         Text(label, style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 11.sp), color = Muted)
         Text(value, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 20.sp, letterSpacing = (-0.03).em), color = Color.White, maxLines = 1)
     }

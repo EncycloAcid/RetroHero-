@@ -18,6 +18,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -28,8 +32,6 @@ import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.swipe
 import androidx.compose.ui.unit.dp
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.outlined.Home
 import androidx.test.core.app.ApplicationProvider
 import com.retrohero.app.R
 import com.retrohero.app.data.Systems
@@ -241,6 +243,29 @@ class PolishScreenshotTest {
     }
 
     @Test
+    fun searchAndQuickPlay() {
+        val first = sample("Thwaite.nes", "nes")
+        val second = sample("Micro City.gba", "gba")
+        var launched: String? = null
+        var opened: String? = null
+        compose.setContent {
+            RetroHeroTheme {
+                GamesScreen(listOf(first, second), emptyList(), true, false, {}, {}, { opened = it.id }, {},
+                    onQuickPlay = { launched = it.id })
+            }
+        }
+        compose.onNodeWithText("Filters").performClick()
+        compose.onNodeWithText("Not played yet").assertExists()
+        compose.onNodeWithText("Filters").performClick()
+        compose.onNode(hasSetTextAction()).performTextInput("Micro")
+        compose.onNodeWithText(first.title).assertDoesNotExist()
+        compose.onNodeWithContentDescription("Play ${second.title}").performClick()
+        compose.runOnIdle { org.junit.Assert.assertEquals(second.id, launched); org.junit.Assert.assertNull(opened) }
+        compose.onNodeWithText(second.title).performClick()
+        compose.runOnIdle { org.junit.Assert.assertEquals(second.id, opened) }
+    }
+
+    @Test
     fun gameMenu() {
         val g = sample("Thwaite (USA).nes", "nes")
         compose.setContent {
@@ -271,12 +296,13 @@ class PolishScreenshotTest {
         }
         compose.mainClock.advanceTimeBy(1500)
         save("hero_page1")
-        compose.onRoot().performTouchInput { swipeLeft() }
+        compose.onNodeWithText("1 / 4").performTouchInput { swipeLeft() }
         compose.mainClock.advanceTimeBy(1500)
         save("hero_page2")
-        compose.onRoot().performTouchInput { swipeLeft() }
+        compose.onNodeWithText("Shuffle").performClick()
         compose.mainClock.advanceTimeBy(1500)
-        save("hero_page3")
+        compose.onNodeWithText("Random pick").assertExists()
+        save("shuffle")
     }
 
     @Test
@@ -344,6 +370,7 @@ class PolishScreenshotTest {
             }
         }
         compose.mainClock.advanceTimeBy(1000)
+        save("game_record")
         compose.onRoot().performTouchInput { swipeUp() }
         compose.mainClock.advanceTimeBy(1000)
         save("detail_stats")
@@ -368,13 +395,7 @@ class PolishScreenshotTest {
         }
         compose.mainClock.advanceTimeBy(1500)
         save("home_collections")
-        repeat(3) {
-            compose.onRoot().performTouchInput {
-                swipe(androidx.compose.ui.geometry.Offset(right * 0.9f, 900f), androidx.compose.ui.geometry.Offset(left + 20f, 900f), 200)
-            }
-            compose.mainClock.advanceTimeBy(2000)
-        }
-        save("home_stats_page")
+        compose.onNodeWithText("Play stats").assertExists()
     }
 
     @Test
@@ -394,9 +415,7 @@ class PolishScreenshotTest {
                         )
                     }
                     com.retrohero.app.ui.components.FloatingNavBar(
-                        items = listOf("Home", "Shelves", "Games", "Library", "Cores", "Settings").map {
-                            com.retrohero.app.ui.components.NavItem(it, androidx.compose.material.icons.Icons.Filled.Home, androidx.compose.material.icons.Icons.Outlined.Home)
-                        },
+                        items = navigationItems,
                         selected = 1, onSelect = {}, modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter),
                     )
                 }

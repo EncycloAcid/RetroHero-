@@ -1,12 +1,13 @@
 package com.retrohero.app.ui.screens
 
+import com.retrohero.app.ui.components.ArchiveLabel
+import com.retrohero.app.ui.components.Ascend
+import com.retrohero.app.ui.components.AccentButton
+import com.retrohero.app.ui.components.Page
 import com.retrohero.app.ui.components.emberBackground
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -49,12 +50,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.retrohero.app.data.AppPaths
@@ -66,7 +63,6 @@ import android.text.format.DateUtils
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Image
-import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.layout.ContentScale
@@ -74,7 +70,6 @@ import coil.compose.AsyncImage
 import java.io.File
 import com.retrohero.app.ui.components.GameArt
 import com.retrohero.app.ui.components.press3D
-import com.retrohero.app.ui.components.rememberArtColor
 import java.text.DateFormat
 import java.util.Date
 import java.util.Locale
@@ -105,42 +100,11 @@ fun GameDetailScreen(
     onDeleteScreenshot: (File) -> Unit = {},
 ) {
     val system = game.system ?: return
-    val art = rememberArtColor(game)
-    val tint by animateColorAsState(art, tween(600), label = "detailTint")
     val hasAuto = saveSlots.any { it.first == AppPaths.AUTO_SLOT }
     val time = remember { DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT, Locale.getDefault()) }
 
     BoxWithConstraints(Modifier.fillMaxSize().emberBackground()) {
-        val coverWidth = (maxWidth * 0.62f).coerceAtMost(300.dp)
-
-        // The art, blurred, hanging behind the top of the page; then the art colour washing to black.
-        GameArt(
-            game,
-            Modifier
-                .fillMaxWidth()
-                .height(maxHeight * 0.62f)
-                .graphicsLayer { alpha = 0.55f }
-                .blur(60.dp),
-            showTag = false,
-        )
-        // Fade the backdrop's lower edge so it melts into the page instead of ending in a line.
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(maxHeight * 0.62f)
-                .background(Brush.verticalGradient(0.45f to Color.Transparent, 1f to Color.Black)),
-        )
-        Box(
-            Modifier.fillMaxSize().background(
-                Brush.verticalGradient(
-                    0f to tint.copy(alpha = 0.55f),
-                    0.35f to tint.copy(alpha = 0.35f),
-                    0.65f to tint.copy(alpha = 0.1f),
-                    1f to Color.Black,
-                ),
-            ),
-        )
-
+        val coverWidth = (maxWidth * 0.35f).coerceAtMost(190.dp)
         Column(
             Modifier
                 .fillMaxSize()
@@ -149,68 +113,26 @@ fun GameDetailScreen(
                 .navigationBarsPadding()
                 .padding(bottom = 32.dp),
         ) {
-            Box(
-                Modifier
-                    .padding(start = 16.dp, top = 8.dp)
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.3f))
-                    .clickable(onClick = onClose),
-                contentAlignment = Alignment.Center,
-            ) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = Color.White) }
-
-            GameArt(
-                game,
-                Modifier
-                    .padding(top = 12.dp)
-                    .align(Alignment.CenterHorizontally)
-                    .width(coverWidth)
-                    .aspectRatio(0.75f)
-                    .press3D()
-                    .shadow(28.dp, RoundedCornerShape(24.dp), ambientColor = tint, spotColor = tint)
-                    .clip(RoundedCornerShape(24.dp)),
-                showTitle = true,
-            )
-
-            Column(Modifier.padding(horizontal = 24.dp).padding(top = 28.dp)) {
-                Text(game.title, style = MaterialTheme.typography.headlineMediumEmphasized, color = Color.White, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                Text(system.name, style = MaterialTheme.typography.bodyLarge, color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(top = 4.dp))
-                if (stat.seconds > 0 || stat.sessions > 0) {
-                    Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Rounded.Schedule, null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            buildString {
-                                append(PlayTime.format(stat.seconds))
-                                append(" played")
-                                if (stat.lastPlayed > 0) {
-                                    append(" · ")
-                                    append(DateUtils.getRelativeTimeSpanString(stat.lastPlayed, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS).toString().lowercase(Locale.getDefault()))
-                                }
-                            },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White.copy(alpha = 0.7f),
-                        )
-                    }
+            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                androidx.compose.material3.IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = Color.White) }
+                ArchiveLabel("Library  /  Game record")
+            }
+            Row(Modifier.fillMaxWidth().padding(horizontal = Page.Gutter, vertical = 10.dp), verticalAlignment = Alignment.Bottom) {
+                GameArt(game, Modifier.width(coverWidth).aspectRatio(0.73f).clip(Ascend.CardShape), showTag = false)
+                Column(Modifier.weight(1f).padding(start = 16.dp)) {
+                    ArchiveLabel(system.shortName)
+                    Text(game.title, style = MaterialTheme.typography.headlineLargeEmphasized, color = Color.White,
+                        modifier = Modifier.padding(top = 6.dp))
+                    Text(system.name, style = MaterialTheme.typography.bodySmall, color = Ascend.Muted)
+                    if (stat.sessions > 0 || stat.seconds > 0) Text("${PlayTime.format(stat.seconds)} played · ${stat.sessions} sessions",
+                        style = MaterialTheme.typography.bodySmall, color = Ascend.Muted, modifier = Modifier.padding(top = 10.dp))
+                    if (stat.lastPlayed > 0) Text("Last played " + DateUtils.getRelativeTimeSpanString(stat.lastPlayed,
+                        System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS).toString().lowercase(Locale.getDefault()),
+                        style = MaterialTheme.typography.bodySmall, color = Ascend.Muted)
                 }
-
-                // Primary action: a light pill, like the hero's.
-                Row(
-                    Modifier
-                        .padding(top = 22.dp)
-                        .fillMaxWidth()
-                        .height(54.dp)
-                        .press3D(maxTilt = 3f)
-                        .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.9f))
-                        .clickable { onPlay(null) },
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(Icons.Rounded.PlayArrow, null, tint = Color(0xFF1A1A1A), modifier = Modifier.size(26.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(if (hasAuto) "Resume" else "Play", style = MaterialTheme.typography.titleMediumEmphasized, color = Color(0xFF1A1A1A))
-                }
+            }
+            Column(Modifier.padding(horizontal = Page.Gutter, vertical = 12.dp)) {
+                AccentButton(if (hasAuto) "Resume game" else "Play game", { onPlay(null) }, Modifier.fillMaxWidth(), Icons.Rounded.PlayArrow)
                 if (hasAuto) {
                     Text(
                         "Start from the beginning",
@@ -234,7 +156,7 @@ fun GameDetailScreen(
                             Modifier
                                 .width(150.dp)
                                 .press3D()
-                                .clip(RoundedCornerShape(20.dp))
+                                .clip(Ascend.CardShape)
                                 .background(Color.White.copy(alpha = 0.08f))
                                 .clickable { onPlay(slot) }
                                 .padding(14.dp),
@@ -333,7 +255,7 @@ fun GameDetailScreen(
             Column(
                 Modifier
                     .padding(horizontal = 24.dp)
-                    .clip(RoundedCornerShape(20.dp))
+                    .clip(Ascend.CardShape)
                     .background(Color.White.copy(alpha = 0.06f)),
             ) {
                 InfoRow("System", system.name)

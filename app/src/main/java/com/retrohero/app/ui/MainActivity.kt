@@ -46,14 +46,10 @@ import com.retrohero.app.ui.screens.ShelfScreen
 import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.outlined.Layers
-import androidx.compose.material.icons.filled.ViewCarousel
 import androidx.compose.material.icons.outlined.ViewAgenda
-import androidx.compose.material.icons.outlined.ViewCarousel
 import com.retrohero.app.ui.screens.StatsScreen
 import com.retrohero.app.ui.screens.RecapScreen
 import com.retrohero.app.data.Looks
-import androidx.compose.material.icons.filled.VideoLibrary
-import androidx.compose.material.icons.outlined.VideoLibrary
 import com.retrohero.app.ui.components.CollectionPickerSheet
 import com.retrohero.app.ui.components.NameDialog
 import com.retrohero.app.ui.components.LocalArtPaths
@@ -64,7 +60,6 @@ import com.retrohero.app.ui.screens.rememberControllers
 import com.retrohero.app.data.GameCollection
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.retrohero.app.ui.components.FloatingNavHeight
-import com.retrohero.app.ui.components.FloatingNavGap
 import com.retrohero.app.ui.components.NavItem
 import com.retrohero.app.ui.screens.HomeScreen
 import com.retrohero.app.R
@@ -89,38 +84,24 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.SportsEsports
-import androidx.compose.material.icons.filled.ViewModule
 import androidx.compose.material.icons.outlined.Extension
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.SportsEsports
-import androidx.compose.material.icons.outlined.ViewModule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.FloatingActionButtonMenu
-import androidx.compose.material3.FloatingActionButtonMenuItem
-import androidx.compose.material3.ToggleFloatingActionButton
-import androidx.compose.material3.ToggleFloatingActionButtonDefaults.animateIcon
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.Download
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.remember
 import com.retrohero.app.ui.components.LaunchIntroOverlay
 import com.retrohero.app.ui.components.LaunchIntroState
 import com.retrohero.app.ui.components.LocalLaunchIntro
-import com.retrohero.app.ui.components.topGlow
 import com.retrohero.app.ui.components.emberBackground
 import com.retrohero.app.ui.screens.ShelvesScreen
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.ui.graphics.lerp
 import com.retrohero.app.ui.components.DownloadSheet
 import com.retrohero.app.ui.components.HomebrewSheet
 import androidx.compose.material.icons.rounded.CardGiftcard
@@ -132,14 +113,12 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.ShortNavigationBar
 import androidx.compose.material3.WideNavigationRail
 import androidx.compose.material3.WideNavigationRailDefaults
 import androidx.compose.material3.WideNavigationRailItem
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.material3.ShortNavigationBarItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -162,12 +141,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.retrohero.app.data.CoreManager.CoreState
 import com.retrohero.app.data.Systems
-import com.retrohero.app.ui.components.GameSheet
 import com.retrohero.app.ui.components.SystemBadge
 import com.retrohero.app.ui.screens.CoresScreen
 import com.retrohero.app.ui.screens.GamesScreen
 import com.retrohero.app.ui.screens.SettingsScreen
-import com.retrohero.app.ui.screens.SystemsScreen
 import com.retrohero.app.ui.theme.RetroHeroTheme
 
 class MainActivity : ComponentActivity() {
@@ -214,7 +191,7 @@ private fun shareScreenshot(context: android.content.Context, file: java.io.File
     context.startActivity(android.content.Intent.createChooser(send, "Share screenshot"))
 }
 
-private enum class Tab(val label: String, val title: String, val selected: ImageVector, val unselected: ImageVector) {
+internal enum class Tab(val label: String, val title: String, val selected: ImageVector, val unselected: ImageVector) {
     Home("Home", "RetroHero", Icons.Filled.Home, Icons.Outlined.Home),
     Shelf("Shelves", "Shelves", Icons.Filled.ViewAgenda, Icons.Outlined.ViewAgenda),
     Games("Search", "Search", Icons.Filled.Search, Icons.Outlined.Search),
@@ -222,6 +199,8 @@ private enum class Tab(val label: String, val title: String, val selected: Image
     Cores("Cores", "Emulators", Icons.Filled.Extension, Icons.Outlined.Extension),
     Settings("Settings", "Settings", Icons.Filled.Settings, Icons.Outlined.Settings),
 }
+
+internal val navigationItems = Tab.entries.map { NavItem(it.label, it.selected, it.unselected) }
 
 @Composable
 private fun App(vm: AppViewModel) {
@@ -324,10 +303,10 @@ private fun App(vm: AppViewModel) {
     // Pages that run under the status bar with their own big titles, like the music app's.
     // Every tab draws its own big header, like the Shelf.
     val immersive = !albumOpen
-    val miniGame = recents.firstOrNull()?.takeIf { !miniHidden && !albumOpen && tab != Tab.Settings && !(tab == Tab.Shelf && shelfFlow) && sheetFor == null && !statsOpen && recap == null }
+    val miniGame = recents.firstOrNull()?.takeIf { !isHome && !miniHidden && !albumOpen && tab != Tab.Settings && !(tab == Tab.Shelf && shelfFlow) && sheetFor == null && !statsOpen && recap == null }
     val navBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val glass = rememberHazeState()
-    val floatingNavSpace = (if (wide || albumOpen) 0.dp else FloatingNavHeight + FloatingNavGap + 8.dp + navBarInset) +
+    val floatingNavSpace = (if (wide || albumOpen) 0.dp else FloatingNavHeight + 1.dp + navBarInset) +
         (if (miniGame != null && !wide) MiniPlayerSpace else 0.dp)
     val systemCount = games.mapTo(HashSet()) { it.systemId }.size
 
@@ -517,6 +496,7 @@ private fun App(vm: AppViewModel) {
                     onPlay = { sheetFor = it.id },
                     onGameOptions = { menuFor = it.id },
                     onQuickPlay = { vm.play(it) },
+                    onHomebrew = { homebrewOpen = true },
                     stats = stats,
                     favorites = favoriteIds,
                 )
@@ -597,13 +577,12 @@ private fun App(vm: AppViewModel) {
                 onOpen = { sheetFor = miniGame.id },
                 onPlay = { vm.play(miniGame) },
                 onHide = { miniHidden = true },
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = navBarInset + FloatingNavHeight + FloatingNavGap + 10.dp),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = navBarInset + FloatingNavHeight + 11.dp),
             )
         }
         if (!wide && !albumOpen) {
             FloatingNavBar(
-                glass = glass,
-                items = Tab.entries.map { NavItem(it.label, it.selected, it.unselected) },
+                items = navigationItems,
                 selected = tab.ordinal,
                 onSelect = { tab = Tab.entries[it] },
                 modifier = Modifier.align(Alignment.BottomCenter),

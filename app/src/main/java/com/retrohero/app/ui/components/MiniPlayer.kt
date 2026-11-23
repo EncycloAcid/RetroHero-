@@ -59,12 +59,12 @@ fun MiniPlayer(
     onHide: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(20.dp)
+    val shape = Ascend.CardShape
     val drag = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
     Row(
         modifier
-            .padding(horizontal = 24.dp)
+            .padding(horizontal = 12.dp)
             .fillMaxWidth()
             .height(64.dp)
             .graphicsLayer {
@@ -72,7 +72,7 @@ fun MiniPlayer(
                 translationY = drag.value
                 alpha = 1f - (drag.value / 120.dp.toPx()).coerceIn(0f, 0.8f)
             }
-            .press3D(maxTilt = 6f)
+            .background(Ascend.Surface, shape)
             .clip(shape)
             .then(if (glass != null) Modifier.frostedGlass(glass, shape) { 1f } else Modifier.background(Color(0xFF131313).copy(alpha = 0.92f)))
             .pointerInput(game.id) {
