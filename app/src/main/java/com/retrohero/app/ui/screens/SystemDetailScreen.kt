@@ -147,13 +147,13 @@ fun CollectionScreen(
     removeLabel = "Remove",
     onOptions = onOptions,
     emptyText = "Nothing here yet. Long-press any game and choose “Add to…”.",
-    barActions = {
+    barActions = { progress ->
         var menu by remember { mutableStateOf(false) }
         Box {
             Box(
                 Modifier.size(44.dp).clip(CircleShape).background(Color.Black.copy(alpha = 0.3f)).clickable { menu = true },
                 contentAlignment = Alignment.Center,
-            ) { Icon(Icons.Rounded.MoreVert, "Collection options", tint = Color.White) }
+            ) { Icon(Icons.Rounded.MoreVert, "Collection options", tint = lerp(Color.White, com.retrohero.app.ui.theme.Tone.Ink, progress)) }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(text = { Text("Rename") }, leadingIcon = { Icon(Icons.Rounded.Edit, null) }, onClick = { menu = false; onRename() })
                 DropdownMenuItem(text = { Text("Delete collection") }, leadingIcon = { Icon(Icons.Rounded.Delete, null) }, onClick = { menu = false; onDelete() })
@@ -179,7 +179,7 @@ private fun AlbumScreen(
     onOptions: (Game) -> Unit,
     removeLabel: String? = null,
     emptyText: String? = null,
-    barActions: @Composable () -> Unit = {},
+    barActions: @Composable (Float) -> Unit = {},
 ) {
     val density = LocalDensity.current
     val headerHeight = (LocalConfiguration.current.screenHeightDp * 0.55f).dp
@@ -259,13 +259,13 @@ private fun AlbumScreen(
                     .background(Color.Black.copy(alpha = 0.3f * (1f - 0.5f * progress)))
                     .clickable(onClick = onBack),
                 contentAlignment = Alignment.Center,
-            ) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = Color.White) }
+            ) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = lerp(Color.White, com.retrohero.app.ui.theme.Tone.Ink, progress)) }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f).graphicsLayer { alpha = progress }) {
                 Text(title, style = MaterialTheme.typography.titleMediumEmphasized, color = com.retrohero.app.ui.theme.Tone.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text("${games.size} games", style = MaterialTheme.typography.bodySmall, color = com.retrohero.app.ui.theme.Tone.Muted)
             }
-            barActions()
+            barActions(progress)
         }
     }
 }
