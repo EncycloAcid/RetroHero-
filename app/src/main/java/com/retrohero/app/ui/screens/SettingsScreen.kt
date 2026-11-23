@@ -122,7 +122,7 @@ fun SettingsScreen(
         label = "settingsPage",
     ) { p ->
         when (p) {
-            null -> SettingsHome(onOpen = { page = it }, onOpenStats = onOpenStats)
+            null -> SettingsHome(settings, onOpen = { page = it }, onOpenStats = onOpenStats)
             "library" -> SubSettings("Game folders", onBack = { page = null }) {
         // ---- Library -------------------------------------------------------------------
         Column {

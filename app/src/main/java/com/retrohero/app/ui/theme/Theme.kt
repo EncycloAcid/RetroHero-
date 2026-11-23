@@ -4,7 +4,9 @@ import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.luminance
@@ -16,7 +18,21 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 
-private val accentState = androidx.compose.runtime.mutableStateOf(Color(0xFFFF6B2C))
+private val accentState = mutableStateOf(Color(0xFFFF5A1F))
+private val darkState = mutableStateOf(false)
+
+object Tone {
+    val isDark: Boolean get() = darkState.value
+    fun setDarkMode(dark: Boolean) { darkState.value = dark }
+
+    val Bg: Color get() = if (isDark) Color(0xFF111113) else Color(0xFFEDECE8)
+    val Surface: Color get() = if (isDark) Color(0xFF1A1A1D) else Color(0xFFF7F6F3)
+    val Raised: Color get() = if (isDark) Color(0xFF232327) else Color.White
+    val Ink: Color get() = if (isDark) Color(0xFFF2F1EE) else Color(0xFF111111)
+    val Muted: Color get() = Ink.copy(alpha = if (isDark) 0.60f else 0.58f)
+    val Faint: Color get() = Ink.copy(alpha = if (isDark) 0.34f else 0.32f)
+    val Line: Color get() = Ink.copy(alpha = if (isDark) 0.09f else 0.10f)
+}
 
 /**
  * The accent colour (ember orange by default) used for the gacha pointer and small highlights.
@@ -27,46 +43,6 @@ val Salmon: Color get() = accentState.value
 fun setAccent(color: Color) {
     accentState.value = color
 }
-
-/**
- * Dark-only palette on warm charcoal with an ember-orange accent; colour otherwise comes from
- * the games themselves (cover art and each system's colour).
- */
-private val Mono = darkColorScheme(
-    primary = Color(0xFFE0E0E0),
-    onPrimary = Color.Black,
-    primaryContainer = Color(0xFF333333),
-    onPrimaryContainer = Color.White,
-    secondary = Color(0xFFB0B0B0),
-    onSecondary = Color.Black,
-    secondaryContainer = Color(0xFF2C2C2C),
-    onSecondaryContainer = Color.White,
-    tertiary = Salmon,
-    onTertiary = Color.Black,
-    tertiaryContainer = Color(0xFF3D2116),
-    onTertiaryContainer = Color(0xFFFFDBCC),
-    error = Color(0xFFFF6B6B),
-    onError = Color.Black,
-    errorContainer = Color(0xFF4A1A1A),
-    onErrorContainer = Color(0xFFFFDADA),
-    background = Color(0xFF0E0E10),
-    onBackground = Color.White,
-    surface = Color(0xFF0E0E10),
-    onSurface = Color.White,
-    surfaceVariant = Color(0xFF1C1C1F),
-    onSurfaceVariant = Color(0xFF9A9AA0),
-    surfaceTint = Color(0xFF0E0E10),
-    surfaceContainerLowest = Color(0xFF0A0A0B),
-    surfaceContainerLow = Color(0xFF131315),
-    surfaceContainer = Color(0xFF18181B),
-    surfaceContainerHigh = Color(0xFF1F1F23),
-    surfaceContainerHighest = Color(0xFF26262A),
-    surfaceBright = Color(0xFF2A2A2A),
-    outline = Color(0xFF77777D),
-    outlineVariant = Color(0xFF232326),
-    inverseSurface = Color.White,
-    inverseOnSurface = Color.Black,
-)
 
 private val Tight = (-0.035).em
 private val Text = (-0.01).em
@@ -115,20 +91,87 @@ private val MonoTypography = Typography(
     labelSmallEmphasized = style(11.sp, 14.sp, FontWeight.Bold),
 )
 
-/** RetroHero is dark-only; [dynamicColor] is accepted for compatibility but not used. */
+/** [dynamicColor] is accepted for compatibility but the Instrument palette is fixed. */
 @Composable
 fun RetroHeroTheme(
     @Suppress("UNUSED_PARAMETER") dynamicColor: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val accent = Salmon
-    MaterialExpressiveTheme(
-        colorScheme = Mono.copy(
-            primary = if (accent.compositeOver(Color(0xFF0E0E10)).luminance() < 0.25f) lerp(accent, Color.White, 0.5f) else accent,
-            onPrimary = Color.Black,
-            primaryContainer = lerp(Mono.surfaceContainer, accent, 0.18f),
+    val drawnAccent = accent.compositeOver(Tone.Bg)
+    val primary = when {
+        Tone.isDark && drawnAccent.luminance() < 0.25f -> lerp(accent, Color.White, 0.5f)
+        !Tone.isDark && drawnAccent.luminance() > 0.6f -> lerp(accent, Color.Black, 0.35f)
+        else -> accent
+    }
+    val primaryContainer = primary.copy(alpha = 0.18f).compositeOver(Tone.Surface)
+    val colorScheme = if (Tone.isDark) {
+        darkColorScheme(
+            primary = primary,
+            onPrimary = Color(0xFF111111),
+            primaryContainer = primaryContainer,
+            onPrimaryContainer = Tone.Ink,
+            secondary = Tone.Muted,
+            onSecondary = Tone.Bg,
+            secondaryContainer = Tone.Raised,
+            onSecondaryContainer = Tone.Ink,
             tertiary = accent,
-        ),
+            onTertiary = Color(0xFF111111),
+            tertiaryContainer = primaryContainer,
+            onTertiaryContainer = Tone.Ink,
+            background = Tone.Bg,
+            onBackground = Tone.Ink,
+            surface = Tone.Surface,
+            onSurface = Tone.Ink,
+            surfaceVariant = Tone.Raised,
+            onSurfaceVariant = Tone.Muted,
+            surfaceTint = Tone.Surface,
+            surfaceContainerLowest = Tone.Bg,
+            surfaceContainerLow = Tone.Surface,
+            surfaceContainer = Tone.Surface,
+            surfaceContainerHigh = Tone.Raised,
+            surfaceContainerHighest = Tone.Raised,
+            surfaceBright = Tone.Raised,
+            outline = Tone.Muted,
+            outlineVariant = Tone.Line,
+            inverseSurface = Tone.Ink,
+            inverseOnSurface = Tone.Bg,
+        )
+    } else {
+        lightColorScheme(
+            primary = primary,
+            onPrimary = Color(0xFF111111),
+            primaryContainer = primaryContainer,
+            onPrimaryContainer = Tone.Ink,
+            secondary = Tone.Muted,
+            onSecondary = Tone.Bg,
+            secondaryContainer = Tone.Raised,
+            onSecondaryContainer = Tone.Ink,
+            tertiary = accent,
+            onTertiary = Color(0xFF111111),
+            tertiaryContainer = primaryContainer,
+            onTertiaryContainer = Tone.Ink,
+            background = Tone.Bg,
+            onBackground = Tone.Ink,
+            surface = Tone.Surface,
+            onSurface = Tone.Ink,
+            surfaceVariant = Tone.Raised,
+            onSurfaceVariant = Tone.Muted,
+            surfaceTint = Tone.Surface,
+            surfaceContainerLowest = Tone.Bg,
+            surfaceContainerLow = Tone.Surface,
+            surfaceContainer = Tone.Surface,
+            surfaceContainerHigh = Tone.Raised,
+            surfaceContainerHighest = Tone.Raised,
+            surfaceBright = Tone.Raised,
+            outline = Tone.Muted,
+            outlineVariant = Tone.Line,
+            inverseSurface = Tone.Ink,
+            inverseOnSurface = Tone.Bg,
+        )
+    }
+    MaterialExpressiveTheme(
+        colorScheme = colorScheme,
         motionScheme = MotionScheme.expressive(),
         typography = MonoTypography,
         content = content,

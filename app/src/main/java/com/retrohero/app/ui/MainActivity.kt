@@ -162,8 +162,17 @@ class MainActivity : ComponentActivity() {
                 Looks.custom(vm.paths.looks).firstOrNull { "look:" + it.id == id }?.accent ?: Looks.accent(id),
             )
         }
+        com.retrohero.app.ui.theme.Tone.setDarkMode(vm.settings.darkMode)
         setContent {
             RetroHeroTheme {
+                val view = androidx.compose.ui.platform.LocalView.current
+                val lightSystemBars = !com.retrohero.app.ui.theme.Tone.isDark
+                androidx.compose.runtime.SideEffect {
+                    androidx.core.view.WindowCompat.getInsetsController(window, view).apply {
+                        isAppearanceLightStatusBars = lightSystemBars
+                        isAppearanceLightNavigationBars = lightSystemBars
+                    }
+                }
                 val artVersion by vm.artVersion.collectAsStateWithLifecycle()
                 CompositionLocalProvider(
                     LocalLaunchIntro provides intro,

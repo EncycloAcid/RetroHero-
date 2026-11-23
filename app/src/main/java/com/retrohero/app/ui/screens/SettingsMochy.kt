@@ -78,7 +78,9 @@ import com.retrohero.app.ui.components.glossCard
 import com.retrohero.app.ui.components.press3D
 import com.retrohero.app.ui.theme.Inter
 import com.retrohero.app.ui.theme.Salmon
+import com.retrohero.app.ui.theme.Tone
 import com.retrohero.app.ui.theme.setAccent
+import com.retrohero.app.ui.theme.setDarkMode
 
 /** Mochy's emphasized easing. */
 val MochyEase = CubicBezierEasing(0.2f, 0f, 0f, 1f)
@@ -101,7 +103,7 @@ private val categories = listOf(
 
 /** The settings home: big title, search pill, then a column of category bubbles. */
 @Composable
-fun SettingsHome(onOpen: (String) -> Unit, onOpenStats: () -> Unit) {
+fun SettingsHome(settings: Settings, onOpen: (String) -> Unit, onOpenStats: () -> Unit) {
     var query by remember { mutableStateOf("") }
     Column(
         Modifier
@@ -113,6 +115,8 @@ fun SettingsHome(onOpen: (String) -> Unit, onOpenStats: () -> Unit) {
         com.retrohero.app.ui.components.PageHeader("Settings", "Library, controls and appearance") {
             Image(painterResource(R.drawable.ic_logo_mark), null, Modifier.size(width = 41.dp, height = 28.dp))
         }
+        AppearanceSwitch(settings)
+        Spacer(Modifier.height(18.dp))
         Spacer(Modifier.height(14.dp))
         // Search pill.
         val focused = query.isNotEmpty()
@@ -257,6 +261,8 @@ fun LooksSettings(settings: Settings, imported: List<Look>, onImport: () -> Unit
         onChanged()
     }
 
+    AppearanceSwitch(settings)
+    Spacer(Modifier.height(20.dp))
     SectionTitle("Accent")
     val accents = Looks.accents.map { (id, v) -> Triple(id, v.first, v.second) } + imported.map { Triple("look:" + it.id, it.name, it.accent) }
     StylePager(
@@ -308,6 +314,44 @@ fun LooksSettings(settings: Settings, imported: List<Look>, onImport: () -> Unit
         color = Color.White.copy(alpha = 0.45f),
         modifier = Modifier.padding(start = 4.dp),
     )
+}
+
+@Composable
+private fun AppearanceSwitch(settings: Settings) {
+    SectionTitle("Appearance")
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(Tone.Raised)
+            .border(1.dp, Tone.Line, RoundedCornerShape(8.dp))
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        listOf("Light", "Dark").forEachIndexed { index, label ->
+            val selected = Tone.isDark == (index == 1)
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(if (selected) Tone.Ink else Color.Transparent)
+                    .clickable {
+                        val dark = index == 1
+                        settings.darkMode = dark
+                        setDarkMode(dark)
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = if (selected) Tone.Bg else Tone.Ink,
+                )
+            }
+        }
+    }
 }
 
 @Composable

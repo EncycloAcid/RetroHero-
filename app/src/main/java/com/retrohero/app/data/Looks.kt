@@ -34,7 +34,7 @@ object Looks {
     val skins = listOf(Console, Glass, Classic, Minimal, Neon, Stealth)
 
     val accents = listOf(
-        "ember" to ("Ember" to Color(0xFFFF6B2C)),
+        "ember" to ("Ember" to Color(0xFFFF5A1F)),
         "salmon" to ("Salmon" to Color(0xFFF0908D)),
         "mint" to ("Mint" to Color(0xFF7FD8B5)),
         "sky" to ("Sky" to Color(0xFF7DB7F5)),
