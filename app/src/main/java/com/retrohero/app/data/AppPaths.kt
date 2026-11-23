@@ -23,6 +23,9 @@ class AppPaths(context: Context) {
     val looks = File(context.filesDir, "looks")
     /** Imported .deltaskin bundles (extracted one per subfolder). */
     val deltaSkins = File(context.filesDir, "delta_skins")
+    /** Exported .rhclip playable moment capsules. */
+    val clips = File(context.filesDir, "clips").apply { mkdirs() }
+    val clipTmp = File(context.cacheDir, "clips").apply { mkdirs() }
     /** Controller remaps; written by the main app, read when a game starts. */
     val remapFile = File(context.filesDir, "remap.json")
     /** Touch-control positions; written in-game. */
