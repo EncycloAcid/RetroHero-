@@ -97,6 +97,11 @@ class Settings(context: Context) {
         else putString("delta_skin_$systemId", identifier)
     }
 
+    /** Source language code (e.g. "ja", "es", "fr") for in-game on-device translation. */
+    var translateSourceLang: String
+        get() = prefs.getString("translate_source_lang", "ja") ?: "ja"
+        set(v) = prefs.edit { putString("translate_source_lang", v) }
+
     private val _reducedMotion = MutableStateFlow(prefs.getBoolean("reduced_motion", false))
     /** Fewer and calmer animations: no tilt, no spinning, instant transitions where possible. */
     val reducedMotion: StateFlow<Boolean> = _reducedMotion
