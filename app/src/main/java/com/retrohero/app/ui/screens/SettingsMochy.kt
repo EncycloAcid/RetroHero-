@@ -184,7 +184,7 @@ fun SettingsHome(settings: Settings, onOpen: (String) -> Unit, onOpenStats: () -
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(Modifier.size(40.dp).clip(CircleShape).background(Salmon), contentAlignment = Alignment.Center) {
-                Icon(Icons.Rounded.Insights, null, tint = Salmon, modifier = Modifier.size(20.dp))
+                Icon(Icons.Rounded.Insights, null, tint = com.retrohero.app.ui.components.Ascend.onAccent, modifier = Modifier.size(20.dp))
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
