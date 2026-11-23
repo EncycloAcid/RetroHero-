@@ -1,5 +1,6 @@
 #include "audio_output.h"
 
+#include <cmath>
 #include <cstring>
 #include <thread>
 
@@ -76,7 +77,45 @@ void AudioOutput::setInputRate(double rate) {
     if (rate > 0) inputRate_ = rate;
 }
 
-void AudioOutput::clear() { readPos_.store(writePos_.load()); }
+void AudioOutput::clear() {
+    readPos_.store(writePos_.load());
+    hapticPeak_.store(0.0f, std::memory_order_relaxed);
+}
+
+float AudioOutput::consumeHapticEnergy() {
+    return hapticPeak_.exchange(0.0f, std::memory_order_relaxed);
+}
+
+void AudioOutput::analyzeHaptics(const int16_t *frames, size_t count) {
+    if (count == 0) return;
+    // 1-pole low-pass around ~160 Hz to isolate explosions, stomps, and heavy hits.
+    const float sr = static_cast<float>(inputRate_ > 1000.0 ? inputRate_ : 44100.0);
+    const float alpha = 1.0f - std::exp(-6.2831853f * 160.0f / sr);
+    float bassSumSq = 0.0f;
+    float peakAbs = 0.0f;
+    for (size_t i = 0; i < count; i++) {
+        float mono = (static_cast<float>(frames[i * 2]) + static_cast<float>(frames[i * 2 + 1])) * (0.5f / 32768.0f);
+        lpState_ += alpha * (mono - lpState_);
+        bassSumSq += lpState_ * lpState_;
+        float a = std::fabs(lpState_);
+        if (a > peakAbs) peakAbs = a;
+    }
+    const float bassRms = std::sqrt(bassSumSq / static_cast<float>(count));
+    const float energy = 0.65f * bassRms + 0.35f * peakAbs;
+
+    // Track fast envelope and a slower adaptive background floor so steady chiptune music
+    // doesn't buzz constantly, while sudden bass transients punch through cleanly.
+    envFast_ = envFast_ * 0.45f + energy * 0.55f;
+    envFloor_ = envFloor_ * 0.96f + energy * 0.04f;
+    if (envFloor_ < 0.015f) envFloor_ = 0.015f;
+
+    float punch = (envFast_ - envFloor_ * 1.45f) * 3.8f;
+    if (punch > 0.0f) {
+        if (punch > 1.0f) punch = 1.0f;
+        float cur = hapticPeak_.load(std::memory_order_relaxed);
+        while (punch > cur && !hapticPeak_.compare_exchange_weak(cur, punch, std::memory_order_relaxed)) {}
+    }
+}
 
 void AudioOutput::push(int16_t l, int16_t r) {
     uint64_t w = writePos_.load(std::memory_order_relaxed);
@@ -90,6 +129,7 @@ void AudioOutput::push(int16_t l, int16_t r) {
 
 void AudioOutput::write(const int16_t *frames, size_t count) {
     if (capacity_ == 0 || !stream_) return;
+    analyzeHaptics(frames, count);
     uint64_t fill = writePos_.load() - readPos_.load();
     double fillRatio = static_cast<double>(fill) / static_cast<double>(capacity_);
     // Dynamic rate control: nudge the ratio by up to 0.5% to keep the buffer half full.

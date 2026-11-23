@@ -175,10 +175,14 @@ fun SettingsScreen(
             ToggleRow(shapes(0), Icons.Outlined.Animation, "Reduce motion", "Calmer animations; no tilting or spinning", settings.reducedMotion.value) { settings.setReducedMotion(it) }
             ToggleRow(shapes(1), Icons.Outlined.ScreenRotation, "Tilt effects", "Game boxes on the Shelf move as you tilt your phone", settings.tiltEffects.value) { settings.setTiltEffects(it) }
         }
-        SegmentedGroup("Playing", 7) {
+        SegmentedGroup("Playing", 9) {
             var i = 0
             ToggleRow(shapes(i++), Icons.Outlined.GridOn, "Sharp pixels", "Default look; pick CRT or LCD per system in-game", settings.sharpPixels) { settings.sharpPixels = it }
             ToggleRow(shapes(i++), Icons.Outlined.Vibration, "Haptic feedback", "Buzz when touch buttons are pressed", settings.haptics) { settings.haptics = it }
+            ToggleRow(shapes(i++), Icons.Outlined.Vibration, "Audio rumble", "Feel bass impacts & explosions from game audio", settings.audioHaptics) { settings.audioHaptics = it }
+            SliderRow(shapes(i++), Icons.Outlined.Vibration, "Audio rumble strength", settings.audioHapticsStrength, 0.2f..1f, { "${(it * 100).toInt()}%" }) {
+                settings.audioHapticsStrength = it
+            }
             ToggleRow(shapes(i++), Icons.Outlined.Gamepad, "Stick moves D-pad", "Left stick acts as D-pad on controllers", settings.stickAsDpad) { settings.stickAsDpad = it }
             SliderRow(shapes(i++), Icons.Outlined.Opacity, "Touch controls opacity", settings.overlayOpacity, 0.2f..1f, { "${(it * 100).toInt()}%" }) {
                 settings.overlayOpacity = it

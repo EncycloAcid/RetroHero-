@@ -66,6 +66,16 @@ class Settings(context: Context) {
         get() = prefs.getBoolean("haptics", true)
         set(v) = prefs.edit { putBoolean("haptics", v) }
 
+    /** Real-time rumble generated from game audio bass transients. */
+    var audioHaptics: Boolean
+        get() = prefs.getBoolean("audio_haptics", false)
+        set(v) = prefs.edit { putBoolean("audio_haptics", v) }
+
+    /** Strength multiplier (0.2..1.0) for audio-driven haptics. */
+    var audioHapticsStrength: Float
+        get() = prefs.getFloat("audio_haptics_strength", 0.7f)
+        set(v) = prefs.edit { putFloat("audio_haptics_strength", v) }
+
     var autoSave: Boolean
         get() = prefs.getBoolean("auto_save", true)
         set(v) = prefs.edit { putBoolean("auto_save", v) }
