@@ -121,7 +121,7 @@ fun RemapScreen(
                 val sel = c.descriptor == profile
                 Row(
                     Modifier
-                        .clip(RoundedCornerShape(8.dp))
+                        .clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Control))
                         .background(if (sel) Tone.Ink else Tone.Raised)
                         .clickable { profile = c.descriptor }
                         .padding(horizontal = 14.dp, vertical = 9.dp),
@@ -152,9 +152,9 @@ fun RemapScreen(
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
+                        .clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card))
                         .background(Tone.Surface)
-                        .border(1.dp, Tone.Line, RoundedCornerShape(14.dp))
+                        .border(1.dp, Tone.Line, RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card))
                         .clickable { capturing = action to label }
                         .padding(horizontal = 16.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -202,9 +202,9 @@ private fun CaptureDialog(label: String, onKey: (Int) -> Unit, onClear: () -> Un
     Dialog(onDismissRequest = onDismiss) {
         Column(
             Modifier
-                .clip(RoundedCornerShape(28.dp))
+                .clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card))
                 .background(Tone.Surface)
-                .border(1.dp, Tone.Line, RoundedCornerShape(28.dp))
+                .border(1.dp, Tone.Line, RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card))
                 .focusRequester(focus)
                 .focusable()
                 .onPreviewKeyEvent { e ->

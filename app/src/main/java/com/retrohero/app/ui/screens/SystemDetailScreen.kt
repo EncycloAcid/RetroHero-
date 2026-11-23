@@ -315,7 +315,7 @@ private fun Header(
                 style = TextStyle(fontFamily = PixelFont, fontSize = 10.sp),
                 color = Color.White,
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Control))
                     .background(Color.Black.copy(alpha = 0.35f))
                     .padding(horizontal = 8.dp, vertical = 6.dp),
             )
@@ -361,7 +361,7 @@ private fun GameRow(game: Game, isFavorite: Boolean, onOpen: () -> Unit, onPlay:
             .padding(horizontal = 22.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        GameArt(game, Modifier.size(52.dp).clip(RoundedCornerShape(12.dp)), showTag = false)
+        GameArt(game, Modifier.size(52.dp).clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Cover)), showTag = false)
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {

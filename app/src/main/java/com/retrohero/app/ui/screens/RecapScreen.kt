@@ -368,7 +368,7 @@ private fun SlotPage(s: PlaySummary) {
                         .size(tile)
                         .offset(y = dy.dp)
                         .graphicsLayer { scaleX = 0.7f + 0.3f * near; scaleY = 0.7f + 0.3f * near; alpha = 0.3f + 0.7f * near }
-                        .clip(RoundedCornerShape(28.dp))
+                        .clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Hero))
                         .background(Brush.linearGradient(listOf(lerp(sys.color, Color.White, 0.15f), lerp(sys.color, Color.Black, 0.5f)))),
                     contentAlignment = Alignment.Center,
                 ) { Text(sys.shortName, style = TextStyle(fontFamily = PixelFont, fontSize = 13.sp), color = Color.White) }
@@ -399,7 +399,7 @@ private fun GamePage(s: PlaySummary) {
             Modifier
                 .size(230.dp)
                 .graphicsLayer { rotationZ = tilt.value; translationX = slide.value * size.width; shadowElevation = 30f }
-                .clip(RoundedCornerShape(30.dp)),
+                .clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Cover)),
             showTitle = true,
         )
         Spacer(Modifier.height(26.dp))
@@ -426,7 +426,7 @@ private fun ReceiptPage(period: String, s: PlaySummary) {
                 s.games.take(7).forEach { (g, secs) ->
                     val count = s.days.size.coerceAtLeast(1)
                     Row(Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                        GameArt(g, Modifier.size(22.dp).clip(RoundedCornerShape(5.dp)), showTag = false)
+                        GameArt(g, Modifier.size(22.dp).clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Cover)), showTag = false)
                         Spacer(Modifier.width(8.dp))
                         Text(g.title, style = mono, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
                         Text(" ${"%.1f".format(secs / 3600f)}h", style = mono)

@@ -110,7 +110,7 @@ fun PillChip(
         label = "pill",
     )
     Row(
-        modifier.height(40.dp).clip(RoundedCornerShape(8.dp)).background(fill).clickable(onClick = onClick).padding(horizontal = 12.dp),
+        modifier.height(40.dp).clip(RoundedCornerShape(Ascend.Radius.Control)).background(fill).clickable(onClick = onClick).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         leading?.invoke()
@@ -167,7 +167,7 @@ fun BoxTile(
                 Modifier
                     .padding(top = 8.dp)
                     .height(30.dp)
-                    .clip(RoundedCornerShape(6.dp))
+                    .clip(RoundedCornerShape(Ascend.Radius.Control))
                     .background(StoreYellow)
                     .clickable(onClick = onPlay)
                     .padding(horizontal = 14.dp),

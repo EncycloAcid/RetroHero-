@@ -62,18 +62,18 @@ fun HomebrewSheet(installed: Set<String>, onGet: (HomebrewGame) -> Unit, onDismi
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(14.dp))
+                            .clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card))
                             .background(MaterialTheme.colorScheme.surfaceContainer)
-                            .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, RoundedCornerShape(14.dp))
+                            .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card))
                             .padding(14.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Box(
                             Modifier
                                 .size(56.dp)
-                                .clip(RoundedCornerShape(16.dp))
+                                .clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Control))
                                 .background(com.retrohero.app.ui.theme.Tone.Raised)
-                                .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, RoundedCornerShape(16.dp)),
+                                .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Control)),
                             contentAlignment = Alignment.Center,
                         ) {
                             Text(system.tag, style = TextStyle(fontFamily = PixelFont, fontSize = 10.sp), color = com.retrohero.app.ui.theme.Tone.Ink)

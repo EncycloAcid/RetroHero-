@@ -107,7 +107,7 @@ fun OnboardingScreen(
                 Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.Center) {
                     when (p) {
                         0 -> {
-                            ArchiveLandscape(Modifier.fillMaxWidth().aspectRatio(1.55f).clip(RoundedCornerShape(8.dp)))
+                            ArchiveLandscape(Modifier.fillMaxWidth().aspectRatio(1.55f).clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Hero)))
                             ArchiveLabel("The personal game archive", Modifier.padding(top = 22.dp))
                             Title("Your games. Your shelves.")
                             Body("Bring your classic games together. Build shelves, revisit favourites, and pick up where you left off.")
@@ -181,14 +181,14 @@ private fun Option(icon: ImageVector, title: String, subtitle: String, onClick: 
             .padding(top = 10.dp)
             .fillMaxWidth()
             .press3D()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card))
             .background(com.retrohero.app.ui.theme.Tone.Surface)
-            .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, RoundedCornerShape(14.dp))
+            .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card))
             .clickable(onClick = onClick)
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(42.dp).clip(RoundedCornerShape(12.dp)).background(com.retrohero.app.ui.theme.Tone.Raised), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(42.dp).clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Control)).background(com.retrohero.app.ui.theme.Tone.Raised), contentAlignment = Alignment.Center) {
             Icon(icon, null, tint = com.retrohero.app.ui.theme.Tone.Ink)
         }
         Spacer(Modifier.width(14.dp))

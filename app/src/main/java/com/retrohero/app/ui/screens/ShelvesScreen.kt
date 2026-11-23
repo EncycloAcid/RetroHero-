@@ -116,15 +116,22 @@ fun ShelvesScreen(
 @Composable
 private fun HeaderButton(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, fill: Color, tint: Color, onClick: () -> Unit, modifier: Modifier = Modifier) {
     Box(
-        modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(fill).clickable(onClick = onClick),
+        modifier.size(44.dp).clip(RoundedCornerShape(Ascend.Radius.Control)).background(fill).clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) { Icon(icon, description, tint = tint) }
 }
 
 @Composable
 private fun Shelf(row: ShelfRow, index: Int, onOpenGame: (Game) -> Unit, onOptions: (Game) -> Unit, subtitle: (Game) -> String?) {
-    Column(Modifier.fillMaxWidth().padding(top = 22.dp)) {
-        SectionTitle(row.title, Modifier.padding(horizontal = Page.Gutter), count = row.count, index = index, onClick = row.onOpen)
+    Column(Modifier.fillMaxWidth().padding(top = 32.dp)) {
+        SectionTitle(
+            row.title,
+            Modifier.padding(horizontal = Page.Gutter),
+            count = row.count,
+            index = index,
+            onClick = row.onOpen,
+            verticalPadding = 0.dp,
+        )
         if (row.games.isEmpty()) {
             Box(
                 Modifier

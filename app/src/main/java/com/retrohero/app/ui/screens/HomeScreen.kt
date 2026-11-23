@@ -11,6 +11,7 @@ import com.retrohero.app.ui.components.ArchiveLabel
 import com.retrohero.app.ui.components.AccentButton
 import com.retrohero.app.ui.components.SectionTitle
 import com.retrohero.app.ui.components.PageHeader
+import com.retrohero.app.ui.components.Page
 import com.retrohero.app.ui.components.Ascend
 import com.retrohero.app.ui.components.emberBackground
 import android.view.HapticFeedbackConstants
@@ -85,6 +86,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -132,16 +134,9 @@ import kotlin.random.Random
 
 // ---- Layout & type ------------------------------------------------------------------------------
 
-/** Side margin that suits the screen: tighter on phones, roomier on large screens. */
+/** Shared page gutter. */
 private val ContentInset: Dp
-    @Composable @ReadOnlyComposable get() {
-        val w = LocalConfiguration.current.screenWidthDp
-        return when {
-            w < 380 -> 18.dp
-            w < 600 -> 22.dp
-            else -> 36.dp
-        }
-    }
+    @Composable @ReadOnlyComposable get() = Page.Gutter
 
 /** Three covers and a peek at the next one on phones. */
 private val RowCardWidth: Dp
@@ -174,7 +169,6 @@ private const val Pitch = 207f
 private const val FocusGap = 17f
 private const val CenterY = 230.5f
 private const val Overhang = 28f
-private const val CoverCorner = 25f
 private const val PointerX = 120f
 private const val PointerY = 236f
 private const val PointerSize = 72f
@@ -234,7 +228,7 @@ fun HomeScreen(
 
     var shuffleOpen by rememberSaveable { mutableStateOf(false) }
     if (shuffleOpen) Dialog(onDismissRequest = { shuffleOpen = false }) {
-        Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))) {
+        Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(Ascend.Radius.Card))) {
             GachaHero(candidates) { shuffleOpen = false; onPlay(it) }
             IconButton({ shuffleOpen = false }, Modifier.align(Alignment.TopEnd)) { Icon(Icons.Rounded.Close, "Close", tint = Color.White) }
         }
@@ -253,10 +247,10 @@ fun HomeScreen(
         if (featured.isNotEmpty()) full { FeaturedGames(featured, recents.firstOrNull(), onOpen, onPlay) }
         full {
             Row(Modifier.fillMaxWidth().padding(horizontal = ContentInset), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                ArchiveShortcut("Shuffle", Icons.Rounded.Shuffle, Modifier.weight(1f)) {
+                ArchiveShortcut("Shuffle", "A1", Icons.Rounded.Shuffle, Modifier.weight(1f)) {
                     if (candidates.size > 1) shuffleOpen = true else candidates.firstOrNull()?.let(onPlay)
                 }
-                ArchiveShortcut("Play stats", Icons.Rounded.Insights, Modifier.weight(1f), onOpenStats)
+                ArchiveShortcut("Play stats", "A2", Icons.Rounded.Insights, Modifier.weight(1f), onOpenStats)
             }
         }
         if (favorites.isNotEmpty()) {
@@ -407,7 +401,7 @@ private fun GachaHero(candidates: List<Game>, onPlay: (Game) -> Unit) {
     BoxWithConstraints(Modifier.fillMaxWidth().height(HeroHeight).clipToBounds()) {
         val unit = maxHeight / GachaHeight
         val focus = unit * FocusSize
-        val coverShape = RoundedCornerShape(unit * CoverCorner)
+        val coverShape = RoundedCornerShape(Ascend.Radius.Hero)
 
         Box(Modifier.fillMaxSize().launchRise(0)) {
 
@@ -468,7 +462,7 @@ private fun GachaHero(candidates: List<Game>, onPlay: (Game) -> Unit) {
                         clip = true
                     },
             ) {
-                GameArt(game, Modifier.fillMaxSize(), showTag = false)
+                GameArt(game, Modifier.fillMaxSize(), showTag = true)
             }
         }
 
@@ -557,14 +551,14 @@ private fun GachaHero(candidates: List<Game>, onPlay: (Game) -> Unit) {
 private fun FeaturedGames(games: List<Game>, recent: Game?, onOpen: (Game) -> Unit, onPlay: (Game) -> Unit) {
     val pager = rememberPagerState { games.size }
     HorizontalPager(state = pager, key = { games[it].id }, contentPadding = PaddingValues(horizontal = ContentInset),
-        pageSpacing = 8.dp, modifier = Modifier.fillMaxWidth()) { index ->
+        pageSpacing = 12.dp, modifier = Modifier.fillMaxWidth()) { index ->
         val game = games[index]
-        Box(Modifier.fillMaxWidth().heightIn(min = 238.dp).clip(RoundedCornerShape(12.dp)).clickable { onOpen(game) }) {
-            GameArt(game, Modifier.matchParentSize(), showTag = false)
+        Box(Modifier.fillMaxWidth().heightIn(min = 238.dp).clip(RoundedCornerShape(Ascend.Radius.Hero)).clickable { onOpen(game) }) {
+            GameArt(game, Modifier.matchParentSize(), showTag = true)
             Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.16f), Color.Black.copy(alpha = 0.36f), Color.Black.copy(alpha = 0.94f)))))
             Column(Modifier.fillMaxWidth().padding(18.dp)) {
                 ArchiveLabel(if (game.id == recent?.id) "Continue playing" else "From your library",
-                    Modifier.background(Color.Black.copy(alpha = 0.75f), RoundedCornerShape(4.dp)).padding(vertical = 4.dp, horizontal = 7.dp), Color.White)
+                    Modifier.background(Color.Black.copy(alpha = 0.75f), RoundedCornerShape(Ascend.Radius.Control)).padding(vertical = 4.dp, horizontal = 7.dp), Color.White)
                 Spacer(Modifier.height(54.dp))
                 Text(game.title, style = MaterialTheme.typography.headlineLargeEmphasized, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(game.system?.name.orEmpty(), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.82f))
@@ -579,16 +573,44 @@ private fun FeaturedGames(games: List<Game>, recent: Game?, onOpen: (Game) -> Un
 }
 
 @Composable
-private fun ArchiveShortcut(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier, onClick: () -> Unit) {
+private fun ArchiveShortcut(label: String, index: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) 0.97f else 1f, spring(dampingRatio = 0.7f, stiffness = 600f), label = "shortcutScale")
-    Row(modifier.graphicsLayer { scaleX = scale; scaleY = scale }.height(48.dp).clip(Ascend.CardShape)
-        .background(Ascend.Surface).clickable(interactionSource = interaction, indication = null, onClick = onClick),
-        horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, tint = Ascend.Muted, modifier = Modifier.size(18.dp))
-        Spacer(Modifier.width(8.dp))
-        Text(label, style = MaterialTheme.typography.labelLarge, color = Tone.Ink)
+    val shape = RoundedCornerShape(Ascend.Radius.Control)
+    val depth = if (com.retrohero.app.ui.theme.Tone.isDark) Modifier else Modifier.shadow(
+        2.dp,
+        shape,
+        ambientColor = Color.Black.copy(alpha = 0.06f),
+        spotColor = Color.Black.copy(alpha = 0.10f),
+    )
+    Row(
+        modifier.then(depth)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .height(52.dp)
+            .clip(shape)
+            .background(com.retrohero.app.ui.theme.Tone.Raised)
+            .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, shape)
+            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
+            .padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier.size(28.dp).clip(CircleShape).background(com.retrohero.app.ui.theme.Tone.Ink.copy(alpha = 0.06f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, null, tint = com.retrohero.app.ui.theme.Tone.Ink, modifier = Modifier.size(16.dp))
+        }
+        Spacer(Modifier.width(10.dp))
+        Text(
+            label,
+            Modifier.weight(1f),
+            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 14.sp),
+            color = com.retrohero.app.ui.theme.Tone.Ink,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        ArchiveLabel(index, color = com.retrohero.app.ui.theme.Tone.Faint)
     }
 }
 
@@ -664,7 +686,14 @@ private fun Die(spinning: Boolean) {
 
 @Composable
 private fun SectionHeader(text: String, count: Int, index: Int, onClick: (() -> Unit)? = null) {
-    com.retrohero.app.ui.components.SectionTitle(text, Modifier.padding(horizontal = ContentInset), count = count, index = index, onClick = onClick)
+    com.retrohero.app.ui.components.SectionTitle(
+        text,
+        Modifier.padding(start = ContentInset, top = 20.dp, end = ContentInset),
+        count = count,
+        index = index,
+        onClick = onClick,
+        verticalPadding = 0.dp,
+    )
 }
 
 @Composable
@@ -672,14 +701,14 @@ internal fun CollectionCard(collection: GameCollection, games: List<Game>, onOpe
     Column(
         Modifier
             .width(RowCardWidth)
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(Ascend.Radius.Card))
             .background(com.retrohero.app.ui.theme.Tone.Surface)
-            .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, RoundedCornerShape(14.dp))
+            .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, RoundedCornerShape(Ascend.Radius.Card))
             .press3D()
             .clickable { onOpen(collection) }
             .padding(6.dp),
     ) {
-        Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(10.dp)).background(com.retrohero.app.ui.theme.Tone.Bg)) {
+        Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(Ascend.Radius.Cover)).background(com.retrohero.app.ui.theme.Tone.Bg)) {
             val covers = games.take(4)
             when {
                 covers.size >= 4 -> Column(Modifier.fillMaxSize()) {
@@ -714,9 +743,9 @@ private fun SystemCard(system: GameSystem, count: Int, onOpen: (GameSystem) -> U
     Column(
         Modifier
             .width(RowCardWidth)
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(Ascend.Radius.Card))
             .background(com.retrohero.app.ui.theme.Tone.Surface)
-            .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, RoundedCornerShape(14.dp))
+            .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, RoundedCornerShape(Ascend.Radius.Card))
             .press3D()
             .clickable(interactionSource = interaction, indication = null) { onOpen(system) }
             .padding(6.dp),
@@ -725,9 +754,9 @@ private fun SystemCard(system: GameSystem, count: Int, onOpen: (GameSystem) -> U
             Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
-                .clip(RoundedCornerShape(10.dp))
+                .clip(RoundedCornerShape(Ascend.Radius.Cover))
                 .background(com.retrohero.app.ui.theme.Tone.Surface)
-                .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, RoundedCornerShape(14.dp)),
+                .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, RoundedCornerShape(Ascend.Radius.Cover)),
             contentAlignment = Alignment.Center,
         ) {
             Box(Modifier.size(88.dp).graphicsLayer { rotationZ = 14f + 60f * p }.background(com.retrohero.app.ui.theme.Tone.Ink.copy(alpha = 0.08f), MorphShape(morph, p)))

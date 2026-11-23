@@ -25,13 +25,13 @@ object Tone {
     val isDark: Boolean get() = darkState.value
     fun setDarkMode(dark: Boolean) { darkState.value = dark }
 
-    val Bg: Color get() = if (isDark) Color(0xFF111113) else Color(0xFFEDECE8)
-    val Surface: Color get() = if (isDark) Color(0xFF1A1A1D) else Color(0xFFF7F6F3)
-    val Raised: Color get() = if (isDark) Color(0xFF232327) else Color.White
+    val Bg: Color get() = if (isDark) Color(0xFF0D0D0F) else Color(0xFFF0EFEB)
+    val Surface: Color get() = if (isDark) Color(0xFF19191C) else Color(0xFFFAF9F6)
+    val Raised: Color get() = if (isDark) Color(0xFF222226) else Color.White
     val Ink: Color get() = if (isDark) Color(0xFFF2F1EE) else Color(0xFF111111)
     val Muted: Color get() = Ink.copy(alpha = if (isDark) 0.60f else 0.58f)
     val Faint: Color get() = Ink.copy(alpha = if (isDark) 0.34f else 0.32f)
-    val Line: Color get() = Ink.copy(alpha = if (isDark) 0.09f else 0.10f)
+    val Line: Color get() = Ink.copy(alpha = 0.08f)
 }
 
 /**

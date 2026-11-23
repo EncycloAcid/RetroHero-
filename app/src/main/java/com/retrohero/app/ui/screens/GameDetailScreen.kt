@@ -191,7 +191,7 @@ fun GameDetailScreen(
                                 .height(110.dp)
                                 .aspectRatio(4f / 3f)
                                 .press3D()
-                                .clip(RoundedCornerShape(16.dp))
+                                .clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Cover))
                                 .background(com.retrohero.app.ui.theme.Tone.Surface)
                                 .clickable { viewing = shot },
                         )
@@ -291,7 +291,7 @@ private fun ScreenshotDialog(shot: File, onDismiss: () -> Unit, onUseAsCover: ()
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
         Column(
             Modifier
-                .clip(RoundedCornerShape(28.dp))
+                .clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card))
                 .background(Color(0xFF161618))
                 .padding(16.dp),
         ) {
@@ -300,7 +300,7 @@ private fun ScreenshotDialog(shot: File, onDismiss: () -> Unit, onUseAsCover: ()
                 contentDescription = "Screenshot",
                 contentScale = ContentScale.Fit,
                 filterQuality = FilterQuality.None,
-                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)),
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Cover)),
             )
             Row(Modifier.fillMaxWidth().padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ShotAction(Icons.Rounded.Image, "Use as cover", Modifier.weight(1f), onUseAsCover)
@@ -315,7 +315,7 @@ private fun ScreenshotDialog(shot: File, onDismiss: () -> Unit, onUseAsCover: ()
 private fun ShotAction(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, modifier: Modifier, onClick: () -> Unit) {
     Column(
         modifier
-            .clip(RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Control))
             .background(Color.White.copy(alpha = 0.08f))
             .clickable(onClick = onClick)
             .padding(vertical = 12.dp),

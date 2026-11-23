@@ -671,7 +671,7 @@ private fun App(vm: AppViewModel) {
         SnackbarHost(snackbar) { data ->
             Snackbar(
                 data,
-                shape = RoundedCornerShape(18.dp),
+                shape = RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card),
                 containerColor = com.retrohero.app.ui.theme.Tone.Surface,
                 contentColor = com.retrohero.app.ui.theme.Tone.Ink,
                 actionColor = com.retrohero.app.ui.theme.Salmon,

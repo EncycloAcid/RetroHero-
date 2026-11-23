@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -27,6 +28,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.retrohero.app.data.Game
@@ -71,9 +73,11 @@ private fun GeneratedCover(game: Game, showTitle: Boolean, showTag: Boolean) {
         if (showTag && maxWidth >= 72.dp) {
             Text(
                 game.system?.shortName?.uppercase().orEmpty(),
-                style = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 9.sp),
+                style = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Medium, fontSize = 8.5.sp, letterSpacing = 0.08.em),
                 color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(6.dp).background(Color.Black.copy(alpha = 0.78f)).padding(horizontal = 5.dp, vertical = 2.dp),
+                modifier = Modifier.padding(6.dp)
+                    .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(4.dp))
+                    .padding(horizontal = 5.dp, vertical = 2.dp),
             )
         }
         if (showTitle) {

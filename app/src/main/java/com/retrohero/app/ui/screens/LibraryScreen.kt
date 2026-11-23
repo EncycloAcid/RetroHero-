@@ -134,7 +134,15 @@ fun LibraryScreen(
                     }
                 }
                 if (favorites.isNotEmpty()) {
-                    span { com.retrohero.app.ui.components.SectionTitle("Pinned", Modifier.padding(top = 12.dp), count = favorites.size, index = 1) }
+                    span {
+                        com.retrohero.app.ui.components.SectionTitle(
+                            "Pinned",
+                            Modifier.padding(top = 20.dp),
+                            count = favorites.size,
+                            index = 1,
+                            verticalPadding = 0.dp,
+                        )
+                    }
                     items(favorites.take(9), key = { "pin_" + it.id }) { g ->
                         com.retrohero.app.ui.components.GameCard(g, onClick = { onOpenGame(g) }, subtitle = g.system?.shortName, onLongClick = { onOptions(g) }, onPlay = { onPlay(g) })
                     }
@@ -171,7 +179,7 @@ fun LibraryScreen(
                 item(key = "newcol") {
                     Column(Modifier.clickable(onClick = onNewCollection)) {
                         Box(
-                            Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(14.dp)).background(com.retrohero.app.ui.theme.Tone.Surface).border(1.dp, com.retrohero.app.ui.theme.Tone.Line, RoundedCornerShape(14.dp)),
+                            Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(Ascend.Radius.Card)).background(com.retrohero.app.ui.theme.Tone.Surface).border(1.dp, com.retrohero.app.ui.theme.Tone.Line, RoundedCornerShape(Ascend.Radius.Card)),
                             contentAlignment = Alignment.Center,
                         ) { Icon(Icons.Rounded.Add, null, tint = com.retrohero.app.ui.theme.Tone.Muted, modifier = Modifier.size(36.dp)) }
                         Text("New collection", style = MaterialTheme.typography.titleSmall, color = com.retrohero.app.ui.theme.Tone.Ink, modifier = Modifier.padding(top = 9.dp))
@@ -189,7 +197,7 @@ fun LibraryScreen(
                         modifier = Modifier
                             .aspectRatio(1f)
                             .press3D()
-                            .clip(RoundedCornerShape(14.dp))
+                            .clip(RoundedCornerShape(Ascend.Radius.Cover))
                             .background(com.retrohero.app.ui.theme.Tone.Surface)
                             .clickable { onOpenGame(s.game) },
                     )
@@ -212,7 +220,7 @@ private fun LazyGridScope.historyItems(history: List<HistoryEntry>, onOpen: (Gam
     val byDay = history.groupBy { it.day() }
     byDay.entries.forEachIndexed { sectionIndex, (day, list) ->
         span {
-            Row(Modifier.padding(start = 12.dp, top = 22.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.padding(start = 12.dp, top = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                 ArchiveLabel((sectionIndex + 1).toString().padStart(2, '0'), color = com.retrohero.app.ui.theme.Tone.Faint)
                 Text(
                     day.format(fmt),
@@ -226,12 +234,12 @@ private fun LazyGridScope.historyItems(history: List<HistoryEntry>, onOpen: (Gam
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(14.dp))
+                    .clip(RoundedCornerShape(Ascend.Radius.Card))
                     .combinedClickable(onClick = { onOpen(e.game) }, onLongClick = { onOptions(e.game) })
                     .padding(start = 12.dp, end = 12.dp, top = 9.dp, bottom = 9.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                GameArt(e.game, Modifier.size(39.dp).clip(RoundedCornerShape(9.dp)), showTag = false)
+                GameArt(e.game, Modifier.size(39.dp).clip(RoundedCornerShape(Ascend.Radius.Cover)), showTag = false)
                 Spacer(Modifier.width(11.dp))
                 Column(Modifier.weight(1f)) {
                     Text(e.game.title, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.sp), color = com.retrohero.app.ui.theme.Tone.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -266,7 +274,7 @@ private fun IndexRow(tab: LibraryTab, count: Int, game: Game?, onClick: () -> Un
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
         ArchiveLabel((tab.ordinal + 1).toString().padStart(2, '0'), Modifier.width(24.dp), color = com.retrohero.app.ui.theme.Tone.Faint)
         Spacer(Modifier.width(16.dp))
-        val thumbnailShape = RoundedCornerShape(10.dp)
+        val thumbnailShape = RoundedCornerShape(Ascend.Radius.Cover)
         Box(
             Modifier.size(44.dp).clip(thumbnailShape).background(com.retrohero.app.ui.theme.Tone.Raised)
                 .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, thumbnailShape),
@@ -319,14 +327,14 @@ private fun ListRow(index: Int, art: @Composable () -> Unit, title: String, subt
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(Ascend.Radius.Card))
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .padding(vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ArchiveLabel(index.toString().padStart(2, '0'), Modifier.width(24.dp), color = com.retrohero.app.ui.theme.Tone.Faint)
         Spacer(Modifier.width(16.dp))
-        val thumbnailShape = RoundedCornerShape(10.dp)
+        val thumbnailShape = RoundedCornerShape(Ascend.Radius.Cover)
         Box(
             Modifier.size(44.dp).clip(thumbnailShape).background(com.retrohero.app.ui.theme.Tone.Raised)
                 .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, thumbnailShape),
@@ -344,7 +352,7 @@ private fun ListRow(index: Int, art: @Composable () -> Unit, title: String, subt
 @Composable
 private fun SystemTile(system: GameSystem) {
     Box(
-        Modifier.fillMaxSize().background(com.retrohero.app.ui.theme.Tone.Surface).border(1.dp, com.retrohero.app.ui.theme.Tone.Line, RoundedCornerShape(14.dp)),
+        Modifier.fillMaxSize().background(com.retrohero.app.ui.theme.Tone.Surface).border(1.dp, com.retrohero.app.ui.theme.Tone.Line, RoundedCornerShape(Ascend.Radius.Card)),
         contentAlignment = Alignment.Center,
     ) {
         Text(system.shortName.take(4), style = TextStyle(fontFamily = com.retrohero.app.ui.theme.PixelFont, fontSize = 9.sp), color = com.retrohero.app.ui.theme.Tone.Ink)

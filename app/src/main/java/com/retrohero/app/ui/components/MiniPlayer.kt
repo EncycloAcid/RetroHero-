@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Icon
@@ -105,7 +106,7 @@ fun MiniPlayer(
             .padding(start = 8.dp, end = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        GameArt(game, Modifier.size(48.dp).clip(RoundedCornerShape(6.dp)), showTag = false)
+        GameArt(game, Modifier.size(48.dp).clip(RoundedCornerShape(Ascend.Radius.Cover)), showTag = false)
         Spacer(Modifier.width(12.dp))
         Column(
             Modifier
@@ -129,7 +130,7 @@ fun MiniPlayer(
         }
         Spacer(Modifier.width(8.dp))
         Box(
-            Modifier.size(48.dp).clip(RoundedCornerShape(24.dp)).clickable(onClick = onPlay),
+            Modifier.size(48.dp).clip(CircleShape).clickable(onClick = onPlay),
             contentAlignment = Alignment.Center,
         ) { Icon(Icons.Rounded.PlayArrow, "Resume ${game.title}", tint = Tone.Ink, modifier = Modifier.size(26.dp)) }
     }

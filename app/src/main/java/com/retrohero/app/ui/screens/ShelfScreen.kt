@@ -145,7 +145,7 @@ fun ShelfScreen(
                         Modifier.size(48.dp).clip(CircleShape).background(com.retrohero.app.ui.theme.Tone.Raised).clickable { sortMenu = true },
                         contentAlignment = Alignment.Center,
                     ) { Icon(Icons.Rounded.SwapVert, "Sort", tint = com.retrohero.app.ui.theme.Tone.Ink) }
-                    DropdownMenu(sortMenu, onDismissRequest = { sortMenu = false }, shape = RoundedCornerShape(20.dp)) {
+                    DropdownMenu(sortMenu, onDismissRequest = { sortMenu = false }, shape = RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Control)) {
                         GameSort.entries.forEach { s ->
                             DropdownMenuItem(
                                 text = { Text(s.label, fontWeight = if (s == sort) FontWeight.Bold else FontWeight.Normal) },

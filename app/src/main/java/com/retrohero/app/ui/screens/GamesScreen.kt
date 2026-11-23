@@ -70,6 +70,7 @@ import com.retrohero.app.ui.theme.PixelFont
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.TextButton
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material.icons.filled.SwapVert
@@ -170,7 +171,7 @@ fun GamesScreen(
         columns = GridCells.Adaptive(108.dp),
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp + LocalNavSpace.current),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
         fullWidth { PageHeader(title, if (games.size == 1) "1 game" else "${games.size} games across ${systemsPresent.size} ${if (systemsPresent.size == 1) "system" else "systems"}", index = pageIndex) }
@@ -231,10 +232,26 @@ fun GamesScreen(
         }
 
         if (browsing && recents.isNotEmpty()) {
-            fullWidth { com.retrohero.app.ui.components.SectionTitle("Jump back in", Modifier.padding(top = 8.dp), count = recents.size, index = 1) }
+            fullWidth {
+                com.retrohero.app.ui.components.SectionTitle(
+                    "Jump back in",
+                    Modifier.padding(top = 20.dp),
+                    count = recents.size,
+                    index = 1,
+                    verticalPadding = 0.dp,
+                )
+            }
             fullWidth { RecentCarousel(recents, onPlay, onGameOptions) }
         }
-        fullWidth { com.retrohero.app.ui.components.SectionTitle(if (browsing) "All games" else "Results", count = filtered.size, index = 2) }
+        fullWidth {
+            com.retrohero.app.ui.components.SectionTitle(
+                if (browsing) "All games" else "Results",
+                Modifier.padding(top = 20.dp),
+                count = filtered.size,
+                index = 2,
+                verticalPadding = 0.dp,
+            )
+        }
 
         if (filtered.isEmpty()) {
             fullWidth {
@@ -333,14 +350,23 @@ private fun SearchField(query: String, total: Int, onChange: (String) -> Unit) {
             if (query.isNotEmpty()) IconButton(onClick = { onChange("") }) { Icon(Icons.Default.Close, "Clear") }
         },
         singleLine = true,
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Control),
         colors = TextFieldDefaults.colors(
             focusedIndicatorColor = Color.Transparent,
             unfocusedIndicatorColor = Color.Transparent,
             focusedContainerColor = Color.Transparent,
             unfocusedContainerColor = Color.Transparent,
         ),
-        modifier = Modifier.fillMaxWidth().padding(top = 4.dp).then(Modifier.ascendCard()),
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
+            .then(
+                if (com.retrohero.app.ui.theme.Tone.isDark) Modifier else Modifier.shadow(
+                    2.dp,
+                    RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Control),
+                    ambientColor = Color.Black.copy(alpha = 0.06f),
+                    spotColor = Color.Black.copy(alpha = 0.10f),
+                ),
+            )
+            .then(Modifier.ascendCard(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Control))),
     )
 }
 
@@ -355,7 +381,7 @@ private fun RecentCarousel(recents: List<Game>, onPlay: (Game) -> Unit, onOption
     HorizontalMultiBrowseCarousel(
         state = state,
         preferredItemWidth = 240.dp,
-        itemSpacing = 10.dp,
+        itemSpacing = 12.dp,
         modifier = Modifier.fillMaxWidth().height(300.dp),
     ) { index ->
         val game = recents[index]

@@ -66,9 +66,9 @@ fun CollectionPickerSheet(
                     Modifier
                         .fillMaxWidth()
                         .padding(bottom = 8.dp)
-                        .clip(RoundedCornerShape(14.dp))
+                        .clip(RoundedCornerShape(Ascend.Radius.Card))
                         .background(Tone.Raised)
-                        .border(1.dp, Tone.Line, RoundedCornerShape(14.dp))
+                        .border(1.dp, Tone.Line, RoundedCornerShape(Ascend.Radius.Card))
                         .clickable { onToggle(c, !inIt) }
                         .padding(horizontal = 16.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -87,12 +87,12 @@ fun CollectionPickerSheet(
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(18.dp))
+                    .clip(RoundedCornerShape(Ascend.Radius.Card))
                     .clickable { naming = true }
                     .padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(Tone.Raised), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(32.dp).clip(RoundedCornerShape(Ascend.Radius.Control)).background(Tone.Raised), contentAlignment = Alignment.Center) {
                     Icon(Icons.Rounded.Add, null, tint = Tone.Ink)
                 }
                 Spacer(Modifier.width(12.dp))

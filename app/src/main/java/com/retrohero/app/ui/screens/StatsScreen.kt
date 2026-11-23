@@ -159,7 +159,7 @@ fun StatsScreen(history: List<HistoryEntry>, onBack: () -> Unit, onRecap: (Perio
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         summary.systems.take(5).forEachIndexed { i, (s, secs) ->
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.size(12.dp).clip(RoundedCornerShape(3.dp)).background(Donut[i]))
+                                Box(Modifier.size(12.dp).clip(CircleShape).background(Donut[i]))
                                 Spacer(Modifier.width(8.dp))
                                 Text("${s.shortName}  ${PlayTime.format(secs)}", style = axis, color = Ink2)
                             }
@@ -175,7 +175,7 @@ fun StatsScreen(history: List<HistoryEntry>, onBack: () -> Unit, onRecap: (Perio
                     summary.games.take(5).forEachIndexed { i, (g, secs) ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("${i + 1}".padStart(2, '0'), style = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Medium, fontSize = 10.sp, letterSpacing = 0.12.em), color = Muted, modifier = Modifier.width(28.dp))
-                            GameArt(g, Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)), showTag = false)
+                            GameArt(g, Modifier.size(40.dp).clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Cover)), showTag = false)
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(g.title, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.sp), color = Tone.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -243,7 +243,7 @@ private fun PeriodRuler(periods: List<Period>, selected: Int, history: List<Hist
                         has -> Tone.Muted
                         else -> Tone.Faint
                     },
-                    modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { onSelect(i) }.padding(bottom = 2.dp),
+                    modifier = Modifier.clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Control)).clickable { onSelect(i) }.padding(bottom = 2.dp),
                 )
             }
         }
@@ -276,9 +276,9 @@ private fun StatCard(title: String, headline: String, initiallyOpen: Boolean = f
         Modifier
             .padding(horizontal = 16.dp)
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card))
             .background(StatsCardFill)
-            .border(1.dp, Tone.Line, RoundedCornerShape(10.dp))
+            .border(1.dp, Tone.Line, RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card))
             .clickable { open = !open }
             .padding(start = 20.dp, end = 16.dp, top = 18.dp, bottom = 14.dp),
     ) {
@@ -287,7 +287,7 @@ private fun StatCard(title: String, headline: String, initiallyOpen: Boolean = f
                 Text(title.uppercase(), style = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Medium, fontSize = 10.sp, letterSpacing = 0.12.em), color = Muted)
                 Text(headline, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, letterSpacing = (-0.02).em), color = Tone.Ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
-            Box(Modifier.size(26.dp).clip(RoundedCornerShape(7.dp)).background(Tone.Raised), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(26.dp).clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Control)).background(Tone.Raised), contentAlignment = Alignment.Center) {
                 Icon(Icons.Rounded.KeyboardArrowDown, if (open) "Collapse" else "Expand", tint = Ink2, modifier = Modifier.rotate(turn))
             }
         }
@@ -301,7 +301,7 @@ private fun StatCard(title: String, headline: String, initiallyOpen: Boolean = f
 
 @Composable
 private fun Habit(label: String, value: String, modifier: Modifier) {
-    Column(modifier.clip(RoundedCornerShape(10.dp)).background(StatsCardFill).padding(16.dp)) {
+    Column(modifier.clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card)).background(StatsCardFill).padding(16.dp)) {
         Text(label.uppercase(), style = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Medium, fontSize = 10.sp, letterSpacing = 0.12.em), color = Muted)
         Text(value, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, letterSpacing = (-0.02).em), color = Tone.Ink, maxLines = 1)
     }

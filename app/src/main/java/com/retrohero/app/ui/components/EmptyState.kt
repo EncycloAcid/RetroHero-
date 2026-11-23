@@ -25,7 +25,7 @@ fun EmptyState(title: String, body: String, action: @Composable () -> Unit = {})
     Column(Modifier.fillMaxSize().emberBackground().verticalScroll(rememberScrollState())
         .padding(horizontal = Page.Gutter).padding(bottom = LocalNavSpace.current + 24.dp)) {
         PageHeader("RetroHero", null)
-        ArchiveLandscape(Modifier.fillMaxWidth().padding(top = 16.dp).aspectRatio(1.8f).clip(RoundedCornerShape(8.dp)))
+        ArchiveLandscape(Modifier.fillMaxWidth().padding(top = 16.dp).aspectRatio(1.8f).clip(RoundedCornerShape(Ascend.Radius.Hero)))
         ArchiveLabel("Getting started", Modifier.padding(top = 24.dp))
         Text(title, style = MaterialTheme.typography.headlineLargeEmphasized, color = MaterialTheme.colorScheme.onBackground,
             modifier = Modifier.padding(top = 6.dp))

@@ -121,7 +121,7 @@ fun SettingsHome(settings: Settings, onOpen: (String) -> Unit, onOpenStats: () -
         val focused = query.isNotEmpty()
         val fill by animateColorAsState(if (focused) Tone.Raised else SearchFill, tween(200), label = "searchFill")
         Row(
-            Modifier.fillMaxWidth().height(48.dp).glossCard(RoundedCornerShape(8.dp)).background(fill.copy(alpha = if (focused) 0.6f else 0f)).padding(horizontal = 16.dp),
+            Modifier.fillMaxWidth().height(48.dp).glossCard(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Control)).background(fill.copy(alpha = if (focused) 0.6f else 0f)).padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(Icons.Rounded.Search, null, tint = Placeholder, modifier = Modifier.size(20.dp))
@@ -149,7 +149,7 @@ fun SettingsHome(settings: Settings, onOpen: (String) -> Unit, onOpenStats: () -
             }
             hits.forEach { (c, label) ->
                 Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).clickable { onOpen(c.id) }.padding(horizontal = 16.dp, vertical = 14.dp),
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card)).clickable { onOpen(c.id) }.padding(horizontal = 16.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Box(Modifier.size(38.dp).clip(CircleShape).background(IconTile), contentAlignment = Alignment.Center) {
@@ -171,7 +171,7 @@ fun SettingsHome(settings: Settings, onOpen: (String) -> Unit, onOpenStats: () -
             Modifier
                 .fillMaxWidth()
                 .press3D()
-                .glossCard(RoundedCornerShape(14.dp))
+                .glossCard(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card))
                 .clickable(onClick = onOpenStats)
                 .padding(horizontal = 18.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -293,9 +293,9 @@ fun LooksSettings(settings: Settings, imported: List<Look>, onImport: () -> Unit
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
+            .clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card))
             .background(Tone.Surface)
-            .border(1.dp, Tone.Line, RoundedCornerShape(22.dp))
+            .border(1.dp, Tone.Line, RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card))
             .clickable(onClick = onImport)
             .padding(horizontal = 20.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -372,7 +372,7 @@ private fun StylePager(
             val id = items[i]
             val isSel = id == selected
             val ring by animateFloatAsState(if (isSel) 1f else 0f, tween(220), label = "ring")
-            val cardShape = RoundedCornerShape(22.dp)
+            val cardShape = RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card)
             Box(
                 Modifier
                     .fillMaxWidth()
@@ -406,9 +406,9 @@ private fun StylePager(
                         .offset(y = 30.dp)
                         .width(133.dp)
                         .fillMaxHeight(0.86f)
-                        .clip(RoundedCornerShape(15.dp))
+                        .clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card))
                         .background(Color.Black)
-                        .border(1.dp, Tone.Line, RoundedCornerShape(15.dp)),
+                        .border(1.dp, Tone.Line, RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card)),
                 ) { preview(id) }
                 Box(Modifier.align(Alignment.BottomEnd).fillMaxWidth().height(40.dp).background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, Tone.Surface))))
                 Text(label, style = MaterialTheme.typography.labelMedium, color = Tone.Muted, modifier = Modifier.padding(start = 22.dp, top = 18.dp))
@@ -432,7 +432,7 @@ private fun StylePager(
 @Composable
 private fun AccentPreview(color: Color) {
     Column(Modifier.fillMaxSize().padding(10.dp)) {
-        Box(Modifier.fillMaxWidth().aspectRatio(1.4f).clip(RoundedCornerShape(10.dp)).background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(color, color.copy(alpha = 0.35f)))))
+    Box(Modifier.fillMaxWidth().aspectRatio(1.4f).clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Cover)).background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(color, color.copy(alpha = 0.35f)))))
         Spacer(Modifier.height(8.dp))
         Box(Modifier.width(60.dp).height(6.dp).clip(CircleShape).background(Tone.Ink.copy(alpha = 0.7f)))
         Spacer(Modifier.height(5.dp))
@@ -445,11 +445,11 @@ private fun AccentPreview(color: Color) {
 @Composable
 private fun PadPreview(skin: PadSkin) {
     val faces = listOf(Color(0xFF4C7DFF), Color(0xFF30C26B), Color(0xFFE5484D), Color(0xFFF5B83D))
-    Box(Modifier.fillMaxSize().background(Tone.Surface).border(1.dp, Tone.Line, RoundedCornerShape(15.dp)).padding(10.dp)) {
+    Box(Modifier.fillMaxSize().background(Tone.Surface).border(1.dp, Tone.Line, RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card)).padding(10.dp)) {
         // D-pad.
         Box(Modifier.align(Alignment.CenterStart).offset(y = (-10).dp).size(44.dp)) {
-            Box(Modifier.align(Alignment.Center).size(15.dp, 44.dp).clip(RoundedCornerShape(4.dp)).background(skin.fill).border(1.dp, skin.edge, RoundedCornerShape(4.dp)))
-            Box(Modifier.align(Alignment.Center).size(44.dp, 15.dp).clip(RoundedCornerShape(4.dp)).background(skin.fill).border(1.dp, skin.edge, RoundedCornerShape(4.dp)))
+            Box(Modifier.align(Alignment.Center).size(15.dp, 44.dp).clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Control)).background(skin.fill).border(1.dp, skin.edge, RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Control)))
+            Box(Modifier.align(Alignment.Center).size(44.dp, 15.dp).clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Control)).background(skin.fill).border(1.dp, skin.edge, RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Control)))
         }
         // Face buttons.
         Box(Modifier.align(Alignment.CenterEnd).offset(y = (-10).dp).size(48.dp)) {

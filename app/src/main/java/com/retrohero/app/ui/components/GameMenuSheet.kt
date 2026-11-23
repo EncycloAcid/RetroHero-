@@ -94,7 +94,7 @@ fun GameMenuSheet(
     ) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 20.dp).padding(bottom = 20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                GameArt(game, Modifier.size(56.dp).clip(RoundedCornerShape(14.dp)), showTag = false)
+                GameArt(game, Modifier.size(56.dp).clip(RoundedCornerShape(Ascend.Radius.Cover)), showTag = false)
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
                     Text(game.title, style = MaterialTheme.typography.titleMediumEmphasized, color = Tone.Ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -110,9 +110,9 @@ fun GameMenuSheet(
                                 .weight(1f)
                                 .height(108.dp)
                                 .press3D()
-                                .clip(RoundedCornerShape(14.dp))
+                                .clip(RoundedCornerShape(Ascend.Radius.Card))
                                 .background(Tone.Raised)
-                                .border(1.dp, Tone.Line, RoundedCornerShape(14.dp))
+                                .border(1.dp, Tone.Line, RoundedCornerShape(Ascend.Radius.Card))
                                 .clickable(onClick = tile.onClick)
                                 .padding(12.dp),
                         ) {

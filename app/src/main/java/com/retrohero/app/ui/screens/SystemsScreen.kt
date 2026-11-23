@@ -97,9 +97,9 @@ private fun SystemCard(system: GameSystem, count: Int, onOpen: (GameSystem) -> U
             .fillMaxWidth()
             .height(164.dp)
             .press3D()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card))
             .background(Tone.Surface)
-            .border(1.dp, Tone.Line, RoundedCornerShape(14.dp))
+            .border(1.dp, Tone.Line, RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card))
             .clickable(interactionSource = interaction, indication = null) { onOpen(system) },
     ) {
         // Oversized signature shape, cropped by the card.
@@ -117,7 +117,7 @@ private fun SystemCard(system: GameSystem, count: Int, onOpen: (GameSystem) -> U
                 style = TextStyle(fontFamily = PixelFont, fontSize = 10.sp),
                 color = Tone.Muted,
                 modifier = Modifier
-                    .background(Tone.Raised, RoundedCornerShape(8.dp))
+                    .background(Tone.Raised, RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Control))
                     .padding(horizontal = 8.dp, vertical = 6.dp),
             )
             Spacer(Modifier.weight(1f))

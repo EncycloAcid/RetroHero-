@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -38,6 +39,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
@@ -58,10 +60,17 @@ import com.retrohero.app.ui.theme.Salmon
 import com.retrohero.app.ui.theme.Tone
 
 object Ascend {
+    object Radius {
+        val Cover = 10.dp
+        val Control = 12.dp
+        val Card = 14.dp
+        val Hero = 18.dp
+    }
+
     val Surface: Color get() = Tone.Surface
     val Border: Color get() = Tone.Line
     val Muted: Color get() = Tone.Muted
-    val CardShape = RoundedCornerShape(14.dp)
+    val CardShape = RoundedCornerShape(Radius.Card)
     private val drawnAccent: Color get() = Salmon.compositeOver(Tone.Bg)
     val accent: Color get() = when {
         Tone.isDark && drawnAccent.luminance() < 0.25f -> lerp(Salmon, Color.White, 0.5f)
@@ -81,9 +90,10 @@ fun SectionTitle(
     count: Int? = null,
     index: Int = 1,
     onClick: (() -> Unit)? = null,
+    verticalPadding: Dp = 6.dp,
 ) {
     Row(modifier.fillMaxWidth().then(if (onClick == null) Modifier else Modifier.clickable(onClick = onClick))
-        .padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        .padding(vertical = verticalPadding), verticalAlignment = Alignment.CenterVertically) {
         ArchiveLabel(index.toString().padStart(2, '0'), color = Tone.Faint)
         Text(
             title,
@@ -98,7 +108,7 @@ fun SectionTitle(
     }
 }
 
-/** Library card: cover on top, title and a quiet info line on a flat panel underneath. */
+/** Library card: cover, title, and a quiet info line. */
 @Composable
 fun GameCard(
     game: Game,
@@ -119,50 +129,52 @@ fun GameCard(
     Box(
         modifier
             .then(if (width != null) Modifier.width(width) else Modifier.fillMaxWidth())
-            .graphicsLayer { scaleX = scale; scaleY = scale }
-            .clip(Ascend.CardShape)
-            .background(Tone.Surface)
-            .border(1.dp, Tone.Line, Ascend.CardShape),
+            .graphicsLayer { scaleX = scale; scaleY = scale },
     ) {
         Column(
             Modifier.fillMaxWidth()
                 .combinedClickable(interactionSource = interaction, indication = null, onClick = onClick, onLongClick = onLongClick),
         ) {
-            Box(Modifier.padding(6.dp).fillMaxWidth().aspectRatio(0.73f).clip(RoundedCornerShape(10.dp))) {
-                GameArt(game, Modifier.fillMaxSize())
+            val coverShape = RoundedCornerShape(Ascend.Radius.Cover)
+            Box(
+                Modifier.fillMaxWidth().aspectRatio(0.73f)
+                    .clip(coverShape)
+                    .border(0.5.dp, Tone.Line, coverShape),
+            ) {
+                GameArt(game, Modifier.fillMaxSize(), showTag = false)
             }
-            Column(Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp)) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                game.title,
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 13.sp, lineHeight = 16.sp),
+                color = Tone.Ink,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (!subtitle.isNullOrBlank()) {
                 Text(
-                    game.title,
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.sp),
-                    color = Tone.Ink,
+                    subtitle,
+                    style = TextStyle(fontFamily = Inter, fontSize = 11.sp),
+                    color = Ascend.Muted,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 2.dp),
                 )
-                if (!subtitle.isNullOrBlank()) {
-                    Text(
-                        subtitle,
-                        style = TextStyle(fontFamily = Inter, fontSize = 11.sp),
-                        color = Ascend.Muted,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 2.dp),
-                    )
-                }
             }
         }
         if (onPlay != null) {
-            Box(Modifier.padding(6.dp).fillMaxWidth().aspectRatio(0.73f)) {
+            Box(Modifier.fillMaxWidth().aspectRatio(0.73f)) {
                 Box(
                     Modifier
                         .align(Alignment.BottomEnd)
-                        .padding(8.dp)
-                        .size(40.dp)
+                        .padding(6.dp)
+                        .size(30.dp)
                         .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.78f))
+                        .background(Tone.Raised.copy(alpha = 0.94f))
+                        .border(0.5.dp, Tone.Line, CircleShape)
                         .clickable(onClick = onPlay),
                     contentAlignment = Alignment.Center,
-                ) { Icon(Icons.Rounded.PlayArrow, "Play ${game.title}", tint = Color.White, modifier = Modifier.size(20.dp)) }
+                ) { Icon(Icons.Rounded.PlayArrow, "Play ${game.title}", tint = Tone.Ink, modifier = Modifier.size(16.dp)) }
             }
         }
     }
@@ -193,15 +205,26 @@ fun Key(
         spring(dampingRatio = 0.7f, stiffness = 600f),
         label = "keyTranslation",
     )
-    val shape = RoundedCornerShape(12.dp)
+    val shape = RoundedCornerShape(Ascend.Radius.Control)
     val view = LocalView.current
+    val depth = when {
+        Tone.isDark -> Modifier
+        primary -> Modifier.shadow(4.dp, shape, spotColor = Ascend.accent.copy(alpha = 0.35f))
+        else -> Modifier.shadow(
+            2.dp,
+            shape,
+            ambientColor = Color.Black.copy(alpha = 0.06f),
+            spotColor = Color.Black.copy(alpha = 0.10f),
+        )
+    }
     Row(
         modifier
+            .then(depth)
             .graphicsLayer { scaleX = scale; scaleY = scale; translationY = translation.toPx() }
             .height(48.dp)
             .clip(shape)
             .background(if (primary) Ascend.accent else Tone.Raised)
-            .border(1.dp, if (primary) Color.Transparent else Tone.Line, shape)
+            .border(1.dp, if (primary && !Tone.isDark) Color.Transparent else Tone.Line, shape)
             .clickable(interactionSource = interaction, indication = null) {
                 view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                 onClick()
@@ -228,11 +251,19 @@ fun Segmented(
 ) {
     if (options.isEmpty()) return
     val selectedIndex = selected.coerceIn(options.indices)
-    val trackShape = RoundedCornerShape(12.dp)
+    val trackShape = RoundedCornerShape(Ascend.Radius.Control)
     BoxWithConstraints(
         modifier
             .fillMaxWidth()
             .height(48.dp)
+            .then(
+                if (Tone.isDark) Modifier else Modifier.shadow(
+                    2.dp,
+                    trackShape,
+                    ambientColor = Color.Black.copy(alpha = 0.06f),
+                    spotColor = Color.Black.copy(alpha = 0.10f),
+                ),
+            )
             .clip(trackShape)
             .background(Tone.Raised)
             .border(1.dp, Tone.Line, trackShape)
@@ -244,12 +275,14 @@ fun Segmented(
             spring(dampingRatio = 0.7f, stiffness = 600f),
             label = "segmentIndicator",
         )
+        val indicatorShape = RoundedCornerShape(Ascend.Radius.Control)
         Box(
             Modifier
                 .offset(x = indicatorX)
                 .width(optionWidth)
                 .fillMaxHeight()
-                .clip(RoundedCornerShape(12.dp))
+                .then(if (Tone.isDark) Modifier else Modifier.shadow(1.dp, indicatorShape))
+                .clip(indicatorShape)
                 .background(Tone.Ink),
         )
         Row(Modifier.fillMaxSize().selectableGroup()) {

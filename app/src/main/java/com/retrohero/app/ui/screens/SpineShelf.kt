@@ -155,7 +155,7 @@ private fun Spine(game: Game, onPick: (Game) -> Unit) {
             .graphicsLayer {
                 translationY = -lift * 28.dp.toPx()
                 shadowElevation = 6f + 18f * lift
-                shape = RoundedCornerShape(3.dp)
+                shape = RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Cover)
                 clip = true
             }
             .background(base)
