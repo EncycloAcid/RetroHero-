@@ -150,7 +150,7 @@ fun LibraryScreen(
                 if (favorites.isNotEmpty()) {
                     span { com.retrohero.app.ui.components.SectionTitle("Pinned", Icons.Rounded.PushPin, Modifier.padding(top = 12.dp), count = favorites.size) }
                     items(favorites.take(9), key = { "pin_" + it.id }) { g ->
-                        com.retrohero.app.ui.components.GameCard(g, onClick = { onOpenGame(g) }, subtitle = g.system?.shortName, onLongClick = { onOptions(g) })
+                        com.retrohero.app.ui.components.GameCard(g, onClick = { onOpenGame(g) }, subtitle = g.system?.shortName, onLongClick = { onOptions(g) }, onPlay = { onPlay(g) })
                     }
                 }
             }

@@ -256,6 +256,7 @@ fun GamesScreen(
                 modifier = Modifier.animateItem(),
                 subtitle = listOfNotNull(game.system?.shortName, stats[game.id]?.takeIf { it.seconds >= 60 }?.let { com.retrohero.app.data.PlayTime.format(it.seconds) }).joinToString(" · "),
                 onLongClick = { onGameOptions(game) },
+                onPlay = onQuickPlay?.let { { it(game) } },
             )
         }
     }

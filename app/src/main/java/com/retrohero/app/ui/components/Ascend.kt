@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -110,6 +111,7 @@ fun GameCard(
     width: Dp? = null,
     subtitle: String? = game.system?.name,
     onLongClick: (() -> Unit)? = null,
+    onPlay: (() -> Unit)? = null,
 ) {
     Column(
         modifier
@@ -118,7 +120,21 @@ fun GameCard(
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
             .semantics(mergeDescendants = true) {},
     ) {
-        Box(Modifier.fillMaxWidth().aspectRatio(0.75f)) { GameArt(game, Modifier.fillMaxSize()) }
+        Box(Modifier.fillMaxWidth().aspectRatio(0.75f)) {
+            GameArt(game, Modifier.fillMaxSize())
+            if (onPlay != null) {
+                Box(
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(8.dp)
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(Salmon)
+                        .clickable(onClick = onPlay),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Icons.Rounded.PlayArrow, "Play ${game.title}", tint = Ascend.onAccent, modifier = Modifier.size(20.dp)) }
+            }
+        }
         Column(Modifier.padding(horizontal = 10.dp, vertical = 9.dp)) {
             Text(
                 game.title,
