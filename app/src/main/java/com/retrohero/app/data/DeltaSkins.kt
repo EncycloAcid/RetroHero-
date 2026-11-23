@@ -160,11 +160,19 @@ object DeltaSkins {
             "gb" -> listOf("gb", "gbc")
             "gba" -> listOf("gba")
             "ds", "nds" -> listOf("nds")
+            "3ds", "n3ds" -> listOf("3ds")
             "genesis", "md", "megadrive" -> listOf("genesis", "segacd", "32x")
             "gg", "gamegear" -> listOf("gg")
-            "ms", "sms", "mastersystem", "sg1000" -> listOf("sms")
+            "ms", "sms", "mastersystem" -> listOf("sms")
+            "sg1000" -> listOf("sg1000")
             "n64" -> listOf("n64")
+            "gc", "ngc", "gamecube" -> listOf("gc")
+            "wii" -> listOf("wii")
+            "saturn", "ss" -> listOf("saturn")
+            "dc", "dreamcast" -> listOf("dreamcast")
             "psx", "ps1" -> listOf("psx")
+            "psp" -> listOf("psp")
+            "ps2" -> listOf("ps2")
             "pce", "tg16" -> listOf("pce", "pcecd")
             else -> emptyList()
         }
@@ -182,7 +190,7 @@ object DeltaSkins {
             "rewind", "togglerewind" -> return DeltaMappedInput.Action(DeltaAction.REWIND_HOLD)
         }
         // Genesis maps A/B/C/X/Y/Z/Mode onto RetroPad differently from Nintendo systems.
-        if (systemId == "genesis") {
+        if (systemId == "genesis" || systemId == "segacd" || systemId == "32x" || systemId == "saturn") {
             return when (key.lowercase()) {
                 "a" -> DeltaMappedInput.Button(RetroPad.Y)
                 "b" -> DeltaMappedInput.Button(RetroPad.B)
@@ -202,12 +210,14 @@ object DeltaSkins {
         return when (key.lowercase()) {
             "a" -> DeltaMappedInput.Button(RetroPad.A)
             "b" -> DeltaMappedInput.Button(RetroPad.B)
-            "x" -> DeltaMappedInput.Button(RetroPad.X)
-            "y" -> DeltaMappedInput.Button(RetroPad.Y)
+            "x", "cup" -> DeltaMappedInput.Button(RetroPad.X)
+            "y", "cleft" -> DeltaMappedInput.Button(RetroPad.Y)
+            "cdown" -> DeltaMappedInput.Button(RetroPad.L2)
+            "cright" -> DeltaMappedInput.Button(RetroPad.R2)
             "l", "l1" -> DeltaMappedInput.Button(RetroPad.L)
             "r", "r1" -> DeltaMappedInput.Button(RetroPad.R)
-            "l2", "z" -> DeltaMappedInput.Button(RetroPad.L2)
-            "r2" -> DeltaMappedInput.Button(RetroPad.R2)
+            "l2", "z", "zl" -> DeltaMappedInput.Button(RetroPad.L2)
+            "r2", "zr" -> DeltaMappedInput.Button(RetroPad.R2)
             "l3" -> DeltaMappedInput.Button(RetroPad.L3)
             "r3" -> DeltaMappedInput.Button(RetroPad.R3)
             "select", "mode" -> DeltaMappedInput.Button(RetroPad.SELECT)
