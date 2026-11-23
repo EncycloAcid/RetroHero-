@@ -242,7 +242,7 @@ fun ShelfScreen(
                     Modifier.fillMaxWidth().padding(horizontal = 28.dp).padding(bottom = 12.dp + LocalNavSpace.current),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Text(current.title, style = MaterialTheme.typography.headlineSmallEmphasized, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
+                    Text(current.title, style = MaterialTheme.typography.headlineSmallEmphasized, color = com.retrohero.app.ui.theme.Tone.Ink, maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
                     val stat = stats[current.id]
                     Text(
                         listOfNotNull(
@@ -251,13 +251,13 @@ fun ShelfScreen(
                             "♥".takeIf { current.id in favorites },
                         ).joinToString(" · "),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.6f),
+                        color = com.retrohero.app.ui.theme.Tone.Muted,
                         textAlign = TextAlign.Center,
                     )
                     Text(
                         "${pager.currentPage + 1} / ${shown.size} · tap the box to open it",
                         style = MaterialTheme.typography.labelMedium,
-                        color = Color.White.copy(alpha = 0.35f),
+                        color = com.retrohero.app.ui.theme.Tone.Faint,
                         modifier = Modifier.padding(top = 8.dp),
                     )
                 }

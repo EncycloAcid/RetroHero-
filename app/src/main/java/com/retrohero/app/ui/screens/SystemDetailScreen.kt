@@ -262,8 +262,8 @@ private fun AlbumScreen(
             ) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = Color.White) }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f).graphicsLayer { alpha = progress }) {
-                Text(title, style = MaterialTheme.typography.titleMediumEmphasized, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("${games.size} games", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.7f))
+                Text(title, style = MaterialTheme.typography.titleMediumEmphasized, color = com.retrohero.app.ui.theme.Tone.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("${games.size} games", style = MaterialTheme.typography.bodySmall, color = com.retrohero.app.ui.theme.Tone.Muted)
             }
             barActions()
         }
