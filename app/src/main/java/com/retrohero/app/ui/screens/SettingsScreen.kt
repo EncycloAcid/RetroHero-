@@ -109,6 +109,9 @@ fun SettingsScreen(
     looks: List<com.retrohero.app.data.Look> = emptyList(),
     onImportLook: () -> Unit = {},
     onLookChanged: () -> Unit = {},
+    deltaSkins: List<com.retrohero.app.data.DeltaSkin> = emptyList(),
+    onImportDeltaSkin: () -> Unit = {},
+    onDeleteDeltaSkin: (com.retrohero.app.data.DeltaSkin) -> Unit = {},
     pageIndex: Int = 6,
     onOpenStats: () -> Unit = {},
 ) {
@@ -212,7 +215,15 @@ fun SettingsScreen(
 
             }
             "looks" -> SubSettings("Customisation", onBack = { page = null }) {
-                LooksSettings(settings, looks, onImportLook, onLookChanged)
+                LooksSettings(
+                    settings = settings,
+                    imported = looks,
+                    onImport = onImportLook,
+                    onChanged = onLookChanged,
+                    deltaSkins = deltaSkins,
+                    onImportDeltaSkin = onImportDeltaSkin,
+                    onDeleteDeltaSkin = onDeleteDeltaSkin,
+                )
             }
             "backup" -> SubSettings("Backup & restore", onBack = { page = null }) {
         // ---- Backup -----------------------------------------------------------------------

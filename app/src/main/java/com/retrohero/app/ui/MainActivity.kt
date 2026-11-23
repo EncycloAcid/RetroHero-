@@ -144,6 +144,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalDensity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import com.retrohero.app.data.CoreManager.CoreState
 import com.retrohero.app.data.Systems
 import com.retrohero.app.ui.components.SystemBadge
@@ -168,6 +169,7 @@ class MainActivity : ComponentActivity() {
             )
         }
         com.retrohero.app.ui.theme.Tone.setDarkMode(vm.settings.darkMode)
+        handleIncomingDeltaSkin(intent)
         setContent {
             RetroHeroTheme {
                 val view = androidx.compose.ui.platform.LocalView.current
@@ -190,6 +192,26 @@ class MainActivity : ComponentActivity() {
                         LaunchIntroOverlay(intro)
                     }
                 }
+            }
+        }
+    }
+
+    private fun handleIncomingDeltaSkin(intent: android.content.Intent?) {
+        if (intent?.action != android.content.Intent.ACTION_VIEW) return
+        val uri = intent.data ?: return
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    contentResolver.openInputStream(uri)!!.use { stream ->
+                        com.retrohero.app.data.DeltaSkins.import(vm.paths.deltaSkins, stream)
+                    }
+                }
+            }
+            result.onSuccess { skin ->
+                skin.systemIds.forEach { vm.settings.setDeltaSkinFor(it, skin.identifier) }
+                Toast.makeText(this@MainActivity, "Added Delta skin “${skin.name}”", Toast.LENGTH_SHORT).show()
+            }.onFailure { err ->
+                Toast.makeText(this@MainActivity, err.message ?: "Couldn't import .deltaskin file.", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -266,6 +288,26 @@ private fun App(vm: AppViewModel) {
             }
             result.onSuccess { lookVersion++; Toast.makeText(context, "Added “${it.name}”", Toast.LENGTH_SHORT).show() }
                 .onFailure { Toast.makeText(context, "That file isn't a RetroHero look.", Toast.LENGTH_LONG).show() }
+        }
+    }
+    var deltaSkinVersion by remember { mutableIntStateOf(0) }
+    val installedDeltaSkins = remember(deltaSkinVersion) { com.retrohero.app.data.DeltaSkins.list(vm.paths.deltaSkins) }
+    val deltaSkinPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) lookScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    context.contentResolver.openInputStream(uri)!!.use { stream ->
+                        com.retrohero.app.data.DeltaSkins.import(vm.paths.deltaSkins, stream)
+                    }
+                }
+            }
+            result.onSuccess { skin ->
+                skin.systemIds.forEach { vm.settings.setDeltaSkinFor(it, skin.identifier) }
+                deltaSkinVersion++
+                Toast.makeText(context, "Added Delta skin “${skin.name}”", Toast.LENGTH_SHORT).show()
+            }.onFailure { err ->
+                Toast.makeText(context, err.message ?: "Couldn't import .deltaskin file.", Toast.LENGTH_LONG).show()
+            }
         }
     }
     var pendingBios by remember { mutableStateOf(false) }
@@ -589,6 +631,13 @@ private fun App(vm: AppViewModel) {
                     onRestore = { restorePicker.launch(arrayOf("application/zip", "application/octet-stream")) },
                     looks = customLooks,
                     onImportLook = { lookPicker.launch(arrayOf("application/json", "text/*", "*/*")) },
+                    deltaSkins = installedDeltaSkins,
+                    onImportDeltaSkin = { deltaSkinPicker.launch(arrayOf("*/*")) },
+                    onDeleteDeltaSkin = { skin ->
+                        com.retrohero.app.data.DeltaSkins.delete(skin)
+                        deltaSkinVersion++
+                        Toast.makeText(context, "Removed “${skin.name}”", Toast.LENGTH_SHORT).show()
+                    },
                     onOpenStats = { statsOpen = true },
                     pageIndex = tab.ordinal + 1,
                 )

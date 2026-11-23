@@ -48,12 +48,16 @@ import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.SportsEsports
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.FileOpen
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -66,14 +70,17 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.retrohero.app.R
+import com.retrohero.app.data.DeltaSkin
 import com.retrohero.app.data.Look
 import com.retrohero.app.data.Looks
 import com.retrohero.app.data.PadSkin
 import com.retrohero.app.data.Settings
+import com.retrohero.app.data.Systems
 import com.retrohero.app.ui.components.LocalNavSpace
 import com.retrohero.app.ui.components.glossCard
 import com.retrohero.app.ui.components.press3D
@@ -96,7 +103,7 @@ private val categories = listOf(
     Category("library", "Game folders", Icons.Rounded.Folder, listOf("folders", "add folder", "rescan", "library", "scan")),
     Category("gameplay", "Gameplay & comfort", Icons.Rounded.Tune, listOf("reduce motion", "animations", "tilt", "gyroscope", "accessibility", "sharp pixels", "haptic", "vibration", "opacity", "touch controls", "fast-forward speed", "auto save", "resume", "screenshots", "gallery", "stick", "d-pad")),
     Category("controls", "Controls", Icons.Rounded.SportsEsports, listOf("controller", "buttons", "remap", "rebind", "rewind", "gamepad")),
-    Category("looks", "Customisation", Icons.Rounded.Palette, listOf("look", "theme", "accent", "colour", "color", "pad skin", "touch buttons", "import look")),
+    Category("looks", "Customisation", Icons.Rounded.Palette, listOf("look", "theme", "accent", "colour", "color", "pad skin", "touch buttons", "import look", "delta", "deltaskin", "controller skin", "skin")),
     Category("bios", "BIOS & system files", Icons.Rounded.Memory, listOf("bios", "system files", "playstation", "import bios", "download bios")),
     Category("backup", "Backup & restore", Icons.Rounded.Backup, listOf("backup", "restore", "export", "new phone", "saves")),
     Category("about", "About", Icons.Rounded.Info, listOf("version", "about", "libretro", "licence")),
@@ -247,11 +254,20 @@ fun SubSettings(title: String, onBack: () -> Unit, content: @Composable ColumnSc
     }
 }
 
-/** Customisation: preview-card pagers for the accent and the touch-pad skin, plus imported looks. */
+/** Customisation: preview-card pagers for the accent and the touch-pad skin, plus imported looks and Delta skins. */
 @Composable
-fun LooksSettings(settings: Settings, imported: List<Look>, onImport: () -> Unit, onChanged: () -> Unit) {
+fun LooksSettings(
+    settings: Settings,
+    imported: List<Look>,
+    onImport: () -> Unit,
+    onChanged: () -> Unit,
+    deltaSkins: List<DeltaSkin> = emptyList(),
+    onImportDeltaSkin: () -> Unit = {},
+    onDeleteDeltaSkin: (DeltaSkin) -> Unit = {},
+) {
     var accentId by remember { mutableStateOf(settings.accent) }
     var skinId by remember { mutableStateOf(settings.padSkin) }
+    var deltaRevision by remember { mutableIntStateOf(0) }
 
     fun apply(accent: String = accentId, skin: String = skinId) {
         accentId = accent
@@ -315,8 +331,107 @@ fun LooksSettings(settings: Settings, imported: List<Look>, onImport: () -> Unit
         }
         Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Tone.Muted)
     }
+
+    Spacer(Modifier.height(28.dp))
+    SectionTitle("Delta skins", 5)
+    Spacer(Modifier.height(10.dp))
+    val cardShape = RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(cardShape)
+            .background(Tone.Surface)
+            .border(1.dp, Tone.Line, cardShape)
+            .clickable(onClick = onImportDeltaSkin)
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(32.dp).clip(CircleShape).background(Tone.Raised), contentAlignment = Alignment.Center) {
+            Icon(Icons.Rounded.SportsEsports, null, tint = Tone.Ink, modifier = Modifier.size(20.dp))
+        }
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text("Import .deltaskin", style = MaterialTheme.typography.titleMedium, color = Tone.Ink)
+            Text(
+                if (deltaSkins.isEmpty()) "Use custom Delta controller skins (.deltaskin)" else "${deltaSkins.size} installed · tap a skin below to toggle it",
+                style = MaterialTheme.typography.labelMedium,
+                color = Tone.Muted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Tone.Muted)
+    }
+
+    if (deltaSkins.isNotEmpty()) {
+        Spacer(Modifier.height(10.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            deltaSkins.forEach { skin ->
+                val active = remember(deltaRevision, skin.identifier, skin.systemIds) {
+                    skin.systemIds.any { settings.deltaSkinFor(it) == skin.identifier }
+                }
+                val sysLabel = skin.systemIds
+                    .mapNotNull { id -> Systems.all.firstOrNull { it.id == id }?.shortName }
+                    .distinct()
+                    .joinToString(" / ")
+                    .ifEmpty { skin.gameTypeIdentifier.substringAfterLast('.').uppercase() }
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(cardShape)
+                        .background(Tone.Surface)
+                        .border(
+                            if (active) 1.5.dp else 1.dp,
+                            if (active) com.retrohero.app.ui.components.Ascend.accent else Tone.Line,
+                            cardShape,
+                        )
+                        .clickable {
+                            val next = if (active) null else skin.identifier
+                            skin.systemIds.forEach { settings.setDeltaSkinFor(it, next) }
+                            deltaRevision++
+                            onChanged()
+                        }
+                        .padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        Modifier
+                            .size(32.dp)
+                            .clip(CircleShape)
+                            .background(if (active) com.retrohero.app.ui.components.Ascend.accent else Tone.Raised),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (active) {
+                            Icon(Icons.Rounded.Check, "Active", tint = com.retrohero.app.ui.components.Ascend.onAccent, modifier = Modifier.size(18.dp))
+                        } else {
+                            ArchiveLabel(sysLabel.take(4), color = Tone.Muted)
+                        }
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(skin.name, style = MaterialTheme.typography.titleMedium, color = Tone.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            if (active) "$sysLabel · Active" else "$sysLabel · Tap to use",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (active) com.retrohero.app.ui.components.Ascend.accent else Tone.Muted,
+                            maxLines = 1,
+                        )
+                    }
+                    IconButton(onClick = {
+                        skin.systemIds.forEach { sysId ->
+                            if (settings.deltaSkinFor(sysId) == skin.identifier) settings.setDeltaSkinFor(sysId, null)
+                        }
+                        deltaRevision++
+                        onDeleteDeltaSkin(skin)
+                    }) {
+                        Icon(Icons.Rounded.DeleteOutline, "Remove ${skin.name}", tint = Tone.Muted)
+                    }
+                }
+            }
+        }
+    }
     Text(
-        "Button skins show in games you start after changing them.",
+        "Button skins and Delta skins apply when you start a game (or switch live from the pause menu).",
         style = MaterialTheme.typography.bodySmall,
         color = Tone.Muted,
         modifier = Modifier.padding(start = 4.dp, top = 8.dp),

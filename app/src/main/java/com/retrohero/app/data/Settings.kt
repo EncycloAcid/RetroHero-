@@ -88,6 +88,15 @@ class Settings(context: Context) {
         get() = prefs.getString("pad_skin", "console")!!
         set(v) = prefs.edit { putString("pad_skin", v) }
 
+    /** Selected Delta skin identifier for [systemId], or null to use the built-in touch pad. */
+    fun deltaSkinFor(systemId: String): String? =
+        prefs.getString("delta_skin_$systemId", null)?.takeIf { it.isNotBlank() }
+
+    fun setDeltaSkinFor(systemId: String, identifier: String?) = prefs.edit {
+        if (identifier.isNullOrBlank()) remove("delta_skin_$systemId")
+        else putString("delta_skin_$systemId", identifier)
+    }
+
     private val _reducedMotion = MutableStateFlow(prefs.getBoolean("reduced_motion", false))
     /** Fewer and calmer animations: no tilt, no spinning, instant transitions where possible. */
     val reducedMotion: StateFlow<Boolean> = _reducedMotion
