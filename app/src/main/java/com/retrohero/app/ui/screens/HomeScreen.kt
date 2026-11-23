@@ -554,7 +554,7 @@ private fun FeaturedGames(games: List<Game>, recent: Game?, onOpen: (Game) -> Un
         pageSpacing = 12.dp, modifier = Modifier.fillMaxWidth()) { index ->
         val game = games[index]
         Box(Modifier.fillMaxWidth().heightIn(min = 238.dp).clip(RoundedCornerShape(Ascend.Radius.Hero)).clickable { onOpen(game) }) {
-            GameArt(game, Modifier.matchParentSize(), showTag = true)
+            GameArt(game, Modifier.matchParentSize(), showTag = false)
             Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.16f), Color.Black.copy(alpha = 0.36f), Color.Black.copy(alpha = 0.94f)))))
             Column(Modifier.fillMaxWidth().padding(18.dp)) {
                 ArchiveLabel(if (game.id == recent?.id) "Continue playing" else "From your library",
