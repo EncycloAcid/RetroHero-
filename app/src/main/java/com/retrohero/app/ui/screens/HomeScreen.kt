@@ -785,21 +785,6 @@ private fun SectionHeader(text: String, icon: androidx.compose.ui.graphics.vecto
 }
 
 @Composable
-private fun OldSectionHeader(text: String, onClick: (() -> Unit)? = null) {
-    Row(
-        Modifier
-            .padding(start = ContentInset - 4.dp, top = 14.dp)
-            .clip(CircleShape)
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(horizontal = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(text, style = TitleStyle, color = LabelColor)
-        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = LabelColor, modifier = Modifier.size(26.dp))
-    }
-}
-
-@Composable
 private fun StatsPage(games: List<Game>, stats: Map<String, PlayStat>, onOpen: (Game) -> Unit, onOpenStats: () -> Unit) {
     val ranked = remember(games, stats) {
         games.filter { (stats[it.id]?.seconds ?: 0) > 0 }.sortedByDescending { stats[it.id]!!.seconds }
