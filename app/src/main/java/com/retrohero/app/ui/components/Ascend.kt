@@ -228,11 +228,11 @@ fun Segmented(
 ) {
     if (options.isEmpty()) return
     val selectedIndex = selected.coerceIn(options.indices)
-    val trackShape = RoundedCornerShape(8.dp)
+    val trackShape = RoundedCornerShape(12.dp)
     BoxWithConstraints(
         modifier
             .fillMaxWidth()
-            .height(44.dp)
+            .height(48.dp)
             .clip(trackShape)
             .background(Tone.Raised)
             .border(1.dp, Tone.Line, trackShape)
@@ -249,7 +249,7 @@ fun Segmented(
                 .offset(x = indicatorX)
                 .width(optionWidth)
                 .fillMaxHeight()
-                .clip(RoundedCornerShape(6.dp))
+                .clip(RoundedCornerShape(12.dp))
                 .background(Tone.Ink),
         )
         Row(Modifier.fillMaxSize().selectableGroup()) {
@@ -265,6 +265,7 @@ fun Segmented(
                         label,
                         style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 13.sp),
                         color = if (selectedIndex == index) Tone.Bg else Tone.Ink,
+                        maxLines = 1,
                     )
                 }
             }

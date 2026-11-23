@@ -263,8 +263,9 @@ fun LooksSettings(settings: Settings, imported: List<Look>, onImport: () -> Unit
     }
 
     AppearanceSwitch(settings)
-    Spacer(Modifier.height(20.dp))
+    Spacer(Modifier.height(28.dp))
     SectionTitle("Accent", 2)
+    Spacer(Modifier.height(10.dp))
     val accents = Looks.accents.map { (id, v) -> Triple(id, v.first, v.second) } + imported.map { Triple("look:" + it.id, it.name, it.accent) }
     StylePager(
         items = accents.map { it.first },
@@ -274,7 +275,9 @@ fun LooksSettings(settings: Settings, imported: List<Look>, onImport: () -> Unit
         onSelect = { apply(accent = it) },
     ) { id -> AccentPreview(accents.first { it.first == id }.third) }
 
+    Spacer(Modifier.height(28.dp))
     SectionTitle("Touch buttons", 3)
+    Spacer(Modifier.height(10.dp))
     val skins = Looks.skins.map { it.id to it } + imported.map { "look:" + it.id to it.pad }
     StylePager(
         items = skins.map { it.first },
@@ -284,7 +287,9 @@ fun LooksSettings(settings: Settings, imported: List<Look>, onImport: () -> Unit
         onSelect = { apply(skin = it) },
     ) { id -> PadPreview(skins.first { it.first == id }.second) }
 
+    Spacer(Modifier.height(28.dp))
     SectionTitle("Your looks", 4)
+    Spacer(Modifier.height(10.dp))
     Row(
         Modifier
             .fillMaxWidth()
@@ -314,13 +319,14 @@ fun LooksSettings(settings: Settings, imported: List<Look>, onImport: () -> Unit
         "Button skins show in games you start after changing them.",
         style = MaterialTheme.typography.bodySmall,
         color = Tone.Muted,
-        modifier = Modifier.padding(start = 4.dp),
+        modifier = Modifier.padding(start = 4.dp, top = 8.dp),
     )
 }
 
 @Composable
 private fun AppearanceSwitch(settings: Settings) {
     SectionTitle("Appearance")
+    Spacer(Modifier.height(10.dp))
     Segmented(
         options = listOf("Light", "Dark"),
         selected = if (Tone.isDark) 1 else 0,
@@ -366,15 +372,32 @@ private fun StylePager(
             val id = items[i]
             val isSel = id == selected
             val ring by animateFloatAsState(if (isSel) 1f else 0f, tween(220), label = "ring")
+            val cardShape = RoundedCornerShape(22.dp)
             Box(
                 Modifier
                     .fillMaxWidth()
                     .height(187.dp)
-                    .clip(RoundedCornerShape(22.dp))
+                    .clip(cardShape)
                     .background(Tone.Surface)
-                    .border(2.dp, Tone.Line.copy(alpha = 0.9f * ring), RoundedCornerShape(22.dp))
+                    .border(1.dp, Tone.Line, cardShape)
+                    .then(
+                        if (isSel) Modifier.border(
+                            1.5.dp,
+                            com.retrohero.app.ui.components.Ascend.accent.copy(alpha = ring),
+                            cardShape,
+                        ) else Modifier,
+                    )
                     .clickable { onSelect(id) },
             ) {
+                if (isSel) {
+                    Box(
+                        Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(14.dp)
+                            .size(6.dp)
+                            .background(com.retrohero.app.ui.components.Ascend.accent, CircleShape),
+                    )
+                }
                 // The mini phone.
                 Box(
                     Modifier

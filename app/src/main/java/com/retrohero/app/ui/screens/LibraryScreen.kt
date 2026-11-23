@@ -33,6 +33,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -263,14 +264,26 @@ private fun Empty(text: String) {
 @Composable
 private fun IndexRow(tab: LibraryTab, count: Int, game: Game?, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(44.dp).clip(Ascend.CardShape).background(Ascend.Surface), contentAlignment = Alignment.Center) {
+        ArchiveLabel((tab.ordinal + 1).toString().padStart(2, '0'), Modifier.width(24.dp), color = com.retrohero.app.ui.theme.Tone.Faint)
+        Spacer(Modifier.width(16.dp))
+        val thumbnailShape = RoundedCornerShape(10.dp)
+        Box(
+            Modifier.size(44.dp).clip(thumbnailShape).background(com.retrohero.app.ui.theme.Tone.Raised)
+                .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, thumbnailShape),
+            contentAlignment = Alignment.Center,
+        ) {
             if (game != null) GameArt(game, Modifier.fillMaxSize(), showTag = false)
-            else ArchiveLabel("–", color = Ascend.Muted)
+            else if (tab == LibraryTab.Screenshots && count == 0) {
+                Icon(Icons.Rounded.Image, null, tint = com.retrohero.app.ui.theme.Tone.Faint, modifier = Modifier.size(18.dp))
+            } else {
+                ArchiveLabel("–", color = com.retrohero.app.ui.theme.Tone.Faint)
+            }
         }
-        ArchiveLabel((tab.ordinal + 1).toString().padStart(2, '0'), color = com.retrohero.app.ui.theme.Tone.Faint)
-        Text(tab.label, Modifier.weight(1f).padding(horizontal = 12.dp), style = MaterialTheme.typography.titleMedium, color = com.retrohero.app.ui.theme.Tone.Ink)
-        ArchiveLabel(count.toString().padStart(2, '0'), color = Ascend.Muted)
-        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Ascend.Muted)
+        Spacer(Modifier.width(14.dp))
+        Text(tab.label, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium, color = com.retrohero.app.ui.theme.Tone.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        ArchiveLabel(count.toString().padStart(2, '0'), color = com.retrohero.app.ui.theme.Tone.Muted)
+        Spacer(Modifier.width(8.dp))
+        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = com.retrohero.app.ui.theme.Tone.Faint, modifier = Modifier.size(18.dp))
     }
     HorizontalDivider(color = Page.Divider)
 }
@@ -311,16 +324,20 @@ private fun ListRow(index: Int, art: @Composable () -> Unit, title: String, subt
             .padding(vertical = 3.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(54.dp).clip(RoundedCornerShape(14.dp))) { art() }
+        ArchiveLabel(index.toString().padStart(2, '0'), Modifier.width(24.dp), color = com.retrohero.app.ui.theme.Tone.Faint)
+        Spacer(Modifier.width(16.dp))
+        val thumbnailShape = RoundedCornerShape(10.dp)
+        Box(
+            Modifier.size(44.dp).clip(thumbnailShape).background(com.retrohero.app.ui.theme.Tone.Raised)
+                .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, thumbnailShape),
+        ) { art() }
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                ArchiveLabel(index.toString().padStart(2, '0'), color = com.retrohero.app.ui.theme.Tone.Faint)
-                Text(title, Modifier.padding(start = 8.dp), style = MaterialTheme.typography.titleMedium, color = com.retrohero.app.ui.theme.Tone.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
+            Text(title, style = MaterialTheme.typography.titleMedium, color = com.retrohero.app.ui.theme.Tone.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = com.retrohero.app.ui.theme.Tone.Muted, maxLines = 1)
         }
-        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = com.retrohero.app.ui.theme.Tone.Faint)
+        Spacer(Modifier.width(8.dp))
+        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = com.retrohero.app.ui.theme.Tone.Faint, modifier = Modifier.size(18.dp))
     }
 }
 

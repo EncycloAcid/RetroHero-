@@ -76,7 +76,8 @@ fun PageHeader(
                 androidx.compose.foundation.Image(
                     androidx.compose.ui.res.painterResource(com.retrohero.app.R.drawable.ic_logo_mark),
                     null,
-                    Modifier.size(width = 18.dp, height = 13.dp).launchMarkTarget(),
+                    Modifier.size(width = 24.dp, height = 16.dp).launchMarkTarget(),
+                    colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Tone.Ink),
                 )
                 Spacer(Modifier.width(7.dp))
                 ArchiveLabel("RetroHero")
@@ -95,9 +96,17 @@ fun PageHeader(
 
 /** A rounded pill used for filters everywhere; tinted with [color] when selected. */
 @Composable
-fun PillChip(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, color: Color = Color.White, leading: (@Composable () -> Unit)? = null) {
+fun PillChip(
+    text: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    color: Color = Color.White,
+    leading: (@Composable () -> Unit)? = null,
+    selectedStyle: Boolean = false,
+) {
     val fill by animateColorAsState(
-        if (!selected) Tone.Raised else lerp(Tone.Raised, if (color == Color.White) Ascend.accent else color, 0.20f),
+        if (!selected) Tone.Raised else if (selectedStyle) Tone.Ink else lerp(Tone.Raised, if (color == Color.White) Ascend.accent else color, 0.20f),
         label = "pill",
     )
     Row(
@@ -105,7 +114,12 @@ fun PillChip(text: String, selected: Boolean, onClick: () -> Unit, modifier: Mod
         verticalAlignment = Alignment.CenterVertically,
     ) {
         leading?.invoke()
-        Text(text, style = MaterialTheme.typography.labelLarge, color = if (selected) Tone.Ink else Tone.Muted, maxLines = 1)
+        Text(
+            text,
+            style = MaterialTheme.typography.labelLarge,
+            color = if (selected && selectedStyle) Tone.Bg else if (selected) Tone.Ink else Tone.Muted,
+            maxLines = 1,
+        )
     }
 }
 

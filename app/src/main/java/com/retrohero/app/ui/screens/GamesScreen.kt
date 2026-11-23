@@ -164,7 +164,7 @@ fun GamesScreen(
     }
     val browsing = query.isBlank() && systemFilter == null && !onlyFavourites && !onlyUnplayed
 
-    Box(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize().background(com.retrohero.app.ui.theme.Tone.Bg)) {
     LazyVerticalGrid(
         state = grid,
         columns = GridCells.Adaptive(108.dp),
@@ -178,11 +178,30 @@ fun GamesScreen(
             Column(Modifier.animateContentSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box(Modifier.weight(1f)) { SearchField(query, games.size) { query = it } }
-                    PillChip("Filters", filtersOpen || systemFilter != null || onlyFavourites || onlyUnplayed, { filtersOpen = !filtersOpen })
+                    val filtersActive = systemFilter != null || onlyFavourites || onlyUnplayed
+                    Box {
+                        com.retrohero.app.ui.components.Key("Filters", { filtersOpen = !filtersOpen })
+                        if (filtersActive) {
+                            Box(
+                                Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(top = 9.dp, end = 9.dp)
+                                    .size(6.dp)
+                                    .background(com.retrohero.app.ui.components.Ascend.accent, CircleShape),
+                            )
+                        }
+                    }
                 }
                 if (filtersOpen) {
                 Segmented(
-                    options = com.retrohero.app.data.GameSort.entries.map { it.label },
+                    options = com.retrohero.app.data.GameSort.entries.map {
+                        when (it) {
+                            com.retrohero.app.data.GameSort.Recent -> "Recent"
+                            com.retrohero.app.data.GameSort.Name -> "A–Z"
+                            com.retrohero.app.data.GameSort.MostPlayed -> "Most played"
+                            com.retrohero.app.data.GameSort.System -> "System"
+                        }
+                    },
                     selected = com.retrohero.app.data.GameSort.entries.indexOf(sort).coerceAtLeast(0),
                     onSelect = { index ->
                         sort = com.retrohero.app.data.GameSort.entries[index]
@@ -190,14 +209,20 @@ fun GamesScreen(
                     },
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PillChip("Favourites", onlyFavourites, { onlyFavourites = !onlyFavourites })
-                    PillChip("Not played yet", onlyUnplayed, { onlyUnplayed = !onlyUnplayed })
+                    PillChip("Favourites", onlyFavourites, { onlyFavourites = !onlyFavourites }, selectedStyle = true)
+                    PillChip("Not played yet", onlyUnplayed, { onlyUnplayed = !onlyUnplayed }, selectedStyle = true)
                 }
                 if (showSystemFilter && systemsPresent.size > 1) {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        item { PillChip("All", systemFilter == null, { systemFilter = null }) }
+                        item { PillChip("All", systemFilter == null, { systemFilter = null }, selectedStyle = true) }
                         items(systemsPresent, key = { it.id }) { system ->
-                            PillChip(system.shortName, systemFilter == system.id, { systemFilter = if (systemFilter == system.id) null else system.id }, color = system.color)
+                            PillChip(
+                                system.shortName,
+                                systemFilter == system.id,
+                                { systemFilter = if (systemFilter == system.id) null else system.id },
+                                color = system.color,
+                                selectedStyle = true,
+                            )
                         }
                     }
                 }
