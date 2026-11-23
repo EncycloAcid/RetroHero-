@@ -62,7 +62,7 @@ val FloatingNavHeight = 60.dp
 val FloatingNavGap = 12.dp
 
 private val DockFill = Color(0xFF18181B)
-private val ItemSize = 44.dp
+private val MaxItemSize = 44.dp
 
 /**
  * A floating dock: a rounded glass pill of icon buttons. The selected tab sits on a filled
@@ -78,36 +78,41 @@ fun FloatingNavBar(
 ) {
     val shape = RoundedCornerShape(22.dp)
     val gap = 4.dp
-    Box(
-        modifier
-            .padding(bottom = FloatingNavGap)
-            .windowInsetsPadding(WindowInsets.navigationBars)
-            .height(FloatingNavHeight)
-            .shadow(18.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
-            .then(if (glass != null) Modifier.frostedGlass(glass, shape) else Modifier.clip(shape))
-            .background(DockFill.copy(alpha = if (glass != null) 0.86f else 0.97f))
-            .border(1.dp, Ascend.accent.copy(alpha = 0.22f), shape)
-            .padding(horizontal = 8.dp),
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        val x by animateDpAsState(
-            (ItemSize + gap) * selected,
-            spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow),
-            label = "dockTile",
-        )
-        Box(Modifier.offset(x = x).size(ItemSize).clip(RoundedCornerShape(14.dp)).background(Salmon))
-        Row(horizontalArrangement = Arrangement.spacedBy(gap), verticalAlignment = Alignment.CenterVertically) {
-            items.forEachIndexed { i, item ->
-                val active = i == selected
-                val tint by animateColorAsState(if (active) Ascend.onAccent else Color.White.copy(alpha = 0.6f), label = "dockTint")
-                Box(
-                    Modifier
-                        .size(ItemSize)
-                        .clip(RoundedCornerShape(14.dp))
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelect(i) },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(if (active) item.selectedIcon else item.icon, item.label, tint = tint, modifier = Modifier.size(22.dp))
+    BoxWithConstraints(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        // Shrink the buttons so every tab fits when the window is narrower than the full dock.
+        val fit = (maxWidth - 16.dp - 24.dp - gap * (items.size - 1)) / items.size
+        val itemSize = if (fit < MaxItemSize) fit else MaxItemSize
+        Box(
+            Modifier
+                .padding(bottom = FloatingNavGap)
+                .windowInsetsPadding(WindowInsets.navigationBars)
+                .height(FloatingNavHeight)
+                .shadow(18.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
+                .then(if (glass != null) Modifier.frostedGlass(glass, shape) else Modifier.clip(shape))
+                .background(DockFill.copy(alpha = if (glass != null) 0.86f else 0.97f))
+                .border(1.dp, Ascend.accent.copy(alpha = 0.22f), shape)
+                .padding(horizontal = 8.dp),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            val x by animateDpAsState(
+                (itemSize + gap) * selected,
+                spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow),
+                label = "dockTile",
+            )
+            Box(Modifier.offset(x = x).size(itemSize).clip(RoundedCornerShape(14.dp)).background(Salmon))
+            Row(horizontalArrangement = Arrangement.spacedBy(gap), verticalAlignment = Alignment.CenterVertically) {
+                items.forEachIndexed { i, item ->
+                    val active = i == selected
+                    val tint by animateColorAsState(if (active) Ascend.onAccent else Color.White.copy(alpha = 0.6f), label = "dockTint")
+                    Box(
+                        Modifier
+                            .size(itemSize)
+                            .clip(RoundedCornerShape(14.dp))
+                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelect(i) },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(if (active) item.selectedIcon else item.icon, item.label, tint = tint, modifier = Modifier.size(22.dp))
+                    }
                 }
             }
         }
