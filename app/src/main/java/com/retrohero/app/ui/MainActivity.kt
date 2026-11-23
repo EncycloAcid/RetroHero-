@@ -711,6 +711,9 @@ private fun App(vm: AppViewModel) {
                 onShareScreenshot = { shareScreenshot(context, it) },
                 pageIndex = tab.ordinal + 1,
                 onDeleteScreenshot = { vm.deleteScreenshot(game, it) },
+                isFavorite = game.id in favoriteIds,
+                onToggleFavorite = { vm.toggleFavorite(game) },
+                onAddToCollection = { pickCollectionsFor = game.id },
             )
         }
     }
