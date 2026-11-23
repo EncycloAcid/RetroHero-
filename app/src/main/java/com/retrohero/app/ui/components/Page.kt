@@ -76,7 +76,7 @@ fun PageHeader(
                 androidx.compose.foundation.Image(
                     androidx.compose.ui.res.painterResource(com.retrohero.app.R.drawable.ic_logo_mark),
                     null,
-                    Modifier.size(width = 24.dp, height = 16.dp).launchMarkTarget(),
+                    Modifier.size(18.dp).launchMarkTarget(),
                     colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Tone.Ink),
                 )
                 Spacer(Modifier.width(7.dp))
