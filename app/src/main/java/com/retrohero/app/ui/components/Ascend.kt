@@ -1,58 +1,75 @@
 package com.retrohero.app.ui.components
 
+import android.view.HapticFeedbackConstants
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalView
 import com.retrohero.app.data.Game
-import com.retrohero.app.ui.components.Page
 import com.retrohero.app.ui.theme.Inter
 import com.retrohero.app.ui.theme.Salmon
+import com.retrohero.app.ui.theme.Tone
 
-/** Clean card surfaces: flat charcoal panels with a hairline border and medium rounding. */
 object Ascend {
-    val Surface = Color(0xFF19191C)
-    val Border = Color.White.copy(alpha = 0.07f)
-    val Muted = Color.White.copy(alpha = 0.65f)
-    val CardShape = RoundedCornerShape(8.dp)
-    private val drawnAccent: Color get() = Salmon.compositeOver(Page.Bg)
-    /** The accent, lifted when it is too dark to read on charcoal. */
-    val accent: Color get() = if (drawnAccent.luminance() < 0.25f) lerp(Salmon, Color.White, 0.5f) else Salmon
-    /** Text/icon colour for content drawn on a filled accent. */
-    val onAccent: Color get() = if (drawnAccent.luminance() > 0.18f) Color(0xFF1A0E08) else Color.White
+    val Surface: Color get() = Tone.Surface
+    val Border: Color get() = Tone.Line
+    val Muted: Color get() = Tone.Muted
+    val CardShape = RoundedCornerShape(14.dp)
+    private val drawnAccent: Color get() = Salmon.compositeOver(Tone.Bg)
+    val accent: Color get() = when {
+        Tone.isDark && drawnAccent.luminance() < 0.25f -> lerp(Salmon, Color.White, 0.5f)
+        !Tone.isDark && drawnAccent.luminance() > 0.6f -> lerp(Salmon, Color.Black, 0.35f)
+        else -> Salmon
+    }
+    val onAccent: Color get() = if (drawnAccent.luminance() > 0.18f) Color(0xFF111111) else Color.White
 }
 
 fun Modifier.ascendCard(shape: androidx.compose.ui.graphics.Shape = Ascend.CardShape): Modifier =
@@ -62,8 +79,8 @@ fun Modifier.ascendCard(shape: androidx.compose.ui.graphics.Shape = Ascend.CardS
 fun SectionTitle(title: String, modifier: Modifier = Modifier, count: Int? = null, onClick: (() -> Unit)? = null) {
     Row(modifier.fillMaxWidth().then(if (onClick == null) Modifier else Modifier.clickable(onClick = onClick))
         .padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(title, modifier = Modifier.weight(1f), style = androidx.compose.material3.MaterialTheme.typography.titleLargeEmphasized,
-            maxLines = 2, overflow = TextOverflow.Ellipsis, color = Color.White)
+        Text(title, modifier = Modifier.weight(1f), style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
+            maxLines = 2, overflow = TextOverflow.Ellipsis, color = Tone.Ink)
         if (count != null) ArchiveLabel(count.toString().padStart(2, '0'), Modifier.padding(start = 8.dp), color = Ascend.Muted)
         if (onClick != null) Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Ascend.Muted, modifier = Modifier.size(18.dp))
     }
@@ -80,13 +97,21 @@ fun GameCard(
     onLongClick: (() -> Unit)? = null,
     onPlay: (() -> Unit)? = null,
 ) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        if (pressed) 0.97f else 1f,
+        spring(dampingRatio = 0.7f, stiffness = 600f),
+        label = "gameCardScale",
+    )
     Column(
         modifier
             .then(if (width != null) Modifier.width(width) else Modifier.fillMaxWidth())
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .combinedClickable(interactionSource = interaction, indication = null, onClick = onClick, onLongClick = onLongClick)
             .semantics(mergeDescendants = true) {},
     ) {
-        Box(Modifier.fillMaxWidth().aspectRatio(0.73f).clip(RoundedCornerShape(6.dp))) {
+        Box(Modifier.fillMaxWidth().aspectRatio(0.73f).clip(RoundedCornerShape(10.dp))) {
             GameArt(game, Modifier.fillMaxSize())
             if (onPlay != null) {
                 Box(
@@ -123,15 +148,106 @@ fun GameCard(
     }
 }
 
-/** Solid accent call-to-action, e.g. "Play" or "View Game". */
 @Composable
 fun AccentButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, icon: ImageVector? = null) {
+    Key(text, onClick, modifier, icon, primary = true)
+}
+
+@Composable
+fun Key(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: ImageVector? = null,
+    primary: Boolean = false,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        if (pressed) 0.97f else 1f,
+        spring(dampingRatio = 0.7f, stiffness = 600f),
+        label = "keyScale",
+    )
+    val translation by animateDpAsState(
+        if (pressed) 1.dp else 0.dp,
+        spring(dampingRatio = 0.7f, stiffness = 600f),
+        label = "keyTranslation",
+    )
+    val shape = RoundedCornerShape(12.dp)
+    val view = LocalView.current
     Row(
-        modifier.height(48.dp).clip(Ascend.CardShape).background(Salmon).clickable(onClick = onClick).padding(horizontal = 18.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        modifier
+            .graphicsLayer { scaleX = scale; scaleY = scale; translationY = translation.toPx() }
+            .height(48.dp)
+            .clip(shape)
+            .background(if (primary) Ascend.accent else Tone.Raised)
+            .border(1.dp, if (primary) Color.Transparent else Tone.Line, shape)
+            .clickable(interactionSource = interaction, indication = null) {
+                view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                onClick()
+            }
+            .padding(horizontal = 16.dp),
         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (icon != null) Icon(icon, null, tint = Ascend.onAccent, modifier = Modifier.padding(end = 6.dp).size(18.dp))
-        Text(text, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.sp), color = Ascend.onAccent)
+        if (icon != null) Icon(icon, null, tint = if (primary) Ascend.onAccent else Tone.Ink, modifier = Modifier.padding(end = 6.dp).size(18.dp))
+        Text(
+            text,
+            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 14.sp),
+            color = if (primary) Ascend.onAccent else Tone.Ink,
+        )
+    }
+}
+
+@Composable
+fun Segmented(
+    options: List<String>,
+    selected: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (options.isEmpty()) return
+    val selectedIndex = selected.coerceIn(options.indices)
+    val trackShape = RoundedCornerShape(8.dp)
+    BoxWithConstraints(
+        modifier
+            .fillMaxWidth()
+            .height(44.dp)
+            .clip(trackShape)
+            .background(Tone.Raised)
+            .border(1.dp, Tone.Line, trackShape)
+            .padding(4.dp),
+    ) {
+        val optionWidth = maxWidth / options.size
+        val indicatorX by animateDpAsState(
+            (optionWidth.value * selectedIndex).dp,
+            spring(dampingRatio = 0.7f, stiffness = 600f),
+            label = "segmentIndicator",
+        )
+        Box(
+            Modifier
+                .offset(x = indicatorX)
+                .width(optionWidth)
+                .fillMaxHeight()
+                .clip(RoundedCornerShape(6.dp))
+                .background(Tone.Ink),
+        )
+        Row(Modifier.fillMaxSize().selectableGroup()) {
+            options.forEachIndexed { index, label ->
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .selectable(selectedIndex == index, role = Role.Tab, onClick = { onSelect(index) }),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        label,
+                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 13.sp),
+                        color = if (selectedIndex == index) Tone.Bg else Tone.Ink,
+                    )
+                }
+            }
+        }
     }
 }

@@ -36,22 +36,22 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.retrohero.app.data.Game
 import com.retrohero.app.ui.theme.Inter
+import com.retrohero.app.ui.theme.Tone
 
 /** Shared look for every tab, taken from the Shelf: same header, same chips, same glossy cards. */
 object Page {
     /** Side padding for page content. */
     val Gutter = 20.dp
-    val CardTop = Color(0xFF1E1E22)
-    val CardBottom = Color(0xFF141417)
-    /** Warm charcoal behind every page. */
-    val Bg = Color(0xFF0E0E10)
-    val Divider = Color.White.copy(alpha = 0.07f)
+    val CardTop: Color get() = Tone.Surface
+    val CardBottom: Color get() = Tone.Bg
+    val Bg: Color get() = Tone.Bg
+    val Divider: Color get() = Tone.Line
 }
 
 fun Modifier.emberBackground(): Modifier = background(Page.Bg)
 
 @Composable
-fun ArchiveLabel(text: String, modifier: Modifier = Modifier, color: Color = Ascend.accent) {
+fun ArchiveLabel(text: String, modifier: Modifier = Modifier, color: Color = Tone.Muted) {
     Text(text.uppercase(), modifier, color = color,
         style = TextStyle(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
             fontWeight = FontWeight.Medium, fontSize = 10.sp, letterSpacing = 0.1.em), maxLines = 1,

@@ -76,6 +76,7 @@ import com.retrohero.app.data.Settings
 import com.retrohero.app.ui.components.LocalNavSpace
 import com.retrohero.app.ui.components.glossCard
 import com.retrohero.app.ui.components.press3D
+import com.retrohero.app.ui.components.Segmented
 import com.retrohero.app.ui.theme.Inter
 import com.retrohero.app.ui.theme.Salmon
 import com.retrohero.app.ui.theme.Tone
@@ -319,39 +320,15 @@ fun LooksSettings(settings: Settings, imported: List<Look>, onImport: () -> Unit
 @Composable
 private fun AppearanceSwitch(settings: Settings) {
     SectionTitle("Appearance")
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(Tone.Raised)
-            .border(1.dp, Tone.Line, RoundedCornerShape(8.dp))
-            .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        listOf("Light", "Dark").forEachIndexed { index, label ->
-            val selected = Tone.isDark == (index == 1)
-            Box(
-                Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(if (selected) Tone.Ink else Color.Transparent)
-                    .clickable {
-                        val dark = index == 1
-                        settings.darkMode = dark
-                        setDarkMode(dark)
-                    },
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    label,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = if (selected) Tone.Bg else Tone.Ink,
-                )
-            }
-        }
-    }
+    Segmented(
+        options = listOf("Light", "Dark"),
+        selected = if (Tone.isDark) 1 else 0,
+        onSelect = { index ->
+            val dark = index == 1
+            settings.darkMode = dark
+            setDarkMode(dark)
+        },
+    )
 }
 
 @Composable

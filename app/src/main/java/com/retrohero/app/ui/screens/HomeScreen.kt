@@ -88,6 +88,7 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
@@ -117,6 +118,7 @@ import com.retrohero.app.ui.components.press3D
 import com.retrohero.app.ui.theme.Inter
 import com.retrohero.app.ui.theme.PixelFont
 import com.retrohero.app.ui.theme.Salmon
+import com.retrohero.app.ui.theme.Tone
 import com.retrohero.app.ui.theme.polygon
 import com.retrohero.app.ui.theme.tag
 import kotlinx.coroutines.flow.drop
@@ -576,11 +578,15 @@ private fun FeaturedGames(games: List<Game>, recent: Game?, onOpen: (Game) -> Un
 
 @Composable
 private fun ArchiveShortcut(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier, onClick: () -> Unit) {
-    Row(modifier.height(48.dp).clip(Ascend.CardShape).background(Ascend.Surface).clickable(onClick = onClick),
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.97f else 1f, spring(dampingRatio = 0.7f, stiffness = 600f), label = "shortcutScale")
+    Row(modifier.graphicsLayer { scaleX = scale; scaleY = scale }.height(48.dp).clip(Ascend.CardShape)
+        .background(Ascend.Surface).clickable(interactionSource = interaction, indication = null, onClick = onClick),
         horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
         Icon(icon, null, tint = Ascend.Muted, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))
-        Text(label, style = MaterialTheme.typography.labelLarge, color = Color.White)
+        Text(label, style = MaterialTheme.typography.labelLarge, color = Tone.Ink)
     }
 }
 
