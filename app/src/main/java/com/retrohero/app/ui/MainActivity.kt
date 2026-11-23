@@ -36,6 +36,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.rememberCoroutineScope
 import android.widget.Toast
@@ -365,25 +367,14 @@ private fun App(vm: AppViewModel) {
     val byId = remember(games) { games.associateBy { it.id } }
     val collectionGames = remember(collections, byId) { collections.map { c -> c to c.gameIds.mapNotNull { byId[it] } } }
 
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-    // Home is immersive: no top app bar, content runs under the status bar.
     val isHome = !albumOpen && tab == Tab.Home && games.isNotEmpty()
-    // Pages that run under the status bar with their own big titles, like the music app's.
-    // Every tab draws its own big header, like the Shelf.
     val immersive = !albumOpen
     val miniGame = recents.firstOrNull()?.takeIf { !isHome && !miniHidden && !albumOpen && tab != Tab.Settings && !(tab == Tab.Shelf && shelfFlow) && sheetFor == null && !statsOpen && recap == null }
     val navBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val glass = rememberHazeState()
     val floatingNavSpace = (if (wide || albumOpen) 0.dp else FloatingNavHeight + 1.dp + navBarInset) +
         (if (miniGame != null && !wide) MiniPlayerSpace else 0.dp)
-    val systemCount = games.mapTo(HashSet()) { it.systemId }.size
 
-    val accent = when {
-        openSystem != null -> openSystem.color
-        tab == Tab.Games || tab == Tab.Home -> recents.firstOrNull()?.system?.color ?: MaterialTheme.colorScheme.primary
-        tab == Tab.Library -> MaterialTheme.colorScheme.tertiary
-        else -> MaterialTheme.colorScheme.primary
-    }
     Box(Modifier.fillMaxSize().emberBackground()) {
     Row(Modifier.fillMaxSize()) {
         if (wide && !albumOpen) {
@@ -397,59 +388,7 @@ private fun App(vm: AppViewModel) {
     Scaffold(
         containerColor = Color.Transparent,
         contentColor = MaterialTheme.colorScheme.onBackground,
-        modifier = Modifier.fillMaxSize().nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = {
-            if (!immersive && !albumOpen) Column {
-                val barTitle: @Composable () -> Unit = {
-                        Text(openSystem?.name ?: tab.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                val barSubtitle: @Composable () -> Unit = {
-                        val text = when {
-                            openSystem != null -> {
-                                val n = games.count { it.systemId == openSystem.id }
-                                "${openSystem.manufacturer} · $n ${if (n == 1) "game" else "games"}"
-                            }
-                            tab == Tab.Games && games.isNotEmpty() -> "Find games across ${systemCount} systems"
-                            tab == Tab.Games -> "Your retro game library"
-                            tab == Tab.Library -> "Your games"
-                            tab == Tab.Cores -> "Emulator engines"
-                            else -> "Library, controls & BIOS"
-                        }
-                        Text(text)
-                }
-                val barNav: @Composable () -> Unit = {
-                        if (openSystem != null) {
-                            FilledTonalIconButton(onClick = { openSystemId = null }, shapes = IconButtonDefaults.shapes()) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
-                            }
-                        }
-                }
-                val barActions: @Composable RowScope.() -> Unit = {
-                        if (openSystem != null) SystemBadge(openSystem, 40.dp, Modifier.padding(end = 12.dp))
-                        if (openSystem == null && (tab == Tab.Games || tab == Tab.Home) && folders.isNotEmpty()) {
-                            FilledTonalIconButton(onClick = vm::rescan, enabled = !scanning, shapes = IconButtonDefaults.shapes()) {
-                                Icon(Icons.Outlined.Refresh, "Rescan library")
-                            }
-                        }
-                }
-                val barColors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.94f),
-                )
-                if (short) {
-                    MediumFlexibleTopAppBar(
-                        title = barTitle, subtitle = barSubtitle, navigationIcon = barNav, actions = barActions,
-                        scrollBehavior = scrollBehavior, colors = barColors,
-                    )
-                } else {
-                    LargeFlexibleTopAppBar(
-                        title = barTitle, subtitle = barSubtitle, navigationIcon = barNav, actions = barActions,
-                        scrollBehavior = scrollBehavior, colors = barColors,
-                    )
-                }
-                if (scanning) LinearWavyProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp))
-            }
-        },
+        modifier = Modifier.fillMaxSize(),
     ) { padding ->
       Row(
           (if (immersive || albumOpen) Modifier else Modifier.padding(top = padding.calculateTopPadding()))
@@ -517,15 +456,14 @@ private fun App(vm: AppViewModel) {
                     onSeeAllGames = { tab = Tab.Games },
                     topActions = {
                         Box {
-                            FilledIconButton(
+                            com.retrohero.app.ui.components.AccentButton(
+                                text = "Add games",
                                 onClick = { addMenu = true },
-                                shapes = IconButtonDefaults.shapes(),
-                                colors = IconButtonDefaults.filledIconButtonColors(
-                                    containerColor = com.retrohero.app.ui.theme.Tone.Raised,
-                                    contentColor = com.retrohero.app.ui.theme.Tone.Ink,
-                                ),
-                                modifier = Modifier.size(46.dp).border(1.dp, com.retrohero.app.ui.theme.Tone.Line, CircleShape),
-                            ) { Icon(Icons.Rounded.Add, "Add games") }
+                                icon = Icons.Rounded.Add,
+                                modifier = androidx.compose.ui.Modifier.semantics {
+                                    this.contentDescription = "Add games"
+                                },
+                            )
                             DropdownMenu(
                                 expanded = addMenu,
                                 onDismissRequest = { addMenu = false },
@@ -534,9 +472,9 @@ private fun App(vm: AppViewModel) {
                                 border = androidx.compose.foundation.BorderStroke(1.dp, com.retrohero.app.ui.theme.Tone.Line),
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text("Download from link") },
-                                    leadingIcon = { Icon(Icons.Outlined.Download, null) },
-                                    onClick = { addMenu = false; vm.openDownload(AppViewModel.DownloadKind.Game) },
+                                    text = { Text("Add game folder") },
+                                    leadingIcon = { Icon(Icons.Outlined.CreateNewFolder, null) },
+                                    onClick = { addMenu = false; folderPicker.launch(null) },
                                 )
                                 DropdownMenuItem(
                                     text = { Text("Free homebrew games") },
@@ -544,9 +482,9 @@ private fun App(vm: AppViewModel) {
                                     onClick = { addMenu = false; homebrewOpen = true },
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Add game folder") },
-                                    leadingIcon = { Icon(Icons.Outlined.CreateNewFolder, null) },
-                                    onClick = { addMenu = false; folderPicker.launch(null) },
+                                    text = { Text("Download from link") },
+                                    leadingIcon = { Icon(Icons.Outlined.Download, null) },
+                                    onClick = { addMenu = false; vm.openDownload(AppViewModel.DownloadKind.Game) },
                                 )
                                 if (folders.isNotEmpty()) {
                                     DropdownMenuItem(
@@ -583,6 +521,7 @@ private fun App(vm: AppViewModel) {
                     collections = collectionGames,
                     stats = stats,
                     onOpenGame = { sheetFor = it.id },
+                    onPlay = { vm.play(it) },
                     onOptions = { menuFor = it.id },
                     onOpenCollection = { openCollectionId = it.id },
                     onNewShelf = { naming = true },

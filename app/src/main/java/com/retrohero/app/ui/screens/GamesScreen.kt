@@ -123,12 +123,12 @@ fun GamesScreen(
             title = "Start your library",
             body = "Add a folder of games to build your first shelf. RetroHero finds the system and sets up its emulator when you play.",
         ) {
-            com.retrohero.app.ui.components.AccentButton("Choose game folder", onAddFolder, icon = Icons.Default.CreateNewFolder)
-            if (onHomebrew != null) androidx.compose.material3.TextButton(onClick = onHomebrew) { Text("Browse free homebrew") }
-            OutlinedButton(onClick = onDownload, shapes = ButtonDefaults.shapes(), modifier = Modifier.padding(top = 12.dp)) {
-                Icon(Icons.Default.Download, null, Modifier.size(ButtonDefaults.IconSize))
-                Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                Text("Download from a link")
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                com.retrohero.app.ui.components.AccentButton("Choose game folder", onAddFolder, Modifier.fillMaxWidth(), icon = Icons.Default.CreateNewFolder)
+                if (onHomebrew != null) {
+                    com.retrohero.app.ui.components.Key("Browse free homebrew", onHomebrew, Modifier.fillMaxWidth())
+                }
+                com.retrohero.app.ui.components.Key("Download from a link", onDownload, Modifier.fillMaxWidth(), icon = Icons.Default.Download)
             }
         }
         return
@@ -172,12 +172,12 @@ fun GamesScreen(
         columns = GridCells.Adaptive(108.dp),
         contentPadding = PaddingValues(start = 20.dp, end = if (showScroller) 28.dp else 20.dp, bottom = 24.dp + LocalNavSpace.current),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
         fullWidth { PageHeader(title, if (games.size == 1) "1 game" else "${games.size} games across ${systemsPresent.size} ${if (systemsPresent.size == 1) "system" else "systems"}", index = pageIndex) }
         fullWidth {
-            Column(Modifier.animateContentSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.animateContentSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Box(Modifier.weight(1f)) { SearchField(query, games.size) { query = it } }
                     val filtersActive = systemFilter != null || onlyFavourites || onlyUnplayed
@@ -194,26 +194,6 @@ fun GamesScreen(
                         }
                     }
                 }
-                if (filtersOpen) {
-                Segmented(
-                    options = com.retrohero.app.data.GameSort.entries.map {
-                        when (it) {
-                            com.retrohero.app.data.GameSort.Recent -> "Recent"
-                            com.retrohero.app.data.GameSort.Name -> "A–Z"
-                            com.retrohero.app.data.GameSort.MostPlayed -> "Most played"
-                            com.retrohero.app.data.GameSort.System -> "System"
-                        }
-                    },
-                    selected = com.retrohero.app.data.GameSort.entries.indexOf(sort).coerceAtLeast(0),
-                    onSelect = { index ->
-                        sort = com.retrohero.app.data.GameSort.entries[index]
-                        scope.launch { grid.scrollToItem(0) }
-                    },
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PillChip("Favourites", onlyFavourites, { onlyFavourites = !onlyFavourites }, selectedStyle = true)
-                    PillChip("Not played yet", onlyUnplayed, { onlyUnplayed = !onlyUnplayed }, selectedStyle = true)
-                }
                 if (showSystemFilter && systemsPresent.size > 1) {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         item { PillChip("All", systemFilter == null, { systemFilter = null }, selectedStyle = true) }
@@ -228,8 +208,28 @@ fun GamesScreen(
                         }
                     }
                 }
+                if (filtersOpen) {
+                    Segmented(
+                        options = com.retrohero.app.data.GameSort.entries.map {
+                            when (it) {
+                                com.retrohero.app.data.GameSort.Recent -> "Recent"
+                                com.retrohero.app.data.GameSort.Name -> "A–Z"
+                                com.retrohero.app.data.GameSort.MostPlayed -> "Most played"
+                                com.retrohero.app.data.GameSort.System -> "System"
+                            }
+                        },
+                        selected = com.retrohero.app.data.GameSort.entries.indexOf(sort).coerceAtLeast(0),
+                        onSelect = { index ->
+                            sort = com.retrohero.app.data.GameSort.entries[index]
+                            scope.launch { grid.scrollToItem(0) }
+                        },
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PillChip("Favourites", onlyFavourites, { onlyFavourites = !onlyFavourites }, selectedStyle = true)
+                        PillChip("Not played yet", onlyUnplayed, { onlyUnplayed = !onlyUnplayed }, selectedStyle = true)
+                    }
+                }
             }
-        }
         }
 
         if (browsing && recents.isNotEmpty()) {

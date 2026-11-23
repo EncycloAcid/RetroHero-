@@ -99,11 +99,11 @@ fun LaunchIntroOverlay(state: LaunchIntroState) {
     if (state.done) return
     val mark = painterResource(R.drawable.ic_logo_mark)
     LaunchedEffect(state) {
-        // Wait for Home's logo (or give up and land in place), then let its first heavy frame draw.
-        withTimeoutOrNull(2_500) { snapshotFlow { state.markBounds != null }.first { it } }
+        // Wait briefly for Home's logo (or land in place), then let its first frame draw.
+        withTimeoutOrNull(200) { snapshotFlow { state.markBounds != null }.first { it } }
         withFrameNanos { }
         withFrameNanos { }
-        delay(120)
+        delay(80)
         coroutineScope {
             launch { state.rise.animateTo(1f, tween(RiseTotalMillis, RiseDelayMillis, LinearEasing)) }
             state.flight.animateTo(1f, tween(FlightMillis, easing = LinearEasing))
@@ -113,14 +113,7 @@ fun LaunchIntroOverlay(state: LaunchIntroState) {
         state.done = true
     }
     Canvas(
-        Modifier
-            .fillMaxSize()
-            // swallow touches until the intro is over
-            .pointerInput(Unit) {
-                awaitPointerEventScope {
-                    while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
-                }
-            },
+        Modifier.fillMaxSize(),
     ) {
         val f = state.flight.value
         val backdrop = 1f - smoothstep(0.18f, 0.7f, f)
