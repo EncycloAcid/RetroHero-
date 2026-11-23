@@ -55,6 +55,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -263,6 +264,7 @@ fun GamesScreen(
 private fun AlphabetScroller(letters: List<Char>, onJump: (Int) -> Unit, modifier: Modifier = Modifier) {
     val present = remember(letters) { letters.distinct() }
     val firstIndex = remember(letters) { present.associateWith { c -> letters.indexOf(c) } }
+    val jump by rememberUpdatedState(onJump)
     var active by remember { mutableStateOf<Char?>(null) }
     val view = androidx.compose.ui.platform.LocalView.current
     Column(
@@ -277,7 +279,7 @@ private fun AlphabetScroller(letters: List<Char>, onJump: (Int) -> Unit, modifie
                     if (c != active) {
                         active = c
                         view.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
-                        onJump(firstIndex[c] ?: 0)
+                        jump(firstIndex[c] ?: 0)
                     }
                 }
                 awaitEachGesture {
