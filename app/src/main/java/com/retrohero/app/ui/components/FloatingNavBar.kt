@@ -5,6 +5,9 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -52,14 +55,18 @@ val LocalNavSpace = compositionLocalOf { 0.dp }
 
 class NavItem(val label: String, val selectedIcon: ImageVector, val icon: ImageVector)
 
-/** Height of the bar's tab row, above the system navigation inset. */
-val FloatingNavHeight = 64.dp
+/** Height of the floating dock. */
+val FloatingNavHeight = 60.dp
 
-private val BarFill = Color(0xFF151517)
+/** Gap between the dock and the bottom of the screen (above the system navigation inset). */
+val FloatingNavGap = 12.dp
+
+private val DockFill = Color(0xFF18181B)
+private val ItemSize = 44.dp
 
 /**
- * Bottom tab bar docked to the screen edge: icon over label, with the selected tab lit in the
- * accent colour, a faint tile behind it and an accent strip along its top edge.
+ * A floating dock: a rounded glass pill of icon buttons. The selected tab sits on a filled
+ * accent tile that slides between items.
  */
 @Composable
 fun FloatingNavBar(
@@ -69,57 +76,40 @@ fun FloatingNavBar(
     modifier: Modifier = Modifier,
     glass: HazeState? = null,
 ) {
-    val accent = Salmon
-    Column(
+    val shape = RoundedCornerShape(22.dp)
+    val gap = 4.dp
+    Box(
         modifier
-            .fillMaxWidth()
-            .then(if (glass != null) Modifier.frostedGlass(glass, RectangleShape) else Modifier)
-            .background(BarFill.copy(alpha = if (glass != null) 0.9f else 0.98f)),
+            .padding(bottom = FloatingNavGap)
+            .windowInsetsPadding(WindowInsets.navigationBars)
+            .height(FloatingNavHeight)
+            .shadow(18.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
+            .then(if (glass != null) Modifier.frostedGlass(glass, shape) else Modifier.clip(shape))
+            .background(DockFill.copy(alpha = if (glass != null) 0.86f else 0.97f))
+            .border(1.dp, Ascend.accent.copy(alpha = 0.22f), shape)
+            .padding(horizontal = 8.dp),
+        contentAlignment = Alignment.CenterStart,
     ) {
-        Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.06f)))
-        BoxWithConstraints(Modifier.fillMaxWidth().height(FloatingNavHeight)) {
-            val itemWidth: Dp = maxWidth / items.size
-            val x by animateDpAsState(
-                itemWidth * selected,
-                spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow),
-                label = "navTile",
-            )
-            Box(Modifier.offset(x = x).width(itemWidth).fillMaxHeight().background(Color.White.copy(alpha = 0.04f)))
-            Box(
-                Modifier
-                    .offset(x = x + itemWidth * 0.18f)
-                    .width(itemWidth * 0.64f)
-                    .height(3.dp)
-                    .clip(RoundedCornerShape(bottomStart = 3.dp, bottomEnd = 3.dp))
-                    .background(accent),
-            )
-            // Dark imported accents are lifted so the active tab stays legible on the charcoal bar.
-            val readableAccent = if (accent.luminance() < 0.25f) lerp(accent, Color.White, 0.5f) else accent
-            Row(Modifier.fillMaxWidth().fillMaxHeight()) {
-                items.forEachIndexed { i, item ->
-                    val active = i == selected
-                    val tint by animateColorAsState(if (active) readableAccent else Color.White.copy(alpha = 0.62f), label = "navTint")
-                    Column(
-                        Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelect(i) }
-                            .padding(top = 4.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                    ) {
-                        Icon(if (active) item.selectedIcon else item.icon, null, tint = tint, modifier = Modifier.size(24.dp))
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            item.label,
-                            style = TextStyle(fontFamily = Inter, fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium, fontSize = 11.sp),
-                            color = tint,
-                            maxLines = 1,
-                        )
-                    }
+        val x by animateDpAsState(
+            (ItemSize + gap) * selected,
+            spring(dampingRatio = 0.75f, stiffness = Spring.StiffnessMediumLow),
+            label = "dockTile",
+        )
+        Box(Modifier.offset(x = x).size(ItemSize).clip(RoundedCornerShape(14.dp)).background(Salmon))
+        Row(horizontalArrangement = Arrangement.spacedBy(gap), verticalAlignment = Alignment.CenterVertically) {
+            items.forEachIndexed { i, item ->
+                val active = i == selected
+                val tint by animateColorAsState(if (active) Ascend.onAccent else Color.White.copy(alpha = 0.6f), label = "dockTint")
+                Box(
+                    Modifier
+                        .size(ItemSize)
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelect(i) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(if (active) item.selectedIcon else item.icon, item.label, tint = tint, modifier = Modifier.size(22.dp))
                 }
             }
         }
-        Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
     }
 }

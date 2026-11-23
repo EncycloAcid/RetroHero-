@@ -64,6 +64,7 @@ import com.retrohero.app.ui.screens.rememberControllers
 import com.retrohero.app.data.GameCollection
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.retrohero.app.ui.components.FloatingNavHeight
+import com.retrohero.app.ui.components.FloatingNavGap
 import com.retrohero.app.ui.components.NavItem
 import com.retrohero.app.ui.screens.HomeScreen
 import com.retrohero.app.R
@@ -326,7 +327,7 @@ private fun App(vm: AppViewModel) {
     val miniGame = recents.firstOrNull()?.takeIf { !miniHidden && !albumOpen && tab != Tab.Settings && !(tab == Tab.Shelf && shelfFlow) && sheetFor == null && !statsOpen && recap == null }
     val navBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val glass = rememberHazeState()
-    val floatingNavSpace = (if (wide || albumOpen) 0.dp else FloatingNavHeight + 1.dp + navBarInset) +
+    val floatingNavSpace = (if (wide || albumOpen) 0.dp else FloatingNavHeight + FloatingNavGap + 8.dp + navBarInset) +
         (if (miniGame != null && !wide) MiniPlayerSpace else 0.dp)
     val systemCount = games.mapTo(HashSet()) { it.systemId }.size
 
@@ -596,7 +597,7 @@ private fun App(vm: AppViewModel) {
                 onOpen = { sheetFor = miniGame.id },
                 onPlay = { vm.play(miniGame) },
                 onHide = { miniHidden = true },
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = navBarInset + FloatingNavHeight + 1.dp + 10.dp),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = navBarInset + FloatingNavHeight + FloatingNavGap + 10.dp),
             )
         }
         if (!wide && !albumOpen) {

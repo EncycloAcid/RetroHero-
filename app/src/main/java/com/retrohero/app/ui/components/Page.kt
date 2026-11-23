@@ -103,8 +103,8 @@ fun PillChip(text: String, selected: Boolean, onClick: () -> Unit, modifier: Mod
  * The glossy panel used for cards: a soft top-to-bottom gradient, a thin highlight along the top
  * edge like the lip of a plastic case, and a soft shadow.
  */
-fun Modifier.glossCard(shape: Shape = RoundedCornerShape(22.dp), tint: Color? = null): Modifier = this
-    .shadow(10.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
+fun Modifier.glossCard(shape: Shape = RoundedCornerShape(16.dp), tint: Color? = null): Modifier = this
+    .shadow(6.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
     .clip(shape)
     .background(
         Brush.verticalGradient(

@@ -1,5 +1,8 @@
 package com.retrohero.app.ui.screens
 
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.GridView
+import com.retrohero.app.ui.components.ascendCard
 import com.retrohero.app.ui.components.LocalNavSpace
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -32,6 +35,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreateNewFolder
@@ -178,7 +182,7 @@ fun GamesScreen(
     Box(Modifier.fillMaxSize()) {
     LazyVerticalGrid(
         state = grid,
-        columns = GridCells.Adaptive(124.dp),
+        columns = GridCells.Adaptive(108.dp),
         contentPadding = PaddingValues(start = 16.dp, end = 28.dp, bottom = 24.dp + LocalNavSpace.current),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -226,9 +230,9 @@ fun GamesScreen(
         }
 
         if (browsing && recents.isNotEmpty()) {
-            fullWidth { SectionHeader("Jump back in") }
+            fullWidth { com.retrohero.app.ui.components.SectionTitle("Jump back in", Icons.Rounded.History, Modifier.padding(top = 8.dp), count = recents.size) }
             fullWidth { RecentCarousel(recents, onPlay, onGameOptions) }
-            fullWidth { SectionHeader("Library") }
+            fullWidth { com.retrohero.app.ui.components.SectionTitle("Library", Icons.Rounded.GridView, Modifier.padding(top = 8.dp), count = filtered.size) }
         }
 
         if (filtered.isEmpty()) {
@@ -246,15 +250,13 @@ fun GamesScreen(
             }
         }
         items(filtered, key = { it.id }) { game ->
-            androidx.compose.foundation.layout.BoxWithConstraints(Modifier.animateItem()) {
-                BoxTile(
-                    game, maxWidth * 0.86f,
-                    onClick = { onPlay(game) },
-                    onLongClick = { onGameOptions(game) },
-                    meta = listOfNotNull(game.system?.shortName, stats[game.id]?.takeIf { it.seconds >= 60 }?.let { com.retrohero.app.data.PlayTime.format(it.seconds) }).joinToString(" · "),
-                    onPlay = onQuickPlay?.let { { it(game) } },
-                )
-            }
+            com.retrohero.app.ui.components.GameCard(
+                game,
+                onClick = { onPlay(game) },
+                modifier = Modifier.animateItem(),
+                subtitle = listOfNotNull(game.system?.shortName, stats[game.id]?.takeIf { it.seconds >= 60 }?.let { com.retrohero.app.data.PlayTime.format(it.seconds) }).joinToString(" · "),
+                onLongClick = { onGameOptions(game) },
+            )
         }
     }
     // A–Z fast scroller along the right edge when sorted by name.
@@ -329,14 +331,14 @@ private fun SearchField(query: String, total: Int, onChange: (String) -> Unit) {
             if (query.isNotEmpty()) IconButton(onClick = { onChange("") }) { Icon(Icons.Default.Close, "Clear") }
         },
         singleLine = true,
-        shape = CircleShape,
+        shape = RoundedCornerShape(14.dp),
         colors = TextFieldDefaults.colors(
             focusedIndicatorColor = Color.Transparent,
             unfocusedIndicatorColor = Color.Transparent,
             focusedContainerColor = Color.Transparent,
             unfocusedContainerColor = Color.Transparent,
         ),
-        modifier = Modifier.fillMaxWidth().padding(top = 4.dp).glossCard(CircleShape),
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp).then(Modifier.ascendCard()),
     )
 }
 

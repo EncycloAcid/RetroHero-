@@ -1,5 +1,10 @@
 package com.retrohero.app.ui.screens
 
+import androidx.compose.material.icons.rounded.CollectionsBookmark
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.SportsEsports
+import androidx.compose.material.icons.rounded.GridView
+import androidx.compose.material.icons.automirrored.rounded.TrendingUp
 import com.retrohero.app.ui.components.emberBackground
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.AnimatedContent
@@ -241,7 +246,7 @@ fun HomeScreen(
         full { HeroCarousel(candidates, games, recents, favorites, onPlay, onOpen, topActions, stats, onOpenStats) }
 
         if (recents.isNotEmpty()) {
-            full { Box(Modifier.launchRise(2)) { SectionHeader("Recently Played") } }
+            full { Box(Modifier.launchRise(2)) { SectionHeader("Recently Played", Icons.Rounded.History, recents.size) } }
             full {
                 LazyRow(modifier = Modifier.launchRise(3), contentPadding = PaddingValues(horizontal = ContentInset), horizontalArrangement = Arrangement.spacedBy(CardSpacing)) {
                     items(recents, key = { "r_" + it.id }) { game -> RowCard(game, onOpen, onOptions) }
@@ -249,7 +254,7 @@ fun HomeScreen(
             }
         }
         if (mostPlayed.size >= 2) {
-            full { SectionHeader("Most Played") }
+            full { SectionHeader("Most Played", Icons.AutoMirrored.Rounded.TrendingUp, mostPlayed.size) }
             full {
                 LazyRow(contentPadding = PaddingValues(horizontal = ContentInset), horizontalArrangement = Arrangement.spacedBy(CardSpacing)) {
                     items(mostPlayed, key = { "m_" + it.id }) { game ->
@@ -259,7 +264,7 @@ fun HomeScreen(
             }
         }
         if (collections.isNotEmpty()) {
-            full { SectionHeader("Your Collections") }
+            full { SectionHeader("Your Collections", Icons.Rounded.CollectionsBookmark, collections.size) }
             full {
                 LazyRow(contentPadding = PaddingValues(horizontal = ContentInset), horizontalArrangement = Arrangement.spacedBy(CardSpacing)) {
                     items(collections, key = { "c_" + it.first.id }) { (c, list) -> CollectionCard(c, list, onOpenCollection) }
@@ -267,14 +272,14 @@ fun HomeScreen(
             }
         }
         if (systems.size > 1) {
-            full { SectionHeader("Your Systems") }
+            full { SectionHeader("Your Systems", Icons.Rounded.SportsEsports, systems.size) }
             full {
                 LazyRow(contentPadding = PaddingValues(horizontal = ContentInset), horizontalArrangement = Arrangement.spacedBy(CardSpacing)) {
                     items(systems, key = { "s_" + it.id }) { system -> SystemCard(system, counts[system.id] ?: 0, onOpenSystem) }
                 }
             }
         }
-        full { SectionHeader("All Games", onSeeAllGames) }
+        full { SectionHeader("All Games", Icons.Rounded.GridView, games.size, onSeeAllGames) }
         items(games, key = { it.id }) { game ->
             GameCard(game, onClick = { onOpen(game) }, onLongClick = { onOptions(game) }, modifier = Modifier.animateItem())
         }
@@ -775,7 +780,12 @@ private fun Die(spinning: Boolean) {
 // ---- Rows -----------------------------------------------------------------------------------------
 
 @Composable
-private fun SectionHeader(text: String, onClick: (() -> Unit)? = null) {
+private fun SectionHeader(text: String, icon: androidx.compose.ui.graphics.vector.ImageVector, count: Int, onClick: (() -> Unit)? = null) {
+    com.retrohero.app.ui.components.SectionTitle(text, icon, Modifier.padding(top = 14.dp), count = count, onClick = onClick)
+}
+
+@Composable
+private fun OldSectionHeader(text: String, onClick: (() -> Unit)? = null) {
     Row(
         Modifier
             .padding(start = ContentInset - 4.dp, top = 14.dp)

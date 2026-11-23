@@ -1,5 +1,6 @@
 package com.retrohero.app.ui.screens
 
+import androidx.compose.material.icons.rounded.PushPin
 import com.retrohero.app.ui.components.emberBackground
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
@@ -147,11 +148,9 @@ fun LibraryScreen(
                 span { WideCard("History", if (history.isEmpty()) "Games you play show up here" else "${history.size} sessions", history.map { it.game }.distinct()) { tab = LibraryTab.History } }
                 span { StatsCard(history, onOpenStats) }
                 if (favorites.isNotEmpty()) {
-                    span { SectionTitle("Pinned") }
+                    span { com.retrohero.app.ui.components.SectionTitle("Pinned", Icons.Rounded.PushPin, Modifier.padding(top = 12.dp), count = favorites.size) }
                     items(favorites.take(9), key = { "pin_" + it.id }) { g ->
-                        androidx.compose.foundation.layout.BoxWithConstraints {
-                            com.retrohero.app.ui.components.BoxTile(g, maxWidth * 0.86f, onClick = { onOpenGame(g) }, onLongClick = { onOptions(g) }, meta = g.system?.shortName, onPlay = { onPlay(g) })
-                        }
+                        com.retrohero.app.ui.components.GameCard(g, onClick = { onOpenGame(g) }, subtitle = g.system?.shortName, onLongClick = { onOptions(g) })
                     }
                 }
             }
