@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.mutableStateOf
 import com.retrohero.app.ui.theme.polygon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
@@ -22,6 +24,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -38,6 +41,7 @@ import com.retrohero.app.data.Systems
 import com.retrohero.app.emulator.VirtualGamepad
 import com.retrohero.app.ui.screens.GamesScreen
 import com.retrohero.app.ui.theme.RetroHeroTheme
+import com.retrohero.app.ui.theme.Tone
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -261,8 +265,21 @@ class PolishScreenshotTest {
         compose.onNodeWithText(first.title).assertDoesNotExist()
         compose.onNodeWithContentDescription("Play ${second.title}").performClick()
         compose.runOnIdle { org.junit.Assert.assertEquals(second.id, launched); org.junit.Assert.assertNull(opened) }
-        compose.onNodeWithText(second.title).performClick()
+        compose.onNodeWithText(second.title).assertIsDisplayed().performClick()
         compose.runOnIdle { org.junit.Assert.assertEquals(second.id, opened) }
+    }
+
+    @Test
+    fun gameCardClickOpensGame() {
+        val game = sample("Micro City.gba", "gba")
+        var opened: String? = null
+        compose.setContent {
+            RetroHeroTheme {
+                com.retrohero.app.ui.components.GameCard(game, onClick = { opened = game.id })
+            }
+        }
+        compose.onNodeWithText(game.title).assertIsDisplayed().performClick()
+        compose.runOnIdle { org.junit.Assert.assertEquals(game.id, opened) }
     }
 
     @Test
@@ -426,6 +443,116 @@ class PolishScreenshotTest {
     }
 
     @Test
+    fun instrumentScreenshots() {
+        val games = listOf(
+            "Thwaite (USA).nes" to "nes",
+            "Libbet.gb" to "gb",
+            "Micro City.gba" to "gba",
+            "Sonic.md" to "genesis",
+            "Mario.sfc" to "snes",
+            "Zelda.nes" to "nes",
+        ).map { sample(it.first, it.second) }
+        val recents = games.take(2)
+        val favorites = games.take(3)
+        val stats = mapOf(games[0].id to com.retrohero.app.data.PlayStat(11_520, 6, 0))
+        val collection = com.retrohero.app.data.GameCollection("instrument", "Couch co-op", games.take(3).map { it.id })
+        val history = sampleHistory()
+        val settings = com.retrohero.app.data.Settings(ApplicationProvider.getApplicationContext())
+        settings.accent = "ember"
+        val activeScreen = mutableStateOf("home")
+        settings.darkMode = false
+        Tone.setDarkMode(false)
+        compose.setContent {
+            RetroHeroTheme {
+                when (activeScreen.value) {
+                    "home" -> com.retrohero.app.ui.screens.HomeScreen(
+                        games = games, recents = recents, onPlay = {}, onOpen = {}, onOptions = {},
+                        favorites = favorites, onOpenSystem = {}, onSeeAllGames = {}, topActions = {},
+                        bottomPadding = 100.dp, stats = stats, collections = listOf(collection to games.take(3)),
+                    )
+                    "shelves" -> Box(Modifier.fillMaxSize()) {
+                        androidx.compose.runtime.CompositionLocalProvider(
+                            com.retrohero.app.ui.components.LocalNavSpace provides com.retrohero.app.ui.components.FloatingNavHeight,
+                        ) {
+                            com.retrohero.app.ui.screens.ShelvesScreen(
+                                games = games, recents = recents, favorites = favorites,
+                                collections = listOf(collection to games.take(3)), stats = stats,
+                                onOpenGame = {}, onOptions = {}, onOpenCollection = {}, onNewShelf = {}, onCoverFlow = {},
+                            )
+                        }
+                        com.retrohero.app.ui.components.FloatingNavBar(
+                            navigationItems, selected = 1, onSelect = {},
+                            modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter),
+                        )
+                    }
+                    "search" -> GamesScreen(
+                        games = games, recents = recents, hasFolders = true, scanning = false,
+                        onAddFolder = {}, onDownload = {}, onPlay = {}, onGameOptions = {},
+                    )
+                    "library" -> com.retrohero.app.ui.screens.LibraryScreen(
+                        games = games, favorites = favorites, collections = listOf(collection to games.take(3)),
+                        shots = emptyList(), history = history, onOpenGame = {}, onOptions = {}, onOpenSystem = {},
+                        onOpenCollection = {}, onNewCollection = {}, onOpenStats = {},
+                    )
+                    "detail" -> com.retrohero.app.ui.screens.GameDetailScreen(
+                        game = games.first(), currentCore = games.first().system!!.cores.first(),
+                        saveSlots = listOf(-1 to System.currentTimeMillis()), onPlay = {}, onSelectCore = {},
+                        onDelete = null, onClose = {}, stat = stats[games.first().id] ?: com.retrohero.app.data.PlayStat.None,
+                    )
+                    "settings" -> Column(
+                        Modifier.fillMaxSize().background(Tone.Bg).padding(20.dp)
+                            .verticalScroll(androidx.compose.foundation.rememberScrollState()),
+                    ) {
+                        com.retrohero.app.ui.screens.LooksSettings(settings, emptyList(), {}, {})
+                    }
+                    else -> com.retrohero.app.ui.screens.OnboardingScreen(
+                        hasGames = false, onAddFolder = {}, onDownloadLink = {}, onHomebrew = {}, onImportBios = {}, onFinish = {},
+                    )
+                }
+            }
+        }
+        listOf(false, true).forEach { dark ->
+            val appearance = if (dark) "dark" else "light"
+            settings.darkMode = dark
+            Tone.setDarkMode(dark)
+            listOf(
+                "home" to "home",
+                "shelves" to "shelves",
+                "search" to "search",
+                "library" to "library",
+                "detail" to "game_detail",
+                "settings" to "settings_looks",
+                "onboarding" to "onboarding",
+            ).forEach { (screen, name) ->
+                compose.runOnIdle { activeScreen.value = screen }
+                compose.mainClock.advanceTimeBy(800)
+                if (screen == "search") compose.onNodeWithText("Filters").performClick()
+                compose.mainClock.advanceTimeBy(250)
+                save("instrument_${name}_$appearance")
+            }
+        }
+    }
+
+    @Test
+    fun darkAppearancePersists() {
+        val settings = com.retrohero.app.data.Settings(ApplicationProvider.getApplicationContext())
+        settings.darkMode = false
+        Tone.setDarkMode(false)
+        compose.setContent {
+            RetroHeroTheme {
+                Column(Modifier.fillMaxSize().background(Tone.Bg).padding(20.dp)) {
+                    com.retrohero.app.ui.screens.LooksSettings(settings, emptyList(), {}, {})
+                }
+            }
+        }
+        compose.onNodeWithText("Dark").performClick()
+        compose.runOnIdle {
+            org.junit.Assert.assertTrue(Tone.isDark)
+            org.junit.Assert.assertTrue(settings.darkMode)
+        }
+    }
+
+    @Test
     fun collectionPage() {
         val games = listOf("Thwaite (USA).nes" to "nes", "Libbet.gb" to "gb", "Micro City.gba" to "gba").map { sample(it.first, it.second) }
         compose.setContent {
@@ -497,8 +624,8 @@ class PolishScreenshotTest {
         val h = sampleHistory()
         compose.setContent { RetroHeroTheme { com.retrohero.app.ui.screens.StatsScreen(h, onBack = {}, onRecap = { _, _ -> }) } }
         compose.mainClock.advanceTimeBy(1500)
-        compose.onAllNodesWithText("Systems").onFirst().performClick()
-        compose.onAllNodesWithText("Games").onFirst().performClick()
+        compose.onAllNodesWithText("SYSTEMS").onFirst().performClick()
+        compose.onAllNodesWithText("GAMES").onFirst().performClick()
         compose.mainClock.advanceTimeBy(1500)
         save("stats")
     }

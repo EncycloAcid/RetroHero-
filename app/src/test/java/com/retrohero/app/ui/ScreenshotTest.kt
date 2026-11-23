@@ -79,7 +79,7 @@ class ScreenshotTest {
     }
 
     private fun tab(label: String) {
-        compose.onAllNodes(hasText(label) and hasClickAction()).onFirst().performClick()
+        compose.onAllNodes(hasText(label, ignoreCase = true) and hasClickAction()).onFirst().performClick()
     }
 
     @Test
