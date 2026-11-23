@@ -196,6 +196,8 @@ class EmulatorActivity : ComponentActivity() {
     private var padAdjust by mutableStateOf<Map<String, PadAdjust>>(emptyMap())
     private var padSelected by mutableStateOf<String?>(null)
     private var padLandscape = false
+    private var translateState by mutableStateOf<TranslateState>(TranslateState.Idle)
+    private var translateLang by mutableStateOf(TranslateSourceLang.JAPANESE)
 
     // Play time: counted only while the game is actually running on screen.
     private var runningSince = 0L
@@ -221,6 +223,7 @@ class EmulatorActivity : ComponentActivity() {
         settings = Settings(this)
         audioHaptics = AudioHapticsEngine(this)
         audioHapticsOn = settings.audioHaptics
+        translateLang = TranslateSourceLang.fromCode(settings.translateSourceLang)
         Tone.setDarkMode(settings.darkMode)
         input = InputMapper(settings.stickAsDpad, Remap.load(paths.remapFile))
         optionsStore = CoreOptionsStore(paths.coreOptionsFile(coreId))
@@ -251,6 +254,7 @@ class EmulatorActivity : ComponentActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 when {
+                    translateState !is TranslateState.Idle -> dismissTranslate()
                     editingPad -> finishPadEdit(save = true)
                     phase is Phase.Running -> setMenu(!menuOpen)
                     else -> finish()
@@ -395,6 +399,31 @@ class EmulatorActivity : ComponentActivity() {
         setMenu(false)
     }
 
+    private fun runScreenTranslate(lang: TranslateSourceLang = translateLang) {
+        translateLang = lang
+        settings.translateSourceLang = lang.code
+        menuOpen = false
+        if (started) NativeBridge.setPaused(true)
+        stopClock()
+        translateState = TranslateState.Working("Capturing frame…")
+        lifecycleScope.launch {
+            val raw = withContext(Dispatchers.IO) { NativeBridge.grabFrame() }
+            translateState = ScreenTranslator.translateRawFrame(raw, lang) { status ->
+                lifecycleScope.launch(Dispatchers.Main) {
+                    if (translateState is TranslateState.Working) translateState = TranslateState.Working(status)
+                }
+            }
+        }
+    }
+
+    private fun dismissTranslate() {
+        translateState = TranslateState.Idle
+        if (started && !shutDown && !menuOpen && !editingPad) {
+            NativeBridge.setPaused(false)
+            startClock()
+        }
+    }
+
     private fun applyFastForward() {
         NativeBridge.setFastForward(fastForwardToggle || fastForwardHeld, settings.fastForwardSpeed)
     }
@@ -412,7 +441,7 @@ class EmulatorActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (started && !shutDown && !menuOpen && !editingPad) {
+        if (started && !shutDown && !menuOpen && !editingPad && translateState is TranslateState.Idle) {
             NativeBridge.setPaused(false)
             startClock()
         }
@@ -609,6 +638,15 @@ class EmulatorActivity : ComponentActivity() {
             }
 
             if (menuOpen) PauseMenu()
+            if (translateState !is TranslateState.Idle) {
+                TranslateOverlay(
+                    state = translateState,
+                    sourceLang = translateLang,
+                    onSelectLang = { runScreenTranslate(it) },
+                    onRescan = { runScreenTranslate(translateLang) },
+                    onDismiss = ::dismissTranslate,
+                )
+            }
             if (editingPad) PadEditBar(Modifier.align(Alignment.TopCenter))
             ScreenshotFlash(flash)
         }
@@ -784,6 +822,9 @@ class EmulatorActivity : ComponentActivity() {
                     NativeBridge.reset()
                     setMenu(false)
                 }
+            }
+            ActionTile(Icons.Default.AspectRatio, "Translate screen (${translateLang.label} → EN)", Modifier.fillMaxWidth()) {
+                runScreenTranslate(translateLang)
             }
             val switchCount = if (deltaSkinsForSystem.isNotEmpty()) 5 else 4
             SegmentedGroup(null, switchCount) {
