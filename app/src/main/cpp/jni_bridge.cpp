@@ -157,6 +157,10 @@ JNIEXPORT jfloat JNICALL JNI_FN(getAspectRatio)(JNIEnv *, jobject) {
     return Frontend::get().aspectRatio();
 }
 
+JNIEXPORT jfloat JNICALL JNI_FN(consumeAudioHaptic)(JNIEnv *, jobject) {
+    return Frontend::get().audio().consumeHapticEnergy();
+}
+
 JNIEXPORT jstring JNICALL JNI_FN(getLastError)(JNIEnv *env, jobject) {
     return env->NewStringUTF(Frontend::get().lastError().c_str());
 }

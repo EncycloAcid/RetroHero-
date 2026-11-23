@@ -42,6 +42,8 @@ object NativeBridge {
     external fun setOption(key: String, value: String)
     external fun getOptions(): Array<String>
     external fun getAspectRatio(): Float
+    /** Peak audio-driven haptic energy [0..1] detected since the previous poll. */
+    external fun consumeAudioHaptic(): Float
     external fun getLastError(): String
 
     data class CoreOption(val key: String, val description: String, val current: String, val values: List<String>)

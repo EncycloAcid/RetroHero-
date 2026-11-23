@@ -173,6 +173,7 @@ class EmulatorActivity : ComponentActivity() {
     private lateinit var optionsStore: CoreOptionsStore
     private lateinit var gamePrefs: GamePrefs
     private lateinit var padLayouts: PadLayouts
+    private lateinit var audioHaptics: AudioHapticsEngine
     private var padSkin: PadSkin = Looks.Console
     private var deltaSkinsForSystem: List<DeltaSkin> = emptyList()
     private var activeDeltaSkin by mutableStateOf<DeltaSkin?>(null)
@@ -180,6 +181,7 @@ class EmulatorActivity : ComponentActivity() {
     private var phase by mutableStateOf<Phase>(Phase.Loading)
     private var menuOpen by mutableStateOf(false)
     private var showPad by mutableStateOf(true)
+    private var audioHapticsOn by mutableStateOf(false)
     private var fastForwardToggle by mutableStateOf(false)
     private var aspect by mutableFloatStateOf(4f / 3f)
     private var frameSize by mutableStateOf(IntSize.Zero)
@@ -217,6 +219,8 @@ class EmulatorActivity : ComponentActivity() {
         system = game.system ?: run { finish(); return }
         paths = AppPaths(this)
         settings = Settings(this)
+        audioHaptics = AudioHapticsEngine(this)
+        audioHapticsOn = settings.audioHaptics
         Tone.setDarkMode(settings.darkMode)
         input = InputMapper(settings.stickAsDpad, Remap.load(paths.remapFile))
         optionsStore = CoreOptionsStore(paths.coreOptionsFile(coreId))
@@ -398,6 +402,7 @@ class EmulatorActivity : ComponentActivity() {
     override fun onPause() {
         super.onPause()
         if (started && !shutDown) {
+            audioHaptics.cancel()
             NativeBridge.setPaused(true)
             NativeBridge.setRewinding(false)
             NativeBridge.saveSram(paths.saveRam(game).absolutePath)
@@ -512,6 +517,22 @@ class EmulatorActivity : ComponentActivity() {
             while (phase is Phase.Running) {
                 aspect = NativeBridge.getAspectRatio().takeIf { it > 0.1f } ?: aspect
                 delay(500)
+            }
+        }
+
+        LaunchedEffect(phase, menuOpen, editingPad, audioHapticsOn) {
+            if (phase !is Phase.Running || menuOpen || editingPad || !audioHapticsOn) {
+                audioHaptics.cancel()
+                return@LaunchedEffect
+            }
+            while (true) {
+                if (!fastForwardToggle && !fastForwardHeld) {
+                    val energy = NativeBridge.consumeAudioHaptic()
+                    if (energy > 0f) audioHaptics.trigger(energy, settings.audioHapticsStrength)
+                } else {
+                    NativeBridge.consumeAudioHaptic()
+                }
+                delay(32)
             }
         }
 
@@ -764,7 +785,7 @@ class EmulatorActivity : ComponentActivity() {
                     setMenu(false)
                 }
             }
-            val switchCount = if (deltaSkinsForSystem.isNotEmpty()) 4 else 3
+            val switchCount = if (deltaSkinsForSystem.isNotEmpty()) 5 else 4
             SegmentedGroup(null, switchCount) {
                 MenuSwitch(shapes(0), Icons.Default.FastForward, "Fast forward", "${settings.fastForwardSpeed.toInt()}× speed", fastForwardToggle) {
                     fastForwardToggle = it
@@ -776,10 +797,15 @@ class EmulatorActivity : ComponentActivity() {
                     rewindOn,
                 ) { setRewind(it) }
                 MenuSwitch(shapes(2), Icons.Default.Gamepad, "Touch controls", "Show the on-screen gamepad", showPad) { showPad = it }
+                MenuSwitch(shapes(3), Icons.Default.Tune, "Audio rumble", "Feel bass impacts from game audio", audioHapticsOn) {
+                    audioHapticsOn = it
+                    settings.audioHaptics = it
+                    if (!it) audioHaptics.cancel()
+                }
                 if (deltaSkinsForSystem.isNotEmpty()) {
                     SegmentedListItem(
                         onClick = { navigate("skin") },
-                        shapes = shapes(3),
+                        shapes = shapes(4),
                         colors = segmentColors(),
                         leadingContent = { ShapeIcon(Icons.Default.AspectRatio) },
                         supportingContent = { Text(activeDeltaSkin?.name ?: "Built-in RetroHero pad") },

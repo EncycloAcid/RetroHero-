@@ -89,6 +89,7 @@ public:
     std::string lastError();
 
     VideoOutput &video() { return video_; }
+    AudioOutput &audio() { return audio_; }
 
 private:
     Frontend() = default;
