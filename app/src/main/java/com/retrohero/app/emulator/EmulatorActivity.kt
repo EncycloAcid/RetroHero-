@@ -24,6 +24,7 @@ import com.retrohero.app.data.PlayTime
 import com.retrohero.app.data.Remap
 import com.retrohero.app.data.Looks
 import com.retrohero.app.data.PadSkin
+import com.retrohero.app.ui.theme.Tone
 import com.retrohero.app.ui.theme.setAccent
 import com.retrohero.app.data.ScreenFilter
 import java.io.File
@@ -208,6 +209,7 @@ class EmulatorActivity : ComponentActivity() {
         system = game.system ?: run { finish(); return }
         paths = AppPaths(this)
         settings = Settings(this)
+        Tone.setDarkMode(settings.darkMode)
         input = InputMapper(settings.stickAsDpad, Remap.load(paths.remapFile))
         optionsStore = CoreOptionsStore(paths.coreOptionsFile(coreId))
         gamePrefs = GamePrefs(this, settings.sharpPixels)
