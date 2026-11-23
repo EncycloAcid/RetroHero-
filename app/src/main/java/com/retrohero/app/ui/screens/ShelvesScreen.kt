@@ -32,6 +32,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -51,8 +53,6 @@ import com.retrohero.app.ui.theme.Salmon
 
 /** One row on the Shelves page. */
 private class ShelfRow(val key: String, val title: String, val games: List<Game>, val count: Int = games.size, val onOpen: (() -> Unit)? = null)
-
-private const val RowLimit = 20
 
 /**
  * Your games grouped into shelves, one horizontal row of covers each: what you're playing,
@@ -75,11 +75,11 @@ fun ShelvesScreen(
         val played = games.filter { (stats[it.id]?.seconds ?: 0) > 0 }
         val backlog = games.filter { (stats[it.id]?.sessions ?: 0) == 0 && (stats[it.id]?.seconds ?: 0) == 0L }
         buildList {
-            add(ShelfRow("playing", "Currently Playing", recents.take(RowLimit), recents.size))
-            add(ShelfRow("favorites", "Favorites", favorites.take(RowLimit), favorites.size))
-            collections.forEach { (c, list) -> add(ShelfRow("col:" + c.id, c.name, list.take(RowLimit), list.size) { onOpenCollection(c) }) }
-            add(ShelfRow("most", "Most Played", played.sortedByDescending { stats[it.id]?.seconds ?: 0 }.take(RowLimit), played.size))
-            add(ShelfRow("backlog", "Backlog", backlog.take(RowLimit), backlog.size))
+            add(ShelfRow("playing", "Currently Playing", recents))
+            add(ShelfRow("favorites", "Favorites", favorites))
+            collections.forEach { (c, list) -> add(ShelfRow("col:" + c.id, c.name, list) { onOpenCollection(c) }) }
+            add(ShelfRow("most", "Most Played", played.sortedByDescending { stats[it.id]?.seconds ?: 0 }))
+            add(ShelfRow("backlog", "Backlog", backlog))
         }.filter { it.count > 0 || it.key.startsWith("col:") }
     }
 
@@ -94,7 +94,7 @@ fun ShelvesScreen(
                 Modifier.padding(start = Page.Gutter, end = 14.dp),
             ) {
                 HeaderButton(Icons.Rounded.ViewCarousel, "Cover flow", Color.White.copy(alpha = 0.08f), Color.White, onCoverFlow)
-                HeaderButton(Icons.Rounded.Add, "New shelf", Salmon, Color(0xFF1A0E08), onNewShelf, Modifier.padding(start = 8.dp))
+                HeaderButton(Icons.Rounded.Add, "New shelf", Salmon, if (Salmon.luminance() > 0.4f) Color(0xFF1A0E08) else Color.White, onNewShelf, Modifier.padding(start = 8.dp))
             }
         }
         if (rows.isEmpty()) {
@@ -177,15 +177,30 @@ private fun Shelf(row: ShelfRow, onOpenGame: (Game) -> Unit, onOptions: (Game) -
 @Composable
 private fun Cover(game: Game, onClick: () -> Unit, onLongClick: () -> Unit) {
     val shape = RoundedCornerShape(8.dp)
-    Box(
+    Column(
         Modifier
             .width(84.dp)
-            .height(116.dp)
-            .shadow(10.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
-            .clip(shape)
+            .clip(RoundedCornerShape(8.dp))
             .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .border(1.dp, Color.White.copy(alpha = 0.08f), shape),
+            .semantics(mergeDescendants = true) {},
     ) {
-        GameArt(game, Modifier.fillMaxSize())
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(116.dp)
+                .shadow(10.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
+                .clip(shape)
+                .border(1.dp, Color.White.copy(alpha = 0.08f), shape),
+        ) {
+            GameArt(game, Modifier.fillMaxSize())
+        }
+        Text(
+            game.title,
+            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 12.sp),
+            color = Color.White.copy(alpha = 0.78f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 6.dp, start = 2.dp, end = 2.dp),
+        )
     }
 }
