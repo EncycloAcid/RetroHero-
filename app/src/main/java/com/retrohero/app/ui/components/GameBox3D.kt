@@ -60,18 +60,19 @@ data class BoxSpec(
 
 fun boxSpec(systemId: String): BoxSpec = when (systemId) {
     "nes" -> BoxSpec(0.72f, 0.2f, Media.Cartridge, Color(0xFF9C9CA0), 0.9f)
-    "snes" -> BoxSpec(1.36f, 0.15f, Media.Cartridge, Color(0xFFBDBDC4), 1.3f)
-    "gb" -> BoxSpec(0.82f, 0.18f, Media.Cartridge, Color(0xFFB9B9BE), 0.88f)
+    "snes", "n64" -> BoxSpec(1.36f, 0.15f, Media.Cartridge, Color(0xFFBDBDC4), 1.3f)
+    "gb", "pokemini", "pico8" -> BoxSpec(0.82f, 0.18f, Media.Cartridge, Color(0xFFB9B9BE), 0.88f)
     "gbc" -> BoxSpec(0.82f, 0.18f, Media.Cartridge, Color(0xFF4A4A52), 0.88f)
     "gba" -> BoxSpec(0.8f, 0.16f, Media.Cartridge, Color(0xFF34343E), 1.6f)
-    "nds" -> BoxSpec(0.88f, 0.13f, Media.Card, Color(0xFF2A2A2E), 1.06f)
+    "nds", "3ds" -> BoxSpec(0.88f, 0.13f, Media.Card, Color(0xFF2A2A2E), 1.06f)
     "vb" -> BoxSpec(0.8f, 0.18f, Media.Cartridge, Color(0xFF2A2A2E), 1.1f)
-    "genesis", "32x", "sms" -> BoxSpec(0.71f, 0.2f, Media.Cartridge, Color(0xFF1C1C1E), 0.82f)
+    "genesis", "32x", "sms", "sg1000" -> BoxSpec(0.71f, 0.2f, Media.Cartridge, Color(0xFF1C1C1E), 0.82f)
     "gg" -> BoxSpec(0.8f, 0.16f, Media.Cartridge, Color(0xFF1C1C1E), 1.25f)
-    "psx", "segacd", "pcecd" -> BoxSpec(1.12f, 0.07f, Media.Disc, Color(0xFFCFCFD4), 1f)
-    "pce" -> BoxSpec(0.8f, 0.12f, Media.Card, Color(0xFFE2E2E6), 0.64f)
+    "psx", "segacd", "pcecd", "saturn", "dreamcast", "neocd", "3do" -> BoxSpec(1.12f, 0.07f, Media.Disc, Color(0xFFCFCFD4), 1f)
+    "gc", "wii", "ps2", "psp" -> BoxSpec(0.71f, 0.12f, Media.Disc, Color(0xFF222228), 1f)
+    "pce", "msx", "tic80" -> BoxSpec(0.8f, 0.12f, Media.Card, Color(0xFFE2E2E6), 0.64f)
     "ngp", "ws", "lynx" -> BoxSpec(0.8f, 0.16f, Media.Cartridge, Color(0xFF2F2F36), 1.15f)
-    "atari2600", "atari7800" -> BoxSpec(0.74f, 0.2f, Media.Cartridge, Color(0xFF1C1C1E), 1.0f)
+    "atari2600", "atari5200", "atari7800", "jaguar", "coleco", "intellivision", "vectrex", "odyssey2" -> BoxSpec(0.74f, 0.2f, Media.Cartridge, Color(0xFF1C1C1E), 1.0f)
     else -> BoxSpec(0.72f, 0.18f, Media.Cartridge, Color(0xFF3A3A40), 1f)
 }
 
@@ -79,9 +80,9 @@ fun boxSpec(systemId: String): BoxSpec = when (systemId) {
 enum class CaseStyle { Cardboard, Clamshell, Jewel, Keepcase }
 
 fun caseStyle(systemId: String): CaseStyle = when (systemId) {
-    "psx", "segacd", "pcecd" -> CaseStyle.Jewel
-    "genesis", "32x", "sms", "gg", "atari2600", "atari7800" -> CaseStyle.Clamshell
-    "nds" -> CaseStyle.Keepcase
+    "psx", "segacd", "pcecd", "saturn", "dreamcast", "neocd", "3do" -> CaseStyle.Jewel
+    "genesis", "32x", "sms", "sg1000", "gg", "atari2600", "atari5200", "atari7800", "coleco", "intellivision" -> CaseStyle.Clamshell
+    "nds", "3ds", "gc", "wii", "ps2", "psp" -> CaseStyle.Keepcase
     else -> CaseStyle.Cardboard
 }
 

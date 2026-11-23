@@ -102,6 +102,7 @@ fun LibraryScreen(
     BackHandler(enabled = backEnabled && tab != LibraryTab.All) { tab = LibraryTab.All }
     val counts = remember(games) { games.groupingBy { it.systemId }.eachCount() }
     val systems = remember(counts) { com.retrohero.app.data.Systems.all.filter { (counts[it.id] ?: 0) > 0 } }
+    val unpopulated = remember(counts) { com.retrohero.app.data.Systems.all.filter { (counts[it.id] ?: 0) == 0 } }
 
     LazyVerticalGrid(
         columns = GridCells.Adaptive(94.dp),
@@ -112,7 +113,7 @@ fun LibraryScreen(
     ) {
         span {
             com.retrohero.app.ui.components.PageHeader(if (tab == LibraryTab.All) "Library" else tab.label,
-                "${games.size} games · ${systems.size} systems", index = pageIndex) {
+                "${games.size} games · ${systems.size} active / ${com.retrohero.app.data.Systems.all.size} systems", index = pageIndex) {
                 if (tab != LibraryTab.All) com.retrohero.app.ui.components.Key("All library", { tab = LibraryTab.All })
             }
         }
@@ -149,7 +150,7 @@ fun LibraryScreen(
                             val entries = LibraryTab.entries.filter { it != LibraryTab.All }
                             entries.forEachIndexed { idx, destination ->
                                 val (count, art) = when (destination) {
-                                    LibraryTab.Systems -> systems.size to games.firstOrNull()
+                                    LibraryTab.Systems -> com.retrohero.app.data.Systems.all.size to games.firstOrNull()
                                     LibraryTab.Favourites -> favorites.size to favorites.firstOrNull()
                                     LibraryTab.Collections -> collections.size to collections.firstNotNullOfOrNull { it.second.firstOrNull() }
                                     LibraryTab.Screenshots -> shots.size to shots.firstOrNull()?.game
@@ -177,7 +178,7 @@ fun LibraryScreen(
                 if (systems.isNotEmpty()) {
                     span {
                         com.retrohero.app.ui.components.SectionTitle(
-                            "Consoles",
+                            "Your Consoles",
                             Modifier.padding(top = 12.dp),
                             count = systems.size,
                             index = 2,
@@ -195,16 +196,70 @@ fun LibraryScreen(
                         )
                     }
                 }
+                if (unpopulated.isNotEmpty()) {
+                    span {
+                        com.retrohero.app.ui.components.SectionTitle(
+                            "Supported Systems",
+                            Modifier.padding(top = 12.dp),
+                            count = com.retrohero.app.data.Systems.all.size,
+                            index = 3,
+                            onClick = { tab = LibraryTab.Systems },
+                            verticalPadding = 0.dp,
+                        )
+                    }
+                    itemsIndexed(unpopulated, key = { _, s -> "cat_sys_" + s.id }, span = { _, _ -> GridItemSpan(maxLineSpan) }) { index, s ->
+                        val exts = s.extensions.take(4).joinToString(" ") { ".$it" }
+                        ListRow(
+                            index = systems.size + index + 1,
+                            art = { SystemTile(s) },
+                            title = s.name,
+                            subtitle = "${s.manufacturer} · ${s.cores.first().displayName} · $exts",
+                            onClick = { onOpenSystem(s) },
+                        )
+                    }
+                }
             }
             LibraryTab.Systems -> {
-                itemsIndexed(systems, key = { _, s -> "sys_" + s.id }, span = { _, _ -> GridItemSpan(maxLineSpan) }) { index, s ->
-                    ListRow(
-                        index = index + 1,
-                        art = { SystemTile(s) },
-                        title = s.name,
-                        subtitle = "${s.manufacturer} · ${counts[s.id] ?: 0} ${if ((counts[s.id] ?: 0) == 1) "game" else "games"}",
-                        onClick = { onOpenSystem(s) },
-                    )
+                if (systems.isNotEmpty()) {
+                    span {
+                        com.retrohero.app.ui.components.SectionTitle(
+                            "In Your Library",
+                            Modifier.padding(top = 4.dp),
+                            count = systems.size,
+                            index = 1,
+                            verticalPadding = 0.dp,
+                        )
+                    }
+                    itemsIndexed(systems, key = { _, s -> "sys_" + s.id }, span = { _, _ -> GridItemSpan(maxLineSpan) }) { index, s ->
+                        ListRow(
+                            index = index + 1,
+                            art = { SystemTile(s) },
+                            title = s.name,
+                            subtitle = "${s.manufacturer} · ${counts[s.id] ?: 0} ${if ((counts[s.id] ?: 0) == 1) "game" else "games"}",
+                            onClick = { onOpenSystem(s) },
+                        )
+                    }
+                }
+                if (unpopulated.isNotEmpty()) {
+                    span {
+                        com.retrohero.app.ui.components.SectionTitle(
+                            "All Supported Consoles",
+                            Modifier.padding(top = 12.dp),
+                            count = unpopulated.size,
+                            index = 2,
+                            verticalPadding = 0.dp,
+                        )
+                    }
+                    itemsIndexed(unpopulated, key = { _, s -> "sys_avail_" + s.id }, span = { _, _ -> GridItemSpan(maxLineSpan) }) { index, s ->
+                        val exts = s.extensions.take(4).joinToString(" ") { ".$it" }
+                        ListRow(
+                            index = systems.size + index + 1,
+                            art = { SystemTile(s) },
+                            title = s.name,
+                            subtitle = "${s.manufacturer} · ${s.cores.first().displayName} · $exts",
+                            onClick = { onOpenSystem(s) },
+                        )
+                    }
                 }
             }
             LibraryTab.Favourites -> {
