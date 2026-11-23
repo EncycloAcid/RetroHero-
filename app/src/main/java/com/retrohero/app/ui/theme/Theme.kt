@@ -104,11 +104,13 @@ fun RetroHeroTheme(
         !Tone.isDark && drawnAccent.luminance() > 0.6f -> lerp(accent, Color.Black, 0.35f)
         else -> accent
     }
+    val onPrimary = if (primary.luminance() > 0.18f) Color(0xFF111111) else Color.White
+    val onTertiary = if (drawnAccent.luminance() > 0.18f) Color(0xFF111111) else Color.White
     val primaryContainer = primary.copy(alpha = 0.18f).compositeOver(Tone.Surface)
     val colorScheme = if (Tone.isDark) {
         darkColorScheme(
             primary = primary,
-            onPrimary = Color(0xFF111111),
+            onPrimary = onPrimary,
             primaryContainer = primaryContainer,
             onPrimaryContainer = Tone.Ink,
             secondary = Tone.Muted,
@@ -116,7 +118,7 @@ fun RetroHeroTheme(
             secondaryContainer = Tone.Raised,
             onSecondaryContainer = Tone.Ink,
             tertiary = accent,
-            onTertiary = Color(0xFF111111),
+            onTertiary = onTertiary,
             tertiaryContainer = primaryContainer,
             onTertiaryContainer = Tone.Ink,
             background = Tone.Bg,
@@ -140,7 +142,7 @@ fun RetroHeroTheme(
     } else {
         lightColorScheme(
             primary = primary,
-            onPrimary = Color(0xFF111111),
+            onPrimary = onPrimary,
             primaryContainer = primaryContainer,
             onPrimaryContainer = Tone.Ink,
             secondary = Tone.Muted,
@@ -148,7 +150,7 @@ fun RetroHeroTheme(
             secondaryContainer = Tone.Raised,
             onSecondaryContainer = Tone.Ink,
             tertiary = accent,
-            onTertiary = Color(0xFF111111),
+            onTertiary = onTertiary,
             tertiaryContainer = primaryContainer,
             onTertiaryContainer = Tone.Ink,
             background = Tone.Bg,
