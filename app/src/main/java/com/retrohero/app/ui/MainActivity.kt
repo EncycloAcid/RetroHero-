@@ -352,21 +352,28 @@ private fun App(vm: AppViewModel) {
     }
     var deltaSkinVersion by remember { mutableIntStateOf(0) }
     val installedDeltaSkins = remember(deltaSkinVersion) { com.retrohero.app.data.DeltaSkins.list(vm.paths.deltaSkins) }
-    val deltaSkinPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) lookScope.launch {
-            val result = withContext(Dispatchers.IO) {
-                runCatching {
-                    context.contentResolver.openInputStream(uri)!!.use { stream ->
-                        com.retrohero.app.data.DeltaSkins.import(vm.paths.deltaSkins, stream)
-                    }
+    val deltaSkinPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isNotEmpty()) lookScope.launch {
+            val imported = mutableListOf<com.retrohero.app.data.DeltaSkin>()
+            var lastError: String? = null
+            withContext(Dispatchers.IO) {
+                for (uri in uris) {
+                    runCatching {
+                        context.contentResolver.openInputStream(uri)!!.use { stream ->
+                            com.retrohero.app.data.DeltaSkins.import(vm.paths.deltaSkins, stream)
+                        }
+                    }.onSuccess { imported += it }
+                        .onFailure { lastError = it.message }
                 }
             }
-            result.onSuccess { skin ->
-                skin.systemIds.forEach { vm.settings.setDeltaSkinFor(it, skin.identifier) }
+            if (imported.isNotEmpty()) {
+                imported.forEach { skin -> skin.systemIds.forEach { vm.settings.setDeltaSkinFor(it, skin.identifier) } }
                 deltaSkinVersion++
-                Toast.makeText(context, "Added Delta skin “${skin.name}”", Toast.LENGTH_SHORT).show()
-            }.onFailure { err ->
-                Toast.makeText(context, err.message ?: "Couldn't import .deltaskin file.", Toast.LENGTH_LONG).show()
+                val msg = if (imported.size == 1) "Added Delta skin “${imported[0].name}”"
+                else "Added ${imported.size} Delta skins"
+                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, lastError ?: "Couldn't import .deltaskin file.", Toast.LENGTH_LONG).show()
             }
         }
     }

@@ -161,7 +161,9 @@ class DeltaSkinsTest {
         assertEquals(listOf("gbc", "gb"), DeltaSkins.systemIdsFor("com.rileytestut.delta.game.gbc"))
         assertEquals(listOf("gba"), DeltaSkins.systemIdsFor("com.rileytestut.Delta.game.gba"))
         assertEquals(listOf("nds"), DeltaSkins.systemIdsFor("com.rileytestut.delta.game.ds"))
-        assertEquals(listOf("genesis"), DeltaSkins.systemIdsFor("com.rileytestut.delta.game.genesis"))
+        assertEquals(listOf("genesis", "segacd", "32x"), DeltaSkins.systemIdsFor("com.rileytestut.delta.game.genesis"))
+        assertEquals(listOf("gg"), DeltaSkins.systemIdsFor("com.rileytestut.delta.game.gg"))
+        assertEquals(listOf("sms"), DeltaSkins.systemIdsFor("com.ignited.game.sms"))
     }
 
     @Test

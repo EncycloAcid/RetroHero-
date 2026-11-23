@@ -149,22 +149,25 @@ object DeltaSkins {
     private const val MAX_ENTRIES = 256
     private const val MAX_BYTES = 64L * 1024 * 1024
 
-    /** Maps a Delta (or Manic-compatible) `gameTypeIdentifier` to RetroHero system IDs. */
-    fun systemIdsFor(gameTypeIdentifier: String): List<String> = when (gameTypeIdentifier.trim().lowercase()) {
-        "com.rileytestut.delta.game.nes", "public.aoshuang.game.nes" -> listOf("nes")
-        "com.rileytestut.delta.game.snes", "public.aoshuang.game.snes" -> listOf("snes")
-        "com.rileytestut.delta.game.gbc", "public.aoshuang.game.gbc" -> listOf("gbc", "gb")
-        "com.rileytestut.delta.game.gb", "public.aoshuang.game.gb" -> listOf("gb", "gbc")
-        "com.rileytestut.delta.game.gba", "public.aoshuang.game.gba" -> listOf("gba")
-        "com.rileytestut.delta.game.ds", "public.aoshuang.game.ds", "public.aoshuang.game.nds" -> listOf("nds")
-        "com.rileytestut.delta.game.genesis", "com.rileytestut.delta.game.md",
-        "public.aoshuang.game.genesis", "public.aoshuang.game.md" -> listOf("genesis")
-        "com.rileytestut.delta.game.n64", "public.aoshuang.game.n64" -> listOf("n64")
-        "com.rileytestut.delta.game.psx", "public.aoshuang.game.psx", "public.aoshuang.game.ps1" -> listOf("psx")
-        "public.aoshuang.game.sms" -> listOf("sms")
-        "public.aoshuang.game.gg" -> listOf("gg")
-        "public.aoshuang.game.pce" -> listOf("pce")
-        else -> emptyList()
+    /** Maps a Delta / Ignited / Manic `gameTypeIdentifier` to RetroHero system IDs. */
+    fun systemIdsFor(gameTypeIdentifier: String): List<String> {
+        val raw = gameTypeIdentifier.trim().lowercase()
+        val suffix = raw.substringAfterLast('.')
+        return when (suffix) {
+            "nes" -> listOf("nes")
+            "snes" -> listOf("snes")
+            "gbc" -> listOf("gbc", "gb")
+            "gb" -> listOf("gb", "gbc")
+            "gba" -> listOf("gba")
+            "ds", "nds" -> listOf("nds")
+            "genesis", "md", "megadrive" -> listOf("genesis", "segacd", "32x")
+            "gg", "gamegear" -> listOf("gg")
+            "ms", "sms", "mastersystem", "sg1000" -> listOf("sms")
+            "n64" -> listOf("n64")
+            "psx", "ps1" -> listOf("psx")
+            "pce", "tg16" -> listOf("pce", "pcecd")
+            else -> emptyList()
+        }
     }
 
     /** Maps a Delta button identifier string to a RetroPad button or special action. */
