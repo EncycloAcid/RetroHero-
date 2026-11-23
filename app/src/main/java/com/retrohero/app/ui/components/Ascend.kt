@@ -192,23 +192,24 @@ fun Key(
     modifier: Modifier = Modifier,
     icon: ImageVector? = null,
     primary: Boolean = false,
+    enabled: Boolean = true,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        if (pressed) 0.97f else 1f,
+        if (pressed && enabled) 0.97f else 1f,
         spring(dampingRatio = 0.7f, stiffness = 600f),
         label = "keyScale",
     )
     val translation by animateDpAsState(
-        if (pressed) 1.dp else 0.dp,
+        if (pressed && enabled) 1.dp else 0.dp,
         spring(dampingRatio = 0.7f, stiffness = 600f),
         label = "keyTranslation",
     )
     val shape = RoundedCornerShape(Ascend.Radius.Control)
     val view = LocalView.current
     val depth = when {
-        Tone.isDark -> Modifier
+        Tone.isDark || !enabled -> Modifier
         primary -> Modifier.shadow(4.dp, shape, spotColor = Ascend.accent.copy(alpha = 0.35f))
         else -> Modifier.shadow(
             2.dp,
@@ -217,15 +218,16 @@ fun Key(
             spotColor = Color.Black.copy(alpha = 0.10f),
         )
     }
+    val contentAlpha = if (enabled) 1f else 0.4f
     Row(
         modifier
             .then(depth)
-            .graphicsLayer { scaleX = scale; scaleY = scale; translationY = translation.toPx() }
+            .graphicsLayer { scaleX = scale; scaleY = scale; translationY = translation.toPx(); alpha = contentAlpha }
             .height(48.dp)
             .clip(shape)
             .background(if (primary) Ascend.accent else Tone.Raised)
             .border(1.dp, if (primary && !Tone.isDark) Color.Transparent else Tone.Line, shape)
-            .clickable(interactionSource = interaction, indication = null) {
+            .clickable(interactionSource = interaction, indication = null, enabled = enabled) {
                 view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                 onClick()
             }

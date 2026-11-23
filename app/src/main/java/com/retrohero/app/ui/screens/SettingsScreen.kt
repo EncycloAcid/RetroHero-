@@ -155,16 +155,8 @@ fun SettingsScreen(
                 }
             }
             Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onAddFolder, shapes = ButtonDefaults.shapes()) {
-                    Icon(Icons.Outlined.Add, null, Modifier.size(ButtonDefaults.IconSize))
-                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                    Text("Add folder")
-                }
-                FilledTonalButton(onClick = onRescan, enabled = !scanning && folders.isNotEmpty(), shapes = ButtonDefaults.shapes()) {
-                    Icon(Icons.Outlined.Refresh, null, Modifier.size(ButtonDefaults.IconSize))
-                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                    Text("Rescan")
-                }
+                com.retrohero.app.ui.components.AccentButton("Add folder", onAddFolder, icon = Icons.Outlined.Add)
+                com.retrohero.app.ui.components.Key("Rescan", onRescan, enabled = !scanning && folders.isNotEmpty(), icon = Icons.Outlined.Refresh)
             }
         }
 
@@ -239,16 +231,8 @@ fun SettingsScreen(
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 10.dp),
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { onBackUp(includeBios) }, shapes = ButtonDefaults.shapes()) {
-                    Icon(Icons.Outlined.Backup, null, Modifier.size(ButtonDefaults.IconSize))
-                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                    Text("Back up now")
-                }
-                FilledTonalButton(onClick = onRestore, shapes = ButtonDefaults.shapes()) {
-                    Icon(Icons.Outlined.Restore, null, Modifier.size(ButtonDefaults.IconSize))
-                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                    Text("Restore")
-                }
+                com.retrohero.app.ui.components.AccentButton("Back up now", { onBackUp(includeBios) }, icon = Icons.Outlined.Backup)
+                com.retrohero.app.ui.components.Key("Restore", onRestore, icon = Icons.Outlined.Restore)
             }
         }
 
@@ -300,16 +284,8 @@ fun SettingsScreen(
                 modifier = Modifier.padding(start = 16.dp, top = 10.dp),
             )
             Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onDownloadBios, shapes = ButtonDefaults.shapes()) {
-                    Icon(Icons.Outlined.Download, null, Modifier.size(ButtonDefaults.IconSize))
-                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                    Text("Download")
-                }
-                FilledTonalButton(onClick = onImportBios, shapes = ButtonDefaults.shapes()) {
-                    Icon(Icons.Outlined.Memory, null, Modifier.size(ButtonDefaults.IconSize))
-                    Spacer(Modifier.width(ButtonDefaults.IconSpacing))
-                    Text("Import files")
-                }
+                com.retrohero.app.ui.components.AccentButton("Download", onDownloadBios, icon = Icons.Outlined.Download)
+                com.retrohero.app.ui.components.Key("Import files", onImportBios, icon = Icons.Outlined.Memory)
             }
         }
 

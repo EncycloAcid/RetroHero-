@@ -193,13 +193,20 @@ fun SettingsHome(settings: Settings, onOpen: (String) -> Unit, onOpenStats: () -
             }
             Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Tone.Muted)
         }
-        Spacer(Modifier.height(18.dp))
-        Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp).height(1.dp).background(Tone.Line))
-        Spacer(Modifier.height(18.dp))
-        Column {
+        Spacer(Modifier.height(16.dp))
+        val groupShape = RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card)
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(groupShape)
+                .background(Tone.Surface)
+                .border(1.dp, Tone.Line, groupShape),
+        ) {
             categories.forEachIndexed { index, c ->
                 CategoryBubble(index + 1, c.title, c.icon) { onOpen(c.id) }
-                androidx.compose.material3.HorizontalDivider(color = com.retrohero.app.ui.components.Page.Divider)
+                if (index < categories.lastIndex) {
+                    androidx.compose.material3.HorizontalDivider(color = com.retrohero.app.ui.components.Page.Divider)
+                }
             }
         }
     }
@@ -210,23 +217,30 @@ private fun CategoryBubble(index: Int, title: String, icon: ImageVector, onClick
     Row(
         Modifier
             .fillMaxWidth()
-            .height(56.dp)
+            .height(58.dp)
             .clickable(onClick = onClick)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ArchiveLabel(index.toString().padStart(2, '0'), color = Tone.Faint)
         Spacer(Modifier.width(12.dp))
-        Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = Tone.Ink, modifier = Modifier.size(20.dp))
+        Box(
+            Modifier
+                .size(34.dp)
+                .clip(CircleShape)
+                .background(Tone.Raised)
+                .border(1.dp, Tone.Line, CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(icon, null, tint = Tone.Ink, modifier = Modifier.size(18.dp))
         }
         Spacer(Modifier.width(12.dp))
-        Text(title, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 17.sp), color = Tone.Ink, modifier = Modifier.weight(1f))
-        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Tone.Faint)
+        Text(title, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 16.sp), color = Tone.Ink, modifier = Modifier.weight(1f))
+        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Tone.Muted)
     }
 }
 
-/** A settings sub-page: round back button, big title, scrolling content. */
+/** A settings sub-page: round back button, mono breadcrumb, big title, divider, and scrolling content. */
 @Composable
 fun SubSettings(title: String, onBack: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     Column(
@@ -239,16 +253,33 @@ fun SubSettings(title: String, onBack: () -> Unit, content: @Composable ColumnSc
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         Column {
-            Box(
-                Modifier.size(40.dp).clip(CircleShape).background(Tone.Raised).border(1.dp, Tone.Line, CircleShape).clickable(onClick = onBack),
-                contentAlignment = Alignment.Center,
-            ) { Icon(Icons.AutoMirrored.Rounded.ArrowBackIos, "Back", tint = Tone.Ink, modifier = Modifier.size(18.dp).offset(x = 3.dp)) }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(Tone.Raised)
+                        .border(1.dp, Tone.Line, CircleShape)
+                        .clickable(onClick = onBack),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.AutoMirrored.Rounded.ArrowBackIos,
+                        "Back",
+                        tint = Tone.Ink,
+                        modifier = Modifier.size(16.dp).offset(x = 2.dp),
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                ArchiveLabel("06 — SETTINGS / ${title.uppercase()}")
+            }
             Text(
                 title,
                 style = MaterialTheme.typography.headlineLargeEmphasized,
                 color = Tone.Ink,
-                modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+                modifier = Modifier.padding(top = 12.dp, bottom = 10.dp),
             )
+            Box(Modifier.fillMaxWidth().height(1.dp).background(com.retrohero.app.ui.components.Page.Divider))
         }
         content()
     }
