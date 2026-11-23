@@ -47,4 +47,4 @@ fun SegmentedGroup(
 @Composable
 fun segmentColors() = ListItemDefaults.segmentedColors(containerColor = Color.Transparent)
 
-private val GroupFill = Tone.Surface
+private val GroupFill get() = Tone.Surface
