@@ -41,6 +41,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import com.retrohero.app.ui.theme.Inter
 import com.retrohero.app.ui.theme.Salmon
 import dev.chrisbanes.haze.HazeState
@@ -91,10 +93,12 @@ fun FloatingNavBar(
                     .clip(RoundedCornerShape(bottomStart = 3.dp, bottomEnd = 3.dp))
                     .background(accent),
             )
+            // Dark imported accents are lifted so the active tab stays legible on the charcoal bar.
+            val readableAccent = if (accent.luminance() < 0.25f) lerp(accent, Color.White, 0.5f) else accent
             Row(Modifier.fillMaxWidth().fillMaxHeight()) {
                 items.forEachIndexed { i, item ->
                     val active = i == selected
-                    val tint by animateColorAsState(if (active) accent else Color.White.copy(alpha = 0.62f), label = "navTint")
+                    val tint by animateColorAsState(if (active) readableAccent else Color.White.copy(alpha = 0.62f), label = "navTint")
                     Column(
                         Modifier
                             .weight(1f)
