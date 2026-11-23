@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -37,6 +38,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.retrohero.app.data.Game
+import com.retrohero.app.ui.components.Page
 import com.retrohero.app.ui.theme.Inter
 import com.retrohero.app.ui.theme.Salmon
 
@@ -46,10 +48,11 @@ object Ascend {
     val Border = Color.White.copy(alpha = 0.07f)
     val Muted = Color.White.copy(alpha = 0.65f)
     val CardShape = RoundedCornerShape(8.dp)
+    private val drawnAccent: Color get() = Salmon.compositeOver(Page.Bg)
     /** The accent, lifted when it is too dark to read on charcoal. */
-    val accent: Color get() = if (Salmon.luminance() < 0.25f) lerp(Salmon, Color.White, 0.5f) else Salmon
+    val accent: Color get() = if (drawnAccent.luminance() < 0.25f) lerp(Salmon, Color.White, 0.5f) else Salmon
     /** Text/icon colour for content drawn on a filled accent. */
-    val onAccent: Color get() = if (Salmon.luminance() > 0.18f) Color(0xFF1A0E08) else Color.White
+    val onAccent: Color get() = if (drawnAccent.luminance() > 0.18f) Color(0xFF1A0E08) else Color.White
 }
 
 fun Modifier.ascendCard(shape: androidx.compose.ui.graphics.Shape = Ascend.CardShape): Modifier =
