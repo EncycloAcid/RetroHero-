@@ -11,6 +11,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -75,20 +76,20 @@ import com.retrohero.app.data.PlaySummary
 import com.retrohero.app.data.PlayTime
 import com.retrohero.app.ui.components.GameArt
 import com.retrohero.app.ui.theme.Inter
+import com.retrohero.app.ui.theme.Tone
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.format.TextStyle as JTextStyle
 import java.util.Locale
 
-// Mochy's stats palette.
-val StatsAccent = Color(0xFF88FF76)
-private val Ink2 = Color(0xFFB8B8B8)
-private val Muted = Color(0xFF7A7A7A)
-private val Grid = Color(0xFF242424)
-private val BarRest = Color(0xFF3A3A3A)
+val StatsAccent: Color get() = com.retrohero.app.ui.components.Ascend.accent
+private val Ink2 get() = Tone.Muted
+private val Muted get() = Tone.Faint
+private val Grid get() = Tone.Line
+private val BarRest get() = Tone.Raised
 private val StatsCardFill = com.retrohero.app.ui.components.Ascend.Surface
 private val Donut = listOf(Color(0xFF3987E5), Color(0xFFD95926), Color(0xFF199E70), Color(0xFFC98500), Color(0xFFD55181))
-private val DonutOther = Color(0xFF5A5A5A)
+private val DonutOther get() = Tone.Faint
 private val ChartEase = MochyEase
 
 /** A range of days to summarise. */
@@ -124,24 +125,25 @@ fun StatsScreen(history: List<HistoryEntry>, onBack: () -> Unit, onRecap: (Perio
                 Modifier.windowInsetsPadding(WindowInsets.statusBars).fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(Modifier.size(40.dp).clip(CircleShape).background(Color(0xFF2C2C2E)).clickable(onClick = onBack), contentAlignment = Alignment.Center) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowBackIos, "Back", tint = Color.White, modifier = Modifier.size(18.dp).padding(start = 3.dp))
+                Box(Modifier.size(40.dp).clip(CircleShape).background(Tone.Raised).clickable(onClick = onBack), contentAlignment = Alignment.Center) {
+                    Icon(Icons.AutoMirrored.Rounded.ArrowBackIos, "Back", tint = Tone.Ink, modifier = Modifier.size(18.dp).padding(start = 3.dp))
                 }
                 Spacer(Modifier.weight(1f))
                 Row(
                     Modifier
                         .clip(CircleShape)
-                        .background(if (summary.totalSeconds > 0) Color.White.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.06f))
+                        .background(Tone.Raised)
+                        .border(1.dp, Tone.Line, CircleShape)
                         .clickable(enabled = summary.totalSeconds > 0) { onRecap(period, summary) }
                         .padding(start = 16.dp, end = 10.dp, top = 9.dp, bottom = 9.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("Recap", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 14.sp), color = Color.White)
-                    Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    Text("Recap", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 14.sp), color = Tone.Ink)
+                    Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Tone.Ink, modifier = Modifier.size(20.dp))
                 }
             }
         }
-        item { Text("Play journal", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.displaySmallEmphasized, color = Color.White) }
+        item { Text("Play journal", Modifier.padding(horizontal = 20.dp, vertical = 8.dp), style = MaterialTheme.typography.displaySmallEmphasized, color = Tone.Ink) }
         item { PeriodRuler(periods, index, history) { index = it } }
         item {
             StatCard("Play time", if (summary.totalSeconds > 0) PlayTime.format(summary.totalSeconds) else "Nothing yet", initiallyOpen = true) {
@@ -172,11 +174,11 @@ fun StatsScreen(history: List<HistoryEntry>, onBack: () -> Unit, onRecap: (Perio
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     summary.games.take(5).forEachIndexed { i, (g, secs) ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("${i + 1}", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 15.sp), color = Muted, modifier = Modifier.width(28.dp))
+                            Text("${i + 1}".padStart(2, '0'), style = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Medium, fontSize = 10.sp, letterSpacing = 0.12.em), color = Muted, modifier = Modifier.width(28.dp))
                             GameArt(g, Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)), showTag = false)
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
-                                Text(g.title, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.sp), color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(g.title, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.sp), color = Tone.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Text(PlayTime.format(secs), style = axis, color = Muted)
                                 Box(Modifier.padding(top = 5.dp).fillMaxWidth(secs / max).height(3.dp).clip(CircleShape).background(if (i == 0) StatsAccent else Ink2.copy(alpha = 0.55f)))
                             }
@@ -234,12 +236,12 @@ private fun PeriodRuler(periods: List<Period>, selected: Int, history: List<Hist
                 val has = history.any { val d = it.day(); (p.from == null || !d.isBefore(p.from)) && !d.isAfter(p.to) }
                 val size by animateFloatAsState(if (on) 30f else 14.4f, tween(320, easing = ChartEase), label = "periodSize")
                 Text(
-                    p.name,
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = size.sp, letterSpacing = (-0.035).em),
+                        p.name,
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = size.sp, letterSpacing = (-0.02).em),
                     color = when {
-                        on -> Color.White
-                        has -> Color(0xFF6E6E6E)
-                        else -> Color(0xFF474747)
+                        on -> Tone.Ink
+                        has -> Tone.Muted
+                        else -> Tone.Faint
                     },
                     modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { onSelect(i) }.padding(bottom = 2.dp),
                 )
@@ -255,7 +257,7 @@ private fun PeriodRuler(periods: List<Period>, selected: Int, history: List<Hist
                 val played = d in playedDays
                 val h = if (played) size.height else size.height * 0.45f
                 drawLine(
-                    if (played) Color.White.copy(alpha = 0.8f) else Color(0xFF474747),
+                    if (played) StatsAccent else Tone.Faint,
                     Offset(i * step + step / 2, size.height),
                     Offset(i * step + step / 2, size.height - h),
                     strokeWidth = 1.5.dp.toPx(),
@@ -276,15 +278,16 @@ private fun StatCard(title: String, headline: String, initiallyOpen: Boolean = f
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
             .background(StatsCardFill)
+            .border(1.dp, Tone.Line, RoundedCornerShape(10.dp))
             .clickable { open = !open }
             .padding(start = 20.dp, end = 16.dp, top = 18.dp, bottom = 14.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(title, style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 12.sp), color = Muted)
-                Text(headline, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 22.sp, letterSpacing = (-0.03).em), color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(title.uppercase(), style = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Medium, fontSize = 10.sp, letterSpacing = 0.12.em), color = Muted)
+                Text(headline, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, letterSpacing = (-0.02).em), color = Tone.Ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
-            Box(Modifier.size(26.dp).clip(RoundedCornerShape(7.dp)).background(Color.White.copy(alpha = 0.06f)), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(26.dp).clip(RoundedCornerShape(7.dp)).background(Tone.Raised), contentAlignment = Alignment.Center) {
                 Icon(Icons.Rounded.KeyboardArrowDown, if (open) "Collapse" else "Expand", tint = Ink2, modifier = Modifier.rotate(turn))
             }
         }
@@ -299,8 +302,8 @@ private fun StatCard(title: String, headline: String, initiallyOpen: Boolean = f
 @Composable
 private fun Habit(label: String, value: String, modifier: Modifier) {
     Column(modifier.clip(RoundedCornerShape(10.dp)).background(StatsCardFill).padding(16.dp)) {
-        Text(label, style = TextStyle(fontFamily = FontFamily.Monospace, fontSize = 11.sp), color = Muted)
-        Text(value, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 20.sp, letterSpacing = (-0.03).em), color = Color.White, maxLines = 1)
+        Text(label.uppercase(), style = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Medium, fontSize = 10.sp, letterSpacing = 0.12.em), color = Muted)
+        Text(value, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 20.sp, letterSpacing = (-0.02).em), color = Tone.Ink, maxLines = 1)
     }
 }
 
@@ -343,7 +346,7 @@ fun LineChart(values: List<Float>, modifier: Modifier, labels: List<String> = em
             drawPath(line, StatsAccent, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
             val peak = values.indices.maxBy { values[it] }
             if (values[peak] > 0) {
-                drawCircle(Color(0xFF111111), 6.dp.toPx(), pts[peak])
+                drawCircle(Tone.Bg, 6.dp.toPx(), pts[peak])
                 drawCircle(StatsAccent, 4.dp.toPx(), pts[peak])
             }
         }

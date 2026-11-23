@@ -1,5 +1,6 @@
 package com.retrohero.app.ui.screens
 
+import androidx.compose.animation.animateContentSize
 import com.retrohero.app.ui.components.ascendCard
 import com.retrohero.app.ui.components.LocalNavSpace
 import androidx.compose.animation.core.RepeatMode
@@ -87,6 +88,7 @@ import com.retrohero.app.ui.components.GameArt
 import com.retrohero.app.ui.components.PageHeader
 import com.retrohero.app.ui.components.PillChip
 import com.retrohero.app.ui.components.GameCard
+import com.retrohero.app.ui.components.Segmented
 
 @Composable
 fun GamesScreen(
@@ -103,6 +105,7 @@ fun GamesScreen(
     favorites: Set<String> = emptySet(),
     title: String = "Search",
     onQuickPlay: ((Game) -> Unit)? = null,
+    pageIndex: Int = 3,
     onHomebrew: (() -> Unit)? = null,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
@@ -111,7 +114,6 @@ fun GamesScreen(
     var onlyFavourites by rememberSaveable { mutableStateOf(false) }
     var onlyUnplayed by rememberSaveable { mutableStateOf(false) }
     var filtersOpen by rememberSaveable { mutableStateOf(false) }
-    var sortMenu by remember { mutableStateOf(false) }
     val grid = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
     val scope = rememberCoroutineScope()
 
@@ -166,62 +168,48 @@ fun GamesScreen(
     LazyVerticalGrid(
         state = grid,
         columns = GridCells.Adaptive(108.dp),
-        contentPadding = PaddingValues(start = 16.dp, end = 28.dp, bottom = 24.dp + LocalNavSpace.current),
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp + LocalNavSpace.current),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
-        fullWidth { PageHeader(title, if (games.size == 1) "1 game" else "${games.size} games across ${systemsPresent.size} ${if (systemsPresent.size == 1) "system" else "systems"}") }
+        fullWidth { PageHeader(title, if (games.size == 1) "1 game" else "${games.size} games across ${systemsPresent.size} ${if (systemsPresent.size == 1) "system" else "systems"}", index = pageIndex) }
         fullWidth {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(Modifier.weight(1f)) { SearchField(query, games.size) { query = it } }
-                PillChip("Filters", filtersOpen || systemFilter != null || onlyFavourites || onlyUnplayed, { filtersOpen = !filtersOpen })
-            }
-        }
-
-        // Sort and quick filters.
-        if (filtersOpen) fullWidth {
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                item {
-                    Box {
-                        PillChip(sort.label, selected = false, onClick = { sortMenu = true }, leading = {
-                            Icon(Icons.Default.SwapVert, "Sort by", Modifier.padding(end = 6.dp).size(18.dp), tint = Color.White)
-                        })
-                        DropdownMenu(sortMenu, onDismissRequest = { sortMenu = false }) {
-                            com.retrohero.app.data.GameSort.entries.forEach { s ->
-                                DropdownMenuItem(
-                                    text = { Text(s.label) },
-                                    leadingIcon = { if (s == sort) Icon(Icons.Default.Check, null) },
-                                    onClick = { sort = s; sortMenu = false; scope.launch { grid.scrollToItem(0) } },
-                                )
-                            }
+            Column(Modifier.animateContentSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Box(Modifier.weight(1f)) { SearchField(query, games.size) { query = it } }
+                    PillChip("Filters", filtersOpen || systemFilter != null || onlyFavourites || onlyUnplayed, { filtersOpen = !filtersOpen })
+                }
+                if (filtersOpen) {
+                Segmented(
+                    options = com.retrohero.app.data.GameSort.entries.map { it.label },
+                    selected = com.retrohero.app.data.GameSort.entries.indexOf(sort).coerceAtLeast(0),
+                    onSelect = { index ->
+                        sort = com.retrohero.app.data.GameSort.entries[index]
+                        scope.launch { grid.scrollToItem(0) }
+                    },
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PillChip("Favourites", onlyFavourites, { onlyFavourites = !onlyFavourites })
+                    PillChip("Not played yet", onlyUnplayed, { onlyUnplayed = !onlyUnplayed })
+                }
+                if (showSystemFilter && systemsPresent.size > 1) {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        item { PillChip("All", systemFilter == null, { systemFilter = null }) }
+                        items(systemsPresent, key = { it.id }) { system ->
+                            PillChip(system.shortName, systemFilter == system.id, { systemFilter = if (systemFilter == system.id) null else system.id }, color = system.color)
                         }
                     }
                 }
-                item {
-                    PillChip("Favourites", onlyFavourites, { onlyFavourites = !onlyFavourites })
-                }
-                item {
-                    PillChip("Not played yet", onlyUnplayed, { onlyUnplayed = !onlyUnplayed })
-                }
             }
         }
-        if (filtersOpen && showSystemFilter && systemsPresent.size > 1) {
-            fullWidth {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    item { PillChip("All", systemFilter == null, { systemFilter = null }) }
-                    items(systemsPresent, key = { it.id }) { system ->
-                        PillChip(system.shortName, systemFilter == system.id, { systemFilter = if (systemFilter == system.id) null else system.id }, color = system.color)
-                    }
-                }
-            }
         }
 
         if (browsing && recents.isNotEmpty()) {
-            fullWidth { com.retrohero.app.ui.components.SectionTitle("Jump back in", Modifier.padding(top = 8.dp), count = recents.size) }
+            fullWidth { com.retrohero.app.ui.components.SectionTitle("Jump back in", Modifier.padding(top = 8.dp), count = recents.size, index = 1) }
             fullWidth { RecentCarousel(recents, onPlay, onGameOptions) }
         }
-        fullWidth { com.retrohero.app.ui.components.SectionTitle(if (browsing) "All games" else "Results", count = filtered.size) }
+        fullWidth { com.retrohero.app.ui.components.SectionTitle(if (browsing) "All games" else "Results", count = filtered.size, index = 2) }
 
         if (filtered.isEmpty()) {
             fullWidth {
@@ -271,7 +259,7 @@ private fun AlphabetScroller(letters: List<Char>, onJump: (Int) -> Unit, modifie
         modifier
             .padding(end = 4.dp)
             .clip(CircleShape)
-            .background(Color.White.copy(alpha = if (active != null) 0.1f else 0.04f))
+            .background(com.retrohero.app.ui.theme.Tone.Ink.copy(alpha = if (active != null) 0.1f else 0.04f))
             .pointerInput(present) {
                 fun pick(y: Float) {
                     val i = ((y / size.height) * present.size).toInt().coerceIn(0, present.lastIndex)
@@ -299,7 +287,7 @@ private fun AlphabetScroller(letters: List<Char>, onJump: (Int) -> Unit, modifie
             Text(
                 c.toString(),
                 style = MaterialTheme.typography.labelSmall,
-                color = if (c == active) Color.White else Color.White.copy(alpha = 0.55f),
+                color = if (c == active) com.retrohero.app.ui.theme.Tone.Ink else com.retrohero.app.ui.theme.Tone.Muted,
                 modifier = Modifier.padding(vertical = 1.dp).semantics { contentDescription = "Jump to $c" },
             )
         }

@@ -1,6 +1,7 @@
 package com.retrohero.app.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -61,8 +62,9 @@ fun HomebrewSheet(installed: Set<String>, onGet: (HomebrewGame) -> Unit, onDismi
                     Row(
                         Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(20.dp))
+                            .clip(RoundedCornerShape(14.dp))
                             .background(MaterialTheme.colorScheme.surfaceContainer)
+                            .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, RoundedCornerShape(14.dp))
                             .padding(14.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
@@ -70,10 +72,11 @@ fun HomebrewSheet(installed: Set<String>, onGet: (HomebrewGame) -> Unit, onDismi
                             Modifier
                                 .size(56.dp)
                                 .clip(RoundedCornerShape(16.dp))
-                                .background(Brush.linearGradient(listOf(lerp(system.color, Color.White, 0.15f), lerp(system.color, Color.Black, 0.5f)))),
+                                .background(com.retrohero.app.ui.theme.Tone.Raised)
+                                .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, RoundedCornerShape(16.dp)),
                             contentAlignment = Alignment.Center,
                         ) {
-                            Text(system.tag, style = TextStyle(fontFamily = PixelFont, fontSize = 10.sp), color = Color.White)
+                            Text(system.tag, style = TextStyle(fontFamily = PixelFont, fontSize = 10.sp), color = com.retrohero.app.ui.theme.Tone.Ink)
                         }
                         Spacer(Modifier.width(14.dp))
                         Column(Modifier.weight(1f)) {
@@ -98,10 +101,10 @@ fun HomebrewSheet(installed: Set<String>, onGet: (HomebrewGame) -> Unit, onDismi
                             Box(
                                 Modifier
                                     .clip(CircleShape)
-                                    .background(Color.White.copy(alpha = 0.64f))
+                                    .background(com.retrohero.app.ui.components.Ascend.accent)
                                     .clickableNoRipple { onGet(game) }
                                     .padding(horizontal = 16.dp, vertical = 7.dp),
-                            ) { Text("Get", style = MaterialTheme.typography.labelLargeEmphasized, color = Color(0xFF2A2A2A)) }
+                            ) { Text("Get", style = MaterialTheme.typography.labelLargeEmphasized, color = com.retrohero.app.ui.components.Ascend.onAccent) }
                         }
                     }
                 }

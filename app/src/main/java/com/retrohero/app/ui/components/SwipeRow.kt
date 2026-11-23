@@ -83,9 +83,14 @@ fun SwipeRow(
             val armed = state.targetValue != SwipeToDismissBoxValue.Settled
             val pop by animateFloatAsState(if (armed) 1.15f else 0.85f, spring(dampingRatio = 0.45f), label = "swipeIcon")
             val (color, icon, label) = when (dir) {
-                SwipeToDismissBoxValue.StartToEnd -> Triple(Color(0xFFE6E6E6), Icons.Rounded.PlayArrow, "Play")
+                SwipeToDismissBoxValue.StartToEnd -> Triple(com.retrohero.app.ui.theme.Tone.Raised, Icons.Rounded.PlayArrow, "Play")
                 else -> if (removeLabel != null) Triple(Color(0xFFE5484D), Icons.Rounded.RemoveCircle, removeLabel)
                 else Triple(Salmon, if (isFavorite) Icons.Rounded.HeartBroken else Icons.Rounded.Favorite, if (isFavorite) "Unpin" else "Pin")
+            }
+            val onColor = when {
+                dir == SwipeToDismissBoxValue.StartToEnd -> com.retrohero.app.ui.theme.Tone.Ink
+                removeLabel != null -> Color(0xFF111111)
+                else -> com.retrohero.app.ui.components.Ascend.onAccent
             }
             Box(
                 Modifier
@@ -99,15 +104,14 @@ fun SwipeRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(icon, null, tint = Color(0xFF1A1A1A), modifier = Modifier.size(24.dp).graphicsLayer { scaleX = pop; scaleY = pop })
-                    Text(label, style = MaterialTheme.typography.labelLargeEmphasized, color = Color(0xFF1A1A1A))
+                    Icon(icon, null, tint = onColor, modifier = Modifier.size(24.dp).graphicsLayer { scaleX = pop; scaleY = pop })
+                    Text(label, style = MaterialTheme.typography.labelLargeEmphasized, color = onColor)
                 }
             }
         },
     ) {
         // Opaque only while swiping, so the page's colour wash shows through at rest.
         val moving = state.dismissDirection != SwipeToDismissBoxValue.Settled
-        Box(if (moving) Modifier.background(Color.Black) else Modifier) { content() }
+        Box(if (moving) Modifier.background(com.retrohero.app.ui.theme.Tone.Bg) else Modifier) { content() }
     }
 }
-

@@ -5,6 +5,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.runtime.getValue
@@ -41,9 +42,7 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -54,6 +53,7 @@ import com.retrohero.app.data.Systems
 import com.retrohero.app.ui.components.rememberPressFeedback
 import com.retrohero.app.ui.theme.PixelFont
 import com.retrohero.app.ui.theme.badgeShape
+import com.retrohero.app.ui.theme.Tone
 
 @Composable
 fun SystemsScreen(games: List<Game>, onOpen: (GameSystem) -> Unit) {
@@ -61,29 +61,28 @@ fun SystemsScreen(games: List<Game>, onOpen: (GameSystem) -> Unit) {
     val (withGames, empty) = remember(counts) { Systems.all.partition { (counts[it.id] ?: 0) > 0 } }
     LazyVerticalGrid(
         columns = GridCells.Adaptive(160.dp),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp + LocalNavSpace.current),
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp + LocalNavSpace.current),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
         if (withGames.isNotEmpty()) {
-            item(span = { GridItemSpan(maxLineSpan) }) { Header("In your library") }
+            item(span = { GridItemSpan(maxLineSpan) }) { Header("In your library", 1) }
             items(withGames, key = { it.id }) { SystemCard(it, counts[it.id] ?: 0, onOpen, Modifier.animateItem()) }
         }
-        item(span = { GridItemSpan(maxLineSpan) }) { Header(if (withGames.isEmpty()) "Supported systems" else "Also supported") }
+        item(span = { GridItemSpan(maxLineSpan) }) { Header(if (withGames.isEmpty()) "Supported systems" else "Also supported", if (withGames.isEmpty()) 1 else 2) }
         items(empty, key = { it.id }) { SystemCard(it, 0, onOpen, Modifier.animateItem()) }
     }
 }
 
 @Composable
-private fun Header(text: String) {
-    Text(text, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 8.dp, start = 4.dp))
+private fun Header(text: String, index: Int) {
+    com.retrohero.app.ui.components.SectionTitle(text, Modifier.padding(top = 8.dp), index = index)
 }
 
 @Composable
 private fun SystemCard(system: GameSystem, count: Int, onOpen: (GameSystem) -> Unit, modifier: Modifier) {
     val interaction = remember { MutableInteractionSource() }
-    val press = rememberPressFeedback(interaction, restCorner = 28.dp, pressedCorner = 44.dp)
     // Pressing morphs the system's signature shape into a circle and spins it a little.
     val pressed by interaction.collectIsPressedAsState()
     val morphProgress by animateFloatAsState(
@@ -93,16 +92,14 @@ private fun SystemCard(system: GameSystem, count: Int, onOpen: (GameSystem) -> U
     )
     val morph = rememberMorph(system.polygon, MaterialShapes.Circle)
     val active = count > 0
-    val surface = MaterialTheme.colorScheme.surfaceContainer
-    val tint = system.color.copy(alpha = if (active) 0.30f else 0.10f).compositeOver(surface)
-    val deep = system.color.copy(alpha = if (active) 0.08f else 0.03f).compositeOver(surface)
     Box(
         modifier
             .fillMaxWidth()
             .height(164.dp)
             .press3D()
-            .clip(RoundedCornerShape(press.corner.value))
-            .background(Brush.linearGradient(listOf(tint, deep), start = Offset.Zero, end = Offset.Infinite))
+            .clip(RoundedCornerShape(14.dp))
+            .background(Tone.Surface)
+            .border(1.dp, Tone.Line, RoundedCornerShape(14.dp))
             .clickable(interactionSource = interaction, indication = null) { onOpen(system) },
     ) {
         // Oversized signature shape, cropped by the card.
@@ -118,9 +115,9 @@ private fun SystemCard(system: GameSystem, count: Int, onOpen: (GameSystem) -> U
             Text(
                 system.shortName.uppercase(),
                 style = TextStyle(fontFamily = PixelFont, fontSize = 10.sp),
-                color = Color.White.copy(alpha = if (active) 1f else 0.7f),
+                color = Tone.Muted,
                 modifier = Modifier
-                    .background(lerp(system.color, Color.Black, 0.5f).copy(alpha = if (active) 0.9f else 0.45f), RoundedCornerShape(8.dp))
+                    .background(Tone.Raised, RoundedCornerShape(8.dp))
                     .padding(horizontal = 8.dp, vertical = 6.dp),
             )
             Spacer(Modifier.weight(1f))
@@ -129,12 +126,12 @@ private fun SystemCard(system: GameSystem, count: Int, onOpen: (GameSystem) -> U
                 style = MaterialTheme.typography.titleMedium,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                color = if (active) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = Tone.Ink,
             )
             Text(
                 if (active) "${if (count == 1) "1 game" else "$count games"} · ${system.manufacturer}" else system.manufacturer,
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = Tone.Muted,
             )
         }
     }

@@ -4,6 +4,7 @@ import android.text.format.DateUtils
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
@@ -39,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.retrohero.app.data.Game
 import com.retrohero.app.data.PlayStat
+import com.retrohero.app.ui.theme.Tone
 import dev.chrisbanes.haze.HazeState
 import kotlinx.coroutines.launch
 
@@ -73,8 +75,9 @@ fun MiniPlayer(
                 alpha = 1f - (drag.value / 120.dp.toPx()).coerceIn(0f, 0.8f)
             }
             .background(Ascend.Surface, shape)
+            .border(1.dp, Tone.Line, shape)
             .clip(shape)
-            .then(if (glass != null) Modifier.frostedGlass(glass, shape) { 1f } else Modifier.background(Color(0xFF131313).copy(alpha = 0.92f)))
+            .then(if (glass != null) Modifier.frostedGlass(glass, shape) { 1f } else Modifier)
             .pointerInput(game.id) {
                 val tracker = VelocityTracker()
                 detectVerticalDragGestures(
@@ -114,7 +117,7 @@ fun MiniPlayer(
                     drawRect(Brush.horizontalGradient(0.82f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
                 },
         ) {
-            Text(game.title, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = Color.White, maxLines = 1, softWrap = false)
+            Text(game.title, style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold), color = Tone.Ink, maxLines = 1, softWrap = false)
             val sub = buildString {
                 append(game.system?.name.orEmpty())
                 if (stat != null && stat.lastPlayed > 0) {
@@ -122,12 +125,12 @@ fun MiniPlayer(
                     append(DateUtils.getRelativeTimeSpanString(stat.lastPlayed, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS))
                 }
             }
-            Text(sub, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f), maxLines = 1, softWrap = false)
+            Text(sub, style = MaterialTheme.typography.bodySmall, color = Tone.Muted, maxLines = 1, softWrap = false)
         }
         Spacer(Modifier.width(8.dp))
         Box(
             Modifier.size(48.dp).clip(RoundedCornerShape(24.dp)).clickable(onClick = onPlay),
             contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Rounded.PlayArrow, "Resume ${game.title}", tint = Color.White, modifier = Modifier.size(26.dp)) }
+        ) { Icon(Icons.Rounded.PlayArrow, "Resume ${game.title}", tint = Tone.Ink, modifier = Modifier.size(26.dp)) }
     }
 }

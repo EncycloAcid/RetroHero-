@@ -8,6 +8,7 @@ import com.retrohero.app.ui.components.Page
 import com.retrohero.app.ui.components.Ascend
 import com.retrohero.app.ui.components.emberBackground
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -27,6 +28,7 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridScope
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
@@ -92,6 +94,7 @@ fun LibraryScreen(
     onOpenStats: () -> Unit,
     onPlay: (Game) -> Unit = {},
     backEnabled: Boolean = true,
+    pageIndex: Int = 4,
 ) {
     var tab by rememberSaveable { mutableStateOf(LibraryTab.All) }
     BackHandler(enabled = backEnabled && tab != LibraryTab.All) { tab = LibraryTab.All }
@@ -107,7 +110,7 @@ fun LibraryScreen(
     ) {
         span {
             com.retrohero.app.ui.components.PageHeader(if (tab == LibraryTab.All) "Library" else tab.label,
-                "${games.size} games · ${systems.size} systems") {
+                "${games.size} games · ${systems.size} systems", index = pageIndex) {
                 if (tab != LibraryTab.All) TextButton(onClick = { tab = LibraryTab.All }) { Text("All library") }
             }
         }
@@ -130,15 +133,16 @@ fun LibraryScreen(
                     }
                 }
                 if (favorites.isNotEmpty()) {
-                    span { com.retrohero.app.ui.components.SectionTitle("Pinned", Modifier.padding(top = 12.dp), count = favorites.size) }
+                    span { com.retrohero.app.ui.components.SectionTitle("Pinned", Modifier.padding(top = 12.dp), count = favorites.size, index = 1) }
                     items(favorites.take(9), key = { "pin_" + it.id }) { g ->
                         com.retrohero.app.ui.components.GameCard(g, onClick = { onOpenGame(g) }, subtitle = g.system?.shortName, onLongClick = { onOptions(g) }, onPlay = { onPlay(g) })
                     }
                 }
             }
             LibraryTab.Systems -> {
-                items(systems, key = { "sys_" + it.id }, span = { GridItemSpan(maxLineSpan) }) { s ->
+                itemsIndexed(systems, key = { _, s -> "sys_" + s.id }, span = { _, _ -> GridItemSpan(maxLineSpan) }) { index, s ->
                     ListRow(
+                        index = index + 1,
                         art = { SystemTile(s) },
                         title = s.name,
                         subtitle = "${s.manufacturer} · ${counts[s.id] ?: 0} ${if ((counts[s.id] ?: 0) == 1) "game" else "games"}",
@@ -148,8 +152,9 @@ fun LibraryScreen(
             }
             LibraryTab.Favourites -> {
                 if (favorites.isEmpty()) span { Empty("Long-press a game and pin it, or swipe left on it in a system list.") }
-                items(favorites, key = { "fav_" + it.id }, span = { GridItemSpan(maxLineSpan) }) { g ->
+                itemsIndexed(favorites, key = { _, g -> "fav_" + g.id }, span = { _, _ -> GridItemSpan(maxLineSpan) }) { index, g ->
                     ListRow(
+                        index = index + 1,
                         art = { GameArt(g, Modifier.fillMaxSize(), showTag = false) },
                         title = g.title,
                         subtitle = g.system?.name.orEmpty(),
@@ -165,10 +170,10 @@ fun LibraryScreen(
                 item(key = "newcol") {
                     Column(Modifier.clickable(onClick = onNewCollection)) {
                         Box(
-                            Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(28.dp)).background(Color(0xFF1C1C1F)),
+                            Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(14.dp)).background(com.retrohero.app.ui.theme.Tone.Surface).border(1.dp, com.retrohero.app.ui.theme.Tone.Line, RoundedCornerShape(14.dp)),
                             contentAlignment = Alignment.Center,
-                        ) { Icon(Icons.Rounded.Add, null, tint = Color.White.copy(alpha = 0.6f), modifier = Modifier.size(36.dp)) }
-                        Text("New collection", style = MaterialTheme.typography.titleSmall, color = Color.White, modifier = Modifier.padding(top = 9.dp))
+                        ) { Icon(Icons.Rounded.Add, null, tint = com.retrohero.app.ui.theme.Tone.Muted, modifier = Modifier.size(36.dp)) }
+                        Text("New collection", style = MaterialTheme.typography.titleSmall, color = com.retrohero.app.ui.theme.Tone.Ink, modifier = Modifier.padding(top = 9.dp))
                     }
                 }
             }
@@ -184,7 +189,7 @@ fun LibraryScreen(
                             .aspectRatio(1f)
                             .press3D()
                             .clip(RoundedCornerShape(14.dp))
-                            .background(Color(0xFF1C1C1F))
+                            .background(com.retrohero.app.ui.theme.Tone.Surface)
                             .clickable { onOpenGame(s.game) },
                     )
                 }
@@ -204,14 +209,17 @@ private fun LazyGridScope.historyItems(history: List<HistoryEntry>, onOpen: (Gam
     }
     val fmt = DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG)
     val byDay = history.groupBy { it.day() }
-    byDay.forEach { (day, list) ->
+    byDay.entries.forEachIndexed { sectionIndex, (day, list) ->
         span {
-            Text(
-                day.format(fmt),
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 16.sp),
-                color = Color.White,
-                modifier = Modifier.padding(start = 12.dp, top = 22.dp, bottom = 6.dp),
-            )
+            Row(Modifier.padding(start = 12.dp, top = 22.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                ArchiveLabel((sectionIndex + 1).toString().padStart(2, '0'), color = com.retrohero.app.ui.theme.Tone.Faint)
+                Text(
+                    day.format(fmt),
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 17.sp),
+                    color = com.retrohero.app.ui.theme.Tone.Ink,
+                    modifier = Modifier.padding(start = 12.dp),
+                )
+            }
         }
         items(list, key = { "h_${it.game.id}_${it.end}" }, span = { GridItemSpan(maxLineSpan) }) { e ->
             Row(
@@ -225,11 +233,11 @@ private fun LazyGridScope.historyItems(history: List<HistoryEntry>, onOpen: (Gam
                 GameArt(e.game, Modifier.size(39.dp).clip(RoundedCornerShape(9.dp)), showTag = false)
                 Spacer(Modifier.width(11.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(e.game.title, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.sp), color = Color.White.copy(alpha = 0.94f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(e.game.title, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.sp), color = com.retrohero.app.ui.theme.Tone.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(
                         "${e.game.system?.shortName.orEmpty()} • ${PlayTime.format(e.seconds)} • ${java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(e.end))}",
                         style = TextStyle(fontFamily = Inter, fontSize = 11.5.sp),
-                        color = Color.White.copy(alpha = 0.55f),
+                        color = com.retrohero.app.ui.theme.Tone.Muted,
                         maxLines = 1,
                     )
                 }
@@ -240,7 +248,7 @@ private fun LazyGridScope.historyItems(history: List<HistoryEntry>, onOpen: (Gam
         Text(
             "· end of the line ·",
             style = TextStyle(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontSize = 12.sp),
-            color = Color.White.copy(alpha = 0.35f),
+            color = com.retrohero.app.ui.theme.Tone.Faint,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
         )
@@ -249,7 +257,7 @@ private fun LazyGridScope.historyItems(history: List<HistoryEntry>, onOpen: (Gam
 
 @Composable
 private fun Empty(text: String) {
-    Text(text, style = MaterialTheme.typography.bodyLarge, color = Color.White.copy(alpha = 0.55f), modifier = Modifier.padding(vertical = 28.dp, horizontal = 4.dp))
+    Text(text, style = MaterialTheme.typography.bodyLarge, color = com.retrohero.app.ui.theme.Tone.Muted, modifier = Modifier.padding(vertical = 28.dp, horizontal = 4.dp))
 }
 
 @Composable
@@ -259,7 +267,8 @@ private fun IndexRow(tab: LibraryTab, count: Int, game: Game?, onClick: () -> Un
             if (game != null) GameArt(game, Modifier.fillMaxSize(), showTag = false)
             else ArchiveLabel("–", color = Ascend.Muted)
         }
-        Text(tab.label, Modifier.weight(1f).padding(horizontal = 12.dp), style = MaterialTheme.typography.titleMedium, color = Color.White)
+        ArchiveLabel((tab.ordinal + 1).toString().padStart(2, '0'), color = com.retrohero.app.ui.theme.Tone.Faint)
+        Text(tab.label, Modifier.weight(1f).padding(horizontal = 12.dp), style = MaterialTheme.typography.titleMedium, color = com.retrohero.app.ui.theme.Tone.Ink)
         ArchiveLabel(count.toString().padStart(2, '0'), color = Ascend.Muted)
         Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Ascend.Muted)
     }
@@ -281,18 +290,19 @@ private fun StatsCard(history: List<HistoryEntry>, onClick: () -> Unit) {
             .padding(horizontal = 18.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        ArchiveLabel("01", Modifier.padding(end = 12.dp), color = com.retrohero.app.ui.theme.Tone.Faint)
         Icon(Icons.Rounded.Insights, null, tint = Ascend.accent)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text("Play journal", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 17.sp), color = Color.White)
-            Text(if (week > 0) "${PlayTime.format(week)} this week" else "Play a game to start your stats", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.55f))
+            Text("Play journal", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 17.sp), color = com.retrohero.app.ui.theme.Tone.Ink)
+            Text(if (week > 0) "${PlayTime.format(week)} this week" else "Play a game to start your stats", style = MaterialTheme.typography.bodySmall, color = com.retrohero.app.ui.theme.Tone.Muted)
         }
-        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Color.White.copy(alpha = 0.5f))
+        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = com.retrohero.app.ui.theme.Tone.Muted)
     }
 }
 
 @Composable
-private fun ListRow(art: @Composable () -> Unit, title: String, subtitle: String, onClick: () -> Unit, onLongClick: (() -> Unit)? = null) {
+private fun ListRow(index: Int, art: @Composable () -> Unit, title: String, subtitle: String, onClick: () -> Unit, onLongClick: (() -> Unit)? = null) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -304,19 +314,22 @@ private fun ListRow(art: @Composable () -> Unit, title: String, subtitle: String
         Box(Modifier.size(54.dp).clip(RoundedCornerShape(14.dp))) { art() }
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.55f), maxLines = 1)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                ArchiveLabel(index.toString().padStart(2, '0'), color = com.retrohero.app.ui.theme.Tone.Faint)
+                Text(title, Modifier.padding(start = 8.dp), style = MaterialTheme.typography.titleMedium, color = com.retrohero.app.ui.theme.Tone.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = com.retrohero.app.ui.theme.Tone.Muted, maxLines = 1)
         }
-        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Color.White.copy(alpha = 0.35f))
+        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = com.retrohero.app.ui.theme.Tone.Faint)
     }
 }
 
 @Composable
 private fun SystemTile(system: GameSystem) {
     Box(
-        Modifier.fillMaxSize().background(Brush.linearGradient(listOf(lerp(system.color, Color.White, 0.15f), lerp(system.color, Color.Black, 0.55f)))),
+        Modifier.fillMaxSize().background(com.retrohero.app.ui.theme.Tone.Surface).border(1.dp, com.retrohero.app.ui.theme.Tone.Line, RoundedCornerShape(14.dp)),
         contentAlignment = Alignment.Center,
     ) {
-        Text(system.shortName.take(4), style = TextStyle(fontFamily = com.retrohero.app.ui.theme.PixelFont, fontSize = 9.sp), color = Color.White)
+        Text(system.shortName.take(4), style = TextStyle(fontFamily = com.retrohero.app.ui.theme.PixelFont, fontSize = 9.sp), color = com.retrohero.app.ui.theme.Tone.Ink)
     }
 }

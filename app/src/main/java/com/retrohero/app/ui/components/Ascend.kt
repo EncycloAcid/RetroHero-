@@ -44,7 +44,6 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -76,13 +75,26 @@ fun Modifier.ascendCard(shape: androidx.compose.ui.graphics.Shape = Ascend.CardS
     this.clip(shape).background(Ascend.Surface).border(1.dp, Ascend.Border, shape)
 
 @Composable
-fun SectionTitle(title: String, modifier: Modifier = Modifier, count: Int? = null, onClick: (() -> Unit)? = null) {
+fun SectionTitle(
+    title: String,
+    modifier: Modifier = Modifier,
+    count: Int? = null,
+    index: Int = 1,
+    onClick: (() -> Unit)? = null,
+) {
     Row(modifier.fillMaxWidth().then(if (onClick == null) Modifier else Modifier.clickable(onClick = onClick))
         .padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(title, modifier = Modifier.weight(1f), style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
-            maxLines = 2, overflow = TextOverflow.Ellipsis, color = Tone.Ink)
-        if (count != null) ArchiveLabel(count.toString().padStart(2, '0'), Modifier.padding(start = 8.dp), color = Ascend.Muted)
-        if (onClick != null) Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Ascend.Muted, modifier = Modifier.size(18.dp))
+        ArchiveLabel(index.toString().padStart(2, '0'), color = Tone.Faint)
+        Text(
+            title,
+            modifier = Modifier.weight(1f).padding(start = 12.dp),
+            style = androidx.compose.material3.MaterialTheme.typography.titleLargeEmphasized,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            color = Tone.Ink,
+        )
+        if (count != null) ArchiveLabel(count.toString().padStart(2, '0'), Modifier.padding(start = 8.dp), color = Tone.Muted)
+        if (onClick != null) Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Tone.Muted, modifier = Modifier.size(18.dp))
     }
 }
 
@@ -104,16 +116,43 @@ fun GameCard(
         spring(dampingRatio = 0.7f, stiffness = 600f),
         label = "gameCardScale",
     )
-    Column(
+    Box(
         modifier
             .then(if (width != null) Modifier.width(width) else Modifier.fillMaxWidth())
             .graphicsLayer { scaleX = scale; scaleY = scale }
-            .combinedClickable(interactionSource = interaction, indication = null, onClick = onClick, onLongClick = onLongClick)
-            .semantics(mergeDescendants = true) {},
+            .clip(Ascend.CardShape)
+            .background(Tone.Surface)
+            .border(1.dp, Tone.Line, Ascend.CardShape),
     ) {
-        Box(Modifier.fillMaxWidth().aspectRatio(0.73f).clip(RoundedCornerShape(10.dp))) {
-            GameArt(game, Modifier.fillMaxSize())
-            if (onPlay != null) {
+        Column(
+            Modifier.fillMaxWidth()
+                .combinedClickable(interactionSource = interaction, indication = null, onClick = onClick, onLongClick = onLongClick),
+        ) {
+            Box(Modifier.padding(6.dp).fillMaxWidth().aspectRatio(0.73f).clip(RoundedCornerShape(10.dp))) {
+                GameArt(game, Modifier.fillMaxSize())
+            }
+            Column(Modifier.padding(start = 8.dp, end = 8.dp, bottom = 8.dp)) {
+                Text(
+                    game.title,
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.sp),
+                    color = Tone.Ink,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (!subtitle.isNullOrBlank()) {
+                    Text(
+                        subtitle,
+                        style = TextStyle(fontFamily = Inter, fontSize = 11.sp),
+                        color = Ascend.Muted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+            }
+        }
+        if (onPlay != null) {
+            Box(Modifier.padding(6.dp).fillMaxWidth().aspectRatio(0.73f)) {
                 Box(
                     Modifier
                         .align(Alignment.BottomEnd)
@@ -124,25 +163,6 @@ fun GameCard(
                         .clickable(onClick = onPlay),
                     contentAlignment = Alignment.Center,
                 ) { Icon(Icons.Rounded.PlayArrow, "Play ${game.title}", tint = Color.White, modifier = Modifier.size(20.dp)) }
-            }
-        }
-        Column(Modifier.padding(vertical = 6.dp)) {
-            Text(
-                game.title,
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.sp),
-                color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (!subtitle.isNullOrBlank()) {
-                Text(
-                    subtitle,
-                    style = TextStyle(fontFamily = Inter, fontSize = 11.sp),
-                    color = Ascend.Muted,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 2.dp),
-                )
             }
         }
     }

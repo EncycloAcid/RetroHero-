@@ -40,6 +40,7 @@ fun CoresScreen(
     states: Map<String, CoreState>,
     onDownload: (CoreInfo) -> Unit,
     onDelete: (CoreInfo) -> Unit,
+    pageIndex: Int = 5,
 ) {
     val cores = Systems.allCores()
     val (installed, available) = cores.partition { states[it.first.id] is CoreState.Installed }
@@ -48,7 +49,7 @@ fun CoresScreen(
         verticalArrangement = Arrangement.spacedBy(20.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
-        item { com.retrohero.app.ui.components.PageHeader("Emulators", "${installed.size} of ${cores.size} installed") }
+        item { com.retrohero.app.ui.components.PageHeader("Emulators", "${installed.size} of ${cores.size} installed", index = pageIndex) }
         item {
             Box(Modifier.glossCard()) {
                 Column(Modifier.padding(20.dp)) {
@@ -56,14 +57,14 @@ fun CoresScreen(
                     Text(
                         "Ready on first play",
                         style = MaterialTheme.typography.titleLarge,
-                        color = Color.White,
+                        color = com.retrohero.app.ui.theme.Tone.Ink,
                         modifier = Modifier.padding(top = 12.dp),
                     )
                     Text(
                         "Cores download automatically the first time you play a system. " +
                             "Built for ${CoreManager.abi()}. Each one is an independent open-source project.",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.65f),
+                        color = com.retrohero.app.ui.theme.Tone.Muted,
                         modifier = Modifier.padding(top = 4.dp),
                     )
                 }

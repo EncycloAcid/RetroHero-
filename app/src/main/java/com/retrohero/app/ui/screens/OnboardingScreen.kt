@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -81,13 +82,14 @@ fun OnboardingScreen(
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars).navigationBarsPadding()) {
             // Skip lives top-right on every page but the last.
             Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                ArchiveLabel("RetroHero  /  Setup", Modifier.padding(start = 8.dp))
+                ArchiveLabel("00 — Setup", Modifier.padding(start = 8.dp))
                 Spacer(Modifier.weight(1f))
+                ArchiveLabel("RetroHero")
                 if (page < pages - 1) {
                     Text(
                         "Skip",
                         style = MaterialTheme.typography.labelLarge,
-                        color = Color.White.copy(alpha = 0.7f),
+                        color = com.retrohero.app.ui.theme.Tone.Muted,
                         modifier = Modifier.clip(CircleShape).clickable(onClick = onFinish).padding(horizontal = 14.dp, vertical = 8.dp),
                     )
                 }
@@ -125,7 +127,7 @@ fun OnboardingScreen(
                             Option(Icons.Rounded.Memory, "Import BIOS files", "Checked by checksum and named correctly for you", onImportBios)
                         }
                         else -> {
-                            Icon(Icons.Rounded.SportsEsports, null, tint = Color.White, modifier = Modifier.size(64.dp))
+                            Icon(Icons.Rounded.SportsEsports, null, tint = com.retrohero.app.ui.theme.Tone.Ink, modifier = Modifier.size(64.dp))
                             Title(if (hasGames) "You're all set." else "Ready when you are.")
                             Body(
                                 if (hasGames) "Your games are in the library. Use Shuffle on Home for a random pick, or open a system to browse."
@@ -164,12 +166,12 @@ fun OnboardingScreen(
 
 @Composable
 private fun Title(text: String) {
-    Text(text, style = MaterialTheme.typography.displaySmallEmphasized, color = Color.White, modifier = Modifier.padding(top = 24.dp))
+    Text(text, style = MaterialTheme.typography.displaySmallEmphasized, color = com.retrohero.app.ui.theme.Tone.Ink, modifier = Modifier.padding(top = 24.dp))
 }
 
 @Composable
 private fun Body(text: String) {
-    Text(text, style = MaterialTheme.typography.bodyLarge, color = Color.White.copy(alpha = 0.65f), textAlign = TextAlign.Start, modifier = Modifier.padding(top = 12.dp))
+    Text(text, style = MaterialTheme.typography.bodyLarge, color = com.retrohero.app.ui.theme.Tone.Muted, textAlign = TextAlign.Start, modifier = Modifier.padding(top = 12.dp))
 }
 
 @Composable
@@ -179,20 +181,21 @@ private fun Option(icon: ImageVector, title: String, subtitle: String, onClick: 
             .padding(top = 10.dp)
             .fillMaxWidth()
             .press3D()
-            .clip(RoundedCornerShape(20.dp))
-            .background(Color.White.copy(alpha = 0.07f))
+            .clip(RoundedCornerShape(14.dp))
+            .background(com.retrohero.app.ui.theme.Tone.Surface)
+            .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(42.dp).clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = 0.1f)), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = Color.White)
+        Box(Modifier.size(42.dp).clip(RoundedCornerShape(12.dp)).background(com.retrohero.app.ui.theme.Tone.Raised), contentAlignment = Alignment.Center) {
+            Icon(icon, null, tint = com.retrohero.app.ui.theme.Tone.Ink)
         }
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleMediumEmphasized, color = Color.White)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.55f))
+            Text(title, style = MaterialTheme.typography.titleMediumEmphasized, color = com.retrohero.app.ui.theme.Tone.Ink)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = com.retrohero.app.ui.theme.Tone.Muted)
         }
-        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Color.White.copy(alpha = 0.5f))
+        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = com.retrohero.app.ui.theme.Tone.Muted)
     }
 }

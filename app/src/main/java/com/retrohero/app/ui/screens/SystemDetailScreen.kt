@@ -226,7 +226,7 @@ private fun AlbumScreen(
                 Text(
                     emptyText,
                     style = MaterialTheme.typography.bodyLarge,
-                    color = Color.White.copy(alpha = 0.6f),
+                    color = com.retrohero.app.ui.theme.Tone.Muted,
                     modifier = Modifier.padding(horizontal = 22.dp, vertical = 28.dp),
                 )
             }
@@ -365,18 +365,18 @@ private fun GameRow(game: Game, isFavorite: Boolean, onOpen: () -> Unit, onPlay:
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(game.title, style = MaterialTheme.typography.titleMedium, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                Text(game.title, style = MaterialTheme.typography.titleMedium, color = com.retrohero.app.ui.theme.Tone.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                 if (isFavorite) Icon(Icons.Rounded.Favorite, "Pinned", tint = Salmon, modifier = Modifier.padding(start = 6.dp).size(14.dp))
             }
             Text(
                 game.fileName.substringAfterLast('.').uppercase() + if (game.isLocal) " · Downloaded" else "",
                 style = MaterialTheme.typography.bodySmall,
-                color = Color.White.copy(alpha = 0.55f),
+                color = com.retrohero.app.ui.theme.Tone.Muted,
             )
         }
         Box(
             Modifier.size(40.dp).clip(CircleShape).clickable(onClick = onPlay),
             contentAlignment = Alignment.Center,
-        ) { Icon(Icons.Rounded.PlayArrow, "Play ${game.title}", tint = Color.White.copy(alpha = 0.85f)) }
+        ) { Icon(Icons.Rounded.PlayArrow, "Play ${game.title}", tint = com.retrohero.app.ui.theme.Tone.Ink) }
     }
 }

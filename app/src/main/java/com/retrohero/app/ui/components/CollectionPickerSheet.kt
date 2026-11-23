@@ -1,6 +1,7 @@
 package com.retrohero.app.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import com.retrohero.app.data.Game
 import com.retrohero.app.data.GameCollection
 import com.retrohero.app.ui.theme.Salmon
+import com.retrohero.app.ui.theme.Tone
 
 /** Tick the collections [game] should be in, or start a new one. */
 @Composable
@@ -52,11 +54,11 @@ fun CollectionPickerSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = Color(0xFF131313),
+        containerColor = Tone.Surface,
     ) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 20.dp).padding(bottom = 20.dp)) {
-            Text("Add to collection", style = MaterialTheme.typography.titleLargeEmphasized, color = Color.White)
-            Text(game.title, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.6f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("Add to collection", style = MaterialTheme.typography.titleLargeEmphasized, color = Tone.Ink)
+            Text(game.title, style = MaterialTheme.typography.bodyMedium, color = Tone.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Spacer(Modifier.size(14.dp))
             collections.forEach { c ->
                 val inIt = game.id in c.gameIds
@@ -64,20 +66,21 @@ fun CollectionPickerSheet(
                     Modifier
                         .fillMaxWidth()
                         .padding(bottom = 8.dp)
-                        .clip(RoundedCornerShape(18.dp))
-                        .background(Color.White.copy(alpha = 0.06f))
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Tone.Raised)
+                        .border(1.dp, Tone.Line, RoundedCornerShape(14.dp))
                         .clickable { onToggle(c, !inIt) }
                         .padding(horizontal = 16.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text(c.name, style = MaterialTheme.typography.titleMedium, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text(if (c.gameIds.size == 1) "1 game" else "${c.gameIds.size} games", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.55f))
+                        Text(c.name, style = MaterialTheme.typography.titleMedium, color = Tone.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(if (c.gameIds.size == 1) "1 game" else "${c.gameIds.size} games", style = MaterialTheme.typography.bodySmall, color = Tone.Muted)
                     }
                     Icon(
                         if (inIt) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
                         if (inIt) "In ${c.name}" else "Not in ${c.name}",
-                        tint = if (inIt) Salmon else Color.White.copy(alpha = 0.4f),
+                        tint = if (inIt) Salmon else Tone.Faint,
                     )
                 }
             }
@@ -89,11 +92,11 @@ fun CollectionPickerSheet(
                     .padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(Modifier.size(32.dp).clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Rounded.Add, null, tint = Color.White)
+                Box(Modifier.size(32.dp).clip(RoundedCornerShape(8.dp)).background(Tone.Raised), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Rounded.Add, null, tint = Tone.Ink)
                 }
                 Spacer(Modifier.width(12.dp))
-                Text("New collection", style = MaterialTheme.typography.titleMedium, color = Color.White)
+                Text("New collection", style = MaterialTheme.typography.titleMedium, color = Tone.Ink)
             }
         }
     }

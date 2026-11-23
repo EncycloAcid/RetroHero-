@@ -1,6 +1,7 @@
 package com.retrohero.app.ui.screens
 
 import com.retrohero.app.ui.components.emberBackground
+import com.retrohero.app.ui.components.ArchiveLabel
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -81,14 +82,13 @@ import com.retrohero.app.ui.theme.Inter
 import com.retrohero.app.ui.theme.Salmon
 import com.retrohero.app.ui.theme.Tone
 import com.retrohero.app.ui.theme.setAccent
-import com.retrohero.app.ui.theme.setDarkMode
 
 /** Mochy's emphasized easing. */
 val MochyEase = CubicBezierEasing(0.2f, 0f, 0f, 1f)
 
-private val IconTile = Color(0xFF333338)
-private val SearchFill = Color(0xFF141416)
-private val Placeholder = Color(0xFF77777D)
+private val IconTile get() = Tone.Raised
+private val SearchFill get() = Tone.Surface
+private val Placeholder get() = Tone.Muted
 
 private class Category(val id: String, val title: String, val icon: ImageVector, val keywords: List<String>)
 
@@ -104,7 +104,7 @@ private val categories = listOf(
 
 /** The settings home: big title, search pill, then a column of category bubbles. */
 @Composable
-fun SettingsHome(settings: Settings, onOpen: (String) -> Unit, onOpenStats: () -> Unit) {
+fun SettingsHome(settings: Settings, onOpen: (String) -> Unit, onOpenStats: () -> Unit, pageIndex: Int = 6) {
     var query by remember { mutableStateOf("") }
     Column(
         Modifier
@@ -113,15 +113,13 @@ fun SettingsHome(settings: Settings, onOpen: (String) -> Unit, onOpenStats: () -
             .verticalScroll(rememberScrollState())
             .padding(start = 20.dp, end = 20.dp, bottom = 24.dp + LocalNavSpace.current),
     ) {
-        com.retrohero.app.ui.components.PageHeader("Settings", "Library, controls and appearance") {
-            Image(painterResource(R.drawable.ic_logo_mark), null, Modifier.size(width = 41.dp, height = 28.dp))
-        }
+        com.retrohero.app.ui.components.PageHeader("Settings", "Library, controls and appearance", index = pageIndex)
         AppearanceSwitch(settings)
         Spacer(Modifier.height(18.dp))
         Spacer(Modifier.height(14.dp))
         // Search pill.
         val focused = query.isNotEmpty()
-        val fill by animateColorAsState(if (focused) Color(0xFF1E1E21) else SearchFill, tween(200), label = "searchFill")
+        val fill by animateColorAsState(if (focused) Tone.Raised else SearchFill, tween(200), label = "searchFill")
         Row(
             Modifier.fillMaxWidth().height(48.dp).glossCard(RoundedCornerShape(8.dp)).background(fill.copy(alpha = if (focused) 0.6f else 0f)).padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -133,7 +131,7 @@ fun SettingsHome(settings: Settings, onOpen: (String) -> Unit, onOpenStats: () -
                 BasicTextField(
                     query, { query = it },
                     singleLine = true,
-                    textStyle = TextStyle(fontFamily = Inter, fontSize = 15.sp, color = Color.White),
+                    textStyle = TextStyle(fontFamily = Inter, fontSize = 15.sp, color = Tone.Ink),
                     cursorBrush = SolidColor(Salmon),
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -145,9 +143,9 @@ fun SettingsHome(settings: Settings, onOpen: (String) -> Unit, onOpenStats: () -
             val hits = categories.flatMap { c ->
                 (listOf(c.title.lowercase()) + c.keywords).filter { it.contains(q) }.map { c to it }
             }.distinctBy { it.second }
-            Text("Results", style = TextStyle(fontFamily = Inter, fontSize = 15.sp), color = Color.White.copy(alpha = 0.6f), modifier = Modifier.padding(top = 22.dp, bottom = 8.dp, start = 4.dp))
+            Text("Results", style = TextStyle(fontFamily = Inter, fontSize = 15.sp), color = Tone.Muted, modifier = Modifier.padding(top = 22.dp, bottom = 8.dp, start = 4.dp))
             if (hits.isEmpty()) {
-                Text("Nothing matches “${query.trim()}”.", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.55f), modifier = Modifier.padding(4.dp))
+                Text("Nothing matches “${query.trim()}”.", style = MaterialTheme.typography.bodyMedium, color = Tone.Muted, modifier = Modifier.padding(4.dp))
             }
             hits.forEach { (c, label) ->
                 Row(
@@ -155,12 +153,12 @@ fun SettingsHome(settings: Settings, onOpen: (String) -> Unit, onOpenStats: () -
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Box(Modifier.size(38.dp).clip(CircleShape).background(IconTile), contentAlignment = Alignment.Center) {
-                        Icon(c.icon, null, tint = Color.White, modifier = Modifier.size(19.dp))
+                        Icon(c.icon, null, tint = Tone.Ink, modifier = Modifier.size(19.dp))
                     }
                     Spacer(Modifier.width(11.dp))
                     Column {
-                        Text(label.replaceFirstChar { it.uppercase() }, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 16.sp), color = Color.White)
-                        Text("Settings › ${c.title}", style = TextStyle(fontFamily = Inter, fontSize = 12.sp), color = Color.White.copy(alpha = 0.55f))
+                        Text(label.replaceFirstChar { it.uppercase() }, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 16.sp), color = Tone.Ink)
+                        Text("Settings › ${c.title}", style = TextStyle(fontFamily = Inter, fontSize = 12.sp), color = Tone.Muted)
                     }
                 }
             }
@@ -173,27 +171,27 @@ fun SettingsHome(settings: Settings, onOpen: (String) -> Unit, onOpenStats: () -
             Modifier
                 .fillMaxWidth()
                 .press3D()
-                .glossCard(RoundedCornerShape(8.dp), tint = Salmon)
+                .glossCard(RoundedCornerShape(14.dp))
                 .clickable(onClick = onOpenStats)
                 .padding(horizontal = 18.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(Modifier.size(40.dp).clip(CircleShape).background(Salmon), contentAlignment = Alignment.Center) {
-                Icon(Icons.Rounded.Insights, null, tint = Color(0xFF1A1A1A), modifier = Modifier.size(20.dp))
+                Icon(Icons.Rounded.Insights, null, tint = Salmon, modifier = Modifier.size(20.dp))
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text("Your stats & recap", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 17.sp), color = Color.White)
-                Text("Play time, favourite systems, your month", style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.55f))
+                Text("Your stats & recap", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 17.sp), color = Tone.Ink)
+                Text("Play time, favourite systems, your month", style = MaterialTheme.typography.bodySmall, color = Tone.Muted)
             }
-            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Color.White.copy(alpha = 0.5f))
+            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Tone.Muted)
         }
         Spacer(Modifier.height(18.dp))
-        Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp).height(0.8.dp).background(Color.White.copy(alpha = 0.1f)))
+        Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp).height(1.dp).background(Tone.Line))
         Spacer(Modifier.height(18.dp))
         Column {
-            categories.forEach { c ->
-                CategoryBubble(c.title, c.icon) { onOpen(c.id) }
+            categories.forEachIndexed { index, c ->
+                CategoryBubble(index + 1, c.title, c.icon) { onOpen(c.id) }
                 androidx.compose.material3.HorizontalDivider(color = com.retrohero.app.ui.components.Page.Divider)
             }
         }
@@ -201,7 +199,7 @@ fun SettingsHome(settings: Settings, onOpen: (String) -> Unit, onOpenStats: () -
 }
 
 @Composable
-private fun CategoryBubble(title: String, icon: ImageVector, onClick: () -> Unit) {
+private fun CategoryBubble(index: Int, title: String, icon: ImageVector, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -210,12 +208,14 @@ private fun CategoryBubble(title: String, icon: ImageVector, onClick: () -> Unit
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        ArchiveLabel(index.toString().padStart(2, '0'), color = Tone.Faint)
+        Spacer(Modifier.width(12.dp))
         Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = Color.White, modifier = Modifier.size(20.dp))
+            Icon(icon, null, tint = Tone.Ink, modifier = Modifier.size(20.dp))
         }
         Spacer(Modifier.width(12.dp))
-        Text(title, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 17.sp), color = Color.White, modifier = Modifier.weight(1f))
-        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Color.White.copy(alpha = 0.35f))
+        Text(title, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 17.sp), color = Tone.Ink, modifier = Modifier.weight(1f))
+        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Tone.Faint)
     }
 }
 
@@ -233,13 +233,13 @@ fun SubSettings(title: String, onBack: () -> Unit, content: @Composable ColumnSc
     ) {
         Column {
             Box(
-                Modifier.size(40.dp).clip(CircleShape).background(Color(0xFF2C2C2E)).clickable(onClick = onBack),
+                Modifier.size(40.dp).clip(CircleShape).background(Tone.Raised).clickable(onClick = onBack),
                 contentAlignment = Alignment.Center,
-            ) { Icon(Icons.AutoMirrored.Rounded.ArrowBackIos, "Back", tint = Color.White, modifier = Modifier.size(18.dp).offset(x = 3.dp)) }
+            ) { Icon(Icons.AutoMirrored.Rounded.ArrowBackIos, "Back", tint = Tone.Ink, modifier = Modifier.size(18.dp).offset(x = 3.dp)) }
             Text(
                 title,
                 style = MaterialTheme.typography.headlineLargeEmphasized,
-                color = Color.White,
+                color = Tone.Ink,
                 modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
             )
         }
@@ -264,7 +264,7 @@ fun LooksSettings(settings: Settings, imported: List<Look>, onImport: () -> Unit
 
     AppearanceSwitch(settings)
     Spacer(Modifier.height(20.dp))
-    SectionTitle("Accent")
+    SectionTitle("Accent", 2)
     val accents = Looks.accents.map { (id, v) -> Triple(id, v.first, v.second) } + imported.map { Triple("look:" + it.id, it.name, it.accent) }
     StylePager(
         items = accents.map { it.first },
@@ -274,7 +274,7 @@ fun LooksSettings(settings: Settings, imported: List<Look>, onImport: () -> Unit
         onSelect = { apply(accent = it) },
     ) { id -> AccentPreview(accents.first { it.first == id }.third) }
 
-    SectionTitle("Touch buttons")
+    SectionTitle("Touch buttons", 3)
     val skins = Looks.skins.map { it.id to it } + imported.map { "look:" + it.id to it.pad }
     StylePager(
         items = skins.map { it.first },
@@ -284,35 +284,36 @@ fun LooksSettings(settings: Settings, imported: List<Look>, onImport: () -> Unit
         onSelect = { apply(skin = it) },
     ) { id -> PadPreview(skins.first { it.first == id }.second) }
 
-    SectionTitle("Your looks")
+    SectionTitle("Your looks", 4)
     Row(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(22.dp))
-            .background(Color(0xFF141416))
+            .background(Tone.Surface)
+            .border(1.dp, Tone.Line, RoundedCornerShape(22.dp))
             .clickable(onClick = onImport)
             .padding(horizontal = 20.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(32.dp).clip(CircleShape).background(Color(0xFFE5E5EA)), contentAlignment = Alignment.Center) {
-            Icon(Icons.Rounded.FileOpen, null, tint = Color(0xFF1C1C1E), modifier = Modifier.size(20.dp))
+        Box(Modifier.size(32.dp).clip(CircleShape).background(Tone.Raised), contentAlignment = Alignment.Center) {
+            Icon(Icons.Rounded.FileOpen, null, tint = Tone.Ink, modifier = Modifier.size(20.dp))
         }
         Spacer(Modifier.width(16.dp))
         Column(Modifier.weight(1f)) {
-            Text("Import a look", style = MaterialTheme.typography.titleMedium, color = Color.White)
+            Text("Import a look", style = MaterialTheme.typography.titleMedium, color = Tone.Ink)
             Text(
                 if (imported.isEmpty()) "A small .json file with an accent and button colours" else "${imported.size} imported: ${imported.joinToString { it.name }}",
                 style = MaterialTheme.typography.labelMedium,
-                color = Color.White.copy(alpha = 0.55f),
+                color = Tone.Muted,
                 maxLines = 1,
             )
         }
-        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Color.White.copy(alpha = 0.5f))
+        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Tone.Muted)
     }
     Text(
         "Button skins show in games you start after changing them.",
         style = MaterialTheme.typography.bodySmall,
-        color = Color.White.copy(alpha = 0.45f),
+        color = Tone.Muted,
         modifier = Modifier.padding(start = 4.dp),
     )
 }
@@ -326,14 +327,22 @@ private fun AppearanceSwitch(settings: Settings) {
         onSelect = { index ->
             val dark = index == 1
             settings.darkMode = dark
-            setDarkMode(dark)
+            Tone.setDarkMode(dark)
         },
     )
 }
 
 @Composable
-private fun SectionTitle(text: String) {
-    Text(text, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 15.sp), color = Color.White, modifier = Modifier.padding(start = 4.dp))
+private fun SectionTitle(text: String, index: Int = 1) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 4.dp)) {
+        ArchiveLabel(index.toString().padStart(2, '0'), color = Tone.Faint)
+        Text(
+            text,
+            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, letterSpacing = (-0.01).em),
+            color = Tone.Ink,
+            modifier = Modifier.padding(start = 12.dp),
+        )
+    }
 }
 
 /** Mochy-style preview cards: 187 dp tall, name bottom-left, a mini phone peeking up bottom-right. */
@@ -362,8 +371,8 @@ private fun StylePager(
                     .fillMaxWidth()
                     .height(187.dp)
                     .clip(RoundedCornerShape(22.dp))
-                    .background(Color(0xFF1C1C1E))
-                    .border(2.dp, Color.White.copy(alpha = 0.9f * ring), RoundedCornerShape(22.dp))
+                    .background(Tone.Surface)
+                    .border(2.dp, Tone.Line.copy(alpha = 0.9f * ring), RoundedCornerShape(22.dp))
                     .clickable { onSelect(id) },
             ) {
                 // The mini phone.
@@ -376,14 +385,14 @@ private fun StylePager(
                         .fillMaxHeight(0.86f)
                         .clip(RoundedCornerShape(15.dp))
                         .background(Color.Black)
-                        .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(15.dp)),
+                        .border(1.dp, Tone.Line, RoundedCornerShape(15.dp)),
                 ) { preview(id) }
-                Box(Modifier.align(Alignment.BottomEnd).fillMaxWidth().height(40.dp).background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, Color(0xFF1C1C1E)))))
-                Text(label, style = MaterialTheme.typography.labelMedium, color = Color.White.copy(alpha = 0.55f), modifier = Modifier.padding(start = 22.dp, top = 18.dp))
+                Box(Modifier.align(Alignment.BottomEnd).fillMaxWidth().height(40.dp).background(androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.Transparent, Tone.Surface))))
+                Text(label, style = MaterialTheme.typography.labelMedium, color = Tone.Muted, modifier = Modifier.padding(start = 22.dp, top = 18.dp))
                 Text(
                     name(id),
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 28.sp, letterSpacing = (-0.03).em),
-                    color = Color.White,
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 28.sp, letterSpacing = (-0.03).em),
+                    color = Tone.Ink,
                     modifier = Modifier.align(Alignment.BottomStart).padding(start = 22.dp, bottom = 24.dp),
                 )
             }
@@ -391,7 +400,7 @@ private fun StylePager(
         Text(
             if (pager.currentPage < items.lastIndex) "Swipe for more · tap to use" else "Tap to use",
             style = MaterialTheme.typography.bodySmall,
-            color = Color.White.copy(alpha = 0.45f),
+            color = Tone.Muted,
             modifier = Modifier.padding(top = 8.dp, start = 4.dp),
         )
     }
@@ -402,9 +411,9 @@ private fun AccentPreview(color: Color) {
     Column(Modifier.fillMaxSize().padding(10.dp)) {
         Box(Modifier.fillMaxWidth().aspectRatio(1.4f).clip(RoundedCornerShape(10.dp)).background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(color, color.copy(alpha = 0.35f)))))
         Spacer(Modifier.height(8.dp))
-        Box(Modifier.width(60.dp).height(6.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.7f)))
+        Box(Modifier.width(60.dp).height(6.dp).clip(CircleShape).background(Tone.Ink.copy(alpha = 0.7f)))
         Spacer(Modifier.height(5.dp))
-        Box(Modifier.width(40.dp).height(6.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.3f)))
+        Box(Modifier.width(40.dp).height(6.dp).clip(CircleShape).background(Tone.Ink.copy(alpha = 0.3f)))
         Spacer(Modifier.height(10.dp))
         Box(Modifier.width(54.dp).height(18.dp).clip(CircleShape).background(color))
     }
@@ -413,7 +422,7 @@ private fun AccentPreview(color: Color) {
 @Composable
 private fun PadPreview(skin: PadSkin) {
     val faces = listOf(Color(0xFF4C7DFF), Color(0xFF30C26B), Color(0xFFE5484D), Color(0xFFF5B83D))
-    Box(Modifier.fillMaxSize().background(Color(0xFF14121A)).padding(10.dp)) {
+    Box(Modifier.fillMaxSize().background(Tone.Surface).border(1.dp, Tone.Line, RoundedCornerShape(15.dp)).padding(10.dp)) {
         // D-pad.
         Box(Modifier.align(Alignment.CenterStart).offset(y = (-10).dp).size(44.dp)) {
             Box(Modifier.align(Alignment.Center).size(15.dp, 44.dp).clip(RoundedCornerShape(4.dp)).background(skin.fill).border(1.dp, skin.edge, RoundedCornerShape(4.dp)))
@@ -428,7 +437,7 @@ private fun PadPreview(skin: PadSkin) {
                     "accent" -> skin.edge
                     else -> faces[i]
                 }
-                Box(Modifier.align(a).size(16.dp).clip(CircleShape).background(c.copy(alpha = if (skin.faces == "color") 0.8f else c.alpha)).border(1.dp, Color.White.copy(alpha = 0.3f), CircleShape))
+                Box(Modifier.align(a).size(16.dp).clip(CircleShape).background(c.copy(alpha = if (skin.faces == "color") 0.8f else c.alpha)).border(1.dp, Tone.Line, CircleShape))
             }
         }
         Row(Modifier.align(Alignment.BottomCenter).padding(bottom = 26.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {

@@ -1,6 +1,7 @@
 package com.retrohero.app.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -44,9 +45,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.retrohero.app.data.Game
 import com.retrohero.app.ui.theme.Salmon
+import com.retrohero.app.ui.theme.Tone
 
 /** One tile in the grid menu. */
-class MenuTile(val icon: ImageVector, val label: String, val tint: Color = Color.White, val onClick: () -> Unit)
+class MenuTile(val icon: ImageVector, val label: String, val tint: Color = Tone.Ink, val onClick: () -> Unit)
 
 /**
  * Long-press menu: the game at the top, then a grid of large action tiles (108 dp tall, like
@@ -88,15 +90,15 @@ fun GameMenuSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = Color(0xFF131313),
+        containerColor = Tone.Surface,
     ) {
         Column(Modifier.navigationBarsPadding().padding(horizontal = 20.dp).padding(bottom = 20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 GameArt(game, Modifier.size(56.dp).clip(RoundedCornerShape(14.dp)), showTag = false)
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(game.title, style = MaterialTheme.typography.titleMediumEmphasized, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text(game.system?.name.orEmpty(), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f))
+                    Text(game.title, style = MaterialTheme.typography.titleMediumEmphasized, color = Tone.Ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(game.system?.name.orEmpty(), style = MaterialTheme.typography.bodySmall, color = Tone.Muted)
                 }
             }
             Spacer(Modifier.height(18.dp))
@@ -108,8 +110,9 @@ fun GameMenuSheet(
                                 .weight(1f)
                                 .height(108.dp)
                                 .press3D()
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(Color.White.copy(alpha = 0.07f))
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(Tone.Raised)
+                                .border(1.dp, Tone.Line, RoundedCornerShape(14.dp))
                                 .clickable(onClick = tile.onClick)
                                 .padding(12.dp),
                         ) {
@@ -119,7 +122,7 @@ fun GameMenuSheet(
                             Text(
                                 tile.label,
                                 style = MaterialTheme.typography.labelLarge,
-                                color = Color.White,
+                                color = Tone.Ink,
                                 textAlign = TextAlign.Center,
                                 maxLines = 1,
                                 modifier = Modifier.fillMaxWidth(),

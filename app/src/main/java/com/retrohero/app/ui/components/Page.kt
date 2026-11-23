@@ -9,12 +9,15 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -54,22 +57,35 @@ fun Modifier.emberBackground(): Modifier = background(Page.Bg)
 fun ArchiveLabel(text: String, modifier: Modifier = Modifier, color: Color = Tone.Muted) {
     Text(text.uppercase(), modifier, color = color,
         style = TextStyle(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-            fontWeight = FontWeight.Medium, fontSize = 10.sp, letterSpacing = 0.1.em), maxLines = 1,
+            fontWeight = FontWeight.Medium, fontSize = 10.sp, letterSpacing = 0.12.em), maxLines = 1,
         overflow = TextOverflow.Ellipsis)
 }
 
 @Composable
-fun PageHeader(title: String, subtitle: String?, modifier: Modifier = Modifier, trailing: @Composable () -> Unit = {}) {
+fun PageHeader(
+    title: String,
+    subtitle: String?,
+    modifier: Modifier = Modifier,
+    index: Int = 1,
+    trailing: @Composable () -> Unit = {},
+) {
     Column(modifier.windowInsetsPadding(WindowInsets.statusBars).fillMaxWidth().padding(top = 18.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            androidx.compose.foundation.Image(androidx.compose.ui.res.painterResource(com.retrohero.app.R.drawable.ic_logo_mark), null,
-                Modifier.size(width = 18.dp, height = 13.dp).launchMarkTarget())
-            ArchiveLabel("RetroHero  /  Archive", Modifier.padding(start = 7.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            ArchiveLabel("${index.toString().padStart(2, '0')} — $title")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                androidx.compose.foundation.Image(
+                    androidx.compose.ui.res.painterResource(com.retrohero.app.R.drawable.ic_logo_mark),
+                    null,
+                    Modifier.size(width = 18.dp, height = 13.dp).launchMarkTarget(),
+                )
+                Spacer(Modifier.width(7.dp))
+                ArchiveLabel("RetroHero")
+            }
         }
         Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.displaySmallEmphasized, color = Color.White)
-                if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Ascend.Muted)
+                Text(title, style = MaterialTheme.typography.displaySmallEmphasized, color = Tone.Ink)
+                if (subtitle != null) Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Tone.Muted)
             }
             trailing()
         }
@@ -81,20 +97,20 @@ fun PageHeader(title: String, subtitle: String?, modifier: Modifier = Modifier, 
 @Composable
 fun PillChip(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, color: Color = Color.White, leading: (@Composable () -> Unit)? = null) {
     val fill by animateColorAsState(
-        if (!selected) Ascend.Surface else lerp(Ascend.Surface, if (color == Color.White) Ascend.accent else color, 0.20f),
+        if (!selected) Tone.Raised else lerp(Tone.Raised, if (color == Color.White) Ascend.accent else color, 0.20f),
         label = "pill",
     )
     Row(
-        modifier.height(40.dp).clip(Ascend.CardShape).background(fill).clickable(onClick = onClick).padding(horizontal = 16.dp),
+        modifier.height(40.dp).clip(RoundedCornerShape(8.dp)).background(fill).clickable(onClick = onClick).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         leading?.invoke()
-        Text(text, style = MaterialTheme.typography.labelLarge, color = Color.White.copy(alpha = if (selected) 1f else 0.78f), maxLines = 1)
+        Text(text, style = MaterialTheme.typography.labelLarge, color = if (selected) Tone.Ink else Tone.Muted, maxLines = 1)
     }
 }
 
-fun Modifier.glossCard(shape: Shape = Ascend.CardShape, tint: Color? = null): Modifier =
-    clip(shape).background(tint?.let { lerp(Ascend.Surface, it, 0.08f) } ?: Ascend.Surface).border(1.dp, Page.Divider, shape)
+fun Modifier.glossCard(shape: Shape = Ascend.CardShape): Modifier =
+    clip(shape).background(Tone.Surface).border(1.dp, Page.Divider, shape)
 
 /** Video-store yellow, for the little Play buttons. */
 val StoreYellow = Color(0xFFF2C94C)
@@ -123,14 +139,14 @@ fun BoxTile(
         Text(
             game.title.uppercase(),
             style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Black, fontSize = 12.sp, lineHeight = 14.sp, letterSpacing = 0.02.em),
-            color = Color.White,
+            color = Tone.Ink,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             modifier = Modifier.padding(top = 12.dp),
         )
         if (meta != null) {
-            Text(meta, style = MaterialTheme.typography.labelSmall, color = Color.White.copy(alpha = 0.5f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(meta, style = MaterialTheme.typography.labelSmall, color = Tone.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (onPlay != null) {
             Row(

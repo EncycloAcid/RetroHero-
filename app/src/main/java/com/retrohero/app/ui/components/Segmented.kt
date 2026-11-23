@@ -5,13 +5,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.ListItemShapes
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.background
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import com.retrohero.app.ui.theme.Tone
 
 /** Scope handed to a segmented group so each row gets the right first/middle/last shape. */
 class SegmentScope(private val count: Int) {
@@ -29,14 +29,9 @@ fun SegmentedGroup(
 ) {
     Column(modifier) {
         if (title != null) {
-            Text(
-                title,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(start = 16.dp, bottom = 8.dp, top = 8.dp),
-            )
+            ArchiveLabel(title, Modifier.padding(start = 16.dp, bottom = 8.dp, top = 8.dp))
         }
-        // Mochy's grouped style: one dark card, rows flush inside it.
+        // One surface card, with rows flush inside it.
         Column(
             Modifier
                 .clip(Ascend.CardShape)
@@ -52,4 +47,4 @@ fun SegmentedGroup(
 @Composable
 fun segmentColors() = ListItemDefaults.segmentedColors(containerColor = Color.Transparent)
 
-private val GroupFill = Ascend.Surface
+private val GroupFill = Tone.Surface

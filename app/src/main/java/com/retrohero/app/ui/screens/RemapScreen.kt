@@ -5,6 +5,7 @@ import android.hardware.input.InputManager
 import android.view.InputDevice
 import android.view.KeyEvent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
@@ -56,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.retrohero.app.data.Remap
 import com.retrohero.app.ui.theme.Salmon
+import com.retrohero.app.ui.theme.Tone
 
 /** A controller you can make a profile for. [descriptor] is [Remap.ANY] for every controller. */
 data class ControllerProfile(val descriptor: String, val name: String)
@@ -102,11 +104,14 @@ fun RemapScreen(
 
     Column(Modifier.fillMaxSize().emberBackground().windowInsetsPadding(WindowInsets.statusBars)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onBack), contentAlignment = Alignment.Center) {
-                Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = Color.White)
+            Box(Modifier.size(44.dp).clip(CircleShape).background(Tone.Raised).clickable(onClick = onBack), contentAlignment = Alignment.Center) {
+                Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = Tone.Ink)
             }
             Spacer(Modifier.width(8.dp))
-            Text("Controller buttons", style = MaterialTheme.typography.titleLargeEmphasized, color = Color.White, modifier = Modifier.weight(1f))
+            Column(Modifier.weight(1f)) {
+                com.retrohero.app.ui.components.ArchiveLabel("06 — Controls")
+                Text("Controller buttons", style = MaterialTheme.typography.titleLargeEmphasized, color = Tone.Ink)
+            }
             if (profiles[profile].orEmpty().isNotEmpty()) {
                 TextButton(onClick = { onChange(profiles - profile) }) { Text("Reset") }
             }
@@ -116,17 +121,17 @@ fun RemapScreen(
                 val sel = c.descriptor == profile
                 Row(
                     Modifier
-                        .clip(CircleShape)
-                        .background(if (sel) Color.White.copy(alpha = 0.9f) else Color.White.copy(alpha = 0.08f))
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (sel) Tone.Ink else Tone.Raised)
                         .clickable { profile = c.descriptor }
                         .padding(horizontal = 14.dp, vertical = 9.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (c.descriptor != Remap.ANY) {
-                        Icon(Icons.Rounded.SportsEsports, null, tint = if (sel) Color(0xFF1A1A1A) else Color.White, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Rounded.SportsEsports, null, tint = if (sel) Tone.Bg else Tone.Ink, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(6.dp))
                     }
-                    Text(c.name, style = MaterialTheme.typography.labelLarge, color = if (sel) Color(0xFF1A1A1A) else Color.White, maxLines = 1)
+                    Text(c.name, style = MaterialTheme.typography.labelLarge, color = if (sel) Tone.Bg else Tone.Ink, maxLines = 1)
                 }
             }
         }
@@ -134,7 +139,7 @@ fun RemapScreen(
             if (controllers.isEmpty()) "No controller connected. Changes to “All controllers” apply to any you connect later."
             else "Tap an action, then press the button you want for it.",
             style = MaterialTheme.typography.bodyMedium,
-            color = Color.White.copy(alpha = 0.6f),
+            color = Tone.Muted,
             modifier = Modifier.padding(horizontal = 22.dp, vertical = 14.dp),
         )
         LazyColumn(
@@ -147,17 +152,18 @@ fun RemapScreen(
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color.White.copy(alpha = 0.06f))
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Tone.Surface)
+                        .border(1.dp, Tone.Line, RoundedCornerShape(14.dp))
                         .clickable { capturing = action to label }
                         .padding(horizontal = 16.dp, vertical = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(label, style = MaterialTheme.typography.titleMedium, color = Color.White, modifier = Modifier.weight(1f))
+                    Text(label, style = MaterialTheme.typography.titleMedium, color = Tone.Ink, modifier = Modifier.weight(1f))
                     Text(
                         keys.joinToString(", ") { Remap.keyName(it) }.ifEmpty { "Not set" },
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (changed) Salmon else Color.White.copy(alpha = 0.55f),
+                        color = if (changed) Salmon else Tone.Muted,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         textAlign = TextAlign.End,
@@ -197,7 +203,8 @@ private fun CaptureDialog(label: String, onKey: (Int) -> Unit, onClear: () -> Un
         Column(
             Modifier
                 .clip(RoundedCornerShape(28.dp))
-                .background(Color(0xFF161618))
+                .background(Tone.Surface)
+                .border(1.dp, Tone.Line, RoundedCornerShape(28.dp))
                 .focusRequester(focus)
                 .focusable()
                 .onPreviewKeyEvent { e ->
@@ -209,9 +216,9 @@ private fun CaptureDialog(label: String, onKey: (Int) -> Unit, onClear: () -> Un
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Icon(Icons.Rounded.SportsEsports, null, tint = Color.White, modifier = Modifier.size(40.dp))
-            Text("Press a button for", style = MaterialTheme.typography.bodyLarge, color = Color.White.copy(alpha = 0.7f), modifier = Modifier.padding(top = 14.dp))
-            Text(label, style = MaterialTheme.typography.headlineSmall, color = Color.White, textAlign = TextAlign.Center)
+            Icon(Icons.Rounded.SportsEsports, null, tint = Tone.Ink, modifier = Modifier.size(40.dp))
+            Text("Press a button for", style = MaterialTheme.typography.bodyLarge, color = Tone.Muted, modifier = Modifier.padding(top = 14.dp))
+            Text(label, style = MaterialTheme.typography.headlineSmall, color = Tone.Ink, textAlign = TextAlign.Center)
             Row(Modifier.padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = onClear) { Text("Turn off") }
                 TextButton(onClick = onDismiss) { Text("Cancel") }

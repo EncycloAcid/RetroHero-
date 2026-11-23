@@ -63,6 +63,7 @@ fun ShelvesScreen(
     onOptions: (Game) -> Unit,
     onOpenCollection: (GameCollection) -> Unit,
     onNewShelf: () -> Unit,
+    pageIndex: Int = 2,
     onCoverFlow: () -> Unit,
 ) {
     val rows = remember(games, recents, favorites, collections, stats) {
@@ -86,8 +87,9 @@ fun ShelvesScreen(
                 "Shelves",
                 "${rows.size} ${if (rows.size == 1) "shelf" else "shelves"} · ${games.size} ${if (games.size == 1) "game" else "games"}",
                 Modifier.padding(start = Page.Gutter, end = 14.dp),
+                index = pageIndex,
             ) {
-                HeaderButton(Icons.Rounded.ViewCarousel, "Cover flow", Color.White.copy(alpha = 0.08f), Color.White, onCoverFlow)
+                HeaderButton(Icons.Rounded.ViewCarousel, "Cover flow", com.retrohero.app.ui.theme.Tone.Raised, com.retrohero.app.ui.theme.Tone.Ink, onCoverFlow)
                 HeaderButton(Icons.Rounded.Add, "New shelf", Salmon, Ascend.onAccent, onNewShelf, Modifier.padding(start = 8.dp))
             }
         }
@@ -96,14 +98,14 @@ fun ShelvesScreen(
                 Text(
                     "Your shelves start here. Add games to your library, or tap + to create a collection.",
                     style = TextStyle(fontFamily = Inter, fontSize = 15.sp),
-                    color = Color.White.copy(alpha = 0.55f),
+                    color = com.retrohero.app.ui.theme.Tone.Muted,
                     modifier = Modifier.padding(horizontal = Page.Gutter, vertical = 40.dp),
                 )
             }
         }
-        rows.forEach { row ->
+        rows.forEachIndexed { index, row ->
             item(key = row.key) {
-                Shelf(row, onOpenGame, onOptions) { g ->
+                Shelf(row, index + 1, onOpenGame, onOptions) { g ->
                     stats[g.id]?.seconds?.takeIf { it >= 60 }?.let { com.retrohero.app.data.PlayTime.format(it) } ?: g.system?.shortName
                 }
             }
@@ -120,9 +122,9 @@ private fun HeaderButton(icon: androidx.compose.ui.graphics.vector.ImageVector, 
 }
 
 @Composable
-private fun Shelf(row: ShelfRow, onOpenGame: (Game) -> Unit, onOptions: (Game) -> Unit, subtitle: (Game) -> String?) {
+private fun Shelf(row: ShelfRow, index: Int, onOpenGame: (Game) -> Unit, onOptions: (Game) -> Unit, subtitle: (Game) -> String?) {
     Column(Modifier.fillMaxWidth().padding(top = 22.dp)) {
-        SectionTitle(row.title, Modifier.padding(horizontal = Page.Gutter), count = row.count, onClick = row.onOpen)
+        SectionTitle(row.title, Modifier.padding(horizontal = Page.Gutter), count = row.count, index = index, onClick = row.onOpen)
         if (row.games.isEmpty()) {
             Box(
                 Modifier

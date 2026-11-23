@@ -9,6 +9,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
+import com.retrohero.app.ui.theme.Tone
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.HazeStyle
 import dev.chrisbanes.haze.HazeTint
@@ -17,10 +18,11 @@ import dev.chrisbanes.haze.hazeEffect
 /** The app content behind floating chrome; screens draw into it, bars blur it. */
 val LocalGlassState = staticCompositionLocalOf<HazeState?> { null }
 
-/** Frosted chrome: #131313 at 78% over a heavy blur, with a little grain against banding. */
-val FrostStyle = HazeStyle(
-    backgroundColor = Color.Black,
-    tint = HazeTint(Color(0xFF131313).copy(alpha = 0.78f)),
+/** Frosted chrome over a heavy blur, with a little grain against banding. */
+val FrostStyle: HazeStyle
+    get() = HazeStyle(
+    backgroundColor = Tone.Bg,
+    tint = HazeTint(Tone.Surface.copy(alpha = 0.78f)),
     blurRadius = 28.dp,
     noiseFactor = 0.035f,
 )
@@ -44,7 +46,6 @@ fun Modifier.frostedGlass(state: HazeState?, shape: Shape, visibility: () -> Flo
                 is Outline.Rectangle -> Path().apply { addRect(outline.rect) }
                 is Outline.Generic -> outline.path
             }
-            drawPath(path, Color.White.copy(alpha = 0.05f * v), style = Stroke(width = 2f + inset))
+            drawPath(path, Tone.Ink.copy(alpha = 0.05f * v), style = Stroke(width = 2f + inset))
         }
 }
-

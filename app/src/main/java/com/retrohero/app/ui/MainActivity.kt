@@ -75,6 +75,10 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -138,6 +142,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalDensity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.retrohero.app.data.CoreManager.CoreState
 import com.retrohero.app.data.Systems
@@ -404,12 +409,19 @@ private fun App(vm: AppViewModel) {
               .fillMaxSize(),
       ) {
         val screen = openSystem?.id ?: openCollection?.let { "col:" + it.id } ?: tab.name
-        val effects = MaterialTheme.motionScheme.defaultEffectsSpec<Float>()
-        val spatial = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
+        val density = LocalDensity.current
         CompositionLocalProvider(LocalNavSpace provides floatingNavSpace) {
         AnimatedContent(
             targetState = screen,
-            transitionSpec = { (fadeIn(effects) + scaleIn(spatial, initialScale = 0.96f)) togetherWith fadeOut(effects) },
+            transitionSpec = {
+                (
+                    fadeIn(tween(220, easing = FastOutSlowInEasing)) +
+                        slideInVertically(tween(220, easing = FastOutSlowInEasing)) { with(density) { 8.dp.roundToPx() } }
+                    ) togetherWith (
+                    fadeOut(tween(220, easing = FastOutSlowInEasing)) +
+                        slideOutVertically(tween(220, easing = FastOutSlowInEasing)) { with(density) { (-8).dp.roundToPx() } }
+                    )
+            },
             label = "screen",
             modifier = Modifier.weight(1f).fillMaxHeight().hazeSource(glass),
         ) { key ->
@@ -452,6 +464,7 @@ private fun App(vm: AppViewModel) {
                     stats = stats,
                     collections = collectionGames,
                     onOpenCollection = { openCollectionId = it.id },
+                    pageIndex = tab.ordinal + 1,
                     onOpenStats = { statsOpen = true },
                     onOpenSystem = { openSystemId = it.id },
                     onSeeAllGames = { tab = Tab.Games },
@@ -461,8 +474,8 @@ private fun App(vm: AppViewModel) {
                                 onClick = { addMenu = true },
                                 shapes = IconButtonDefaults.shapes(),
                                 colors = IconButtonDefaults.filledIconButtonColors(
-                                    containerColor = Color.White.copy(alpha = 0.16f),
-                                    contentColor = Color.White,
+                                    containerColor = com.retrohero.app.ui.theme.Tone.Raised,
+                                    contentColor = com.retrohero.app.ui.theme.Tone.Ink,
                                 ),
                                 modifier = Modifier.size(46.dp),
                             ) { Icon(Icons.Rounded.Add, "Add games") }
@@ -508,6 +521,7 @@ private fun App(vm: AppViewModel) {
                     onHomebrew = { homebrewOpen = true },
                     stats = stats,
                     favorites = favoriteIds,
+                    pageIndex = tab.ordinal + 1,
                 )
                 key == Tab.Shelf.name && !shelfFlow -> ShelvesScreen(
                     games = games,
@@ -519,6 +533,7 @@ private fun App(vm: AppViewModel) {
                     onOptions = { menuFor = it.id },
                     onOpenCollection = { openCollectionId = it.id },
                     onNewShelf = { naming = true },
+                    pageIndex = tab.ordinal + 1,
                     onCoverFlow = { shelfFlow = true },
                 )
                 key == Tab.Shelf.name -> ShelfScreen(
@@ -531,6 +546,7 @@ private fun App(vm: AppViewModel) {
                     onPlay = { vm.play(it) },
                     onDetails = { sheetFor = it.id },
                     onShowShelves = { shelfFlow = false },
+                    pageIndex = tab.ordinal + 1,
                 )
                 key == Tab.Library.name -> LibraryScreen(
                     backEnabled = sheetFor == null && menuFor == null && !statsOpen && recap == null && pickCollectionsFor == null,
@@ -546,8 +562,9 @@ private fun App(vm: AppViewModel) {
                     onNewCollection = { naming = true },
                     onOpenStats = { statsOpen = true },
                     onPlay = { vm.play(it) },
+                    pageIndex = tab.ordinal + 1,
                 )
-                key == Tab.Cores.name -> CoresScreen(coreStates, vm::downloadCore, vm::deleteCore)
+                key == Tab.Cores.name -> CoresScreen(coreStates, vm::downloadCore, vm::deleteCore, pageIndex = tab.ordinal + 1)
                 else -> SettingsScreen(
                     settings = vm.settings,
                     dynamicColor = dynamicColor,
@@ -573,6 +590,7 @@ private fun App(vm: AppViewModel) {
                     looks = customLooks,
                     onImportLook = { lookPicker.launch(arrayOf("application/json", "text/*", "*/*")) },
                     onOpenStats = { statsOpen = true },
+                    pageIndex = tab.ordinal + 1,
                 )
             }
         }
@@ -632,6 +650,7 @@ private fun App(vm: AppViewModel) {
                 onUseAsCover = { vm.useAsCover(game, it) },
                 onClearCover = { vm.clearCover(game) },
                 onShareScreenshot = { shareScreenshot(context, it) },
+                pageIndex = tab.ordinal + 1,
                 onDeleteScreenshot = { vm.deleteScreenshot(game, it) },
             )
         }
@@ -653,8 +672,8 @@ private fun App(vm: AppViewModel) {
             Snackbar(
                 data,
                 shape = RoundedCornerShape(18.dp),
-                containerColor = Color(0xFF232326),
-                contentColor = Color.White,
+                containerColor = com.retrohero.app.ui.theme.Tone.Surface,
+                contentColor = com.retrohero.app.ui.theme.Tone.Ink,
                 actionColor = com.retrohero.app.ui.theme.Salmon,
                 modifier = Modifier.padding(horizontal = 16.dp),
             )

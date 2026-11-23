@@ -48,9 +48,9 @@ private val IconShapes = listOf(
 fun ShapeIcon(icon: ImageVector, size: Dp = 32.dp, tint: Color? = null) {
     // Mochy's row icon: an iOS-style light circle with a dark glyph, on a dark card.
     Box(
-        Modifier.size(size).background(Color(0xFFE5E5EA), androidx.compose.foundation.shape.CircleShape),
+        Modifier.size(size).background(com.retrohero.app.ui.theme.Tone.Raised, androidx.compose.foundation.shape.CircleShape),
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, null, tint = tint ?: Color(0xFF1C1C1E), modifier = Modifier.size(size * 0.62f))
+        Icon(icon, null, tint = tint ?: com.retrohero.app.ui.theme.Tone.Ink, modifier = Modifier.size(size * 0.62f))
     }
 }

@@ -107,6 +107,7 @@ fun ShelfScreen(
     onPlay: (Game) -> Unit,
     onDetails: (Game) -> Unit,
     startWithSpines: Boolean = true,
+    pageIndex: Int = 2,
     onShowShelves: (() -> Unit)? = null,
 ) {
     var system by rememberSaveable { mutableStateOf<String?>(null) }
@@ -129,20 +130,21 @@ fun ShelfScreen(
                 "Shelf",
                 "${shown.size} ${if (shown.size == 1) "game" else "games"} · ${sort.label}",
                 Modifier.padding(start = 22.dp, end = 12.dp),
+                index = pageIndex,
             ) {
                 if (onShowShelves != null) Box(
-                    Modifier.padding(end = 8.dp).size(48.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f)).clickable(onClick = onShowShelves),
+                    Modifier.padding(end = 8.dp).size(48.dp).clip(CircleShape).background(com.retrohero.app.ui.theme.Tone.Raised).clickable(onClick = onShowShelves),
                     contentAlignment = Alignment.Center,
-                ) { Icon(Icons.Rounded.ViewAgenda, "Show shelves", tint = Color.White) }
+                ) { Icon(Icons.Rounded.ViewAgenda, "Show shelves", tint = com.retrohero.app.ui.theme.Tone.Ink) }
                 Box(
-                    Modifier.padding(end = 8.dp).size(48.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f)).clickable { spines = !spines },
+                    Modifier.padding(end = 8.dp).size(48.dp).clip(CircleShape).background(com.retrohero.app.ui.theme.Tone.Raised).clickable { spines = !spines },
                     contentAlignment = Alignment.Center,
-                ) { Icon(if (spines) Icons.Rounded.ViewCarousel else Icons.Rounded.ViewWeek, if (spines) "Show as cover flow" else "Show as spines", tint = Color.White) }
+                ) { Icon(if (spines) Icons.Rounded.ViewCarousel else Icons.Rounded.ViewWeek, if (spines) "Show as cover flow" else "Show as spines", tint = com.retrohero.app.ui.theme.Tone.Ink) }
                 Box {
                     Box(
-                        Modifier.size(48.dp).clip(CircleShape).background(Color.White.copy(alpha = 0.08f)).clickable { sortMenu = true },
+                        Modifier.size(48.dp).clip(CircleShape).background(com.retrohero.app.ui.theme.Tone.Raised).clickable { sortMenu = true },
                         contentAlignment = Alignment.Center,
-                    ) { Icon(Icons.Rounded.SwapVert, "Sort", tint = Color.White) }
+                    ) { Icon(Icons.Rounded.SwapVert, "Sort", tint = com.retrohero.app.ui.theme.Tone.Ink) }
                     DropdownMenu(sortMenu, onDismissRequest = { sortMenu = false }, shape = RoundedCornerShape(20.dp)) {
                         GameSort.entries.forEach { s ->
                             DropdownMenuItem(
@@ -161,7 +163,7 @@ fun ShelfScreen(
             }
             if (shown.isEmpty()) {
                 Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    Text("No games here yet.", style = MaterialTheme.typography.bodyLarge, color = Color.White.copy(alpha = 0.55f))
+                    Text("No games here yet.", style = MaterialTheme.typography.bodyLarge, color = com.retrohero.app.ui.theme.Tone.Muted)
                 }
                 return@Column
             }

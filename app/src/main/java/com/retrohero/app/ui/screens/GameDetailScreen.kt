@@ -6,6 +6,7 @@ import com.retrohero.app.ui.components.AccentButton
 import com.retrohero.app.ui.components.Page
 import com.retrohero.app.ui.components.emberBackground
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -97,6 +98,7 @@ fun GameDetailScreen(
     onUseAsCover: (File) -> Unit = {},
     onClearCover: () -> Unit = {},
     onShareScreenshot: (File) -> Unit = {},
+    pageIndex: Int = 4,
     onDeleteScreenshot: (File) -> Unit = {},
 ) {
     val system = game.system ?: return
@@ -114,14 +116,14 @@ fun GameDetailScreen(
                 .padding(bottom = 32.dp),
         ) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                androidx.compose.material3.IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = Color.White) }
-                ArchiveLabel("Library  /  Game record")
+                androidx.compose.material3.IconButton(onClick = onClose) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = com.retrohero.app.ui.theme.Tone.Ink) }
+                ArchiveLabel("${pageIndex.toString().padStart(2, '0')} — Game record")
             }
             Row(Modifier.fillMaxWidth().padding(horizontal = Page.Gutter, vertical = 10.dp), verticalAlignment = Alignment.Bottom) {
                 GameArt(game, Modifier.width(coverWidth).aspectRatio(0.73f).clip(Ascend.CardShape), showTag = false)
                 Column(Modifier.weight(1f).padding(start = 16.dp)) {
                     ArchiveLabel(system.shortName)
-                    Text(game.title, style = MaterialTheme.typography.headlineLargeEmphasized, color = Color.White,
+                    Text(game.title, style = MaterialTheme.typography.displaySmallEmphasized, color = com.retrohero.app.ui.theme.Tone.Ink,
                         modifier = Modifier.padding(top = 6.dp))
                     Text(system.name, style = MaterialTheme.typography.bodySmall, color = Ascend.Muted)
                     if (stat.sessions > 0 || stat.seconds > 0) Text("${PlayTime.format(stat.seconds)} played · ${stat.sessions} sessions",
@@ -137,7 +139,7 @@ fun GameDetailScreen(
                     Text(
                         "Start from the beginning",
                         style = MaterialTheme.typography.labelLarge,
-                        color = Color.White.copy(alpha = 0.7f),
+                        color = com.retrohero.app.ui.theme.Tone.Muted,
                         modifier = Modifier
                             .align(Alignment.CenterHorizontally)
                             .padding(top = 6.dp)
@@ -149,7 +151,7 @@ fun GameDetailScreen(
             }
 
             if (saveSlots.isNotEmpty()) {
-                SectionLabel("Save states")
+                SectionLabel("Save states", 1)
                 LazyRow(contentPadding = PaddingValues(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(saveSlots, key = { it.first }) { (slot, modified) ->
                         Column(
@@ -157,18 +159,19 @@ fun GameDetailScreen(
                                 .width(150.dp)
                                 .press3D()
                                 .clip(Ascend.CardShape)
-                                .background(Color.White.copy(alpha = 0.08f))
+                                .background(com.retrohero.app.ui.theme.Tone.Surface)
+                                .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, Ascend.CardShape)
                                 .clickable { onPlay(slot) }
                                 .padding(14.dp),
                         ) {
-                            Icon(if (slot == AppPaths.AUTO_SLOT) Icons.Rounded.History else Icons.Rounded.Save, null, tint = Color.White.copy(alpha = 0.8f))
+                            Icon(if (slot == AppPaths.AUTO_SLOT) Icons.Rounded.History else Icons.Rounded.Save, null, tint = com.retrohero.app.ui.theme.Tone.Muted)
                             Text(
                                 if (slot == AppPaths.AUTO_SLOT) "Auto-save" else "Slot $slot",
                                 style = MaterialTheme.typography.titleSmallEmphasized,
-                                color = Color.White,
+                                color = com.retrohero.app.ui.theme.Tone.Ink,
                                 modifier = Modifier.padding(top = 10.dp),
                             )
-                            Text(time.format(Date(modified)), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.6f), maxLines = 1)
+                            Text(time.format(Date(modified)), style = MaterialTheme.typography.bodySmall, color = com.retrohero.app.ui.theme.Tone.Muted, maxLines = 1)
                         }
                     }
                 }
@@ -176,7 +179,7 @@ fun GameDetailScreen(
 
             if (screenshots.isNotEmpty()) {
                 var viewing by remember { mutableStateOf<File?>(null) }
-                SectionLabel("Screenshots")
+                SectionLabel("Screenshots", 2)
                 LazyRow(contentPadding = PaddingValues(horizontal = 24.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(screenshots, key = { it.path }) { shot ->
                         AsyncImage(
@@ -189,7 +192,7 @@ fun GameDetailScreen(
                                 .aspectRatio(4f / 3f)
                                 .press3D()
                                 .clip(RoundedCornerShape(16.dp))
-                                .background(Color.White.copy(alpha = 0.06f))
+                                .background(com.retrohero.app.ui.theme.Tone.Surface)
                                 .clickable { viewing = shot },
                         )
                     }
@@ -198,7 +201,7 @@ fun GameDetailScreen(
                     Text(
                         "Go back to the original cover",
                         style = MaterialTheme.typography.labelLarge,
-                        color = Color.White.copy(alpha = 0.7f),
+                        color = com.retrohero.app.ui.theme.Tone.Muted,
                         modifier = Modifier
                             .padding(start = 14.dp, top = 6.dp)
                             .clip(CircleShape)
@@ -218,7 +221,7 @@ fun GameDetailScreen(
             }
 
             if (system.cores.size > 1) {
-                SectionLabel("Emulator")
+                SectionLabel("Emulator", 3)
                 var selected by remember { mutableIntStateOf(system.cores.indexOf(currentCore).coerceAtLeast(0)) }
                 Row(
                     Modifier.padding(horizontal = 24.dp).fillMaxWidth(),
@@ -246,17 +249,18 @@ fun GameDetailScreen(
                 Text(
                     "${system.cores[selected].license} license · used for every ${system.shortName} game",
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.5f),
+                    color = com.retrohero.app.ui.theme.Tone.Muted,
                     modifier = Modifier.padding(start = 24.dp, top = 8.dp),
                 )
             }
 
-            SectionLabel("Details")
+            SectionLabel("Details", 4)
             Column(
                 Modifier
                     .padding(horizontal = 24.dp)
                     .clip(Ascend.CardShape)
-                    .background(Color.White.copy(alpha = 0.06f)),
+                    .background(com.retrohero.app.ui.theme.Tone.Surface)
+                    .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, Ascend.CardShape),
             ) {
                 InfoRow("System", system.name)
                 InfoRow("File", game.fileName)
@@ -323,20 +327,19 @@ private fun ShotAction(icon: androidx.compose.ui.graphics.vector.ImageVector, la
 }
 
 @Composable
-private fun SectionLabel(text: String) {
-    Text(
+private fun SectionLabel(text: String, index: Int) {
+    com.retrohero.app.ui.components.SectionTitle(
         text,
-        style = MaterialTheme.typography.titleLargeEmphasized,
-        color = Color.White.copy(alpha = 0.69f),
-        modifier = Modifier.padding(start = 24.dp, top = 30.dp, bottom = 12.dp),
+        modifier = Modifier.padding(start = 24.dp, end = 24.dp, top = 30.dp, bottom = 12.dp),
+        index = index,
     )
 }
 
 @Composable
 private fun InfoRow(label: String, value: String) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 13.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.55f), modifier = Modifier.width(72.dp))
-        Text(value, style = MaterialTheme.typography.bodyMedium, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = com.retrohero.app.ui.theme.Tone.Muted, modifier = Modifier.width(72.dp))
+        Text(value, style = MaterialTheme.typography.bodyMedium, color = com.retrohero.app.ui.theme.Tone.Ink, maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }
 

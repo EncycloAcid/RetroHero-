@@ -31,6 +31,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -157,8 +158,8 @@ private val HeroHeight: Dp
 private val CardSpacing = 12.dp
 private val Tracking = (-0.04).em
 
-private val LabelStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 16.sp, lineHeight = 19.sp, letterSpacing = Tracking)
-private val HeroTitleStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 26.sp, lineHeight = 30.sp, letterSpacing = Tracking)
+private val LabelStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, lineHeight = 19.sp, letterSpacing = Tracking)
+private val HeroTitleStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 26.sp, lineHeight = 30.sp, letterSpacing = Tracking)
 private val CardTitleStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, lineHeight = 17.sp, letterSpacing = (-0.03).em)
 private val CardSubtitleStyle = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 12.sp, lineHeight = 15.sp, letterSpacing = (-0.02).em)
 private val LabelColor = Color.White.copy(alpha = 0.69f)
@@ -218,6 +219,7 @@ fun HomeScreen(
     stats: Map<String, PlayStat> = emptyMap(),
     collections: List<Pair<GameCollection, List<Game>>> = emptyList(),
     onOpenCollection: (GameCollection) -> Unit = {},
+    pageIndex: Int = 1,
     onOpenStats: () -> Unit = {},
 ) {
     val mostPlayed = remember(games, stats) {
@@ -247,7 +249,7 @@ fun HomeScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxSize().emberBackground(),
     ) {
-        full { PageHeader("Home", "${games.size} games · ${systems.size} systems", Modifier.padding(horizontal = ContentInset), trailing = topActions) }
+        full { PageHeader("Home", "${games.size} games · ${systems.size} systems", Modifier.padding(horizontal = ContentInset), index = pageIndex, trailing = topActions) }
         if (featured.isNotEmpty()) full { FeaturedGames(featured, recents.firstOrNull(), onOpen, onPlay) }
         full {
             Row(Modifier.fillMaxWidth().padding(horizontal = ContentInset), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -258,14 +260,14 @@ fun HomeScreen(
             }
         }
         if (favorites.isNotEmpty()) {
-            full { SectionHeader("Pinned", favorites.size) }
+            full { SectionHeader("Pinned", favorites.size, 1) }
             full { LazyRow(contentPadding = PaddingValues(horizontal = ContentInset), horizontalArrangement = Arrangement.spacedBy(CardSpacing)) {
                 items(favorites, key = { it.id }) { game -> GameCard(game, { onOpen(game) }, width = RowCardWidth, onLongClick = { onOptions(game) }, onPlay = { onPlay(game) }) }
             } }
         }
 
         if (recents.isNotEmpty()) {
-            full { Box(Modifier.launchRise(2)) { SectionHeader("Recently Played", recents.size) } }
+            full { Box(Modifier.launchRise(2)) { SectionHeader("Recently Played", recents.size, 2) } }
             full {
                 LazyRow(modifier = Modifier.launchRise(3), contentPadding = PaddingValues(horizontal = ContentInset), horizontalArrangement = Arrangement.spacedBy(CardSpacing)) {
                     items(recents, key = { "r_" + it.id }) { game -> RowCard(game, onOpen, onOptions) }
@@ -276,14 +278,14 @@ fun HomeScreen(
         if (last != null) {
             val picks = games.filter { it.systemId == last.systemId && it !in recents }.take(4)
             if (picks.isNotEmpty()) {
-                full { SectionHeader("More on ${last.system?.shortName ?: last.systemId}", picks.size) }
+                full { SectionHeader("More on ${last.system?.shortName ?: last.systemId}", picks.size, 3) }
                 full { LazyRow(contentPadding = PaddingValues(horizontal = ContentInset), horizontalArrangement = Arrangement.spacedBy(CardSpacing)) {
                     items(picks, key = { it.id }) { game -> RowCard(game, onOpen, onOptions) }
                 } }
             }
         }
         if (mostPlayed.size >= 2) {
-            full { SectionHeader("Most Played", mostPlayed.size) }
+            full { SectionHeader("Most Played", mostPlayed.size, 4) }
             full {
                 LazyRow(contentPadding = PaddingValues(horizontal = ContentInset), horizontalArrangement = Arrangement.spacedBy(CardSpacing)) {
                     items(mostPlayed, key = { "m_" + it.id }) { game ->
@@ -293,7 +295,7 @@ fun HomeScreen(
             }
         }
         if (collections.isNotEmpty()) {
-            full { SectionHeader("Your Collections", collections.size) }
+            full { SectionHeader("Your Collections", collections.size, 5) }
             full {
                 LazyRow(contentPadding = PaddingValues(horizontal = ContentInset), horizontalArrangement = Arrangement.spacedBy(CardSpacing)) {
                     items(collections, key = { "c_" + it.first.id }) { (c, list) -> CollectionCard(c, list, onOpenCollection) }
@@ -301,14 +303,14 @@ fun HomeScreen(
             }
         }
         if (systems.size > 1) {
-            full { SectionHeader("Your Systems", systems.size) }
+            full { SectionHeader("Your Systems", systems.size, 6) }
             full {
                 LazyRow(contentPadding = PaddingValues(horizontal = ContentInset), horizontalArrangement = Arrangement.spacedBy(CardSpacing)) {
                     items(systems, key = { "s_" + it.id }) { system -> SystemCard(system, counts[system.id] ?: 0, onOpenSystem) }
                 }
             }
         }
-        full { SectionHeader("All Games", games.size, onSeeAllGames) }
+        full { SectionHeader("All Games", games.size, 7, onSeeAllGames) }
         items(games, key = { it.id }) { game ->
             GameCard(game, onClick = { onOpen(game) }, onLongClick = { onOptions(game) }, modifier = Modifier.animateItem())
         }
@@ -661,14 +663,23 @@ private fun Die(spinning: Boolean) {
 // ---- Rows -----------------------------------------------------------------------------------------
 
 @Composable
-private fun SectionHeader(text: String, count: Int, onClick: (() -> Unit)? = null) {
-    com.retrohero.app.ui.components.SectionTitle(text, Modifier.padding(horizontal = ContentInset), count = count, onClick = onClick)
+private fun SectionHeader(text: String, count: Int, index: Int, onClick: (() -> Unit)? = null) {
+    com.retrohero.app.ui.components.SectionTitle(text, Modifier.padding(horizontal = ContentInset), count = count, index = index, onClick = onClick)
 }
 
 @Composable
 internal fun CollectionCard(collection: GameCollection, games: List<Game>, onOpen: (GameCollection) -> Unit) {
-    Column(Modifier.width(RowCardWidth).press3D().clickable { onOpen(collection) }) {
-        Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(8.dp)).background(Color(0xFF1C1C1F))) {
+    Column(
+        Modifier
+            .width(RowCardWidth)
+            .clip(RoundedCornerShape(14.dp))
+            .background(com.retrohero.app.ui.theme.Tone.Surface)
+            .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, RoundedCornerShape(14.dp))
+            .press3D()
+            .clickable { onOpen(collection) }
+            .padding(6.dp),
+    ) {
+        Box(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(10.dp)).background(com.retrohero.app.ui.theme.Tone.Bg)) {
             val covers = games.take(4)
             when {
                 covers.size >= 4 -> Column(Modifier.fillMaxSize()) {
@@ -679,13 +690,13 @@ internal fun CollectionCard(collection: GameCollection, games: List<Game>, onOpe
                 covers.isNotEmpty() -> GameArt(covers.first(), Modifier.fillMaxSize(), showTag = false)
                 else -> Icon(
                     Icons.AutoMirrored.Rounded.QueueMusic, null,
-                    tint = Color.White.copy(alpha = 0.4f),
+                    tint = com.retrohero.app.ui.theme.Tone.Faint,
                     modifier = Modifier.align(Alignment.Center).size(48.dp),
                 )
             }
         }
-        Text(collection.name, style = CardTitleStyle, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 9.dp))
-        Text(if (games.size == 1) "1 game" else "${games.size} games", style = CardSubtitleStyle, color = SubtleColor)
+        Text(collection.name, style = CardTitleStyle, color = com.retrohero.app.ui.theme.Tone.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 9.dp, start = 2.dp, end = 2.dp))
+        Text(if (games.size == 1) "1 game" else "${games.size} games", style = CardSubtitleStyle, color = com.retrohero.app.ui.theme.Tone.Muted, modifier = Modifier.padding(horizontal = 2.dp))
     }
 }
 
@@ -700,19 +711,29 @@ private fun SystemCard(system: GameSystem, count: Int, onOpen: (GameSystem) -> U
     val pressed by interaction.collectIsPressedAsState()
     val p by animateFloatAsState(if (pressed) 1f else 0f, spring(0.5f, Spring.StiffnessMediumLow), label = "sysMorph")
     val morph = rememberMorph(system.polygon, MaterialShapes.Circle)
-    Column(Modifier.width(RowCardWidth).press3D().clickable(interactionSource = interaction, indication = null) { onOpen(system) }) {
+    Column(
+        Modifier
+            .width(RowCardWidth)
+            .clip(RoundedCornerShape(14.dp))
+            .background(com.retrohero.app.ui.theme.Tone.Surface)
+            .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, RoundedCornerShape(14.dp))
+            .press3D()
+            .clickable(interactionSource = interaction, indication = null) { onOpen(system) }
+            .padding(6.dp),
+    ) {
         Box(
             Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
-                .clip(RoundedCornerShape(8.dp))
-                .background(Brush.linearGradient(listOf(lerp(system.color, Color.White, 0.15f), lerp(system.color, Color.Black, 0.55f)))),
+                .clip(RoundedCornerShape(10.dp))
+                .background(com.retrohero.app.ui.theme.Tone.Surface)
+                .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, RoundedCornerShape(14.dp)),
             contentAlignment = Alignment.Center,
         ) {
-            Box(Modifier.size(88.dp).graphicsLayer { rotationZ = 14f + 60f * p }.background(Color.White.copy(alpha = 0.2f), MorphShape(morph, p)))
-            Text(system.tag, style = TextStyle(fontFamily = PixelFont, fontSize = 15.sp), color = Color.White)
+            Box(Modifier.size(88.dp).graphicsLayer { rotationZ = 14f + 60f * p }.background(com.retrohero.app.ui.theme.Tone.Ink.copy(alpha = 0.08f), MorphShape(morph, p)))
+            Text(system.tag, style = TextStyle(fontFamily = PixelFont, fontSize = 15.sp), color = com.retrohero.app.ui.theme.Tone.Ink)
         }
-        Text(system.name, style = CardTitleStyle, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 9.dp))
-        Text(if (count == 1) "1 game" else "$count games", style = CardSubtitleStyle, color = SubtleColor)
+        Text(system.name, style = CardTitleStyle, color = com.retrohero.app.ui.theme.Tone.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 9.dp))
+        Text(if (count == 1) "1 game" else "$count games", style = CardSubtitleStyle, color = com.retrohero.app.ui.theme.Tone.Muted)
     }
 }

@@ -40,6 +40,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import com.retrohero.app.ui.theme.Tone
 import kotlinx.coroutines.launch
 
 /*
@@ -98,15 +99,13 @@ fun Modifier.press3D(maxTilt: Float = 7f, pressedScale: Float = 0.97f): Modifier
         }
 }
 
-private val SwitchGrey = Color(0xFF8E8E93)
-
 /** Monochrome switch: an outlined track when off, grey track and white thumb when on. */
 @Composable
 fun MonoSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
     val alpha = if (enabled) 1f else 0.38f
-    val track by animateColorAsState(if (checked) SwitchGrey.copy(alpha = alpha) else Color.Transparent, tween(150), label = "track")
-    val border by animateColorAsState(if (checked) Color.Transparent else SwitchGrey.copy(alpha = 0.45f * alpha), tween(150), label = "border")
-    val thumb by animateColorAsState(if (checked) Color.White.copy(alpha = alpha) else SwitchGrey.copy(alpha = alpha), tween(150), label = "thumb")
+    val track by animateColorAsState(if (checked) Tone.Ink.copy(alpha = 0.24f * alpha) else Color.Transparent, tween(150), label = "track")
+    val border by animateColorAsState(if (checked) Color.Transparent else Tone.Line.copy(alpha = alpha), tween(150), label = "border")
+    val thumb by animateColorAsState(if (checked) Tone.Ink.copy(alpha = alpha) else Tone.Raised.copy(alpha = alpha), tween(150), label = "thumb")
     val x by animateDpAsState(if (checked) 52.dp - 24.dp - 4.dp else 4.dp, spring(dampingRatio = 0.7f, stiffness = 700f), label = "thumbX")
     Box(
         modifier
@@ -123,7 +122,7 @@ fun MonoSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit, modifier: M
             Icon(
                 if (checked) Icons.Rounded.Check else Icons.Rounded.Close,
                 null,
-                tint = if (checked) SwitchGrey else Color.Black.copy(alpha = 0.6f),
+                tint = if (checked) Tone.Bg else Tone.Ink,
                 modifier = Modifier.size(14.dp),
             )
         }

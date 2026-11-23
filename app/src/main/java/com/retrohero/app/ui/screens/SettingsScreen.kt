@@ -109,6 +109,7 @@ fun SettingsScreen(
     looks: List<com.retrohero.app.data.Look> = emptyList(),
     onImportLook: () -> Unit = {},
     onLookChanged: () -> Unit = {},
+    pageIndex: Int = 6,
     onOpenStats: () -> Unit = {},
 ) {
     var page by rememberSaveable { mutableStateOf<String?>(null) }
@@ -122,7 +123,7 @@ fun SettingsScreen(
         label = "settingsPage",
     ) { p ->
         when (p) {
-            null -> SettingsHome(settings, onOpen = { page = it }, onOpenStats = onOpenStats)
+            null -> SettingsHome(settings, onOpen = { page = it }, onOpenStats = onOpenStats, pageIndex = pageIndex)
             "library" -> SubSettings("Game folders", onBack = { page = null }) {
         // ---- Library -------------------------------------------------------------------
         Column {
