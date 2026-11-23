@@ -524,6 +524,7 @@ private fun App(vm: AppViewModel) {
                     onShowShelves = { shelfFlow = false },
                 )
                 key == Tab.Library.name -> LibraryScreen(
+                    backEnabled = sheetFor == null && menuFor == null && !statsOpen && recap == null && pickCollectionsFor == null,
                     games = games,
                     favorites = favorites,
                     collections = collectionGames,

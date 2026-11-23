@@ -91,9 +91,10 @@ fun LibraryScreen(
     onNewCollection: () -> Unit,
     onOpenStats: () -> Unit,
     onPlay: (Game) -> Unit = {},
+    backEnabled: Boolean = true,
 ) {
     var tab by rememberSaveable { mutableStateOf(LibraryTab.All) }
-    BackHandler(enabled = tab != LibraryTab.All) { tab = LibraryTab.All }
+    BackHandler(enabled = backEnabled && tab != LibraryTab.All) { tab = LibraryTab.All }
     val counts = remember(games) { games.groupingBy { it.systemId }.eachCount() }
     val systems = remember(counts) { com.retrohero.app.data.Systems.all.filter { (counts[it.id] ?: 0) > 0 } }
 
