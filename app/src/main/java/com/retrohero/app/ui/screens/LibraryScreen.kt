@@ -113,24 +113,50 @@ fun LibraryScreen(
         span {
             com.retrohero.app.ui.components.PageHeader(if (tab == LibraryTab.All) "Library" else tab.label,
                 "${games.size} games · ${systems.size} systems", index = pageIndex) {
-                if (tab != LibraryTab.All) TextButton(onClick = { tab = LibraryTab.All }) { Text("All library") }
+                if (tab != LibraryTab.All) com.retrohero.app.ui.components.Key("All library", { tab = LibraryTab.All })
+            }
+        }
+        span {
+            androidx.compose.foundation.lazy.LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(LibraryTab.entries.size) { i ->
+                    val entry = LibraryTab.entries[i]
+                    com.retrohero.app.ui.components.PillChip(
+                        text = entry.label,
+                        selected = tab == entry,
+                        onClick = { tab = entry },
+                        selectedStyle = true,
+                    )
+                }
             }
         }
         when (tab) {
             LibraryTab.All -> {
                 span { StatsCard(history, onOpenStats) }
                 span {
+                    val cardShape = RoundedCornerShape(Ascend.Radius.Card)
                     Column {
-                        ArchiveLabel("Browse the archive", Modifier.padding(vertical = 12.dp))
-                        LibraryTab.entries.filter { it != LibraryTab.All }.forEach { destination ->
-                            val (count, art) = when (destination) {
-                                LibraryTab.Systems -> systems.size to games.firstOrNull()
-                                LibraryTab.Favourites -> favorites.size to favorites.firstOrNull()
-                                LibraryTab.Collections -> collections.size to collections.firstNotNullOfOrNull { it.second.firstOrNull() }
-                                LibraryTab.Screenshots -> shots.size to shots.firstOrNull()?.game
-                                else -> history.size to history.firstOrNull()?.game
+                        ArchiveLabel("Browse the archive", Modifier.padding(bottom = 10.dp, top = 4.dp))
+                        Column(
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(cardShape)
+                                .background(com.retrohero.app.ui.theme.Tone.Surface)
+                                .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, cardShape)
+                                .padding(horizontal = 14.dp, vertical = 4.dp),
+                        ) {
+                            val entries = LibraryTab.entries.filter { it != LibraryTab.All }
+                            entries.forEachIndexed { idx, destination ->
+                                val (count, art) = when (destination) {
+                                    LibraryTab.Systems -> systems.size to games.firstOrNull()
+                                    LibraryTab.Favourites -> favorites.size to favorites.firstOrNull()
+                                    LibraryTab.Collections -> collections.size to collections.firstNotNullOfOrNull { it.second.firstOrNull() }
+                                    LibraryTab.Screenshots -> shots.size to shots.firstOrNull()?.game
+                                    else -> history.size to history.firstOrNull()?.game
+                                }
+                                IndexRow(destination, count, art, showDivider = idx < entries.lastIndex) { tab = destination }
                             }
-                            IndexRow(destination, count, art) { tab = destination }
                         }
                     }
                 }
@@ -271,13 +297,13 @@ private fun Empty(text: String) {
 }
 
 @Composable
-private fun IndexRow(tab: LibraryTab, count: Int, game: Game?, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 7.dp), verticalAlignment = Alignment.CenterVertically) {
+private fun IndexRow(tab: LibraryTab, count: Int, game: Game?, showDivider: Boolean = true, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
         ArchiveLabel((tab.ordinal + 1).toString().padStart(2, '0'), Modifier.width(24.dp), color = com.retrohero.app.ui.theme.Tone.Faint)
-        Spacer(Modifier.width(16.dp))
+        Spacer(Modifier.width(12.dp))
         val thumbnailShape = RoundedCornerShape(Ascend.Radius.Cover)
         Box(
-            Modifier.size(44.dp).clip(thumbnailShape).background(com.retrohero.app.ui.theme.Tone.Raised)
+            Modifier.size(42.dp).clip(thumbnailShape).background(com.retrohero.app.ui.theme.Tone.Raised)
                 .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, thumbnailShape),
             contentAlignment = Alignment.Center,
         ) {
@@ -294,7 +320,7 @@ private fun IndexRow(tab: LibraryTab, count: Int, game: Game?, onClick: () -> Un
         Spacer(Modifier.width(8.dp))
         Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = com.retrohero.app.ui.theme.Tone.Faint, modifier = Modifier.size(18.dp))
     }
-    HorizontalDivider(color = Page.Divider)
+    if (showDivider) HorizontalDivider(color = Page.Divider)
 }
 
 @Composable

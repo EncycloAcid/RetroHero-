@@ -109,8 +109,15 @@ fun PillChip(
         if (!selected) Tone.Raised else if (selectedStyle) Tone.Ink else lerp(Tone.Raised, if (color == Color.White) Ascend.accent else color, 0.20f),
         label = "pill",
     )
+    val shape = RoundedCornerShape(Ascend.Radius.Control)
     Row(
-        modifier.height(40.dp).clip(RoundedCornerShape(Ascend.Radius.Control)).background(fill).clickable(onClick = onClick).padding(horizontal = 12.dp),
+        modifier
+            .height(38.dp)
+            .clip(shape)
+            .background(fill)
+            .border(1.dp, if (selected && selectedStyle) Tone.Ink else Tone.Line, shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         leading?.invoke()

@@ -65,6 +65,7 @@ fun ShelvesScreen(
     onNewShelf: () -> Unit,
     pageIndex: Int = 2,
     onCoverFlow: () -> Unit,
+    onPlay: (Game) -> Unit = {},
 ) {
     val rows = remember(games, recents, favorites, collections, stats) {
         val played = games.filter { (stats[it.id]?.seconds ?: 0) > 0 }
@@ -86,17 +87,17 @@ fun ShelvesScreen(
             PageHeader(
                 "Shelves",
                 "${rows.size} ${if (rows.size == 1) "shelf" else "shelves"} · ${games.size} ${if (games.size == 1) "game" else "games"}",
-                Modifier.padding(start = Page.Gutter, end = 14.dp),
+                Modifier.padding(start = Page.Gutter, end = Page.Gutter),
                 index = pageIndex,
             ) {
-                HeaderButton(Icons.Rounded.ViewCarousel, "Cover flow", com.retrohero.app.ui.theme.Tone.Raised, com.retrohero.app.ui.theme.Tone.Ink, onCoverFlow)
-                HeaderButton(Icons.Rounded.Add, "New shelf", Salmon, Ascend.onAccent, onNewShelf, Modifier.padding(start = 8.dp))
+                com.retrohero.app.ui.components.Key("3D Boxes", onCoverFlow, icon = Icons.Rounded.ViewCarousel)
+                com.retrohero.app.ui.components.AccentButton("New", onNewShelf, Modifier.padding(start = 8.dp), icon = Icons.Rounded.Add)
             }
         }
         if (rows.isEmpty()) {
             item(key = "empty") {
                 Text(
-                    "Your shelves start here. Add games to your library, or tap + to create a collection.",
+                    "Your shelves start here. Add games to your library, or tap + New to create a collection.",
                     style = TextStyle(fontFamily = Inter, fontSize = 15.sp),
                     color = com.retrohero.app.ui.theme.Tone.Muted,
                     modifier = Modifier.padding(horizontal = Page.Gutter, vertical = 40.dp),
@@ -105,7 +106,7 @@ fun ShelvesScreen(
         }
         rows.forEachIndexed { index, row ->
             item(key = row.key) {
-                Shelf(row, index + 1, onOpenGame, onOptions) { g ->
+                Shelf(row, index + 1, onOpenGame, onPlay, onOptions) { g ->
                     stats[g.id]?.seconds?.takeIf { it >= 60 }?.let { com.retrohero.app.data.PlayTime.format(it) } ?: g.system?.shortName
                 }
             }
@@ -114,16 +115,8 @@ fun ShelvesScreen(
 }
 
 @Composable
-private fun HeaderButton(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String, fill: Color, tint: Color, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Box(
-        modifier.size(44.dp).clip(RoundedCornerShape(Ascend.Radius.Control)).background(fill).clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) { Icon(icon, description, tint = tint) }
-}
-
-@Composable
-private fun Shelf(row: ShelfRow, index: Int, onOpenGame: (Game) -> Unit, onOptions: (Game) -> Unit, subtitle: (Game) -> String?) {
-    Column(Modifier.fillMaxWidth().padding(top = 32.dp)) {
+private fun Shelf(row: ShelfRow, index: Int, onOpenGame: (Game) -> Unit, onPlay: (Game) -> Unit, onOptions: (Game) -> Unit, subtitle: (Game) -> String?) {
+    Column(Modifier.fillMaxWidth().padding(top = 24.dp)) {
         SectionTitle(
             row.title,
             Modifier.padding(horizontal = Page.Gutter),
@@ -150,7 +143,14 @@ private fun Shelf(row: ShelfRow, index: Int, onOpenGame: (Game) -> Unit, onOptio
                 modifier = Modifier.padding(top = 12.dp),
             ) {
                 items(row.games, key = { it.id }) { game ->
-                    GameCard(game, onClick = { onOpenGame(game) }, width = 96.dp, subtitle = subtitle(game), onLongClick = { onOptions(game) })
+                    GameCard(
+                        game,
+                        onClick = { onOpenGame(game) },
+                        width = 118.dp,
+                        subtitle = subtitle(game),
+                        onLongClick = { onOptions(game) },
+                        onPlay = { onPlay(game) },
+                    )
                 }
             }
         }

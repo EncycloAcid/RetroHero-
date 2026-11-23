@@ -57,47 +57,7 @@ private val TiltSpring = spring<Float>(dampingRatio = Spring.DampingRatioNoBounc
 /** True when the person asked for less motion (Settings → Gameplay & comfort). */
 val LocalReducedMotion = androidx.compose.runtime.staticCompositionLocalOf { false }
 
-fun Modifier.press3D(maxTilt: Float = 7f, pressedScale: Float = 0.97f): Modifier = composed {
-    if (LocalReducedMotion.current) return@composed this
-    val scope = rememberCoroutineScope()
-    val press = remember { Animatable(0f) }
-    var normalized by remember { mutableStateOf(Offset.Zero) }
-    var size by remember { mutableStateOf(IntSize.Zero) }
-    this
-        .pointerInput(Unit) {
-            awaitPointerEventScope {
-                while (true) {
-                    val down = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.pressed } ?: continue
-                    val bounds = this.size
-                    if (bounds.width > 0 && bounds.height > 0) {
-                        normalized = Offset(
-                            ((down.position.x / bounds.width) * 2f - 1f).coerceIn(-1f, 1f),
-                            ((down.position.y / bounds.height) * 2f - 1f).coerceIn(-1f, 1f),
-                        )
-                        size = bounds
-                    }
-                    scope.launch { press.animateTo(1f, TiltSpring) }
-                    while (true) {
-                        val event = awaitPointerEvent(PointerEventPass.Initial)
-                        if (event.changes.none { it.pressed }) break
-                    }
-                    scope.launch { press.animateTo(0f, TiltSpring) }
-                }
-            }
-        }
-        .graphicsLayer {
-            val t = press.value
-            if (t > 0f) {
-                val s = 1f - (1f - pressedScale) * t
-                scaleX = s
-                scaleY = s
-                rotationX = -normalized.y * maxTilt * t
-                rotationY = normalized.x * maxTilt * t
-                cameraDistance = (size.width.takeIf { it > 0 }?.toFloat() ?: 1000f) * 3f
-                transformOrigin = TransformOrigin.Center
-            }
-        }
-}
+fun Modifier.press3D(maxTilt: Float = 7f, pressedScale: Float = 0.97f): Modifier = this
 
 /** Tactile Instrument switch: recessed track when off, Ember accent track and crisp thumb when on. */
 @Composable

@@ -108,7 +108,7 @@ fun SectionTitle(
     }
 }
 
-/** Library card: cover, title, and a quiet info line. */
+/** Library card: cover with console tag & quick-play button, readable title, and info line. */
 @Composable
 fun GameCard(
     game: Game,
@@ -126,6 +126,7 @@ fun GameCard(
         spring(dampingRatio = 0.7f, stiffness = 600f),
         label = "gameCardScale",
     )
+    val coverShape = RoundedCornerShape(Ascend.Radius.Cover)
     Box(
         modifier
             .then(if (width != null) Modifier.width(width) else Modifier.fillMaxWidth())
@@ -135,26 +136,38 @@ fun GameCard(
             Modifier.fillMaxWidth()
                 .combinedClickable(interactionSource = interaction, indication = null, onClick = onClick, onLongClick = onLongClick),
         ) {
-            val coverShape = RoundedCornerShape(Ascend.Radius.Cover)
             Box(
-                Modifier.fillMaxWidth().aspectRatio(0.73f)
+                Modifier.fillMaxWidth().aspectRatio(0.75f)
                     .clip(coverShape)
-                    .border(0.5.dp, Tone.Line, coverShape),
+                    .border(1.dp, Tone.Line, coverShape),
             ) {
                 GameArt(game, Modifier.fillMaxSize(), showTag = false)
+                val sysTag = game.system?.shortName
+                if (!sysTag.isNullOrBlank()) {
+                    Box(
+                        Modifier
+                            .align(Alignment.TopStart)
+                            .padding(6.dp)
+                            .background(Color.Black.copy(alpha = 0.72f), RoundedCornerShape(6.dp))
+                            .border(0.5.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(6.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    ) {
+                        ArchiveLabel(sysTag, color = Color.White)
+                    }
+                }
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(7.dp))
             Text(
                 game.title,
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 13.sp, lineHeight = 16.sp),
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, lineHeight = 16.sp),
                 color = Tone.Ink,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             if (!subtitle.isNullOrBlank()) {
                 Text(
                     subtitle,
-                    style = TextStyle(fontFamily = Inter, fontSize = 11.sp),
+                    style = TextStyle(fontFamily = Inter, fontSize = 11.5.sp),
                     color = Ascend.Muted,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -163,18 +176,18 @@ fun GameCard(
             }
         }
         if (onPlay != null) {
-            Box(Modifier.fillMaxWidth().aspectRatio(0.73f)) {
+            Box(Modifier.fillMaxWidth().aspectRatio(0.75f)) {
                 Box(
                     Modifier
                         .align(Alignment.BottomEnd)
                         .padding(6.dp)
-                        .size(30.dp)
+                        .size(32.dp)
                         .clip(CircleShape)
-                        .background(Tone.Raised.copy(alpha = 0.94f))
-                        .border(0.5.dp, Tone.Line, CircleShape)
+                        .background(Tone.Raised.copy(alpha = 0.96f))
+                        .border(1.dp, Tone.Line, CircleShape)
                         .clickable(onClick = onPlay),
                     contentAlignment = Alignment.Center,
-                ) { Icon(Icons.Rounded.PlayArrow, "Play ${game.title}", tint = Tone.Ink, modifier = Modifier.size(16.dp)) }
+                ) { Icon(Icons.Rounded.PlayArrow, "Play ${game.title}", tint = Tone.Ink, modifier = Modifier.size(18.dp)) }
             }
         }
     }

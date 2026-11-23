@@ -237,10 +237,10 @@ fun HomeScreen(
         (recents.take(1) + favorites.take(2) + games.take(5)).distinctBy { it.id }.take(4)
     }
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(100.dp),
+        columns = GridCells.Adaptive(104.dp),
         contentPadding = PaddingValues(start = ContentInset, end = ContentInset, bottom = bottomPadding + 24.dp),
         horizontalArrangement = Arrangement.spacedBy(CardSpacing),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
         modifier = Modifier.fillMaxSize().emberBackground(),
     ) {
         full { PageHeader("Home", "${games.size} games · ${systems.size} systems", Modifier.padding(horizontal = ContentInset), index = pageIndex, trailing = topActions) }
@@ -251,6 +251,42 @@ fun HomeScreen(
                     if (candidates.size > 1) shuffleOpen = true else candidates.firstOrNull()?.let(onPlay)
                 }
                 ArchiveShortcut("Play stats", "A2", Icons.Rounded.Insights, Modifier.weight(1f), onOpenStats)
+            }
+        }
+        if (systems.isNotEmpty()) {
+            full {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = ContentInset),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(systems, key = { "chip_" + it.id }) { sys ->
+                        val count = counts[sys.id] ?: 0
+                        Row(
+                            Modifier
+                                .height(38.dp)
+                                .clip(RoundedCornerShape(Ascend.Radius.Control))
+                                .background(Tone.Surface)
+                                .border(1.dp, Tone.Line, RoundedCornerShape(Ascend.Radius.Control))
+                                .clickable { onOpenSystem(sys) }
+                                .padding(horizontal = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(7.dp),
+                        ) {
+                            Box(
+                                Modifier
+                                    .size(7.dp)
+                                    .clip(CircleShape)
+                                    .background(sys.color),
+                            )
+                            Text(
+                                sys.shortName,
+                                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.sp),
+                                color = Tone.Ink,
+                            )
+                            ArchiveLabel(count.toString().padStart(2, '0'), color = Tone.Muted)
+                        }
+                    }
+                }
             }
         }
         if (favorites.isNotEmpty()) {
@@ -264,7 +300,7 @@ fun HomeScreen(
             full { Box(Modifier.launchRise(2)) { SectionHeader("Recently Played", recents.size, 2) } }
             full {
                 LazyRow(modifier = Modifier.launchRise(3), contentPadding = PaddingValues(horizontal = ContentInset), horizontalArrangement = Arrangement.spacedBy(CardSpacing)) {
-                    items(recents, key = { "r_" + it.id }) { game -> RowCard(game, onOpen, onOptions) }
+                    items(recents, key = { "r_" + it.id }) { game -> RowCard(game, onOpen, onOptions, onQuickPlay = onPlay) }
                 }
             }
         }
@@ -274,7 +310,7 @@ fun HomeScreen(
             if (picks.isNotEmpty()) {
                 full { SectionHeader("More on ${last.system?.shortName ?: last.systemId}", picks.size, 3) }
                 full { LazyRow(contentPadding = PaddingValues(horizontal = ContentInset), horizontalArrangement = Arrangement.spacedBy(CardSpacing)) {
-                    items(picks, key = { it.id }) { game -> RowCard(game, onOpen, onOptions) }
+                    items(picks, key = { it.id }) { game -> RowCard(game, onOpen, onOptions, onQuickPlay = onPlay) }
                 } }
             }
         }
@@ -283,7 +319,7 @@ fun HomeScreen(
             full {
                 LazyRow(contentPadding = PaddingValues(horizontal = ContentInset), horizontalArrangement = Arrangement.spacedBy(CardSpacing)) {
                     items(mostPlayed, key = { "m_" + it.id }) { game ->
-                        RowCard(game, onOpen, onOptions, subtitle = PlayTime.format(stats[game.id]?.seconds ?: 0))
+                        RowCard(game, onOpen, onOptions, subtitle = PlayTime.format(stats[game.id]?.seconds ?: 0), onQuickPlay = onPlay)
                     }
                 }
             }
@@ -306,7 +342,7 @@ fun HomeScreen(
         }
         full { SectionHeader("All Games", games.size, 7, onSeeAllGames) }
         items(games, key = { it.id }) { game ->
-            GameCard(game, onClick = { onOpen(game) }, onLongClick = { onOptions(game) }, modifier = Modifier.animateItem())
+            GameCard(game, onClick = { onOpen(game) }, onLongClick = { onOptions(game) }, onPlay = { onPlay(game) }, modifier = Modifier.animateItem())
         }
     }
 }
@@ -606,8 +642,9 @@ private fun FeaturedGames(games: List<Game>, recent: Game?, onOpen: (Game) -> Un
                 Spacer(Modifier.height(54.dp))
                 Text(game.title, style = MaterialTheme.typography.headlineLargeEmphasized, color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(game.system?.name.orEmpty(), style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.82f))
-                Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     AccentButton("Play", { onPlay(game) }, icon = Icons.Rounded.PlayArrow)
+                    com.retrohero.app.ui.components.Key("Details", { onOpen(game) })
                     Spacer(Modifier.weight(1f))
                     ArchiveLabel(
                         "${(index + 1).toString().padStart(2, '0')} / ${games.size.toString().padStart(2, '0')}",
@@ -777,8 +814,8 @@ internal fun CollectionCard(collection: GameCollection, games: List<Game>, onOpe
 }
 
 @Composable
-private fun RowCard(game: Game, onPlay: (Game) -> Unit, onOptions: (Game) -> Unit, subtitle: String? = null) {
-    GameCard(game, { onPlay(game) }, width = RowCardWidth, subtitle = subtitle ?: game.system?.shortName, onLongClick = { onOptions(game) })
+private fun RowCard(game: Game, onPlay: (Game) -> Unit, onOptions: (Game) -> Unit, subtitle: String? = null, onQuickPlay: ((Game) -> Unit)? = null) {
+    GameCard(game, { onPlay(game) }, width = RowCardWidth, subtitle = subtitle ?: game.system?.shortName, onLongClick = { onOptions(game) }, onPlay = onQuickPlay?.let { { it(game) } })
 }
 
 @Composable

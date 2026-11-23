@@ -58,7 +58,7 @@ val LocalNavSpace = compositionLocalOf { 0.dp }
 
 class NavItem(val label: String, val selectedIcon: ImageVector, val icon: ImageVector)
 
-val FloatingNavHeight = 66.dp
+val FloatingNavHeight = 68.dp
 
 @Composable
 fun FloatingNavBar(items: List<NavItem>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
@@ -92,18 +92,20 @@ fun FloatingNavBar(items: List<NavItem>, selected: Int, onSelect: (Int) -> Unit,
                     )
                     val tint by animateColorAsState(if (active) Tone.Ink else Tone.Muted, tween(160), label = "navTint")
                     val pill by animateColorAsState(
-                        if (active) Tone.Ink.copy(alpha = if (Tone.isDark) 0.10f else 0.06f) else Color.Transparent,
+                        if (active) Tone.Raised else Color.Transparent,
                         tween(160),
                         label = "navPill",
                     )
+                    val keyShape = RoundedCornerShape(10.dp)
                     Box(
                         Modifier
                             .weight(1f)
                             .fillMaxHeight()
                             .padding(start = 2.dp, end = 2.dp, top = 7.dp, bottom = 5.dp)
                             .graphicsLayer { scaleX = scale; scaleY = scale }
-                            .clip(RoundedCornerShape(10.dp))
+                            .clip(keyShape)
                             .background(pill)
+                            .then(if (active) Modifier.border(1.dp, Tone.Line, keyShape) else Modifier)
                             .selectable(
                                 selected = active,
                                 interactionSource = interaction,
@@ -126,8 +128,8 @@ fun FloatingNavBar(items: List<NavItem>, selected: Int, onSelect: (Int) -> Unit,
                                 style = TextStyle(
                                     fontFamily = FontFamily.Monospace,
                                     fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
-                                    fontSize = 8.5.sp,
-                                    letterSpacing = 0.05.em,
+                                    fontSize = 9.sp,
+                                    letterSpacing = 0.04.em,
                                 ),
                             )
                         }

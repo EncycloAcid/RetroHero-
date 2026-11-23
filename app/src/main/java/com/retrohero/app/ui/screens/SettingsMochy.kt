@@ -97,16 +97,16 @@ private val IconTile get() = Tone.Raised
 private val SearchFill get() = Tone.Surface
 private val Placeholder get() = Tone.Muted
 
-private class Category(val id: String, val title: String, val icon: ImageVector, val keywords: List<String>)
+private class Category(val id: String, val title: String, val subtitle: String, val icon: ImageVector, val keywords: List<String>)
 
 private val categories = listOf(
-    Category("library", "Game folders", Icons.Rounded.Folder, listOf("folders", "add folder", "rescan", "library", "scan")),
-    Category("gameplay", "Gameplay & comfort", Icons.Rounded.Tune, listOf("reduce motion", "animations", "tilt", "gyroscope", "accessibility", "sharp pixels", "haptic", "vibration", "opacity", "touch controls", "fast-forward speed", "auto save", "resume", "screenshots", "gallery", "stick", "d-pad")),
-    Category("controls", "Controls", Icons.Rounded.SportsEsports, listOf("controller", "buttons", "remap", "rebind", "rewind", "gamepad")),
-    Category("looks", "Customisation", Icons.Rounded.Palette, listOf("look", "theme", "accent", "colour", "color", "pad skin", "touch buttons", "import look", "delta", "deltaskin", "controller skin", "skin")),
-    Category("bios", "BIOS & system files", Icons.Rounded.Memory, listOf("bios", "system files", "playstation", "import bios", "download bios")),
-    Category("backup", "Backup & restore", Icons.Rounded.Backup, listOf("backup", "restore", "export", "new phone", "saves")),
-    Category("about", "About", Icons.Rounded.Info, listOf("version", "about", "libretro", "licence")),
+    Category("library", "Game folders", "Add ROM folders & rescan your library", Icons.Rounded.Folder, listOf("folders", "add folder", "rescan", "library", "scan")),
+    Category("gameplay", "Gameplay & comfort", "Auto-save, fast-forward, shaders & haptics", Icons.Rounded.Tune, listOf("reduce motion", "animations", "tilt", "gyroscope", "accessibility", "sharp pixels", "haptic", "vibration", "opacity", "touch controls", "fast-forward speed", "auto save", "resume", "screenshots", "gallery", "stick", "d-pad")),
+    Category("controls", "Controls", "Controller remapping & touch button layout", Icons.Rounded.SportsEsports, listOf("controller", "buttons", "remap", "rebind", "rewind", "gamepad")),
+    Category("looks", "Customisation", "Themes, accents & Delta controller skins", Icons.Rounded.Palette, listOf("look", "theme", "accent", "colour", "color", "pad skin", "touch buttons", "import look", "delta", "deltaskin", "controller skin", "skin")),
+    Category("bios", "BIOS & system files", "PS1, Sega CD & console BIOS status", Icons.Rounded.Memory, listOf("bios", "system files", "playstation", "import bios", "download bios")),
+    Category("backup", "Backup & restore", "Export or restore saves, states & shelves", Icons.Rounded.Backup, listOf("backup", "restore", "export", "new phone", "saves")),
+    Category("about", "About", "Version info & emulator core licenses", Icons.Rounded.Info, listOf("version", "about", "libretro", "licence")),
 )
 
 /** The settings home: big title, search pill, then a column of category bubbles. */
@@ -203,7 +203,7 @@ fun SettingsHome(settings: Settings, onOpen: (String) -> Unit, onOpenStats: () -
                 .border(1.dp, Tone.Line, groupShape),
         ) {
             categories.forEachIndexed { index, c ->
-                CategoryBubble(index + 1, c.title, c.icon) { onOpen(c.id) }
+                CategoryBubble(index + 1, c.title, c.subtitle, c.icon) { onOpen(c.id) }
                 if (index < categories.lastIndex) {
                     androidx.compose.material3.HorizontalDivider(color = com.retrohero.app.ui.components.Page.Divider)
                 }
@@ -213,20 +213,19 @@ fun SettingsHome(settings: Settings, onOpen: (String) -> Unit, onOpenStats: () -
 }
 
 @Composable
-private fun CategoryBubble(index: Int, title: String, icon: ImageVector, onClick: () -> Unit) {
+private fun CategoryBubble(index: Int, title: String, subtitle: String, icon: ImageVector, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .height(58.dp)
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 16.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ArchiveLabel(index.toString().padStart(2, '0'), color = Tone.Faint)
         Spacer(Modifier.width(12.dp))
         Box(
             Modifier
-                .size(34.dp)
+                .size(36.dp)
                 .clip(CircleShape)
                 .background(Tone.Raised)
                 .border(1.dp, Tone.Line, CircleShape),
@@ -235,7 +234,10 @@ private fun CategoryBubble(index: Int, title: String, icon: ImageVector, onClick
             Icon(icon, null, tint = Tone.Ink, modifier = Modifier.size(18.dp))
         }
         Spacer(Modifier.width(12.dp))
-        Text(title, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 16.sp), color = Tone.Ink, modifier = Modifier.weight(1f))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.5.sp), color = Tone.Ink)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Tone.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
         Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Tone.Muted)
     }
 }
