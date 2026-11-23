@@ -155,6 +155,7 @@ import com.retrohero.app.ui.theme.RetroHeroTheme
 
 class MainActivity : ComponentActivity() {
     private val vm: AppViewModel by viewModels()
+    private var incomingMoment by mutableStateOf<com.retrohero.app.data.ExtractedMoment?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -169,7 +170,7 @@ class MainActivity : ComponentActivity() {
             )
         }
         com.retrohero.app.ui.theme.Tone.setDarkMode(vm.settings.darkMode)
-        handleIncomingDeltaSkin(intent)
+        handleIncomingFile(intent)
         setContent {
             RetroHeroTheme {
                 val view = androidx.compose.ui.platform.LocalView.current
@@ -181,6 +182,7 @@ class MainActivity : ComponentActivity() {
                     }
                 }
                 val artVersion by vm.artVersion.collectAsStateWithLifecycle()
+                val games by vm.games.collectAsStateWithLifecycle()
                 CompositionLocalProvider(
                     LocalLaunchIntro provides intro,
                     LocalArtPaths provides vm.paths,
@@ -190,16 +192,74 @@ class MainActivity : ComponentActivity() {
                     Box(Modifier.fillMaxSize()) {
                         App(vm)
                         LaunchIntroOverlay(intro)
+                        incomingMoment?.let { moment ->
+                            val match = remember(moment, games) {
+                                com.retrohero.app.data.MomentCapsule.findMatchingGame(moment.manifest, games)
+                            }
+                            val sysName = Systems.get(moment.manifest.systemId)?.name ?: moment.manifest.systemId.uppercase()
+                            AlertDialog(
+                                onDismissRequest = { incomingMoment = null },
+                                title = { Text(moment.manifest.title) },
+                                text = {
+                                    Column(verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+                                        Text(
+                                            "${moment.manifest.gameTitle} · $sysName",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = com.retrohero.app.ui.theme.Tone.Muted,
+                                        )
+                                        if (moment.manifest.note.isNotBlank()) {
+                                            Text(moment.manifest.note, style = MaterialTheme.typography.bodyMedium)
+                                        }
+                                        if (match == null) {
+                                            Text(
+                                                "Add “${moment.manifest.gameTitle}” ($sysName) to your library to play this moment.",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.error,
+                                            )
+                                        }
+                                    }
+                                },
+                                confirmButton = {
+                                    if (match != null) {
+                                        androidx.compose.material3.Button(onClick = {
+                                            incomingMoment = null
+                                            vm.play(
+                                                match,
+                                                statePath = moment.stateFile.absolutePath,
+                                                challengeTitle = moment.manifest.title,
+                                            )
+                                        }) { Text("Play challenge") }
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { incomingMoment = null }) { Text("Close") }
+                                },
+                            )
+                        }
                     }
                 }
             }
         }
     }
 
-    private fun handleIncomingDeltaSkin(intent: android.content.Intent?) {
+    private fun handleIncomingFile(intent: android.content.Intent?) {
         if (intent?.action != android.content.Intent.ACTION_VIEW) return
         val uri = intent.data ?: return
+        val pathHint = (uri.lastPathSegment ?: uri.toString()).lowercase()
         lifecycleScope.launch {
+            if (pathHint.endsWith(".rhclip")) {
+                val res = withContext(Dispatchers.IO) {
+                    runCatching {
+                        val dest = java.io.File(vm.paths.clipTmp, "incoming-${System.currentTimeMillis()}")
+                        contentResolver.openInputStream(uri)!!.use { stream ->
+                            com.retrohero.app.data.MomentCapsule.extract(stream, dest)
+                        }
+                    }
+                }
+                res.onSuccess { incomingMoment = it }
+                    .onFailure { Toast.makeText(this@MainActivity, it.message ?: "Couldn't open .rhclip file.", Toast.LENGTH_LONG).show() }
+                return@launch
+            }
             val result = withContext(Dispatchers.IO) {
                 runCatching {
                     contentResolver.openInputStream(uri)!!.use { stream ->
@@ -211,7 +271,7 @@ class MainActivity : ComponentActivity() {
                 skin.systemIds.forEach { vm.settings.setDeltaSkinFor(it, skin.identifier) }
                 Toast.makeText(this@MainActivity, "Added Delta skin “${skin.name}”", Toast.LENGTH_SHORT).show()
             }.onFailure { err ->
-                Toast.makeText(this@MainActivity, err.message ?: "Couldn't import .deltaskin file.", Toast.LENGTH_LONG).show()
+                Toast.makeText(this@MainActivity, err.message ?: "Couldn't import file.", Toast.LENGTH_LONG).show()
             }
         }
     }
