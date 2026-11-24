@@ -486,7 +486,7 @@ class PolishScreenshotTest {
         }
         compose.mainClock.advanceTimeBy(1500)
         save("home_collections")
-        compose.onNodeWithText("Play stats").assertExists()
+        compose.onNodeWithContentDescription("Play stats").assertExists()
     }
 
     @Test

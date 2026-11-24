@@ -112,11 +112,15 @@ fun SettingsScreen(
     deltaSkins: List<com.retrohero.app.data.DeltaSkin> = emptyList(),
     onImportDeltaSkin: () -> Unit = {},
     onDeleteDeltaSkin: (com.retrohero.app.data.DeltaSkin) -> Unit = {},
-    pageIndex: Int = 6,
+    pageIndex: Int = 4,
     onOpenStats: () -> Unit = {},
+    coreStates: Map<String, CoreManager.CoreState> = emptyMap(),
+    onDownloadCore: (com.retrohero.app.data.CoreInfo) -> Unit = {},
+    onDeleteCore: (com.retrohero.app.data.CoreInfo) -> Unit = {},
 ) {
     var page by rememberSaveable { mutableStateOf<String?>(null) }
     BackHandler(enabled = page != null) { page = null }
+    val installedCoresCount = coreStates.values.count { it is CoreManager.CoreState.Installed }
     AnimatedContent(
         targetState = page,
         transitionSpec = {
@@ -126,7 +130,27 @@ fun SettingsScreen(
         label = "settingsPage",
     ) { p ->
         when (p) {
-            null -> SettingsHome(settings, onOpen = { page = it }, onOpenStats = onOpenStats, pageIndex = pageIndex)
+            null -> SettingsHome(
+                settings = settings,
+                onOpen = { page = it },
+                onOpenStats = onOpenStats,
+                pageIndex = pageIndex,
+                installedCoresCount = installedCoresCount,
+                totalCoresCount = Systems.allCores().size,
+            )
+            "cores" -> Column(Modifier.fillMaxSize()) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, end = 16.dp, top = 48.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    FilledTonalButton(onClick = { page = null }) {
+                        Text("← System")
+                    }
+                }
+                CoresScreen(coreStates, onDownloadCore, onDeleteCore, pageIndex = pageIndex)
+            }
             "library" -> SubSettings("Game folders", onBack = { page = null }) {
         // ---- Library -------------------------------------------------------------------
         Column {

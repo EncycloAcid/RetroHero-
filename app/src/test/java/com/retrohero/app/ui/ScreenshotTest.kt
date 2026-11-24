@@ -88,8 +88,8 @@ class ScreenshotTest {
         seed()
         ActivityScenario.launch(MainActivity::class.java).use {
             shot("light_1_home")
-            tab("Library"); shot("light_2_library")
-            tab("Settings"); shot("light_3_settings")
+            tab("Consoles"); shot("light_2_library")
+            tab("System"); shot("light_3_settings")
         }
     }
 
@@ -99,7 +99,7 @@ class ScreenshotTest {
         seed()
         ActivityScenario.launch(MainActivity::class.java).use {
             shot("land_1_home")
-            tab("Settings"); shot("land_2_settings")
+            tab("System"); shot("land_2_settings")
         }
     }
 
@@ -138,9 +138,7 @@ class ScreenshotTest {
             compose.mainClock.autoAdvance = true
             compose.onAllNodesWithContentDescription("Close").onFirst().performClick()
             tab("Search"); shot("2_search")
-            tab("Library"); shot("3_library")
-            compose.onAllNodesWithText("Systems").onFirst().performClick()
-            shot("3a_library_systems")
+            tab("Consoles"); shot("3_library")
             compose.onAllNodesWithText("Game Boy Advance").onFirst().performClick()
             shot("3b_system_page")
             compose.onAllNodesWithText("Moonlight Run").onFirst().performClick()
@@ -149,8 +147,11 @@ class ScreenshotTest {
             compose.waitForIdle()
             compose.onAllNodesWithContentDescription("Back").onFirst().performClick()
             compose.waitForIdle()
-            tab("Cores"); shot("4_cores")
-            tab("Settings"); shot("5_settings")
+            tab("System"); shot("5_settings")
+            compose.onAllNodesWithText("Emulator Cores").onFirst().performClick()
+            shot("4_cores")
+            compose.onAllNodesWithText("← System").onFirst().performClick()
+            compose.waitForIdle()
             compose.onAllNodesWithText("Customisation").onFirst().performClick()
             shot("5b_customisation")
             compose.onAllNodesWithContentDescription("Back").onFirst().performClick()
@@ -159,7 +160,7 @@ class ScreenshotTest {
             shot("5c_gameplay")
             compose.onAllNodesWithContentDescription("Back").onFirst().performClick()
             compose.waitForIdle()
-            tab("Home")
+            tab("Play")
             compose.onAllNodesWithContentDescription("Add games").onFirst().performClick()
             shot("6_add_menu")
             compose.onAllNodesWithText("Download from link").onFirst().performClick()

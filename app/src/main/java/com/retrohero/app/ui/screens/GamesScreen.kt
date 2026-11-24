@@ -1,32 +1,34 @@
 package com.retrohero.app.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
-import com.retrohero.app.ui.components.ascendCard
-import com.retrohero.app.ui.components.LocalNavSpace
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.ui.graphics.graphicsLayer
-import com.retrohero.app.ui.components.rememberPressFeedback
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -39,58 +41,63 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CreateNewFolder
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.GridView
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.ViewAgenda
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.carousel.HorizontalMultiBrowseCarousel
-import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.sp
-import com.retrohero.app.ui.theme.PixelFont
-import androidx.compose.ui.unit.dp
-import androidx.compose.material3.TextButton
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material.icons.filled.SwapVert
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import kotlinx.coroutines.launch
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
 import com.retrohero.app.data.Game
+import com.retrohero.app.data.GameSort
+import com.retrohero.app.data.PlayStat
+import com.retrohero.app.data.PlayTime
 import com.retrohero.app.data.Systems
+import com.retrohero.app.ui.components.ArchiveLabel
+import com.retrohero.app.ui.components.Ascend
 import com.retrohero.app.ui.components.EmptyState
 import com.retrohero.app.ui.components.GameArt
-import com.retrohero.app.ui.components.PageHeader
-import com.retrohero.app.ui.components.PillChip
 import com.retrohero.app.ui.components.GameCard
-import com.retrohero.app.ui.components.Segmented
+import com.retrohero.app.ui.components.LocalNavSpace
+import com.retrohero.app.ui.components.PillChip
+import com.retrohero.app.ui.theme.Inter
+import com.retrohero.app.ui.theme.Tone
+import kotlinx.coroutines.launch
 
+/**
+ * Command Search & Switchable List/Grid Catalogue:
+ * Top command search bar with 1-tap List/Grid switcher, Filters drawer, color-coded console pills,
+ * detailed cartridge list rows (or 2-column cover grid), and an A–Z side scrubber.
+ */
 @Composable
 fun GamesScreen(
     games: List<Game>,
@@ -102,7 +109,7 @@ fun GamesScreen(
     onPlay: (Game) -> Unit,
     onGameOptions: (Game) -> Unit,
     showSystemFilter: Boolean = true,
-    stats: Map<String, com.retrohero.app.data.PlayStat> = emptyMap(),
+    stats: Map<String, PlayStat> = emptyMap(),
     favorites: Set<String> = emptySet(),
     title: String = "Search",
     onQuickPlay: ((Game) -> Unit)? = null,
@@ -111,10 +118,11 @@ fun GamesScreen(
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var systemFilter by rememberSaveable { mutableStateOf<String?>(null) }
-    var sort by rememberSaveable { mutableStateOf(com.retrohero.app.data.GameSort.Name) }
+    var sort by rememberSaveable { mutableStateOf(GameSort.Name) }
     var onlyFavourites by rememberSaveable { mutableStateOf(false) }
     var onlyUnplayed by rememberSaveable { mutableStateOf(false) }
     var filtersOpen by rememberSaveable { mutableStateOf(false) }
+    var gridMode by rememberSaveable { mutableStateOf(false) }
     val grid = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
     val scope = rememberCoroutineScope()
 
@@ -152,179 +160,390 @@ fun GamesScreen(
     }
     val filtered = remember(games, query, systemFilter, sort, onlyFavourites, onlyUnplayed, stats, favorites, recents) {
         val q = query.trim()
-        com.retrohero.app.data.GameSort.apply(
+        GameSort.apply(
             games.filter {
                 (systemFilter == null || it.systemId == systemFilter) &&
                     (q.isEmpty() || it.title.contains(q, ignoreCase = true) || it.fileName.contains(q, ignoreCase = true) ||
-                        it.system?.shortName?.equals(q, ignoreCase = true) == true) &&
+                        it.system?.shortName?.equals(q, ignoreCase = true) == true ||
+                        it.system?.name?.contains(q, ignoreCase = true) == true) &&
                     (!onlyFavourites || it.id in favorites) &&
                     (!onlyUnplayed || (stats[it.id]?.sessions ?: 0) == 0)
             },
             sort, stats, recents.map { it.id },
         )
     }
-    val browsing = query.isBlank() && systemFilter == null && !onlyFavourites && !onlyUnplayed
-    val showScroller = sort == com.retrohero.app.data.GameSort.Name && filtered.size > 12
+    val filtersActive = systemFilter != null || onlyFavourites || onlyUnplayed || sort != GameSort.Name
+    val showScroller = sort == GameSort.Name && filtered.size > 12
 
-    Box(Modifier.fillMaxSize().background(com.retrohero.app.ui.theme.Tone.Bg)) {
-    LazyVerticalGrid(
-        state = grid,
-        columns = GridCells.Adaptive(108.dp),
-        contentPadding = PaddingValues(start = 20.dp, end = if (showScroller) 28.dp else 20.dp, bottom = 24.dp + LocalNavSpace.current),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-        modifier = Modifier.fillMaxSize(),
-    ) {
-        fullWidth { PageHeader(title, if (games.size == 1) "1 game" else "${games.size} games · ${systemsPresent.size} ${if (systemsPresent.size == 1) "system" else "systems"}", index = pageIndex) }
-        fullWidth {
-            val sortBadge = when (sort) {
-                com.retrohero.app.data.GameSort.Name -> "A–Z"
-                com.retrohero.app.data.GameSort.Recent -> "RECENT"
-                com.retrohero.app.data.GameSort.MostPlayed -> "PLAYED"
-                com.retrohero.app.data.GameSort.System -> "SYSTEM"
-            }
-            com.retrohero.app.ui.components.BentoTelemetryStrip(
-                metrics = listOf(
-                    com.retrohero.app.ui.components.BentoMetric(filtered.size.toString(), "RESULTS", Icons.Default.Search),
-                    com.retrohero.app.ui.components.BentoMetric(systemsPresent.size.toString(), "CONSOLES", Icons.Default.SwapVert),
-                    com.retrohero.app.ui.components.BentoMetric(favorites.size.toString(), "PINNED", Icons.Default.Check),
-                    com.retrohero.app.ui.components.BentoMetric(sortBadge, "ORDER", Icons.Default.SwapVert),
-                ),
-            )
-        }
-        fullWidth {
-            com.retrohero.app.ui.components.BentoPanel(
-                header = "SEARCH & CONSOLE FILTER",
-                badge = "${filtered.size}/${games.size}",
-            ) {
-                Column(Modifier.animateContentSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Box(Modifier.weight(1f)) { SearchField(query, games.size) { query = it } }
-                        val filtersActive = systemFilter != null || onlyFavourites || onlyUnplayed
-                        Box {
-                            com.retrohero.app.ui.components.Key("Filters", { filtersOpen = !filtersOpen }, icon = Icons.Default.SwapVert)
-                            if (filtersActive) {
-                                Box(
-                                    Modifier
-                                        .align(Alignment.TopEnd)
-                                        .padding(top = 6.dp, end = 6.dp)
-                                        .size(6.dp)
-                                        .background(com.retrohero.app.ui.components.Ascend.accent, CircleShape),
-                                )
-                            }
-                        }
-                    }
-                    if (showSystemFilter && systemsPresent.size > 1) {
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            item { PillChip("All", systemFilter == null, { systemFilter = null }, selectedStyle = true) }
-                            items(systemsPresent, key = { it.id }) { system ->
-                                PillChip(
-                                    system.shortName,
-                                    systemFilter == system.id,
-                                    { systemFilter = if (systemFilter == system.id) null else system.id },
-                                    color = system.color,
-                                    selectedStyle = true,
-                                )
-                            }
-                        }
-                    }
-                    if (filtersOpen) {
-                        Segmented(
-                            options = com.retrohero.app.data.GameSort.entries.map {
-                                when (it) {
-                                    com.retrohero.app.data.GameSort.Recent -> "Recent"
-                                    com.retrohero.app.data.GameSort.Name -> "A–Z"
-                                    com.retrohero.app.data.GameSort.MostPlayed -> "Most played"
-                                    com.retrohero.app.data.GameSort.System -> "System"
-                                }
-                            },
-                            selected = com.retrohero.app.data.GameSort.entries.indexOf(sort).coerceAtLeast(0),
-                            onSelect = { index ->
-                                sort = com.retrohero.app.data.GameSort.entries[index]
-                                scope.launch { grid.scrollToItem(0) }
-                            },
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            PillChip("Favourites", onlyFavourites, { onlyFavourites = !onlyFavourites }, selectedStyle = true)
-                            PillChip("Not played yet", onlyUnplayed, { onlyUnplayed = !onlyUnplayed }, selectedStyle = true)
-                        }
-                    }
-                }
-            }
-        }
-
-        if (browsing && recents.isNotEmpty()) {
+    Box(Modifier.fillMaxSize().background(Tone.Bg)) {
+        LazyVerticalGrid(
+            state = grid,
+            columns = GridCells.Fixed(2),
+            contentPadding = PaddingValues(start = 20.dp, end = if (showScroller) 30.dp else 20.dp, bottom = 28.dp + LocalNavSpace.current),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            // Compact Command Search Header + View Switcher
             fullWidth {
-                com.retrohero.app.ui.components.BentoPanel(
-                    header = "JUMP BACK IN",
-                    badge = "${recents.size} RECENT",
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .windowInsetsPadding(WindowInsets.statusBars)
+                        .padding(top = 12.dp)
+                        .animateContentSize(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        items(recents, key = { "rec_" + it.id }) { game ->
-                            GameCard(
-                                game = game,
-                                onClick = { onPlay(game) },
-                                width = 114.dp,
-                                subtitle = game.system?.shortName,
-                                onLongClick = { onGameOptions(game) },
-                                onPlay = onQuickPlay?.let { { it(game) } },
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Column {
+                            Text(
+                                title,
+                                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Black, fontSize = 26.sp, letterSpacing = (-0.03).em),
+                                color = Tone.Ink,
+                            )
+                            ArchiveLabel(
+                                "${filtered.size} OF ${games.size} TITLES · ${sort.label.uppercase()}",
+                                color = Tone.Muted,
                             )
                         }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            // List / Grid Toggle Button
+                            val toggleShape = RoundedCornerShape(11.dp)
+                            Box(
+                                Modifier
+                                    .size(40.dp)
+                                    .clip(toggleShape)
+                                    .background(Tone.Surface)
+                                    .border(1.dp, Tone.Line, toggleShape)
+                                    .clickable { gridMode = !gridMode },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    if (gridMode) Icons.Rounded.ViewAgenda else Icons.Rounded.GridView,
+                                    if (gridMode) "Switch to list view" else "Switch to grid view",
+                                    tint = Tone.Ink,
+                                    modifier = Modifier.size(19.dp),
+                                )
+                            }
+                            // Filters Toggle Button
+                            val filterShape = RoundedCornerShape(11.dp)
+                            Row(
+                                Modifier
+                                    .height(40.dp)
+                                    .clip(filterShape)
+                                    .background(if (filtersOpen || filtersActive) Tone.Ink else Tone.Surface)
+                                    .border(1.dp, if (filtersOpen || filtersActive) Tone.Ink else Tone.Line, filterShape)
+                                    .clickable { filtersOpen = !filtersOpen }
+                                    .padding(horizontal = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Tune,
+                                    null,
+                                    tint = if (filtersOpen || filtersActive) Tone.Bg else Tone.Ink,
+                                    modifier = Modifier.size(16.dp),
+                                )
+                                Text(
+                                    "Filters",
+                                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.sp),
+                                    color = if (filtersOpen || filtersActive) Tone.Bg else Tone.Ink,
+                                )
+                                if (filtersActive) {
+                                    Box(Modifier.size(6.dp).clip(CircleShape).background(Ascend.accent))
+                                }
+                            }
+                        }
+                    }
+
+                    // Command Search Input
+                    CommandSearchField(query, games.size) { query = it }
+
+                    // Color-Coded Console Hardware Filter Chips
+                    if (showSystemFilter && systemsPresent.size > 1) {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            item {
+                                ConsoleDotChip(
+                                    label = "All",
+                                    count = games.size,
+                                    dotColor = Ascend.accent,
+                                    selected = systemFilter == null,
+                                    onClick = { systemFilter = null },
+                                )
+                            }
+                            items(systemsPresent, key = { it.id }) { sys ->
+                                ConsoleDotChip(
+                                    label = sys.shortName,
+                                    count = null,
+                                    dotColor = sys.color,
+                                    selected = systemFilter == sys.id,
+                                    onClick = { systemFilter = if (systemFilter == sys.id) null else sys.id },
+                                )
+                            }
+                        }
+                    }
+
+                    // Expandable Sort & Filter Controls
+                    AnimatedVisibility(visible = filtersOpen) {
+                        val panelShape = RoundedCornerShape(14.dp)
+                        Column(
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(panelShape)
+                                .background(Tone.Surface)
+                                .border(1.dp, Tone.Line, panelShape)
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            ArchiveLabel("SORT ORDER", color = Tone.Muted)
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                items(GameSort.entries) { option ->
+                                    PillChip(option.label, sort == option, { sort = option }, selectedStyle = true)
+                                }
+                            }
+                            ArchiveLabel("QUICK FILTERS", color = Tone.Muted)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                PillChip("Favourites", onlyFavourites, { onlyFavourites = !onlyFavourites }, selectedStyle = true)
+                                PillChip("Not played yet", onlyUnplayed, { onlyUnplayed = !onlyUnplayed }, selectedStyle = true)
+                            }
+                        }
                     }
                 }
             }
-        }
-        fullWidth {
-            com.retrohero.app.ui.components.SectionTitle(
-                if (browsing) "All games" else "Results",
-                Modifier.padding(top = 4.dp),
-                count = filtered.size,
-                index = 2,
-                verticalPadding = 0.dp,
-            )
-        }
 
-        if (filtered.isEmpty()) {
-            fullWidth {
-                Column(Modifier.fillMaxWidth().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("No games match", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        "Try a different search, or clear the filters.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp),
+            if (filtered.isEmpty()) {
+                fullWidth {
+                    val emptyShape = RoundedCornerShape(16.dp)
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp)
+                            .clip(emptyShape)
+                            .background(Tone.Surface)
+                            .border(1.dp, Tone.Line, emptyShape)
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text(
+                            "No matching games",
+                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 15.sp),
+                            color = Tone.Ink,
+                        )
+                        Text(
+                            "Try another search term or clear your active console filters.",
+                            style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
+                            color = Tone.Muted,
+                        )
+                    }
+                }
+            } else if (gridMode) {
+                items(filtered, key = { "grid_${it.id}" }) { game ->
+                    GameCard(
+                        game = game,
+                        onClick = { onPlay(game) },
+                        subtitle = game.system?.shortName,
+                        onLongClick = { onGameOptions(game) },
+                        onPlay = onQuickPlay?.let { qp -> { qp(game) } },
                     )
-                    TextButton(onClick = { query = ""; systemFilter = null; onlyFavourites = false; onlyUnplayed = false }) { Text("Clear filters") }
+                }
+            } else {
+                // Detailed Cartridge List Rows (default view — fast & scannable)
+                items(
+                    items = filtered,
+                    key = { "row_${it.id}" },
+                    span = { GridItemSpan(maxLineSpan) },
+                ) { game ->
+                    CatalogueCartridgeRow(
+                        game = game,
+                        isFavorite = game.id in favorites,
+                        stat = stats[game.id],
+                        onOpen = { onPlay(game) },
+                        onQuickPlay = { (onQuickPlay ?: onPlay)(game) },
+                        onLongClick = { onGameOptions(game) },
+                    )
                 }
             }
         }
-        items(filtered, key = { it.id }) { game ->
-            com.retrohero.app.ui.components.GameCard(
-                game,
-                onClick = { onPlay(game) },
-                modifier = Modifier.animateItem(),
-                subtitle = listOfNotNull(game.system?.shortName, stats[game.id]?.takeIf { it.seconds >= 60 }?.let { com.retrohero.app.data.PlayTime.format(it.seconds) }).joinToString(" · "),
-                onLongClick = { onGameOptions(game) },
-                onPlay = onQuickPlay?.let { { it(game) } },
+
+        if (showScroller) {
+            AlphaScroller(
+                games = filtered,
+                modifier = Modifier.align(Alignment.CenterEnd),
+                onJump = { idx -> scope.launch { grid.scrollToItem(idx + 1) } },
             )
         }
-    }
-    // A–Z fast scroller along the right edge when sorted by name.
-    if (showScroller) {
-        AlphabetScroller(
-            letters = filtered.map { it.title.firstOrNull()?.uppercaseChar()?.let { c -> if (c.isLetter()) c else '#' } ?: '#' },
-            onJump = { index -> scope.launch { grid.scrollToItem((grid.layoutInfo.totalItemsCount - filtered.size + index).coerceAtLeast(0)) } },
-            modifier = Modifier.align(Alignment.CenterEnd).padding(top = 88.dp, bottom = LocalNavSpace.current + 12.dp),
-        )
-    }
     }
 }
 
-/** Letters down the right edge: tap or drag to jump to games starting with that letter. */
 @Composable
-private fun AlphabetScroller(letters: List<Char>, onJump: (Int) -> Unit, modifier: Modifier = Modifier) {
-    val present = remember(letters) { letters.distinct() }
-    val firstIndex = remember(letters) { present.associateWith { c -> letters.indexOf(c) } }
+private fun CommandSearchField(query: String, total: Int, onChange: (String) -> Unit) {
+    val shape = RoundedCornerShape(14.dp)
+    TextField(
+        value = query,
+        onValueChange = onChange,
+        placeholder = {
+            Text(
+                "Search $total games or consoles…",
+                style = TextStyle(fontFamily = Inter, fontSize = 14.sp),
+                color = Tone.Muted,
+            )
+        },
+        leadingIcon = { Icon(Icons.Default.Search, null, tint = Tone.Muted, modifier = Modifier.size(20.dp)) },
+        trailingIcon = {
+            if (query.isNotEmpty()) {
+                IconButton(onClick = { onChange("") }) {
+                    Icon(Icons.Default.Close, "Clear", tint = Tone.Muted)
+                }
+            }
+        },
+        singleLine = true,
+        shape = shape,
+        colors = TextFieldDefaults.colors(
+            focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent,
+            focusedContainerColor = Tone.Surface,
+            unfocusedContainerColor = Tone.Surface,
+            focusedTextColor = Tone.Ink,
+            unfocusedTextColor = Tone.Ink,
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .border(1.dp, Tone.Line, shape),
+    )
+}
+
+@Composable
+private fun ConsoleDotChip(
+    label: String,
+    count: Int?,
+    dotColor: Color,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(10.dp)
+    Row(
+        Modifier
+            .height(34.dp)
+            .clip(shape)
+            .background(if (selected) Tone.Ink else Tone.Surface)
+            .border(1.dp, if (selected) Tone.Ink else Tone.Line, shape)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Box(Modifier.size(6.dp).clip(CircleShape).background(dotColor))
+        Text(
+            label,
+            style = TextStyle(fontFamily = Inter, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, fontSize = 12.5.sp),
+            color = if (selected) Tone.Bg else Tone.Ink,
+        )
+        if (count != null) {
+            Text(
+                count.toString(),
+                style = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 10.sp),
+                color = if (selected) Tone.Bg.copy(alpha = 0.7f) else Tone.Muted,
+            )
+        }
+    }
+}
+
+@Composable
+private fun CatalogueCartridgeRow(
+    game: Game,
+    isFavorite: Boolean,
+    stat: PlayStat?,
+    onOpen: () -> Unit,
+    onQuickPlay: () -> Unit,
+    onLongClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(14.dp)
+    val playShape = RoundedCornerShape(10.dp)
+    val sysColor = game.system?.color ?: Ascend.accent
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(Tone.Surface)
+            .border(1.dp, Tone.Line, shape)
+            .combinedClickable(onClick = onOpen, onLongClick = onLongClick)
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        GameArt(
+            game,
+            Modifier
+                .size(52.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .border(1.dp, Tone.Line, RoundedCornerShape(10.dp)),
+            showTag = false,
+        )
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    game.title,
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 14.5.sp, letterSpacing = (-0.01).em),
+                    color = Tone.Ink,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (isFavorite) {
+                    Icon(Icons.Rounded.Favorite, "Pinned", tint = Ascend.accent, modifier = Modifier.size(13.dp))
+                }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Box(Modifier.size(6.dp).clip(CircleShape).background(sysColor))
+                val detail = buildString {
+                    append(game.system?.shortName ?: game.systemId)
+                    if (stat != null && stat.seconds >= 60) {
+                        append(" · ")
+                        append(PlayTime.format(stat.seconds))
+                    } else {
+                        append(" · ")
+                        append(game.fileName.substringAfterLast('.').uppercase())
+                    }
+                }
+                ArchiveLabel(detail, color = Tone.Muted)
+            }
+        }
+        Box(
+            Modifier
+                .size(38.dp)
+                .clip(playShape)
+                .background(Ascend.accent)
+                .clickable(onClick = onQuickPlay),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Rounded.PlayArrow,
+                "Play ${game.title}",
+                tint = Ascend.onAccent,
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun AlphaScroller(games: List<Game>, modifier: Modifier = Modifier, onJump: (Int) -> Unit) {
+    val firstIndex = remember(games) {
+        buildMap<Char, Int> {
+            games.forEachIndexed { i, g ->
+                val c = g.title.firstOrNull()?.uppercaseChar()?.takeIf { it in 'A'..'Z' } ?: '#'
+                putIfAbsent(c, i)
+            }
+        }
+    }
+    val present = remember(firstIndex) { firstIndex.keys.sortedBy { if (it == '#') ' ' else it } }
+    if (present.size < 4) return
     val jump by rememberUpdatedState(onJump)
     var active by remember { mutableStateOf<Char?>(null) }
     val view = androidx.compose.ui.platform.LocalView.current
@@ -332,8 +551,8 @@ private fun AlphabetScroller(letters: List<Char>, onJump: (Int) -> Unit, modifie
         modifier
             .padding(end = 4.dp)
             .clip(CircleShape)
-            .background(com.retrohero.app.ui.theme.Tone.Surface.copy(alpha = if (active != null) 0.96f else 0.82f))
-            .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, CircleShape)
+            .background(Tone.Surface.copy(alpha = if (active != null) 0.96f else 0.85f))
+            .border(1.dp, Tone.Line, CircleShape)
             .pointerInput(present) {
                 fun pick(y: Float) {
                     val i = ((y / size.height) * present.size).toInt().coerceIn(0, present.lastIndex)
@@ -361,7 +580,7 @@ private fun AlphabetScroller(letters: List<Char>, onJump: (Int) -> Unit, modifie
             Text(
                 c.toString(),
                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                color = if (c == active) com.retrohero.app.ui.components.Ascend.accent else com.retrohero.app.ui.theme.Tone.Muted,
+                color = if (c == active) Ascend.accent else Tone.Muted,
                 modifier = Modifier.padding(vertical = 0.5.dp).semantics { contentDescription = "Jump to $c" },
             )
         }
@@ -370,116 +589,6 @@ private fun AlphabetScroller(letters: List<Char>, onJump: (Int) -> Unit, modifie
 
 private fun LazyGridScope.fullWidth(content: @Composable () -> Unit) =
     item(span = { GridItemSpan(maxLineSpan) }) { content() }
-
-@Composable
-private fun SearchField(query: String, total: Int, onChange: (String) -> Unit) {
-    TextField(
-        value = query,
-        onValueChange = onChange,
-        placeholder = { Text("Search $total games") },
-        leadingIcon = { Icon(Icons.Default.Search, null) },
-        trailingIcon = {
-            if (query.isNotEmpty()) IconButton(onClick = { onChange("") }) { Icon(Icons.Default.Close, "Clear") }
-        },
-        singleLine = true,
-        shape = RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Control),
-        colors = TextFieldDefaults.colors(
-            focusedIndicatorColor = Color.Transparent,
-            unfocusedIndicatorColor = Color.Transparent,
-            focusedContainerColor = Color.Transparent,
-            unfocusedContainerColor = Color.Transparent,
-        ),
-        modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
-            .then(
-                if (com.retrohero.app.ui.theme.Tone.isDark) Modifier else Modifier.shadow(
-                    2.dp,
-                    RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Control),
-                    ambientColor = Color.Black.copy(alpha = 0.06f),
-                    spotColor = Color.Black.copy(alpha = 0.10f),
-                ),
-            )
-            .then(Modifier.ascendCard(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Control))),
-    )
-}
-
-@Composable
-private fun SectionHeader(text: String) {
-    Text(text, style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 8.dp, start = 4.dp))
-}
-
-@Composable
-private fun RecentCarousel(recents: List<Game>, onPlay: (Game) -> Unit, onOptions: (Game) -> Unit) {
-    val state = rememberCarouselState { recents.size }
-    HorizontalMultiBrowseCarousel(
-        state = state,
-        preferredItemWidth = 240.dp,
-        itemSpacing = 12.dp,
-        modifier = Modifier.fillMaxWidth().height(300.dp),
-    ) { index ->
-        val game = recents[index]
-        val info = carouselItemDrawInfo
-        // Text fades out as an item shrinks toward the edge, so it never shows clipped.
-        val reveal = {
-            val f = ((info.size - info.minSize) / (info.maxSize - info.minSize).coerceAtLeast(1f)).coerceIn(0f, 1f)
-            ((f - 0.75f) / 0.25f).coerceIn(0f, 1f) // only the focused (near full-size) item shows text
-        }
-        val interaction = remember { MutableInteractionSource() }
-        val press = rememberPressFeedback(interaction, restCorner = 28.dp, pressedCorner = 28.dp, pressedScale = 0.96f)
-        Box(
-            Modifier
-                .fillMaxSize()
-                .graphicsLayer {
-                    scaleX = press.scale.value
-                    scaleY = press.scale.value
-                }
-                .maskClip(MaterialTheme.shapes.extraLarge)
-                .combinedClickable(
-                    interactionSource = interaction,
-                    indication = null,
-                    onClick = { onPlay(game) },
-                    onLongClick = { onOptions(game) },
-                ),
-        ) {
-            GameArt(game, Modifier.fillMaxSize(), showTag = false)
-            Box(
-                Modifier.fillMaxSize().background(
-                    Brush.verticalGradient(0.35f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.88f)),
-                ),
-            )
-            Column(
-                Modifier
-                    .align(Alignment.BottomStart)
-                    .graphicsLayer { alpha = reveal() }
-                    .padding(18.dp),
-            ) {
-                Text(
-                    game.system?.shortName.orEmpty().uppercase(),
-                    style = TextStyle(fontFamily = PixelFont, fontSize = 9.sp, color = game.system?.color ?: Color.White),
-                    modifier = Modifier.padding(bottom = 8.dp),
-                )
-                Text(
-                    game.title,
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = Color.White,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Box(
-                Modifier
-                    .align(Alignment.TopEnd)
-                    .graphicsLayer { alpha = reveal() }
-                    .padding(14.dp)
-                    .size(46.dp)
-                    .background(Color.White.copy(alpha = 0.22f), CircleShape)
-                    .border(1.dp, Color.White.copy(alpha = 0.35f), CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Default.PlayArrow, "Play", tint = Color.White)
-            }
-        }
-    }
-}
 
 /** Shimmering placeholder cards shown while the first scan runs. */
 @Composable
@@ -503,7 +612,7 @@ private fun SkeletonGrid() {
             Column {
                 Box(Modifier.fillMaxWidth().aspectRatio(0.74f).background(tone, MaterialTheme.shapes.extraLarge))
                 Box(Modifier.padding(top = 10.dp).fillMaxWidth(0.8f).height(14.dp).background(tone, CircleShape))
-                Box(Modifier.padding(top = 6.dp).fillMaxWidth(0.4f).height(10.dp).background(tone, CircleShape))
+                Box(Modifier.padding(top = 6.dp).fillMaxWidth(0.45f).height(11.dp).background(tone, CircleShape))
             }
         }
     }

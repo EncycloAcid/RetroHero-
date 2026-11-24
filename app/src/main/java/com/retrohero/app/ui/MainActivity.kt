@@ -91,10 +91,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SportsEsports
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.Extension
+import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.SportsEsports
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.ContainedLoadingIndicator
@@ -295,12 +301,10 @@ private fun shareScreenshot(context: android.content.Context, file: java.io.File
 }
 
 internal enum class Tab(val label: String, val title: String, val selected: ImageVector, val unselected: ImageVector) {
-    Home("Home", "RetroHero", Icons.Filled.Home, Icons.Outlined.Home),
-    Shelf("Shelves", "Shelves", Icons.Filled.ViewAgenda, Icons.Outlined.ViewAgenda),
+    Home("Play", "RetroHero", Icons.Filled.SportsEsports, Icons.Outlined.SportsEsports),
+    Library("Consoles", "Consoles", Icons.Filled.GridView, Icons.Outlined.GridView),
     Games("Search", "Search", Icons.Filled.Search, Icons.Outlined.Search),
-    Library("Library", "Library", Icons.Filled.Layers, Icons.Outlined.Layers),
-    Cores("Cores", "Emulators", Icons.Filled.Extension, Icons.Outlined.Extension),
-    Settings("Settings", "Settings", Icons.Filled.Settings, Icons.Outlined.Settings),
+    Settings("System", "System", Icons.Filled.Tune, Icons.Outlined.Tune),
 }
 
 internal val navigationItems = Tab.entries.map { NavItem(it.label, it.selected, it.unselected) }
@@ -325,9 +329,9 @@ private fun App(vm: AppViewModel) {
 
     var tab by rememberSaveable { mutableStateOf(Tab.entries.firstOrNull { it.name == vm.settings.lastTab } ?: Tab.Home) }
     LaunchedEffect(tab) { vm.settings.lastTab = tab.name }
-    // Shelves tab: rows of shelves, or the 3D cover flow / spine wall.
+    // Consoles tab: Hardware/Shelves deck, or the 3D cover flow / spine wall.
     var shelfFlow by rememberSaveable { mutableStateOf(false) }
-    BackHandler(enabled = shelfFlow && tab == Tab.Shelf) { shelfFlow = false }
+    BackHandler(enabled = shelfFlow && tab == Tab.Library) { shelfFlow = false }
     var openSystemId by rememberSaveable { mutableStateOf<String?>(null) }
     var openCollectionId by rememberSaveable { mutableStateOf<String?>(null) }
     var pickCollectionsFor by rememberSaveable { mutableStateOf<String?>(null) }
@@ -429,7 +433,7 @@ private fun App(vm: AppViewModel) {
 
     val isHome = !albumOpen && tab == Tab.Home && games.isNotEmpty()
     val immersive = !albumOpen
-    val miniGame = recents.firstOrNull()?.takeIf { !isHome && !miniHidden && !albumOpen && tab != Tab.Settings && !(tab == Tab.Shelf && shelfFlow) && sheetFor == null && !statsOpen && recap == null }
+    val miniGame = recents.firstOrNull()?.takeIf { !isHome && !miniHidden && !albumOpen && tab != Tab.Settings && !(tab == Tab.Library && shelfFlow) && sheetFor == null && !statsOpen && recap == null }
     val navBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val glass = rememberHazeState()
     val floatingNavSpace = (if (wide || albumOpen) 0.dp else FloatingNavHeight + 1.dp + navBarInset) +
@@ -574,21 +578,7 @@ private fun App(vm: AppViewModel) {
                     favorites = favoriteIds,
                     pageIndex = tab.ordinal + 1,
                 )
-                key == Tab.Shelf.name && !shelfFlow -> ShelvesScreen(
-                    games = games,
-                    recents = recents,
-                    favorites = favorites,
-                    collections = collectionGames,
-                    stats = stats,
-                    onOpenGame = { sheetFor = it.id },
-                    onPlay = { vm.play(it) },
-                    onOptions = { menuFor = it.id },
-                    onOpenCollection = { openCollectionId = it.id },
-                    onNewShelf = { naming = true },
-                    pageIndex = tab.ordinal + 1,
-                    onCoverFlow = { shelfFlow = true },
-                )
-                key == Tab.Shelf.name -> ShelfScreen(
+                key == Tab.Library.name && shelfFlow -> ShelfScreen(
                     games = games,
                     stats = stats,
                     recentIds = recents.map { it.id },
@@ -615,8 +605,10 @@ private fun App(vm: AppViewModel) {
                     onOpenStats = { statsOpen = true },
                     onPlay = { vm.play(it) },
                     pageIndex = tab.ordinal + 1,
+                    recents = recents,
+                    stats = stats,
+                    onCoverFlow = { shelfFlow = true },
                 )
-                key == Tab.Cores.name -> CoresScreen(coreStates, vm::downloadCore, vm::deleteCore, pageIndex = tab.ordinal + 1)
                 else -> SettingsScreen(
                     settings = vm.settings,
                     dynamicColor = dynamicColor,
@@ -650,6 +642,9 @@ private fun App(vm: AppViewModel) {
                     },
                     onOpenStats = { statsOpen = true },
                     pageIndex = tab.ordinal + 1,
+                    coreStates = coreStates,
+                    onDownloadCore = vm::downloadCore,
+                    onDeleteCore = vm::deleteCore,
                 )
             }
         }
