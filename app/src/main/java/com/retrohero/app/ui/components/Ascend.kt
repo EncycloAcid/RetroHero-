@@ -159,88 +159,90 @@ fun GameCard(
         spring(dampingRatio = 0.7f, stiffness = 600f),
         label = "gameCardScale",
     )
-    val cardShape = RoundedCornerShape(Ascend.Radius.Card)
-    val coverShape = RoundedCornerShape(Ascend.Radius.Cover)
+    val cardShape = RoundedCornerShape(20.dp)
     Box(
         modifier
             .then(if (width != null) Modifier.width(width) else Modifier.fillMaxWidth())
+            .aspectRatio(0.76f)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(cardShape)
             .background(Tone.Surface)
-            .border(1.dp, Tone.Line, cardShape),
+            .border(
+                1.dp,
+                androidx.compose.ui.graphics.Brush.verticalGradient(
+                    listOf(Color.White.copy(alpha = 0.24f), Color.White.copy(alpha = 0.06f)),
+                ),
+                cardShape,
+            )
+            .combinedClickable(interactionSource = interaction, indication = null, onClick = onClick, onLongClick = onLongClick),
     ) {
-        Column(
+        GameArt(game, Modifier.fillMaxSize(), showTag = false)
+        Box(
             Modifier
-                .fillMaxWidth()
-                .combinedClickable(interactionSource = interaction, indication = null, onClick = onClick, onLongClick = onLongClick),
-        ) {
+                .fillMaxSize()
+                .background(
+                    androidx.compose.ui.graphics.Brush.verticalGradient(
+                        0f to Color.Black.copy(alpha = 0.14f),
+                        0.45f to Color.Transparent,
+                        0.74f to Color.Black.copy(alpha = 0.72f),
+                        1f to Color.Black.copy(alpha = 0.92f),
+                    ),
+                ),
+        )
+        val sysTag = game.system?.shortName
+        if (!sysTag.isNullOrBlank()) {
             Box(
                 Modifier
-                    .fillMaxWidth()
-                    .padding(6.dp)
-                    .aspectRatio(0.78f)
-                    .clip(coverShape)
-                    .border(0.5.dp, Tone.Line, coverShape),
-            ) {
-                GameArt(game, Modifier.fillMaxSize(), showTag = false)
-                val sysTag = game.system?.shortName
-                if (!sysTag.isNullOrBlank()) {
-                    Box(
-                        Modifier
-                            .align(Alignment.TopStart)
-                            .padding(6.dp)
-                            .background(Color.Black.copy(alpha = 0.76f), RoundedCornerShape(6.dp))
-                            .border(0.5.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(6.dp))
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
-                    ) {
-                        ArchiveLabel(sysTag, color = Color.White)
-                    }
-                }
-            }
-            Box(Modifier.fillMaxWidth().height(1.dp).background(Page.Divider))
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .background(Tone.Bg.copy(alpha = 0.38f))
-                    .padding(horizontal = 8.dp, vertical = 7.dp),
+                    .align(Alignment.TopStart)
+                    .padding(10.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.56f))
+                    .border(0.75.dp, Color.White.copy(alpha = 0.22f), CircleShape)
+                    .padding(horizontal = 8.dp, vertical = 3.dp),
             ) {
                 Text(
-                    game.title,
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp, lineHeight = 15.sp),
-                    color = Tone.Ink,
+                    sysTag,
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 10.sp),
+                    color = Color.White,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                 )
-                if (!subtitle.isNullOrBlank()) {
-                    Text(
-                        subtitle.uppercase(),
-                        style = TextStyle(
-                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                            fontWeight = FontWeight.Medium,
-                            fontSize = 9.sp,
-                            letterSpacing = 0.05.em,
-                        ),
-                        color = Ascend.Muted,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(top = 2.dp),
-                    )
-                }
             }
         }
         if (onPlay != null) {
-            Box(Modifier.fillMaxWidth().padding(6.dp).aspectRatio(0.78f)) {
-                Box(
-                    Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(6.dp)
-                        .size(30.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Ascend.accent)
-                        .border(1.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(8.dp))
-                        .clickable(onClick = onPlay),
-                    contentAlignment = Alignment.Center,
-                ) { Icon(Icons.Rounded.PlayArrow, "Play ${game.title}", tint = Ascend.onAccent, modifier = Modifier.size(17.dp)) }
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(10.dp)
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(Ascend.accent.copy(alpha = 0.92f))
+                    .border(1.dp, Color.White.copy(alpha = 0.30f), CircleShape)
+                    .clickable(onClick = onPlay),
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Rounded.PlayArrow, "Play ${game.title}", tint = Color.White, modifier = Modifier.size(18.dp)) }
+        }
+        Column(
+            Modifier
+                .align(Alignment.BottomStart)
+                .fillMaxWidth()
+                .padding(12.dp),
+        ) {
+            Text(
+                game.title,
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 14.sp, lineHeight = 17.sp),
+                color = Color.White,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (!subtitle.isNullOrBlank()) {
+                Text(
+                    subtitle,
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 11.sp),
+                    color = Color.White.copy(alpha = 0.70f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
             }
         }
     }
@@ -263,54 +265,45 @@ fun Key(
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        if (pressed && enabled) 0.97f else 1f,
+        if (pressed && enabled) 0.96f else 1f,
         spring(dampingRatio = 0.7f, stiffness = 600f),
         label = "keyScale",
     )
-    val translation by animateDpAsState(
-        if (pressed && enabled) 1.dp else 0.dp,
-        spring(dampingRatio = 0.7f, stiffness = 600f),
-        label = "keyTranslation",
-    )
-    val shape = RoundedCornerShape(11.dp)
+    val shape = CircleShape
     val view = LocalView.current
     val contentAlpha = if (enabled) 1f else 0.4f
-    val fg = if (primary) Ascend.onAccent else Tone.Ink
+    val fg = if (primary) Color.White else Tone.Ink
+    val surfaceMod = if (primary) {
+        Modifier
+            .clip(shape)
+            .background(androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(Ascend.accent, Color(0xFF7B68FF))))
+            .border(1.dp, Color.White.copy(alpha = 0.30f), shape)
+    } else {
+        Modifier.glassPanel(shape, elevated = true)
+    }
     Row(
         modifier
-            .graphicsLayer { scaleX = scale; scaleY = scale; translationY = translation.toPx(); alpha = contentAlpha }
-            .height(44.dp)
-            .clip(shape)
-            .background(if (primary) Ascend.accent else Tone.Surface)
-            .border(1.dp, if (primary) Color.Transparent else Tone.Line, shape)
+            .graphicsLayer { scaleX = scale; scaleY = scale; alpha = contentAlpha }
+            .height(42.dp)
+            .then(surfaceMod)
             .clickable(interactionSource = interaction, indication = null, enabled = enabled) {
                 view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                 onClick()
             }
-            .padding(start = 13.dp, end = if (icon != null) 6.dp else 13.dp),
-        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(7.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (icon != null) {
+            Icon(icon, null, tint = fg, modifier = Modifier.size(17.dp))
+        }
         Text(
             text,
-            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.sp),
+            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp),
             color = fg,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
-        if (icon != null) {
-            Spacer(Modifier.width(8.dp))
-            Box(
-                Modifier
-                    .size(30.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(if (primary) Color.Black.copy(alpha = 0.18f) else Tone.Raised)
-                    .border(1.dp, if (primary) Color.White.copy(alpha = 0.22f) else Tone.Line, RoundedCornerShape(8.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(icon, null, tint = fg, modifier = Modifier.size(16.dp))
-            }
-        }
     }
 }
 

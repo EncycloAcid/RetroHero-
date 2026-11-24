@@ -18,24 +18,24 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 
-private val accentState = mutableStateOf(Color(0xFFFF5A1F))
-private val darkState = mutableStateOf(false)
+private val accentState = mutableStateOf(Color(0xFF5B8CFF))
+private val darkState = mutableStateOf(true)
 
 object Tone {
     val isDark: Boolean get() = darkState.value
     fun setDarkMode(dark: Boolean) { darkState.value = dark }
 
-    val Bg: Color get() = if (isDark) Color(0xFF0D0D0F) else Color(0xFFF0EFEB)
-    val Surface: Color get() = if (isDark) Color(0xFF19191C) else Color(0xFFFAF9F6)
-    val Raised: Color get() = if (isDark) Color(0xFF222226) else Color.White
-    val Ink: Color get() = if (isDark) Color(0xFFF2F1EE) else Color(0xFF111111)
-    val Muted: Color get() = Ink.copy(alpha = if (isDark) 0.60f else 0.58f)
-    val Faint: Color get() = Ink.copy(alpha = if (isDark) 0.34f else 0.32f)
-    val Line: Color get() = Ink.copy(alpha = 0.08f)
+    val Bg: Color get() = if (isDark) Color(0xFF070A12) else Color(0xFFEEF2FA)
+    val Surface: Color get() = if (isDark) Color(0xFF121828) else Color(0xFFFFFFFF)
+    val Raised: Color get() = if (isDark) Color(0xFF1B233A) else Color(0xFFF6F8FE)
+    val Ink: Color get() = if (isDark) Color(0xFFF4F7FF) else Color(0xFF0F1426)
+    val Muted: Color get() = Ink.copy(alpha = if (isDark) 0.66f else 0.60f)
+    val Faint: Color get() = Ink.copy(alpha = if (isDark) 0.36f else 0.34f)
+    val Line: Color get() = if (isDark) Color.White.copy(alpha = 0.12f) else Color(0xFF1A2548).copy(alpha = 0.10f)
 }
 
 /**
- * The accent colour (ember orange by default) used for the gacha pointer and small highlights.
+ * The accent colour (Aurora Cobalt by default) used across the Midnight Glass UI.
  * It follows the chosen look; reading it in a composable recomposes when the look changes.
  */
 val Salmon: Color get() = accentState.value

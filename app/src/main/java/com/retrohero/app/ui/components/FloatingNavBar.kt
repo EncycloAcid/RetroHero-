@@ -63,21 +63,24 @@ val FloatingNavHeight = 72.dp
 
 @Composable
 fun FloatingNavBar(items: List<NavItem>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
-    val dockShape = RoundedCornerShape(22.dp)
+    val dockShape = RoundedCornerShape(24.dp)
+    val dark = Tone.isDark
+    val dockBg = if (dark) Color(0xFF101627).copy(alpha = 0.90f) else Color.White.copy(alpha = 0.92f)
+    val dockBorder = if (dark) Color.White.copy(alpha = 0.16f) else Color(0xFF1A2548).copy(alpha = 0.12f)
     Box(
         modifier
             .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.navigationBars)
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .shadow(
-                elevation = if (Tone.isDark) 14.dp else 8.dp,
+                elevation = if (dark) 18.dp else 10.dp,
                 shape = dockShape,
-                ambientColor = Color.Black.copy(alpha = if (Tone.isDark) 0.50f else 0.12f),
-                spotColor = Color.Black.copy(alpha = if (Tone.isDark) 0.60f else 0.18f),
+                ambientColor = Color.Black.copy(alpha = if (dark) 0.65f else 0.14f),
+                spotColor = Color.Black.copy(alpha = if (dark) 0.75f else 0.18f),
             )
             .clip(dockShape)
-            .background(Tone.Surface)
-            .border(1.dp, Tone.Line, dockShape),
+            .background(dockBg)
+            .border(1.dp, dockBorder, dockShape),
     ) {
         Row(
             Modifier
@@ -97,16 +100,16 @@ fun FloatingNavBar(items: List<NavItem>, selected: Int, onSelect: (Int) -> Unit,
                     label = "navScale",
                 )
                 val tint by animateColorAsState(
-                    if (active) Tone.Bg else Tone.Muted,
+                    if (active) Color.White else Tone.Muted,
                     tween(160),
                     label = "navTint",
                 )
                 val pill by animateColorAsState(
-                    if (active) Tone.Ink else Color.Transparent,
-                    tween(160),
+                    if (active) Ascend.accent else Color.Transparent,
+                    tween(180),
                     label = "navPill",
                 )
-                val keyShape = RoundedCornerShape(16.dp)
+                val keyShape = RoundedCornerShape(18.dp)
                 Box(
                     Modifier
                         .weight(if (active) 1.48f else 0.92f)
@@ -114,6 +117,10 @@ fun FloatingNavBar(items: List<NavItem>, selected: Int, onSelect: (Int) -> Unit,
                         .graphicsLayer { scaleX = scale; scaleY = scale }
                         .clip(keyShape)
                         .background(pill)
+                        .then(
+                            if (active) Modifier.border(1.dp, Color.White.copy(alpha = 0.28f), keyShape)
+                            else Modifier,
+                        )
                         .selectable(
                             selected = active,
                             interactionSource = interaction,
@@ -126,15 +133,9 @@ fun FloatingNavBar(items: List<NavItem>, selected: Int, onSelect: (Int) -> Unit,
                     if (active) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp),
-                            modifier = Modifier.padding(horizontal = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.padding(horizontal = 10.dp),
                         ) {
-                            Box(
-                                Modifier
-                                    .size(5.dp)
-                                    .clip(CircleShape)
-                                    .background(Ascend.accent),
-                            )
                             Icon(item.selectedIcon, null, tint = tint, modifier = Modifier.size(18.dp))
                             Text(
                                 item.label,

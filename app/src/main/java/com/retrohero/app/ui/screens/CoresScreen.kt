@@ -37,6 +37,7 @@ import com.retrohero.app.data.Systems
 import com.retrohero.app.ui.components.SegmentedGroup
 import com.retrohero.app.ui.components.segmentColors
 import com.retrohero.app.ui.components.SystemBadge
+import com.retrohero.app.ui.components.auroraBackdrop
 
 @Composable
 fun CoresScreen(
@@ -50,7 +51,7 @@ fun CoresScreen(
     LazyColumn(
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp + LocalNavSpace.current),
         verticalArrangement = Arrangement.spacedBy(16.dp),
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().auroraBackdrop(),
     ) {
         item { com.retrohero.app.ui.components.PageHeader("Emulators", "${installed.size} of ${cores.size} installed", index = pageIndex) }
         item {

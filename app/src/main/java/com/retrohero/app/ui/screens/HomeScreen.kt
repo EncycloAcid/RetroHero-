@@ -9,12 +9,17 @@ import androidx.compose.material3.IconButton
 import androidx.compose.ui.window.Dialog
 import com.retrohero.app.ui.components.ArchiveLabel
 import com.retrohero.app.ui.components.AccentButton
+import com.retrohero.app.ui.components.GlassOrb
+import com.retrohero.app.ui.components.GlassPillButton
 import com.retrohero.app.ui.components.SectionTitle
 import com.retrohero.app.ui.components.PageHeader
 import com.retrohero.app.ui.components.Page
 import com.retrohero.app.ui.components.Ascend
+import com.retrohero.app.ui.components.auroraBackdrop
 import com.retrohero.app.ui.components.emberBackground
+import com.retrohero.app.ui.components.glassPanel
 import com.retrohero.app.ui.components.launchMarkTarget
+import androidx.compose.foundation.pager.PagerState
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
@@ -204,7 +209,7 @@ private fun reelDistance(index: Int, reel: Float, count: Int): Float {
     return d
 }
 
-/** Asymmetric Bento Play Deck: tall vertical active cartridge hero, stacked telemetry & shuffle tiles, console hardware rail, and 2-column editorial game feed. */
+/** Midnight Glass & Console Aurora Play screen: dynamic console-tinted aurora glow, cinematic poster carousel, glass console ribbons, and poster shelves. */
 @Composable
 fun HomeScreen(
     games: List<Game>,
@@ -233,12 +238,9 @@ fun HomeScreen(
     val candidates = remember(games, recents) {
         (recents + games.shuffled()).distinctBy { it.id }.take(MaxCandidates)
     }
-    val totalSeconds = remember(stats) { stats.values.sumOf { it.seconds } }
-    val totalSessions = remember(stats) { stats.values.sumOf { it.sessions } }
-
     var shuffleOpen by rememberSaveable { mutableStateOf(false) }
     if (shuffleOpen) Dialog(onDismissRequest = { shuffleOpen = false }) {
-        Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(Ascend.Radius.Card))) {
+        Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp))) {
             GachaHero(candidates) { shuffleOpen = false; onPlay(it) }
             IconButton({ shuffleOpen = false }, Modifier.align(Alignment.TopEnd)) { Icon(Icons.Rounded.Close, "Close", tint = Color.White) }
         }
@@ -246,22 +248,36 @@ fun HomeScreen(
     val featured = remember(games, recents, favorites) {
         (recents.take(3) + favorites.take(2) + games.take(4)).distinctBy { it.id }.take(4)
     }
-    val feedGames = remember(games, recents) {
-        (recents + games).distinctBy { it.id }.take(8)
+    val pager = rememberPagerState { featured.size.coerceAtLeast(1) }
+    val focusedGame = featured.getOrNull(pager.currentPage)
+    val auroraPrimary by animateColorAsState(
+        focusedGame?.system?.color ?: Ascend.accent,
+        tween(550),
+        label = "auroraPrimary",
+    )
+    val auroraSecondary by animateColorAsState(
+        lerp(auroraPrimary, Color(0xFF7B5CFF), 0.55f),
+        tween(550),
+        label = "auroraSecondary",
+    )
+    val shelfGames = remember(games, recents) {
+        (recents + games).distinctBy { it.id }.take(10)
     }
 
     androidx.compose.foundation.lazy.LazyColumn(
         contentPadding = PaddingValues(bottom = bottomPadding + 28.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
-        modifier = Modifier.fillMaxSize().emberBackground(),
+        verticalArrangement = Arrangement.spacedBy(22.dp),
+        modifier = Modifier
+            .fillMaxSize()
+            .auroraBackdrop(auroraPrimary, auroraSecondary),
     ) {
-        // Compact Console Command Bar
-        item(key = "command_bar") {
+        // Floating Minimal Glass Header
+        item(key = "aurora_header") {
             Row(
                 Modifier
                     .fillMaxWidth()
                     .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(start = ContentInset, end = ContentInset, top = 12.dp, bottom = 2.dp),
+                    .padding(start = 20.dp, end = 20.dp, top = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
@@ -272,9 +288,7 @@ fun HomeScreen(
                     Box(
                         Modifier
                             .size(38.dp)
-                            .clip(RoundedCornerShape(11.dp))
-                            .background(Tone.Surface)
-                            .border(1.dp, Tone.Line, RoundedCornerShape(11.dp)),
+                            .glassPanel(CircleShape, elevated = true),
                         contentAlignment = Alignment.Center,
                     ) {
                         androidx.compose.foundation.Image(
@@ -285,46 +299,55 @@ fun HomeScreen(
                         )
                     }
                     Column {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        ) {
-                            Text(
-                                "RetroHero",
-                                style = TextStyle(
-                                    fontFamily = Inter,
-                                    fontWeight = FontWeight.Black,
-                                    fontSize = 20.sp,
-                                    letterSpacing = (-0.03).em,
-                                ),
-                                color = Tone.Ink,
-                            )
-                            Box(Modifier.size(6.dp).clip(CircleShape).background(Ascend.accent))
-                        }
-                        ArchiveLabel(
-                            "${games.size} ROMS · ${systems.size} CONSOLES",
+                        Text(
+                            "RetroHero",
+                            style = TextStyle(
+                                fontFamily = Inter,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 21.sp,
+                                letterSpacing = (-0.025).em,
+                            ),
+                            color = Tone.Ink,
+                        )
+                        Text(
+                            "${games.size} games · ${systems.size} consoles",
+                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 12.sp),
                             color = Tone.Muted,
                         )
                     }
                 }
-                topActions()
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    GlassOrb(
+                        icon = Icons.Rounded.Insights,
+                        contentDescription = "Play stats",
+                        onClick = onOpenStats,
+                        size = 38.dp,
+                    )
+                    GlassPillButton(
+                        text = "Shuffle",
+                        icon = Icons.Rounded.Shuffle,
+                        onClick = {
+                            if (candidates.size > 1) shuffleOpen = true else candidates.firstOrNull()?.let(onPlay)
+                        },
+                        height = 38.dp,
+                    )
+                    topActions()
+                }
             }
         }
 
-        // Asymmetric 2-Column Bento Mosaic Hero
+        // PS5 / Apple TV Cinematic Cover Carousel
         if (featured.isNotEmpty()) {
-            item(key = "bento_mosaic") {
-                AsymmetricPlayMosaic(
+            item(key = "cinematic_carousel") {
+                CinematicAuroraCarousel(
+                    pager = pager,
                     featured = featured,
                     recent = recents.firstOrNull(),
-                    gamesCount = games.size,
-                    systems = systems,
-                    counts = counts,
-                    totalSeconds = totalSeconds,
-                    totalSessions = totalSessions,
                     onOpen = onOpen,
                     onPlay = onPlay,
-                    onOpenStats = onOpenStats,
                     onShuffle = {
                         if (candidates.size > 1) shuffleOpen = true else candidates.firstOrNull()?.let(onPlay)
                     },
@@ -332,71 +355,117 @@ fun HomeScreen(
             }
         }
 
-        // Horizontal Console Hardware Cartridge Rail
+        // Floating Console Worlds Glass Ribbon
         if (systems.isNotEmpty()) {
-            item(key = "console_rail") {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            item(key = "console_worlds") {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(
-                        Modifier.fillMaxWidth().padding(horizontal = ContentInset),
+                        Modifier.fillMaxWidth().padding(horizontal = 20.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            "Hardware Deck",
-                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 15.sp, letterSpacing = (-0.02).em),
+                            "Consoles",
+                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 18.sp, letterSpacing = (-0.02).em),
                             color = Tone.Ink,
                         )
-                        ArchiveLabel("${systems.size} / ${Systems.all.size} ACTIVE", color = Tone.Muted)
+                        Text(
+                            "${systems.size} active",
+                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 13.sp),
+                            color = Tone.Muted,
+                        )
                     }
                     LazyRow(
-                        contentPadding = PaddingValues(horizontal = ContentInset),
+                        contentPadding = PaddingValues(horizontal = 20.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                     ) {
-                        items(systems, key = { "rail_${it.id}" }) { sys ->
-                            HardwareRailTile(sys, counts[sys.id] ?: 0) { onOpenSystem(sys) }
+                        items(systems, key = { "world_${it.id}" }) { sys ->
+                            ConsoleGlassChip(sys, counts[sys.id] ?: 0) { onOpenSystem(sys) }
                         }
                     }
                 }
             }
         }
 
-        // Pinned Favourites & Custom Shelves Horizontal Cards
-        if (favorites.isNotEmpty() || collections.isNotEmpty()) {
-            item(key = "shelves_strip") {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        // Continue Playing / Jump Back In Horizontal Poster Shelf
+        item(key = "poster_shelf") {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        if (recents.isNotEmpty()) "Continue Playing" else "Your Library",
+                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 18.sp, letterSpacing = (-0.02).em),
+                        color = Tone.Ink,
+                    )
                     Row(
-                        Modifier.fillMaxWidth().padding(horizontal = ContentInset),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        Modifier
+                            .clip(CircleShape)
+                            .clickable(onClick = onSeeAllGames)
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            "Pinned & Shelves",
-                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 15.sp, letterSpacing = (-0.02).em),
-                            color = Tone.Ink,
+                            "See all",
+                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.sp),
+                            color = Ascend.accent,
                         )
-                        ArchiveLabel("${favorites.size} PINNED · ${collections.size} SHELVES", color = Tone.Muted)
+                        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Ascend.accent, modifier = Modifier.size(16.dp))
                     }
+                }
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(shelfGames, key = { "poster_${it.id}" }) { game ->
+                        val sub = stats[game.id]?.takeIf { it.seconds >= 60 }?.let { PlayTime.format(it.seconds) }
+                            ?: game.system?.name
+                        GameCard(
+                            game = game,
+                            onClick = { onOpen(game) },
+                            width = 148.dp,
+                            subtitle = sub,
+                            onLongClick = { onOptions(game) },
+                            onPlay = { onPlay(game) },
+                        )
+                    }
+                }
+            }
+        }
+
+        // Pinned Favourites & Custom Collections Glass Cards
+        if (favorites.isNotEmpty() || collections.isNotEmpty()) {
+            item(key = "glass_shelves") {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        "Collections",
+                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 18.sp, letterSpacing = (-0.02).em),
+                        color = Tone.Ink,
+                        modifier = Modifier.padding(horizontal = 20.dp),
+                    )
                     LazyRow(
-                        contentPadding = PaddingValues(horizontal = ContentInset),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        contentPadding = PaddingValues(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         if (favorites.isNotEmpty()) {
-                            item(key = "fav_deck") {
-                                CompactShelfDeckCard(
-                                    title = "Pinned Favourites",
-                                    subtitle = "${favorites.size} games",
+                            item(key = "fav_glass") {
+                                GlassCollectionBanner(
+                                    title = "Favourites",
+                                    subtitle = "${favorites.size} pinned games",
                                     games = favorites,
-                                    accent = Ascend.accent,
+                                    tint = Ascend.accent,
                                     onClick = { onOpen(favorites.first()) },
                                 )
                             }
                         }
-                        items(collections, key = { "shelf_${it.first.id}" }) { (col, items) ->
-                            CompactShelfDeckCard(
+                        items(collections, key = { "gcol_${it.first.id}" }) { (col, items) ->
+                            GlassCollectionBanner(
                                 title = col.name,
                                 subtitle = if (items.size == 1) "1 game" else "${items.size} games",
                                 games = items,
-                                accent = Tone.Ink,
+                                tint = items.firstOrNull()?.system?.color ?: Color(0xFF7B5CFF),
                                 onClick = { onOpenCollection(col) },
                             )
                         }
@@ -405,75 +474,22 @@ fun HomeScreen(
             }
         }
 
-        // 2-Column Editorial Spotlight & Jump Back In Grid
-        item(key = "feed_header") {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = ContentInset),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    if (recents.isNotEmpty()) "Jump Back In" else "Your Library",
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 17.sp, letterSpacing = (-0.02).em),
-                    color = Tone.Ink,
-                )
-                Row(
-                    Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable(onClick = onSeeAllGames)
-                        .padding(horizontal = 6.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    ArchiveLabel("SEE ALL ${games.size}", color = Ascend.accent)
-                    Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Ascend.accent, modifier = Modifier.size(16.dp))
-                }
-            }
-        }
-
-        val pairs = feedGames.chunked(2)
-        items(pairs.size, key = { "editorial_pair_$it" }) { idx ->
-            val pair = pairs[idx]
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = ContentInset),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                pair.forEach { game ->
-                    EditorialTwoUpCard(
-                        game = game,
-                        stat = stats[game.id],
-                        onOpen = { onOpen(game) },
-                        onPlay = { onPlay(game) },
-                        onLongClick = { onOptions(game) },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-                if (pair.size == 1) Spacer(Modifier.weight(1f))
-            }
-        }
-
-        // Most Played Spotlight Rows
+        // Most Played Glass Row
         if (mostPlayed.isNotEmpty()) {
-            item(key = "most_played_block") {
+            item(key = "most_played_glass") {
                 Column(
-                    Modifier.fillMaxWidth().padding(horizontal = ContentInset),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            "Most Played",
-                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 15.sp),
-                            color = Tone.Ink,
-                        )
-                        ArchiveLabel("TOP ${mostPlayed.size}", color = Tone.Muted)
-                    }
+                    Text(
+                        "Most Played",
+                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 18.sp, letterSpacing = (-0.02).em),
+                        color = Tone.Ink,
+                    )
                     mostPlayed.take(3).forEach { game ->
-                        WideCartridgeRow(
+                        GlassGameStripRow(
                             game = game,
-                            badge = PlayTime.format(stats[game.id]?.seconds ?: 0),
+                            detail = "${game.system?.name.orEmpty()} · ${PlayTime.format(stats[game.id]?.seconds ?: 0)}",
                             onOpen = { onOpen(game) },
                             onPlay = { onPlay(game) },
                             onLongClick = { onOptions(game) },
@@ -483,13 +499,14 @@ fun HomeScreen(
             }
         }
 
-        // Full Catalogue Shortcut Button
-        item(key = "browse_all_footer") {
-            com.retrohero.app.ui.components.BoxedButton(
-                text = "Explore full catalogue (${games.size} games)",
+        // Explore All Games Pill CTA
+        item(key = "explore_all_cta") {
+            com.retrohero.app.ui.components.GlassPillButton(
+                text = "Explore all ${games.size} games",
                 icon = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
                 onClick = onSeeAllGames,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = ContentInset),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                height = 48.dp,
             )
         }
     }
@@ -719,277 +736,221 @@ private fun GachaHero(candidates: List<Game>, onPlay: (Game) -> Unit) {
     }
 }
 
-// ---- Asymmetric Bento Play Deck Components -----------------------------------------------------
+// ---- Midnight Glass & Console Aurora Play Components -------------------------------------------
 
 @Composable
-private fun AsymmetricPlayMosaic(
+private fun CinematicAuroraCarousel(
+    pager: PagerState,
     featured: List<Game>,
     recent: Game?,
-    gamesCount: Int,
-    systems: List<GameSystem>,
-    counts: Map<String, Int>,
-    totalSeconds: Long,
-    totalSessions: Int,
     onOpen: (Game) -> Unit,
     onPlay: (Game) -> Unit,
-    onOpenStats: () -> Unit,
     onShuffle: () -> Unit,
 ) {
-    val pager = rememberPagerState { featured.size }
-    val heroShape = RoundedCornerShape(20.dp)
-    val tileShape = RoundedCornerShape(18.dp)
+    val cardShape = RoundedCornerShape(26.dp)
+    HorizontalPager(
+        state = pager,
+        contentPadding = PaddingValues(horizontal = 20.dp),
+        pageSpacing = 12.dp,
+        modifier = Modifier.fillMaxWidth().height(312.dp),
+    ) { page ->
+        val game = featured[page]
+        val sysColor = game.system?.color ?: Ascend.accent
+        val isRecent = game.id == recent?.id
+        val pageOffset = ((pager.currentPage - page) + pager.currentPageOffsetFraction).coerceIn(-1f, 1f)
+        val scale = 1f - 0.055f * abs(pageOffset)
+        val alpha = 1f - 0.22f * abs(pageOffset)
 
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = ContentInset)
-            .height(282.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        // Left Column (58% width, tall full-bleed swipeable Active Cartridge Hero)
-        HorizontalPager(
-            state = pager,
-            pageSpacing = 10.dp,
-            modifier = Modifier.weight(1.26f).fillMaxHeight(),
-        ) { page ->
-            val game = featured[page]
-            val isRecent = game.id == recent?.id
+        Box(
+            Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    this.alpha = alpha
+                }
+                .clip(cardShape)
+                .background(Color(0xFF0C1120))
+                .border(
+                    width = 1.dp,
+                    brush = Brush.verticalGradient(
+                        listOf(
+                            Color.White.copy(alpha = 0.30f),
+                            sysColor.copy(alpha = 0.28f),
+                            Color.White.copy(alpha = 0.08f),
+                        ),
+                    ),
+                    shape = cardShape,
+                )
+                .clickable { onOpen(game) },
+        ) {
+            GameArt(game, Modifier.fillMaxSize(), showTag = false)
+
+            // Atmospheric midnight vignette + console-colored edge aura
             Box(
                 Modifier
                     .fillMaxSize()
-                    .clip(heroShape)
-                    .background(Color(0xFF141417))
-                    .border(1.dp, Tone.Line, heroShape)
-                    .clickable { onOpen(game) },
-            ) {
-                GameArt(game, Modifier.fillMaxSize(), showTag = false)
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                0f to Color.Black.copy(alpha = 0.25f),
-                                0.42f to Color.Transparent,
-                                0.72f to Color.Black.copy(alpha = 0.78f),
-                                1f to Color.Black.copy(alpha = 0.94f),
-                            ),
+                    .background(
+                        Brush.verticalGradient(
+                            0f to Color(0xFF060912).copy(alpha = 0.30f),
+                            0.38f to Color.Transparent,
+                            0.68f to Color(0xFF070A14).copy(alpha = 0.80f),
+                            1f to Color(0xFF050811).copy(alpha = 0.96f),
                         ),
-                )
-                // Top-left live tag
+                    ),
+            )
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.radialGradient(
+                            0f to sysColor.copy(alpha = 0.28f),
+                            0.75f to Color.Transparent,
+                            center = Offset(0f, 900f),
+                            radius = 700f,
+                        ),
+                    ),
+            )
+
+            // Top floating glass badges
+            Row(
+                Modifier
+                    .align(Alignment.TopStart)
+                    .fillMaxWidth()
+                    .padding(14.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Row(
                     Modifier
-                        .align(Alignment.TopStart)
-                        .padding(10.dp)
-                        .background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(8.dp))
-                        .border(0.5.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(8.dp))
-                        .padding(horizontal = 7.dp, vertical = 4.dp),
+                        .clip(CircleShape)
+                        .background(Color(0xFF0A0F1E).copy(alpha = 0.68f))
+                        .border(1.dp, Color.White.copy(alpha = 0.20f), CircleShape)
+                        .padding(horizontal = 10.dp, vertical = 5.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    Box(Modifier.size(5.dp).clip(CircleShape).background(Ascend.accent))
-                    ArchiveLabel(if (isRecent) "RESUME" else "SPOTLIGHT", color = Color.White)
+                    Box(Modifier.size(6.dp).clip(CircleShape).background(sysColor))
+                    Text(
+                        if (isRecent) "Resume" else "Spotlight",
+                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 11.sp),
+                        color = Color.White,
+                    )
                 }
-                // Top-right page counter
+
                 if (featured.size > 1) {
                     Box(
                         Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(10.dp)
-                            .background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(8.dp))
-                            .border(0.5.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(8.dp))
-                            .padding(horizontal = 7.dp, vertical = 4.dp),
+                            .clip(CircleShape)
+                            .background(Color(0xFF0A0F1E).copy(alpha = 0.68f))
+                            .border(1.dp, Color.White.copy(alpha = 0.20f), CircleShape)
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
                     ) {
-                        ArchiveLabel("${page + 1} / ${featured.size}", color = Color.White)
+                        Text(
+                            "${page + 1} / ${featured.size}",
+                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 11.sp),
+                            color = Color.White.copy(alpha = 0.92f),
+                        )
                     }
                 }
-                // Bottom cartridge info + instant Ember Play bar
-                Column(
-                    Modifier
-                        .align(Alignment.BottomStart)
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        ArchiveLabel(
-                            game.system?.shortName ?: game.systemId,
-                            color = Ascend.accent,
-                        )
+            }
+
+            // Bottom cinematic title + luminous Play Now CTA
+            Column(
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Box(
+                            Modifier
+                                .clip(CircleShape)
+                                .background(sysColor.copy(alpha = 0.24f))
+                                .border(0.75.dp, sysColor.copy(alpha = 0.55f), CircleShape)
+                                .padding(horizontal = 8.dp, vertical = 3.dp),
+                        ) {
+                            Text(
+                                game.system?.shortName ?: game.systemId,
+                                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 10.5.sp),
+                                color = Color.White,
+                            )
+                        }
                         Text(
-                            game.title,
-                            style = TextStyle(
-                                fontFamily = Inter,
-                                fontWeight = FontWeight.Black,
-                                fontSize = 18.sp,
-                                lineHeight = 20.sp,
-                                letterSpacing = (-0.02).em,
-                            ),
-                            color = Color.White,
-                            maxLines = 2,
+                            game.system?.name.orEmpty(),
+                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 12.sp),
+                            color = Color.White.copy(alpha = 0.72f),
+                            maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
                     }
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        val playShape = RoundedCornerShape(10.dp)
-                        Row(
-                            Modifier
-                                .weight(1f)
-                                .height(38.dp)
-                                .clip(playShape)
-                                .background(Ascend.accent)
-                                .clickable { onPlay(game) }
-                                .padding(start = 12.dp, end = 5.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                        ) {
-                            Text(
-                                "Play",
-                                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 13.sp),
-                                color = Ascend.onAccent,
-                            )
-                            Box(
-                                Modifier
-                                    .size(28.dp)
-                                    .clip(RoundedCornerShape(7.dp))
-                                    .background(Color.Black.copy(alpha = 0.20f)),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(Icons.Rounded.PlayArrow, "Play ${game.title}", tint = Ascend.onAccent, modifier = Modifier.size(16.dp))
-                            }
-                        }
-                        Box(
-                            Modifier
-                                .size(38.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(Color.White.copy(alpha = 0.16f))
-                                .border(1.dp, Color.White.copy(alpha = 0.24f), RoundedCornerShape(10.dp))
-                                .clickable { onOpen(game) },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(Icons.Rounded.Insights, "Details", tint = Color.White, modifier = Modifier.size(17.dp))
-                        }
-                    }
-                }
-            }
-        }
-
-        // Right Column (42% width, 2 stacked asymmetric Bento tiles)
-        Column(
-            Modifier.weight(0.84f).fillMaxHeight(),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            // Top Tile: Activity Telemetry + Mini Console Color Spark-Chart
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .weight(1.16f)
-                    .clip(tileShape)
-                    .background(Tone.Surface)
-                    .border(1.dp, Tone.Line, tileShape)
-                    .clickable(onClick = onOpenStats)
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    ArchiveLabel("ACTIVITY", color = Tone.Muted)
-                    Icon(Icons.Rounded.Insights, "Play stats", tint = Ascend.accent, modifier = Modifier.size(15.dp))
-                }
-                Column {
                     Text(
-                        if (totalSeconds >= 60) PlayTime.format(totalSeconds) else "$gamesCount",
+                        game.title,
                         style = TextStyle(
                             fontFamily = Inter,
-                            fontWeight = FontWeight.Black,
-                            fontSize = 26.sp,
-                            letterSpacing = (-0.03).em,
-                            fontFeatureSettings = "tnum",
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 23.sp,
+                            lineHeight = 26.sp,
+                            letterSpacing = (-0.025).em,
                         ),
-                        color = Tone.Ink,
-                        maxLines = 1,
-                    )
-                    ArchiveLabel(
-                        if (totalSeconds >= 60) "$totalSessions SESSIONS" else "ROM ARCHIVE",
-                        color = Tone.Muted,
+                        color = Color.White,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
-                // Mini console color spark-bars
-                val top5 = systems.take(5)
-                val maxC = (top5.maxOfOrNull { counts[it.id] ?: 1 } ?: 1).coerceAtLeast(1)
-                Row(
-                    Modifier.fillMaxWidth().height(26.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.Bottom,
-                ) {
-                    top5.forEach { sys ->
-                        val frac = ((counts[sys.id] ?: 1).toFloat() / maxC).coerceIn(0.28f, 1f)
-                        Box(
-                            Modifier
-                                .weight(1f)
-                                .fillMaxHeight(frac)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(sys.color),
-                        )
-                    }
-                    repeat((5 - top5.size).coerceAtLeast(0)) {
-                        Box(
-                            Modifier
-                                .weight(1f)
-                                .fillMaxHeight(0.25f)
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(Tone.Line),
-                        )
-                    }
-                }
-            }
 
-            // Bottom Tile: High-Contrast Obsidian Shuffle Dice Tile
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .weight(0.84f)
-                    .clip(tileShape)
-                    .background(Tone.Ink)
-                    .clickable(onClick = onShuffle)
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.SpaceBetween,
-            ) {
                 Row(
                     Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    ArchiveLabel("GACHA", color = Tone.Bg.copy(alpha = 0.65f))
+                    Row(
+                        Modifier
+                            .weight(1f)
+                            .height(44.dp)
+                            .clip(CircleShape)
+                            .background(Brush.horizontalGradient(listOf(Ascend.accent, Color(0xFF7B68FF))))
+                            .border(1.dp, Color.White.copy(alpha = 0.34f), CircleShape)
+                            .clickable { onPlay(game) }
+                            .padding(horizontal = 18.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        Icon(
+                            Icons.Rounded.PlayArrow,
+                            "Play ${game.title}",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            if (isRecent) "Resume Game" else "Play Now",
+                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 14.sp),
+                            color = Color.White,
+                        )
+                    }
+
                     Box(
                         Modifier
-                            .size(28.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Ascend.accent),
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(Color.White.copy(alpha = 0.14f))
+                            .border(1.dp, Color.White.copy(alpha = 0.26f), CircleShape)
+                            .clickable { onOpen(game) },
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(Icons.Rounded.Shuffle, null, tint = Ascend.onAccent, modifier = Modifier.size(15.dp))
+                        Icon(
+                            Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                            "Game details",
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp),
+                        )
                     }
-                }
-                Column {
-                    Text(
-                        "Shuffle",
-                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.ExtraBold, fontSize = 16.sp, letterSpacing = (-0.02).em),
-                        color = Tone.Bg,
-                        maxLines = 1,
-                    )
-                    Text(
-                        "Spin the reel",
-                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 11.sp),
-                        color = Tone.Bg.copy(alpha = 0.68f),
-                        maxLines = 1,
-                    )
                 }
             }
         }
@@ -997,87 +958,70 @@ private fun AsymmetricPlayMosaic(
 }
 
 @Composable
-private fun HardwareRailTile(system: GameSystem, count: Int, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(14.dp)
+private fun ConsoleGlassChip(system: GameSystem, count: Int, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(18.dp)
     Row(
         Modifier
-            .width(142.dp)
-            .height(64.dp)
-            .clip(shape)
-            .background(Tone.Surface)
-            .border(1.dp, Tone.Line, shape)
+            .height(54.dp)
+            .glassPanel(shape, tint = system.color)
             .clickable(onClick = onClick)
-            .padding(end = 10.dp),
+            .padding(horizontal = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Box(
             Modifier
-                .width(5.dp)
-                .fillMaxHeight()
-                .background(system.color),
-        )
-        Spacer(Modifier.width(10.dp))
-        Column(
-            Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(3.dp),
+                .size(30.dp)
+                .clip(CircleShape)
+                .background(system.color.copy(alpha = 0.22f))
+                .border(1.dp, system.color.copy(alpha = 0.55f), CircleShape),
+            contentAlignment = Alignment.Center,
         ) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    system.tag,
-                    style = TextStyle(fontFamily = PixelFont, fontSize = 9.sp),
-                    color = Tone.Ink,
-                )
-                Box(
-                    Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Tone.Raised)
-                        .border(1.dp, Tone.Line, RoundedCornerShape(6.dp))
-                        .padding(horizontal = 5.dp, vertical = 1.dp),
-                ) {
-                    Text(
-                        count.toString(),
-                        style = TextStyle(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 10.sp),
-                        color = Tone.Ink,
-                    )
-                }
-            }
+            Box(Modifier.size(9.dp).clip(CircleShape).background(system.color))
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
             Text(
-                system.name,
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 12.sp),
+                system.shortName,
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 13.5.sp),
+                color = Tone.Ink,
+                maxLines = 1,
+            )
+            Text(
+                if (count == 1) "1 title" else "$count titles",
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 11.sp),
                 color = Tone.Muted,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
         }
     }
 }
 
 @Composable
-private fun CompactShelfDeckCard(
+private fun GlassCollectionBanner(
     title: String,
     subtitle: String,
     games: List<Game>,
-    accent: Color,
+    tint: Color,
     onClick: () -> Unit,
 ) {
-    val shape = RoundedCornerShape(16.dp)
+    val shape = RoundedCornerShape(22.dp)
     Row(
         Modifier
-            .width(232.dp)
-            .height(86.dp)
-            .clip(shape)
-            .background(Tone.Surface)
-            .border(1.dp, Tone.Line, shape)
+            .width(248.dp)
+            .height(92.dp)
+            .glassPanel(shape, tint = tint, elevated = true)
             .clickable(onClick = onClick)
-            .padding(10.dp),
+            .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Box(Modifier.size(64.dp).clip(RoundedCornerShape(10.dp)).background(Tone.Bg).border(1.dp, Tone.Line, RoundedCornerShape(10.dp))) {
+        Box(
+            Modifier
+                .size(66.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(Tone.Bg)
+                .border(1.dp, Color.White.copy(alpha = if (Tone.isDark) 0.16f else 0.55f), RoundedCornerShape(14.dp)),
+        ) {
             val covers = games.take(4)
             when {
                 covers.size >= 4 -> Column(Modifier.fillMaxSize()) {
@@ -1089,106 +1033,37 @@ private fun CompactShelfDeckCard(
             }
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Box(Modifier.width(18.dp).height(3.dp).clip(CircleShape).background(accent))
             Text(
                 title,
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 14.sp),
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 15.sp),
                 color = Tone.Ink,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            ArchiveLabel(subtitle, color = Tone.Muted)
-        }
-        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Tone.Faint, modifier = Modifier.size(18.dp))
-    }
-}
-
-@Composable
-private fun EditorialTwoUpCard(
-    game: Game,
-    stat: PlayStat?,
-    onOpen: () -> Unit,
-    onPlay: () -> Unit,
-    onLongClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val cardShape = RoundedCornerShape(16.dp)
-    val playShape = RoundedCornerShape(9.dp)
-    Column(
-        modifier
-            .clip(cardShape)
-            .background(Tone.Surface)
-            .border(1.dp, Tone.Line, cardShape)
-            .combinedClickable(onClick = onOpen, onLongClick = onLongClick),
-    ) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .aspectRatio(1.18f)
-                .background(Tone.Bg),
-        ) {
-            GameArt(game, Modifier.fillMaxSize(), showTag = false)
-            Box(
-                Modifier
-                    .align(Alignment.TopStart)
-                    .padding(8.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(Color.Black.copy(alpha = 0.68f))
-                    .border(0.5.dp, Color.White.copy(alpha = 0.20f), RoundedCornerShape(6.dp))
-                    .padding(horizontal = 6.dp, vertical = 3.dp),
-            ) {
-                ArchiveLabel(game.system?.shortName ?: game.systemId, color = Color.White)
-            }
-            Box(
-                Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(8.dp)
-                    .size(32.dp)
-                    .clip(playShape)
-                    .background(Ascend.accent)
-                    .clickable(onClick = onPlay),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Rounded.PlayArrow, "Play ${game.title}", tint = Ascend.onAccent, modifier = Modifier.size(18.dp))
-            }
-        }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(Tone.Line))
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .background(Tone.Bg.copy(alpha = 0.35f))
-                .padding(horizontal = 10.dp, vertical = 9.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
             Text(
-                game.title,
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 13.5.sp, letterSpacing = (-0.02).em),
-                color = Tone.Ink,
+                subtitle,
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 12.sp),
+                color = Tone.Muted,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
-            val meta = if (stat != null && stat.seconds >= 60) PlayTime.format(stat.seconds)
-            else game.system?.name.orEmpty()
-            ArchiveLabel(meta, color = Tone.Muted)
         }
+        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Tone.Muted, modifier = Modifier.size(18.dp))
     }
 }
 
 @Composable
-private fun WideCartridgeRow(
+private fun GlassGameStripRow(
     game: Game,
-    badge: String,
+    detail: String,
     onOpen: () -> Unit,
     onPlay: () -> Unit,
     onLongClick: () -> Unit,
 ) {
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(20.dp)
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(shape)
-            .background(Tone.Surface)
-            .border(1.dp, Tone.Line, shape)
+            .glassPanel(shape)
             .combinedClickable(onClick = onOpen, onLongClick = onLongClick)
             .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -1197,31 +1072,37 @@ private fun WideCartridgeRow(
         GameArt(
             game,
             Modifier
-                .size(50.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .border(1.dp, Tone.Line, RoundedCornerShape(10.dp)),
+                .size(52.dp)
+                .clip(RoundedCornerShape(13.dp))
+                .border(1.dp, Color.White.copy(alpha = if (Tone.isDark) 0.16f else 0.40f), RoundedCornerShape(13.dp)),
             showTag = false,
         )
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 game.title,
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 14.sp),
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp),
                 color = Tone.Ink,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            ArchiveLabel("${game.system?.shortName ?: game.systemId} · $badge", color = Tone.Muted)
+            Text(
+                detail,
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 12.sp),
+                color = Tone.Muted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
         Box(
             Modifier
-                .size(36.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(Ascend.accent.copy(alpha = 0.14f))
-                .border(1.dp, Ascend.accent.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
+                .size(38.dp)
+                .clip(CircleShape)
+                .background(Brush.linearGradient(listOf(Ascend.accent, Color(0xFF7B68FF))))
+                .border(1.dp, Color.White.copy(alpha = 0.28f), CircleShape)
                 .clickable(onClick = onPlay),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(Icons.Rounded.PlayArrow, "Play ${game.title}", tint = Ascend.accent, modifier = Modifier.size(18.dp))
+            Icon(Icons.Rounded.PlayArrow, "Play ${game.title}", tint = Color.White, modifier = Modifier.size(19.dp))
         }
     }
 }

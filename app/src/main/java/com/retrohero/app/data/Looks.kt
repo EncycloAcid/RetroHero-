@@ -36,13 +36,14 @@ object Looks {
     val skins = listOf(Console, Instrument, Glass, Classic, Minimal, Neon, Stealth)
 
     val accents = listOf(
+        "aurora" to ("Aurora" to Color(0xFF5B8CFF)),
+        "violet" to ("Violet" to Color(0xFF9B7BFF)),
         "ember" to ("Ember" to Color(0xFFFF5A1F)),
-        "salmon" to ("Salmon" to Color(0xFFF0908D)),
-        "mint" to ("Mint" to Color(0xFF7FD8B5)),
-        "sky" to ("Sky" to Color(0xFF7DB7F5)),
-        "lavender" to ("Lavender" to Color(0xFFB4A2F2)),
-        "butter" to ("Butter" to Color(0xFFF2D27A)),
-        "snow" to ("Snow" to Color(0xFFE8E8EC)),
+        "mint" to ("Mint" to Color(0xFF3FD8A4)),
+        "sky" to ("Sky" to Color(0xFF4CC9FF)),
+        "salmon" to ("Rose" to Color(0xFFFF6B8B)),
+        "butter" to ("Gold" to Color(0xFFF6C85F)),
+        "snow" to ("Frost" to Color(0xFFE8EEFF)),
     )
 
     fun accent(id: String?): Color = accents.firstOrNull { it.first == id }?.second?.second ?: accents.first().second.second
