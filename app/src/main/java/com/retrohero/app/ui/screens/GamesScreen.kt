@@ -350,7 +350,7 @@ fun GamesScreen(
                         subtitle = subtitle,
                         onLongClick = { onGameOptions(game) },
                         onPlay = onQuickPlay?.let { qp -> { qp(game) } } ?: { onPlay(game) },
-                        progress = computeGameProgress(st, false),
+                        progress = computeGameProgress(st),
                         isFavorite = game.id in favorites,
                         onToggleFavorite = { onToggleFavorite(game) },
                     )
