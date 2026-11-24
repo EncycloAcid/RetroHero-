@@ -140,6 +140,7 @@ fun GameDetailScreen(
     pageIndex: Int = 4,
     onDeleteScreenshot: (File) -> Unit = {},
     isFavorite: Boolean = false,
+    onShelf: Boolean = false,
     onToggleFavorite: () -> Unit = {},
     onAddToCollection: () -> Unit = {},
 ) {
@@ -149,8 +150,8 @@ fun GameDetailScreen(
     var viewingShot by remember { mutableStateOf<File?>(null) }
     var selectedStageShot by remember(screenshots) { mutableStateOf(screenshots.firstOrNull()) }
 
-    val milestones = remember(game.id, stat, saveSlots.size, screenshots.size, isFavorite, system.shortName) {
-        buildMilestones(stat, saveSlots.size, screenshots.size, isFavorite, system.shortName)
+    val milestones = remember(game.id, stat, saveSlots.size, screenshots.size, isFavorite, onShelf, system.shortName) {
+        buildMilestones(stat, saveSlots.size, screenshots.size, isFavorite, onShelf, system.shortName)
     }
     val unlockedCount = milestones.count { it.unlocked }
     val completionPct = ((unlockedCount * 100f) / milestones.size.coerceAtLeast(1)).roundToInt()
@@ -1100,6 +1101,7 @@ private fun buildMilestones(
     saveCount: Int,
     shotCount: Int,
     isFavorite: Boolean,
+    onShelf: Boolean,
     shortSystem: String,
 ): List<GameMilestone> {
     val firstBoot = stat.sessions >= 1 || stat.seconds > 0 || saveCount > 0
@@ -1134,8 +1136,8 @@ private fun buildMilestones(
             title = "The Curator",
             subtitle = "Pin this title to Favourites or a custom shelf",
             icon = Icons.Rounded.Favorite,
-            unlocked = isFavorite,
-            percent = if (isFavorite) 100 else 0,
+            unlocked = isFavorite || onShelf,
+            percent = if (isFavorite || onShelf) 100 else 0,
         ),
         GameMilestone(
             title = "Arcade Regular",
