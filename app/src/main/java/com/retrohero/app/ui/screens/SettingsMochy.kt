@@ -549,7 +549,7 @@ fun LooksSettings(
     onImportDeltaSkin: () -> Unit = {},
     onDeleteDeltaSkin: (DeltaSkin) -> Unit = {},
 ) {
-    var accentId by remember { mutableStateOf(settings.accent) }
+    var accentId by remember { mutableStateOf(Looks.canonicalAccent(settings.accent)) }
     var skinId by remember { mutableStateOf(settings.padSkin) }
     var deltaRevision by remember { mutableIntStateOf(0) }
 
