@@ -76,13 +76,26 @@ class Settings(context: Context) {
 
     /** Accent colour id from [Looks.accents], or "look:<id>" for an imported look. */
     var accent: String
-        get() = prefs.getString("accent", "salmon")!!
+        get() = prefs.getString("accent", "ember")!!
         set(v) = prefs.edit { putString("accent", v) }
+
+    var darkMode: Boolean
+        get() = prefs.getBoolean("dark_mode", true)
+        set(v) = prefs.edit { putBoolean("dark_mode", v) }
 
     /** Touch-pad skin id from [Looks.skins], or "look:<id>" for an imported look. */
     var padSkin: String
         get() = prefs.getString("pad_skin", "console")!!
         set(v) = prefs.edit { putString("pad_skin", v) }
+
+    /** Selected Delta skin identifier for [systemId], or null to use the built-in touch pad. */
+    fun deltaSkinFor(systemId: String): String? =
+        prefs.getString("delta_skin_$systemId", null)?.takeIf { it.isNotBlank() }
+
+    fun setDeltaSkinFor(systemId: String, identifier: String?) = prefs.edit {
+        if (identifier.isNullOrBlank()) remove("delta_skin_$systemId")
+        else putString("delta_skin_$systemId", identifier)
+    }
 
     private val _reducedMotion = MutableStateFlow(prefs.getBoolean("reduced_motion", false))
     /** Fewer and calmer animations: no tilt, no spinning, instant transitions where possible. */
@@ -113,6 +126,31 @@ class Settings(context: Context) {
     var stickAsDpad: Boolean
         get() = prefs.getBoolean("stick_as_dpad", true)
         set(v) = prefs.edit { putBoolean("stick_as_dpad", v) }
+
+    private val _shelfStatuses = MutableStateFlow(loadShelfStatuses())
+    val shelfStatuses: StateFlow<Map<String, String>> = _shelfStatuses
+
+    private fun loadShelfStatuses(): Map<String, String> {
+        val raw = prefs.getString("shelf_statuses_json", null) ?: return emptyMap()
+        return runCatching {
+            val obj = org.json.JSONObject(raw)
+            buildMap {
+                val keys = obj.keys()
+                while (keys.hasNext()) {
+                    val k = keys.next()
+                    put(k, obj.optString(k))
+                }
+            }
+        }.getOrDefault(emptyMap())
+    }
+
+    fun setShelfStatus(gameId: String, status: String) {
+        val updated = _shelfStatuses.value.toMutableMap().apply { put(gameId, status) }
+        val obj = org.json.JSONObject()
+        updated.forEach { (k, v) -> obj.put(k, v) }
+        prefs.edit { putString("shelf_statuses_json", obj.toString()) }
+        _shelfStatuses.value = updated
+    }
 
     private val _favorites = MutableStateFlow(prefs.getStringSet(KEY_FAVORITES, emptySet())!!.toSet())
     /** Pinned games, shown in the home "Speed dial". */

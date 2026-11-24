@@ -18,12 +18,19 @@ import androidx.compose.material3.Slider
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import com.retrohero.app.data.Cheat
 import com.retrohero.app.data.Cheats
+import com.retrohero.app.data.DeltaAction
+import com.retrohero.app.data.DeltaSkin
+import com.retrohero.app.data.DeltaSkins
 import com.retrohero.app.data.PlayTime
 import com.retrohero.app.data.Remap
 import com.retrohero.app.data.Looks
 import com.retrohero.app.data.PadSkin
+import com.retrohero.app.ui.theme.Tone
 import com.retrohero.app.ui.theme.setAccent
 import com.retrohero.app.data.ScreenFilter
 import java.io.File
@@ -167,6 +174,8 @@ class EmulatorActivity : ComponentActivity() {
     private lateinit var gamePrefs: GamePrefs
     private lateinit var padLayouts: PadLayouts
     private var padSkin: PadSkin = Looks.Console
+    private var deltaSkinsForSystem: List<DeltaSkin> = emptyList()
+    private var activeDeltaSkin by mutableStateOf<DeltaSkin?>(null)
 
     private var phase by mutableStateOf<Phase>(Phase.Loading)
     private var menuOpen by mutableStateOf(false)
@@ -208,6 +217,7 @@ class EmulatorActivity : ComponentActivity() {
         system = game.system ?: run { finish(); return }
         paths = AppPaths(this)
         settings = Settings(this)
+        Tone.setDarkMode(settings.darkMode)
         input = InputMapper(settings.stickAsDpad, Remap.load(paths.remapFile))
         optionsStore = CoreOptionsStore(paths.coreOptionsFile(coreId))
         gamePrefs = GamePrefs(this, settings.sharpPixels)
@@ -215,6 +225,9 @@ class EmulatorActivity : ComponentActivity() {
         val custom = Looks.custom(paths.looks)
         padSkin = settings.padSkin.let { id -> custom.firstOrNull { "look:" + it.id == id }?.pad ?: Looks.skin(id) }
         setAccent(settings.accent.let { id -> custom.firstOrNull { "look:" + it.id == id }?.accent ?: Looks.accent(id) })
+        deltaSkinsForSystem = DeltaSkins.forSystem(paths.deltaSkins, system.id)
+        val selectedDeltaId = settings.deltaSkinFor(system.id)
+        activeDeltaSkin = deltaSkinsForSystem.firstOrNull { it.identifier == selectedDeltaId }
         padLayouts = PadLayouts(paths.padLayoutFile)
         filter = gamePrefs.filter(system.id)
         integerScale = gamePrefs.integerScale(system.id)
@@ -458,11 +471,44 @@ class EmulatorActivity : ComponentActivity() {
         return super.dispatchGenericMotionEvent(event)
     }
 
+    private fun handleDeltaAction(action: DeltaAction, pressed: Boolean) {
+        when (action) {
+            DeltaAction.MENU -> if (pressed) setMenu(true)
+            DeltaAction.FAST_FORWARD_HOLD -> {
+                fastForwardHeld = pressed
+                applyFastForward()
+            }
+            DeltaAction.FAST_FORWARD_TOGGLE -> if (pressed) {
+                fastForwardToggle = !fastForwardToggle
+                applyFastForward()
+            }
+            DeltaAction.REWIND_HOLD -> if (rewindOn) NativeBridge.setRewinding(pressed)
+            DeltaAction.QUICK_SAVE -> if (pressed) {
+                val file = paths.stateFile(game, AppPaths.QUICK_SLOT)
+                val ok = NativeBridge.saveState(file.absolutePath)
+                toast(if (ok) "Quick saved" else NativeBridge.getLastError().ifEmpty { "Quick save failed" })
+            }
+            DeltaAction.QUICK_LOAD -> if (pressed) {
+                val file = paths.stateFile(game, AppPaths.QUICK_SLOT)
+                if (!file.exists()) {
+                    toast("No quick save yet")
+                } else {
+                    val ok = NativeBridge.loadState(file.absolutePath)
+                    toast(if (ok) "Quick loaded" else NativeBridge.getLastError().ifEmpty { "Quick load failed" })
+                }
+            }
+            DeltaAction.SCREENSHOT -> if (pressed) takeScreenshot()
+        }
+    }
+
     // ---- UI ---------------------------------------------------------------------------------
 
     @Composable
     private fun EmulatorScreen() {
-        val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val config = LocalConfiguration.current
+        val landscape = config.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val tablet = config.smallestScreenWidthDp >= 600
+        var sustainedCount by remember { mutableIntStateOf(0) }
 
         LaunchedEffect(phase) {
             while (phase is Phase.Running) {
@@ -472,14 +518,99 @@ class EmulatorActivity : ComponentActivity() {
         }
 
         padLandscape = landscape
-        Box(Modifier.fillMaxSize().background(Color.Black)) {
-            if (landscape) {
+        BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
+            val density = LocalDensity.current
+            val containerW = with(density) { maxWidth.toPx() }
+            val containerH = with(density) { maxHeight.toPx() }
+            val longEdge = maxOf(containerW, containerH)
+            val shortEdge = minOf(containerW, containerH).coerceAtLeast(1f)
+            val tallPhone = !tablet && (longEdge / shortEdge) >= 1.85f
+            val skin = activeDeltaSkin
+            val deltaRep = if (showPad && !editingPad && skin != null) {
+                skin.representations.pick(landscape = landscape, tablet = tablet, tallPhone = tallPhone)
+            } else null
+
+            val shellStyle = remember(padSkin, system.id, system.color, Tone.isDark) {
+                when (padSkin.faces) {
+                    "console" -> ConsoleStyles.forSystem(system.id, system.color)
+                    "instrument" -> ConsoleStyles.instrument(
+                        dark = Tone.isDark,
+                        accent = com.retrohero.app.ui.components.Ascend.accent,
+                        onAccent = com.retrohero.app.ui.components.Ascend.onAccent,
+                        systemName = system.name,
+                    )
+                    else -> null
+                }
+            }
+
+            if (skin != null && deltaRep != null) {
+                val deltaLayout = remember(containerW, containerH, deltaRep, landscape) {
+                    computeDeltaLayout(containerW, containerH, deltaRep, landscape)
+                }
+                val sr = deltaLayout.screenRect
+                Box(
+                    Modifier
+                        .offset { IntOffset(sr.left.roundToInt(), sr.top.roundToInt()) }
+                        .size(with(density) { sr.width.toDp() }, with(density) { sr.height.toDp() }),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (deltaLayout.explicitScreen) GameSurface(Modifier.fillMaxSize()) else GameView()
+                }
+                if (phase is Phase.Running) {
+                    val view = androidx.compose.ui.platform.LocalView.current
+                    DeltaSkinOverlay(
+                        skin = skin,
+                        representation = deltaRep,
+                        layout = deltaLayout,
+                        systemId = system.id,
+                        opacity = settings.overlayOpacity,
+                        onButton = { id, pressed -> NativeBridge.setButton(0, id, pressed) },
+                        onAnalog = { x, y ->
+                            NativeBridge.setAnalog(0, 0, 0, x)
+                            NativeBridge.setAnalog(0, 0, 1, y)
+                        },
+                        onPointer = { x, y, down -> NativeBridge.setPointer(x, y, down) },
+                        onAction = ::handleDeltaAction,
+                        onPress = { if (settings.haptics) view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP) },
+                    )
+                }
+            } else if (landscape) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { GameView() }
-                if (showPad && phase is Phase.Running) Pad(landscape = true, Modifier.fillMaxSize().safeDrawingPadding())
+                if (showPad && phase is Phase.Running) {
+                    Pad(
+                        landscape = true,
+                        modifier = Modifier.fillMaxSize().safeDrawingPadding(),
+                        onSustainedChanged = { sustainedCount = it.size },
+                    )
+                }
+            } else if (shellStyle != null && showPad) {
+                // Full-device Delta-inspired physical handheld shell wrapping display bezel + control deck
+                HandheldShell(
+                    style = shellStyle,
+                    fastForwardActive = fastForwardToggle || fastForwardHeld,
+                    sustainedCount = sustainedCount,
+                    gameContent = { GameView() },
+                    padContent = {
+                        if (phase is Phase.Running) {
+                            Pad(
+                                landscape = false,
+                                modifier = Modifier.fillMaxSize(),
+                                inShell = true,
+                                onSustainedChanged = { sustainedCount = it.size },
+                            )
+                        }
+                    },
+                )
             } else {
                 Column(Modifier.fillMaxSize().safeDrawingPadding()) {
                     Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) { GameView() }
-                    if (showPad && phase is Phase.Running) Pad(landscape = false, Modifier.fillMaxWidth().fillMaxHeight(0.45f))
+                    if (showPad && phase is Phase.Running) {
+                        Pad(
+                            landscape = false,
+                            modifier = Modifier.fillMaxWidth().fillMaxHeight(0.45f),
+                            onSustainedChanged = { sustainedCount = it.size },
+                        )
+                    }
                 }
             }
 
@@ -515,7 +646,12 @@ class EmulatorActivity : ComponentActivity() {
     }
 
     @Composable
-    private fun Pad(landscape: Boolean, modifier: Modifier) {
+    private fun Pad(
+        landscape: Boolean,
+        modifier: Modifier,
+        inShell: Boolean = false,
+        onSustainedChanged: (Set<Int>) -> Unit = {},
+    ) {
         val view = androidx.compose.ui.platform.LocalView.current
         VirtualGamepad(
             layout = system.layout,
@@ -542,6 +678,8 @@ class EmulatorActivity : ComponentActivity() {
                     onAdjust = { name, a -> padAdjust = padAdjust + (name to a) },
                 )
             } else null,
+            inShell = inShell,
+            onSustainedChanged = onSustainedChanged,
         )
     }
 
@@ -630,6 +768,7 @@ class EmulatorActivity : ComponentActivity() {
                             "options" -> OptionsPage { page = "main" }
                             "cheats" -> CheatsPage { page = "main" }
                             "screen" -> ScreenPage { page = "main" }
+                            "skin" -> DeltaSkinPage { page = "main" }
                             else -> MainMenuPage { page = it }
                         }
                     }
@@ -677,7 +816,8 @@ class EmulatorActivity : ComponentActivity() {
                     setMenu(false)
                 }
             }
-            SegmentedGroup(null, 3) {
+            val switchCount = if (deltaSkinsForSystem.isNotEmpty()) 4 else 3
+            SegmentedGroup(null, switchCount) {
                 MenuSwitch(shapes(0), Icons.Default.FastForward, "Fast forward", "${settings.fastForwardSpeed.toInt()}× speed", fastForwardToggle) {
                     fastForwardToggle = it
                     applyFastForward()
@@ -688,6 +828,46 @@ class EmulatorActivity : ComponentActivity() {
                     rewindOn,
                 ) { setRewind(it) }
                 MenuSwitch(shapes(2), Icons.Default.Gamepad, "Touch controls", "Show the on-screen gamepad", showPad) { showPad = it }
+                if (deltaSkinsForSystem.isNotEmpty()) {
+                    SegmentedListItem(
+                        onClick = { navigate("skin") },
+                        shapes = shapes(3),
+                        colors = segmentColors(),
+                        leadingContent = { ShapeIcon(Icons.Default.AspectRatio) },
+                        supportingContent = { Text(activeDeltaSkin?.name ?: "Built-in RetroHero pad") },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) { Text("Delta skin") }
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun DeltaSkinPage(back: () -> Unit) {
+        val options: List<DeltaSkin?> = listOf(null) + deltaSkinsForSystem
+        Column {
+            PageHeader("Delta skin", back)
+            SegmentedGroup(null, options.size) {
+                options.forEachIndexed { i, skin ->
+                    val selected = activeDeltaSkin?.identifier == skin?.identifier
+                    SegmentedListItem(
+                        onClick = {
+                            activeDeltaSkin = skin
+                            settings.setDeltaSkinFor(system.id, skin?.identifier)
+                            setMenu(false)
+                            back()
+                        },
+                        shapes = shapes(i),
+                        colors = segmentColors(),
+                        leadingContent = {
+                            RadioButton(selected = selected, onClick = null)
+                        },
+                        supportingContent = {
+                            Text(if (skin == null) "Use RetroHero's built-in touch pad" else skin.identifier, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) { Text(skin?.name ?: "Built-in controls") }
+                }
             }
         }
     }

@@ -26,23 +26,38 @@ data class Look(val id: String, val name: String, val accent: Color, val pad: Pa
 object Looks {
     /** Looks like the real controller of the system being played (see ConsoleStyles). */
     val Console = PadSkin("console", "Console", Color(0xFF232325), Color(0xFFD6D6D6), Color(0xFFD0203C), Color(0xFFD0203C), "console")
+    /** Tactile hardware-inspired deck matching RetroHero's Light/Dark Instrument theme. */
+    val Instrument = PadSkin("instrument", "Instrument", Color(0xFF1A1A1D), Color(0xFFEDECE8), Color(0xFFFF5A1F), Color(0xFF111111), "instrument")
     val Glass = PadSkin("glass", "Glass", Color(0xFF1A1622).copy(alpha = 0.55f), Color.White.copy(alpha = 0.22f), null, Color.White, "color")
     val Classic = PadSkin("classic", "Classic", Color(0xFFCFCFD6), Color(0xFF6E6E78), Color(0xFF9C9CA6), Color(0xFF2A2A30), "color")
     val Minimal = PadSkin("minimal", "Minimal", Color.Transparent, Color.White.copy(alpha = 0.5f), Color.White.copy(alpha = 0.25f), Color.White.copy(alpha = 0.85f), "mono")
     val Neon = PadSkin("neon", "Neon", Color.Black.copy(alpha = 0.55f), Color(0xFFF0908D), null, Color.White, "accent", glow = 1f)
     val Stealth = PadSkin("stealth", "Stealth", Color.White.copy(alpha = 0.06f), Color.White.copy(alpha = 0.08f), Color.White.copy(alpha = 0.2f), Color.White.copy(alpha = 0.55f), "mono")
-    val skins = listOf(Console, Glass, Classic, Minimal, Neon, Stealth)
+    val skins = listOf(Console, Instrument, Glass, Classic, Minimal, Neon, Stealth)
 
     val accents = listOf(
-        "salmon" to ("Salmon" to Color(0xFFF0908D)),
-        "mint" to ("Mint" to Color(0xFF7FD8B5)),
-        "sky" to ("Sky" to Color(0xFF7DB7F5)),
-        "lavender" to ("Lavender" to Color(0xFFB4A2F2)),
-        "butter" to ("Butter" to Color(0xFFF2D27A)),
-        "snow" to ("Snow" to Color(0xFFE8E8EC)),
+        "deck" to ("Deck Cyan" to Color(0xFF1AA8FF)),
+        "switch" to ("Switch Red" to Color(0xFFE60012)),
+        "lime" to ("Acid Lime" to Color(0xFFD8FF3E)),
+        "mono" to ("Monochrome" to Color(0xFFFAFAFA)),
+        "ember" to ("Ember" to Color(0xFFFF5A1F)),
+        "crimson" to ("Crimson" to Color(0xFFE60012)),
+        "mint" to ("Mint" to Color(0xFF3FD8A4)),
+        "sky" to ("Sky" to Color(0xFF4CC9FF)),
+        "aurora" to ("Cobalt" to Color(0xFF5B8CFF)),
+        "butter" to ("Gold" to Color(0xFFF6C85F)),
     )
 
-    fun accent(id: String?): Color = accents.firstOrNull { it.first == id }?.second?.second ?: accents.first().second.second
+    fun canonicalAccent(id: String?): String = when (id) {
+        "lavender" -> "aurora"
+        "salmon" -> "ember"
+        "snow" -> "mono"
+        null -> "deck"
+        else -> id
+    }
+
+    fun accent(id: String?): Color =
+        accents.firstOrNull { it.first == canonicalAccent(id) }?.second?.second ?: accents.first().second.second
     fun skin(id: String?): PadSkin = skins.firstOrNull { it.id == id } ?: Console
 
     // ---- Look files you can import ----------------------------------------------------------

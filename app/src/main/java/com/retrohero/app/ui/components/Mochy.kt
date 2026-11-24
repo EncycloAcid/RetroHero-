@@ -40,6 +40,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import com.retrohero.app.ui.theme.Tone
 import kotlinx.coroutines.launch
 
 /*
@@ -56,62 +57,29 @@ private val TiltSpring = spring<Float>(dampingRatio = Spring.DampingRatioNoBounc
 /** True when the person asked for less motion (Settings → Gameplay & comfort). */
 val LocalReducedMotion = androidx.compose.runtime.staticCompositionLocalOf { false }
 
-fun Modifier.press3D(maxTilt: Float = 7f, pressedScale: Float = 0.97f): Modifier = composed {
-    if (LocalReducedMotion.current) return@composed this
-    val scope = rememberCoroutineScope()
-    val press = remember { Animatable(0f) }
-    var normalized by remember { mutableStateOf(Offset.Zero) }
-    var size by remember { mutableStateOf(IntSize.Zero) }
-    this
-        .pointerInput(Unit) {
-            awaitPointerEventScope {
-                while (true) {
-                    val down = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.pressed } ?: continue
-                    val bounds = this.size
-                    if (bounds.width > 0 && bounds.height > 0) {
-                        normalized = Offset(
-                            ((down.position.x / bounds.width) * 2f - 1f).coerceIn(-1f, 1f),
-                            ((down.position.y / bounds.height) * 2f - 1f).coerceIn(-1f, 1f),
-                        )
-                        size = bounds
-                    }
-                    scope.launch { press.animateTo(1f, TiltSpring) }
-                    while (true) {
-                        val event = awaitPointerEvent(PointerEventPass.Initial)
-                        if (event.changes.none { it.pressed }) break
-                    }
-                    scope.launch { press.animateTo(0f, TiltSpring) }
-                }
-            }
-        }
-        .graphicsLayer {
-            val t = press.value
-            if (t > 0f) {
-                val s = 1f - (1f - pressedScale) * t
-                scaleX = s
-                scaleY = s
-                rotationX = -normalized.y * maxTilt * t
-                rotationY = normalized.x * maxTilt * t
-                cameraDistance = (size.width.takeIf { it > 0 }?.toFloat() ?: 1000f) * 3f
-                transformOrigin = TransformOrigin.Center
-            }
-        }
-}
+fun Modifier.press3D(maxTilt: Float = 7f, pressedScale: Float = 0.97f): Modifier = this
 
-private val SwitchGrey = Color(0xFF8E8E93)
-
-/** Monochrome switch: an outlined track when off, grey track and white thumb when on. */
+/** Tactile Instrument switch: recessed track when off, Ember accent track and crisp thumb when on. */
 @Composable
 fun MonoSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
     val alpha = if (enabled) 1f else 0.38f
-    val track by animateColorAsState(if (checked) SwitchGrey.copy(alpha = alpha) else Color.Transparent, tween(150), label = "track")
-    val border by animateColorAsState(if (checked) Color.Transparent else SwitchGrey.copy(alpha = 0.45f * alpha), tween(150), label = "border")
-    val thumb by animateColorAsState(if (checked) Color.White.copy(alpha = alpha) else SwitchGrey.copy(alpha = alpha), tween(150), label = "thumb")
+    val view = androidx.compose.ui.platform.LocalView.current
+    val track by animateColorAsState(if (checked) Ascend.accent.copy(alpha = alpha) else Tone.Bg.copy(alpha = alpha), tween(160), label = "track")
+    val border by animateColorAsState(if (checked) Color.Transparent else Tone.Line.copy(alpha = alpha), tween(160), label = "border")
+    val thumb by animateColorAsState(if (checked) Ascend.onAccent.copy(alpha = alpha) else Tone.Muted.copy(alpha = 0.55f * alpha), tween(160), label = "thumb")
     val x by animateDpAsState(if (checked) 52.dp - 24.dp - 4.dp else 4.dp, spring(dampingRatio = 0.7f, stiffness = 700f), label = "thumbX")
     Box(
         modifier
             .size(52.dp, 32.dp)
-            .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onCheckedChange)
+            .toggleable(
+                value = checked,
+                enabled = enabled,
+                role = Role.Switch,
+                onValueChange = {
+                    view.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK)
+                    onCheckedChange(it)
+                },
+            )
             .clip(CircleShape)
             .background(track)
             .border(1.dp, border, CircleShape),
@@ -123,7 +91,7 @@ fun MonoSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit, modifier: M
             Icon(
                 if (checked) Icons.Rounded.Check else Icons.Rounded.Close,
                 null,
-                tint = if (checked) SwitchGrey else Color.Black.copy(alpha = 0.6f),
+                tint = if (checked) Ascend.accent else Tone.Surface,
                 modifier = Modifier.size(14.dp),
             )
         }

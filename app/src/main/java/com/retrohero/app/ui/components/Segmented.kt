@@ -1,19 +1,19 @@
 package com.retrohero.app.ui.components
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.ListItemShapes
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.background
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.border
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import com.retrohero.app.ui.theme.Tone
 
 /** Scope handed to a segmented group so each row gets the right first/middle/last shape. */
 class SegmentScope(private val count: Int) {
@@ -31,18 +31,26 @@ fun SegmentedGroup(
 ) {
     Column(modifier) {
         if (title != null) {
-            Text(
+            androidx.compose.material3.Text(
                 title,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.labelMedium,
+                color = Tone.Muted,
                 modifier = Modifier.padding(start = 16.dp, bottom = 8.dp, top = 8.dp),
             )
         }
-        // Mochy's grouped style: one dark card, rows flush inside it.
+        val depth = if (Tone.isDark) Modifier else Modifier.shadow(
+            2.dp,
+            Ascend.CardShape,
+            ambientColor = Color.Black.copy(alpha = 0.05f),
+            spotColor = Color.Black.copy(alpha = 0.08f),
+        )
+        // One surface card with crisp Instrument hairline border.
         Column(
             Modifier
-                .clip(RoundedCornerShape(28.dp))
+                .then(depth)
+                .clip(Ascend.CardShape)
                 .background(GroupFill)
+                .border(1.dp, Tone.Line, Ascend.CardShape)
                 .padding(vertical = 6.dp),
         ) {
             SegmentScope(count).content()
@@ -54,4 +62,4 @@ fun SegmentedGroup(
 @Composable
 fun segmentColors() = ListItemDefaults.segmentedColors(containerColor = Color.Transparent)
 
-private val GroupFill = Color(0xFF141416)
+private val GroupFill get() = Tone.Surface
