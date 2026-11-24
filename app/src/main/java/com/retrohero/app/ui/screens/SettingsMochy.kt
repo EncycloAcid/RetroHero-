@@ -2,9 +2,6 @@ package com.retrohero.app.ui.screens
 
 import com.retrohero.app.ui.components.ArchiveLabel
 import com.retrohero.app.ui.components.Ascend
-import com.retrohero.app.ui.components.GlassOrb
-import com.retrohero.app.ui.components.auroraBackdrop
-import com.retrohero.app.ui.components.glassPanel
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -67,7 +64,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -106,25 +102,23 @@ private class Category(
     val title: String,
     val subtitle: String,
     val icon: ImageVector,
-    val badgeColor: Color,
     val keywords: List<String>,
 )
 
 private val categories = listOf(
-    Category("library", "Game folders", "Add ROM folders & rescan your library", Icons.Rounded.Folder, Color(0xFF5B8CFF), listOf("folders", "add folder", "rescan", "library", "scan")),
-    Category("gameplay", "Gameplay & comfort", "Auto-save, fast-forward, shaders & haptics", Icons.Rounded.Tune, Color(0xFF2DC98A), listOf("reduce motion", "animations", "tilt", "gyroscope", "accessibility", "sharp pixels", "haptic", "vibration", "opacity", "touch controls", "fast-forward speed", "auto save", "resume", "screenshots", "gallery", "stick", "d-pad")),
-    Category("controls", "Controls", "Controller remapping & touch button layout", Icons.Rounded.SportsEsports, Color(0xFFF5A623), listOf("controller", "buttons", "remap", "rebind", "rewind", "gamepad")),
-    Category("looks", "Customisation", "Themes, accents & Delta controller skins", Icons.Rounded.Palette, Color(0xFF9B7BFF), listOf("look", "theme", "accent", "colour", "color", "pad skin", "touch buttons", "import look", "delta", "deltaskin", "controller skin", "skin")),
-    Category("bios", "BIOS & system files", "PS1, Sega CD & console BIOS status", Icons.Rounded.Memory, Color(0xFFFF6B8B), listOf("bios", "system files", "playstation", "import bios", "download bios")),
-    Category("backup", "Backup & restore", "Export or restore saves, states & shelves", Icons.Rounded.Backup, Color(0xFF38BDF8), listOf("backup", "restore", "export", "new phone", "saves")),
-    Category("about", "About", "Version info & emulator core licenses", Icons.Rounded.Info, Color(0xFF8B98B8), listOf("version", "about", "libretro", "licence")),
+    Category("library", "Game folders", "Add ROM folders & rescan your library", Icons.Rounded.Folder, listOf("folders", "add folder", "rescan", "library", "scan")),
+    Category("gameplay", "Gameplay & comfort", "Auto-save, fast-forward, shaders & haptics", Icons.Rounded.Tune, listOf("reduce motion", "animations", "tilt", "gyroscope", "accessibility", "sharp pixels", "haptic", "vibration", "opacity", "touch controls", "fast-forward speed", "auto save", "resume", "screenshots", "gallery", "stick", "d-pad")),
+    Category("controls", "Controls", "Controller remapping & touch button layout", Icons.Rounded.SportsEsports, listOf("controller", "buttons", "remap", "rebind", "rewind", "gamepad")),
+    Category("looks", "Customisation", "Themes, accents & Delta controller skins", Icons.Rounded.Palette, listOf("look", "theme", "accent", "colour", "color", "pad skin", "touch buttons", "import look", "delta", "deltaskin", "controller skin", "skin")),
+    Category("bios", "BIOS & system files", "PS1, Sega CD & console BIOS status", Icons.Rounded.Memory, listOf("bios", "system files", "playstation", "import bios", "download bios")),
+    Category("backup", "Backup & restore", "Export or restore saves, states & shelves", Icons.Rounded.Backup, listOf("backup", "restore", "export", "new phone", "saves")),
+    Category("about", "About", "Version info & emulator core licenses", Icons.Rounded.Info, listOf("version", "about", "libretro", "licence")),
 )
 
 /**
- * Midnight Glass & Console Aurora System Control Center:
- * Translucent aurora hero pair (Live Midnight/Frost theme toggle + Emulator Cores),
- * floating glass search field, Apple/PS5 frosted glass grouped settings sheets with vibrant squircle badges,
- * and a luminous Aurora-to-Violet Play Journal & Recap card.
+ * Pure Minimal Monochrome System screen:
+ * Flat OLED/white canvas, crisp inline Light/Dark switcher, flat search field,
+ * and an ultra-clean monochrome hairline settings list with zero gradients or boxy chrome.
  */
 @Composable
 fun SettingsHome(
@@ -147,13 +141,13 @@ fun SettingsHome(
     Column(
         Modifier
             .fillMaxSize()
-            .auroraBackdrop(Ascend.accent, Color(0xFF7B68FF))
+            .background(Tone.Bg)
             .verticalScroll(rememberScrollState())
             .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 28.dp + LocalNavSpace.current),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 28.dp + LocalNavSpace.current),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        // Floating Midnight Glass Header
+        // Minimal Flat Header
         Row(
             Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -162,180 +156,86 @@ fun SettingsHome(
             Column {
                 Text(
                     "System",
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 26.sp, letterSpacing = (-0.03).em),
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 24.sp, letterSpacing = (-0.03).em),
                     color = Tone.Ink,
                 )
                 Text(
-                    "Control center · ${Systems.all.size} systems",
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 12.5.sp),
+                    "${Systems.all.size} systems · $abiLabel",
+                    style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
                     color = Tone.Muted,
                 )
             }
             Row(
                 Modifier
-                    .height(38.dp)
-                    .glassPanel(CircleShape, elevated = true)
+                    .height(34.dp)
+                    .clip(CircleShape)
+                    .background(Tone.Surface)
+                    .border(1.dp, Tone.Line, CircleShape)
                     .clickable { onOpen("about") }
-                    .padding(horizontal = 14.dp),
+                    .padding(horizontal = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
             ) {
-                Icon(Icons.Rounded.Info, null, tint = Tone.Ink, modifier = Modifier.size(16.dp))
-                Text("About", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.sp), color = Tone.Ink)
+                Icon(Icons.Rounded.Info, null, tint = Tone.Ink, modifier = Modifier.size(15.dp))
+                Text("About", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp), color = Tone.Ink)
             }
         }
 
-        // Top 2-Column Frosted Glass Hero Pair: Live Appearance + Emulator Cores
-        Row(
-            Modifier.fillMaxWidth().height(144.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            val heroShape = RoundedCornerShape(24.dp)
-            // Left: Live Midnight / Frost Appearance Switcher
-            Column(
-                Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .glassPanel(heroShape, elevated = true)
-                    .padding(14.dp),
-                verticalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        "Appearance",
-                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 12.sp),
-                        color = Tone.Muted,
-                    )
-                    Box(
-                        Modifier
-                            .size(28.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF9B7BFF).copy(alpha = 0.22f)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(Icons.Rounded.Palette, null, tint = Color(0xFF9B7BFF), modifier = Modifier.size(15.dp))
-                    }
-                }
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        if (Tone.isDark) "Midnight" else "Frost",
-                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 18.sp, letterSpacing = (-0.02).em),
-                        color = Tone.Ink,
-                    )
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .height(34.dp)
-                            .clip(CircleShape)
-                            .background(if (Tone.isDark) Color.Black.copy(alpha = 0.34f) else Color(0xFFDCE3F2))
-                            .border(1.dp, Tone.Line, CircleShape)
-                            .padding(3.dp),
-                        horizontalArrangement = Arrangement.spacedBy(3.dp),
-                    ) {
-                        listOf("Light" to false, "Dark" to true).forEach { (label, dark) ->
-                            val selected = Tone.isDark == dark
-                            val selMod = if (selected) {
-                                Modifier
-                                    .clip(CircleShape)
-                                    .background(Brush.horizontalGradient(listOf(Ascend.accent, Color(0xFF7B68FF))))
-                            } else {
-                                Modifier.clip(CircleShape)
-                            }
-                            Box(
-                                Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight()
-                                    .then(selMod)
-                                    .clickable {
-                                        settings.darkMode = dark
-                                        Tone.setDarkMode(dark)
-                                    },
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    label,
-                                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 11.5.sp),
-                                    color = if (selected) Color.White else Tone.Muted,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Right: Luminous Aurora Emulator Cores Card
-            Column(
-                Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .glassPanel(heroShape, tint = Ascend.accent, elevated = true)
-                    .clickable { onOpen("cores") }
-                    .padding(14.dp),
-                verticalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        abiLabel,
-                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 12.sp),
-                        color = Tone.Muted,
-                    )
-                    Box(
-                        Modifier
-                            .size(28.dp)
-                            .clip(CircleShape)
-                            .background(Brush.linearGradient(listOf(Ascend.accent, Color(0xFF7B68FF)))),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(Icons.Rounded.Memory, null, tint = Color.White, modifier = Modifier.size(15.dp))
-                    }
-                }
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(
-                        "$installedCoresCount / $totalCoresCount",
-                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.ExtraBold, fontSize = 23.sp, letterSpacing = (-0.02).em),
-                        color = Tone.Ink,
-                    )
-                    Text(
-                        "Emulator Cores",
-                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp),
-                        color = Tone.Ink,
-                        maxLines = 1,
-                    )
-                    Text(
-                        "Manage engines →",
-                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp),
-                        color = Ascend.accent,
-                    )
-                }
-            }
-        }
-
-        // Floating Glass Search Pill
+        // Inline Flat Monochrome Light / Dark Switcher
         Row(
             Modifier
                 .fillMaxWidth()
-                .height(46.dp)
-                .glassPanel(RoundedCornerShape(18.dp), elevated = true)
-                .padding(horizontal = 14.dp),
+                .height(38.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Tone.Surface)
+                .border(1.dp, Tone.Line, RoundedCornerShape(10.dp))
+                .padding(3.dp),
+            horizontalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            listOf("Light" to false, "Dark" to true).forEach { (label, dark) ->
+                val selected = Tone.isDark == dark
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(7.dp))
+                        .background(if (selected) Ascend.accent else Color.Transparent)
+                        .clickable {
+                            settings.darkMode = dark
+                            Tone.setDarkMode(dark)
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        label,
+                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp),
+                        color = if (selected) Ascend.onAccent else Tone.Muted,
+                    )
+                }
+            }
+        }
+
+        // Flat Monochrome Search Input
+        val searchShape = RoundedCornerShape(10.dp)
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .height(42.dp)
+                .clip(searchShape)
+                .background(Tone.Surface)
+                .border(1.dp, Tone.Line, searchShape)
+                .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Rounded.Search, null, tint = Placeholder, modifier = Modifier.size(19.dp))
-            Spacer(Modifier.width(10.dp))
+            Icon(Icons.Rounded.Search, null, tint = Placeholder, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(9.dp))
             Box(Modifier.weight(1f)) {
                 if (query.isEmpty()) Text("Search settings", style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = Placeholder)
                 BasicTextField(
                     query, { query = it },
                     singleLine = true,
                     textStyle = TextStyle(fontFamily = Inter, fontSize = 14.sp, color = Tone.Ink),
-                    cursorBrush = SolidColor(Ascend.accent),
+                    cursorBrush = SolidColor(Tone.Ink),
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
@@ -346,167 +246,113 @@ fun SettingsHome(
             val hits = categories.flatMap { c ->
                 (listOf(c.title.lowercase()) + c.keywords).filter { it.contains(q) }.map { c to it }
             }.distinctBy { it.second }
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("${hits.size} matches", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.sp), color = Tone.Muted)
+            Column {
+                Text(
+                    "${hits.size} matches",
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 12.sp),
+                    color = Tone.Muted,
+                    modifier = Modifier.padding(bottom = 6.dp),
+                )
                 if (hits.isEmpty()) {
-                    Text("Nothing matches “${query.trim()}”.", style = MaterialTheme.typography.bodyMedium, color = Tone.Muted, modifier = Modifier.padding(8.dp))
+                    Text("Nothing matches “${query.trim()}”.", style = MaterialTheme.typography.bodyMedium, color = Tone.Muted, modifier = Modifier.padding(vertical = 8.dp))
                 } else {
-                    GlassSettingsGroup {
-                        hits.forEachIndexed { i, (c, label) ->
-                            GlassSettingsRow(
-                                title = label.replaceFirstChar { it.uppercase() },
-                                subtitle = "System › ${c.title}",
-                                icon = c.icon,
-                                badgeColor = c.badgeColor,
-                                onClick = { onOpen(c.id) },
-                                showDivider = i < hits.lastIndex,
-                            )
-                        }
+                    hits.forEachIndexed { i, (c, label) ->
+                        MonoSettingsRow(
+                            title = label.replaceFirstChar { it.uppercase() },
+                            subtitle = "System › ${c.title}",
+                            icon = c.icon,
+                            trailingValue = null,
+                            onClick = { onOpen(c.id) },
+                            showDivider = i < hits.lastIndex,
+                        )
                     }
                 }
             }
             return@Column
         }
 
-        // Grouped Frosted Glass Settings Sheet 1: Library & Style
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                "Library & Appearance",
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.sp),
-                color = Tone.Muted,
-                modifier = Modifier.padding(start = 4.dp),
+        // Ultra-Clean Flat Hairline Settings List
+        Column(Modifier.fillMaxWidth()) {
+            MonoSettingsRow(
+                title = "Emulator Cores",
+                subtitle = "Download & manage libretro engines ($abiLabel)",
+                icon = Icons.Rounded.Memory,
+                trailingValue = "$installedCoresCount/$totalCoresCount",
+                onClick = { onOpen("cores") },
+                showDivider = true,
             )
-            GlassSettingsGroup {
-                val lib = categories.first { it.id == "library" }
-                val looks = categories.first { it.id == "looks" }
-                GlassSettingsRow(
-                    title = lib.title,
-                    subtitle = lib.subtitle,
-                    icon = lib.icon,
-                    badgeColor = lib.badgeColor,
-                    onClick = { onOpen(lib.id) },
-                    showDivider = true,
-                )
-                GlassSettingsRow(
-                    title = looks.title,
-                    subtitle = looks.subtitle,
-                    icon = looks.icon,
-                    badgeColor = looks.badgeColor,
-                    onClick = { onOpen(looks.id) },
-                    showDivider = false,
-                )
-            }
-        }
-
-        // Grouped Frosted Glass Settings Sheet 2: Emulation & Data
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                "Emulation & Data",
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.sp),
-                color = Tone.Muted,
-                modifier = Modifier.padding(start = 4.dp),
+            MonoSettingsRow(
+                title = "Your stats & recap",
+                subtitle = "Play time, sessions & personal highlights",
+                icon = Icons.Rounded.Insights,
+                trailingValue = null,
+                onClick = onOpenStats,
+                showDivider = true,
             )
-            GlassSettingsGroup {
-                val gp = categories.first { it.id == "gameplay" }
-                val ctrl = categories.first { it.id == "controls" }
-                val bios = categories.first { it.id == "bios" }
-                val bkp = categories.first { it.id == "backup" }
-                GlassSettingsRow(
-                    title = gp.title,
-                    subtitle = "${settings.fastForwardSpeed.toInt()}× fast-forward · ${if (settings.autoSave) "auto-save on" else "manual saves"}",
-                    icon = gp.icon,
-                    badgeColor = gp.badgeColor,
-                    onClick = { onOpen(gp.id) },
-                    showDivider = true,
-                )
-                GlassSettingsRow(
-                    title = ctrl.title,
-                    subtitle = ctrl.subtitle,
-                    icon = ctrl.icon,
-                    badgeColor = ctrl.badgeColor,
-                    onClick = { onOpen(ctrl.id) },
-                    showDivider = true,
-                )
-                GlassSettingsRow(
-                    title = bios.title,
-                    subtitle = bios.subtitle,
-                    icon = bios.icon,
-                    badgeColor = bios.badgeColor,
-                    onClick = { onOpen(bios.id) },
-                    showDivider = true,
-                )
-                GlassSettingsRow(
-                    title = bkp.title,
-                    subtitle = bkp.subtitle,
-                    icon = bkp.icon,
-                    badgeColor = bkp.badgeColor,
-                    onClick = { onOpen(bkp.id) },
-                    showDivider = false,
-                )
-            }
-        }
-
-        // Luminous Aurora-to-Violet Play Journal & Recap Banner
-        val journalShape = RoundedCornerShape(22.dp)
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clip(journalShape)
-                .background(Brush.horizontalGradient(listOf(Ascend.accent, Color(0xFF7B68FF))))
-                .border(1.dp, Color.White.copy(alpha = 0.32f), journalShape)
-                .clickable(onClick = onOpenStats)
-                .padding(horizontal = 16.dp, vertical = 15.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Box(
-                Modifier
-                    .size(42.dp)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.20f))
-                    .border(1.dp, Color.White.copy(alpha = 0.30f), CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Rounded.Insights, null, tint = Color.White, modifier = Modifier.size(21.dp))
-            }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    "Your stats & recap",
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 15.5.sp),
-                    color = Color.White,
-                )
-                Text(
-                    "Play time · consoles · personal highlights",
-                    style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
-                    color = Color.White.copy(alpha = 0.82f),
-                )
-            }
-            Icon(
-                Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                null,
-                tint = Color.White,
-                modifier = Modifier.size(22.dp),
+            val lib = categories.first { it.id == "library" }
+            MonoSettingsRow(
+                title = lib.title,
+                subtitle = lib.subtitle,
+                icon = lib.icon,
+                trailingValue = null,
+                onClick = { onOpen(lib.id) },
+                showDivider = true,
+            )
+            val looks = categories.first { it.id == "looks" }
+            MonoSettingsRow(
+                title = looks.title,
+                subtitle = looks.subtitle,
+                icon = looks.icon,
+                trailingValue = null,
+                onClick = { onOpen(looks.id) },
+                showDivider = true,
+            )
+            val gp = categories.first { it.id == "gameplay" }
+            MonoSettingsRow(
+                title = gp.title,
+                subtitle = "${settings.fastForwardSpeed.toInt()}× fast-forward · ${if (settings.autoSave) "auto-save on" else "manual saves"}",
+                icon = gp.icon,
+                trailingValue = null,
+                onClick = { onOpen(gp.id) },
+                showDivider = true,
+            )
+            val ctrl = categories.first { it.id == "controls" }
+            MonoSettingsRow(
+                title = ctrl.title,
+                subtitle = ctrl.subtitle,
+                icon = ctrl.icon,
+                trailingValue = null,
+                onClick = { onOpen(ctrl.id) },
+                showDivider = true,
+            )
+            val bios = categories.first { it.id == "bios" }
+            MonoSettingsRow(
+                title = bios.title,
+                subtitle = bios.subtitle,
+                icon = bios.icon,
+                trailingValue = null,
+                onClick = { onOpen(bios.id) },
+                showDivider = true,
+            )
+            val bkp = categories.first { it.id == "backup" }
+            MonoSettingsRow(
+                title = bkp.title,
+                subtitle = bkp.subtitle,
+                icon = bkp.icon,
+                trailingValue = null,
+                onClick = { onOpen(bkp.id) },
+                showDivider = false,
             )
         }
     }
 }
 
 @Composable
-private fun GlassSettingsGroup(content: @Composable ColumnScope.() -> Unit) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .glassPanel(RoundedCornerShape(22.dp), elevated = true),
-        content = content,
-    )
-}
-
-@Composable
-private fun GlassSettingsRow(
+private fun MonoSettingsRow(
     title: String,
     subtitle: String,
     icon: ImageVector,
-    badgeColor: Color,
+    trailingValue: String?,
     onClick: () -> Unit,
     showDivider: Boolean,
 ) {
@@ -514,20 +360,11 @@ private fun GlassSettingsRow(
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 13.dp),
+                .padding(vertical = 13.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(13.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Box(
-                Modifier
-                    .size(38.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(badgeColor.copy(alpha = if (Tone.isDark) 0.22f else 0.14f))
-                    .border(1.dp, badgeColor.copy(alpha = 0.42f), RoundedCornerShape(12.dp)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(icon, null, tint = badgeColor, modifier = Modifier.size(19.dp))
-            }
+            Icon(icon, null, tint = Tone.Ink, modifier = Modifier.size(20.dp))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     title,
@@ -544,13 +381,20 @@ private fun GlassSettingsRow(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Tone.Muted, modifier = Modifier.size(19.dp))
+            if (trailingValue != null) {
+                Text(
+                    trailingValue,
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 13.sp),
+                    color = Tone.Muted,
+                )
+            }
+            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Tone.Faint, modifier = Modifier.size(18.dp))
         }
         if (showDivider) {
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .padding(start = 65.dp, end = 14.dp)
+                    .padding(start = 34.dp)
                     .height(1.dp)
                     .background(Tone.Line),
             )
@@ -558,24 +402,26 @@ private fun GlassSettingsRow(
     }
 }
 
-/** A settings sub-page: Midnight Glass backdrop, floating circular glass back orb, clean title, and scrolling content. */
+/** A settings sub-page: flat monochrome canvas, crisp circular back icon, bold title, and scrolling content. */
 @Composable
 fun SubSettings(title: String, onBack: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     Column(
         Modifier
             .fillMaxSize()
-            .auroraBackdrop(Ascend.accent, Color(0xFF7B68FF))
+            .background(Tone.Bg)
             .verticalScroll(rememberScrollState())
             .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 24.dp + LocalNavSpace.current),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
+            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 24.dp + LocalNavSpace.current),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Column {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     Modifier
-                        .size(40.dp)
-                        .glassPanel(CircleShape, elevated = true)
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(Tone.Surface)
+                        .border(1.dp, Tone.Line, CircleShape)
                         .clickable(onClick = onBack),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -583,22 +429,23 @@ fun SubSettings(title: String, onBack: () -> Unit, content: @Composable ColumnSc
                         Icons.AutoMirrored.Rounded.ArrowBackIos,
                         "Back",
                         tint = Tone.Ink,
-                        modifier = Modifier.size(16.dp).offset(x = 2.dp),
+                        modifier = Modifier.size(15.dp).offset(x = 2.dp),
                     )
                 }
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(10.dp))
                 Text(
                     "System / $title",
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 13.sp),
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 12.5.sp),
                     color = Tone.Muted,
                 )
             }
             Text(
                 title,
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 28.sp, letterSpacing = (-0.03).em),
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 26.sp, letterSpacing = (-0.03).em),
                 color = Tone.Ink,
-                modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+                modifier = Modifier.padding(top = 12.dp, bottom = 8.dp),
             )
+            Box(Modifier.fillMaxWidth().height(1.dp).background(Tone.Line))
         }
         content()
     }

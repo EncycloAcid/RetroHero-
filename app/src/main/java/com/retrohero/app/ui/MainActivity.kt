@@ -33,9 +33,12 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.runtime.mutableIntStateOf
@@ -460,13 +463,21 @@ private fun App(vm: AppViewModel) {
                     onSeeAllGames = { tab = Tab.Games },
                     topActions = {
                         Box {
-                            com.retrohero.app.ui.components.GlassOrb(
-                                icon = Icons.Rounded.Add,
-                                contentDescription = "Add games",
-                                onClick = { addMenu = true },
-                                size = 38.dp,
-                                accent = true,
-                            )
+                            Box(
+                                androidx.compose.ui.Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(com.retrohero.app.ui.components.Ascend.accent)
+                                    .clickable { addMenu = true },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Add,
+                                    "Add games",
+                                    tint = com.retrohero.app.ui.components.Ascend.onAccent,
+                                    modifier = androidx.compose.ui.Modifier.size(19.dp),
+                                )
+                            }
                             DropdownMenu(
                                 expanded = addMenu,
                                 onDismissRequest = { addMenu = false },

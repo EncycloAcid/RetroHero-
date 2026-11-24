@@ -9,15 +9,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.ui.window.Dialog
 import com.retrohero.app.ui.components.ArchiveLabel
 import com.retrohero.app.ui.components.AccentButton
-import com.retrohero.app.ui.components.GlassOrb
-import com.retrohero.app.ui.components.GlassPillButton
 import com.retrohero.app.ui.components.SectionTitle
 import com.retrohero.app.ui.components.PageHeader
 import com.retrohero.app.ui.components.Page
 import com.retrohero.app.ui.components.Ascend
-import com.retrohero.app.ui.components.auroraBackdrop
-import com.retrohero.app.ui.components.emberBackground
-import com.retrohero.app.ui.components.glassPanel
 import com.retrohero.app.ui.components.launchMarkTarget
 import androidx.compose.foundation.pager.PagerState
 import android.view.HapticFeedbackConstants
@@ -209,7 +204,7 @@ private fun reelDistance(index: Int, reel: Float, count: Int): Float {
     return d
 }
 
-/** Midnight Glass & Console Aurora Play screen: dynamic console-tinted aurora glow, cinematic poster carousel, glass console ribbons, and poster shelves. */
+/** Pure Minimal Monochrome Play screen: flat OLED/white canvas, editorial Hero Landing, live console filter strip, and immediate 3-column box-art wall. */
 @Composable
 fun HomeScreen(
     games: List<Game>,
@@ -229,7 +224,7 @@ fun HomeScreen(
     onOpenStats: () -> Unit = {},
 ) {
     val mostPlayed = remember(games, stats) {
-        games.filter { (stats[it.id]?.seconds ?: 0) >= 60 }.sortedByDescending { stats[it.id]?.seconds ?: 0 }.take(6)
+        games.filter { (stats[it.id]?.seconds ?: 0) >= 60 }.sortedByDescending { stats[it.id]?.seconds ?: 0 }.take(5)
     }
     val counts = remember(games) { games.groupingBy { it.systemId }.eachCount() }
     val systems = remember(counts) {
@@ -239,233 +234,210 @@ fun HomeScreen(
         (recents + games.shuffled()).distinctBy { it.id }.take(MaxCandidates)
     }
     var shuffleOpen by rememberSaveable { mutableStateOf(false) }
+    var activeSystem by rememberSaveable { mutableStateOf<String?>(null) }
+
     if (shuffleOpen) Dialog(onDismissRequest = { shuffleOpen = false }) {
-        Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp))) {
+        Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))) {
             GachaHero(candidates) { shuffleOpen = false; onPlay(it) }
             IconButton({ shuffleOpen = false }, Modifier.align(Alignment.TopEnd)) { Icon(Icons.Rounded.Close, "Close", tint = Color.White) }
         }
     }
+
     val featured = remember(games, recents, favorites) {
         (recents.take(3) + favorites.take(2) + games.take(4)).distinctBy { it.id }.take(4)
     }
     val pager = rememberPagerState { featured.size.coerceAtLeast(1) }
-    val focusedGame = featured.getOrNull(pager.currentPage)
-    val auroraPrimary by animateColorAsState(
-        focusedGame?.system?.color ?: Ascend.accent,
-        tween(550),
-        label = "auroraPrimary",
-    )
-    val auroraSecondary by animateColorAsState(
-        lerp(auroraPrimary, Color(0xFF7B5CFF), 0.55f),
-        tween(550),
-        label = "auroraSecondary",
-    )
-    val shelfGames = remember(games, recents) {
-        (recents + games).distinctBy { it.id }.take(10)
+    val gridGames = remember(games, recents, activeSystem) {
+        val ordered = (recents + games).distinctBy { it.id }
+        val filtered = if (activeSystem == null) ordered else ordered.filter { it.systemId == activeSystem }
+        filtered.take(15)
     }
 
-    androidx.compose.foundation.lazy.LazyColumn(
-        contentPadding = PaddingValues(bottom = bottomPadding + 28.dp),
-        verticalArrangement = Arrangement.spacedBy(22.dp),
-        modifier = Modifier
-            .fillMaxSize()
-            .auroraBackdrop(auroraPrimary, auroraSecondary),
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(3),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = bottomPadding + 28.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+        modifier = Modifier.fillMaxSize().background(Tone.Bg),
     ) {
-        // Floating Minimal Glass Header
-        item(key = "aurora_header") {
+        // Minimal Flat Monochrome Top Bar
+        item(key = "mono_header", span = { GridItemSpan(maxLineSpan) }) {
             Row(
                 Modifier
                     .fillMaxWidth()
                     .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(start = 20.dp, end = 20.dp, top = 14.dp),
+                    .padding(top = 12.dp, bottom = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(9.dp),
                 ) {
-                    Box(
-                        Modifier
-                            .size(38.dp)
-                            .glassPanel(CircleShape, elevated = true),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        androidx.compose.foundation.Image(
-                            androidx.compose.ui.res.painterResource(com.retrohero.app.R.drawable.ic_logo_mark),
-                            null,
-                            Modifier.size(18.dp).launchMarkTarget(),
-                            colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Tone.Ink),
-                        )
-                    }
-                    Column {
-                        Text(
-                            "RetroHero",
-                            style = TextStyle(
-                                fontFamily = Inter,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 21.sp,
-                                letterSpacing = (-0.025).em,
-                            ),
-                            color = Tone.Ink,
-                        )
-                        Text(
-                            "${games.size} games · ${systems.size} consoles",
-                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 12.sp),
-                            color = Tone.Muted,
-                        )
-                    }
+                    androidx.compose.foundation.Image(
+                        androidx.compose.ui.res.painterResource(com.retrohero.app.R.drawable.ic_logo_mark),
+                        null,
+                        Modifier.size(20.dp).launchMarkTarget(),
+                        colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Tone.Ink),
+                    )
+                    Text(
+                        "RetroHero",
+                        style = TextStyle(
+                            fontFamily = Inter,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 21.sp,
+                            letterSpacing = (-0.03).em,
+                        ),
+                        color = Tone.Ink,
+                    )
                 }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    GlassOrb(
-                        icon = Icons.Rounded.Insights,
-                        contentDescription = "Play stats",
-                        onClick = onOpenStats,
-                        size = 38.dp,
-                    )
-                    GlassPillButton(
-                        text = "Shuffle",
-                        icon = Icons.Rounded.Shuffle,
-                        onClick = {
-                            if (candidates.size > 1) shuffleOpen = true else candidates.firstOrNull()?.let(onPlay)
-                        },
-                        height = 38.dp,
-                    )
+                    Box(
+                        Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(Tone.Surface)
+                            .border(1.dp, Tone.Line, CircleShape)
+                            .clickable(onClick = onOpenStats),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(Icons.Rounded.Insights, "Play stats", tint = Tone.Ink, modifier = Modifier.size(18.dp))
+                    }
+                    Row(
+                        Modifier
+                            .height(36.dp)
+                            .clip(CircleShape)
+                            .background(Tone.Surface)
+                            .border(1.dp, Tone.Line, CircleShape)
+                            .clickable {
+                                if (candidates.size > 1) shuffleOpen = true else candidates.firstOrNull()?.let(onPlay)
+                            }
+                            .padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    ) {
+                        Icon(Icons.Rounded.Shuffle, null, tint = Tone.Ink, modifier = Modifier.size(15.dp))
+                        Text(
+                            "Shuffle",
+                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp),
+                            color = Tone.Ink,
+                        )
+                    }
                     topActions()
                 }
             }
         }
 
-        // PS5 / Apple TV Cinematic Cover Carousel
+        // Clean Editorial Hero Landing (Box Art First)
         if (featured.isNotEmpty()) {
-            item(key = "cinematic_carousel") {
-                CinematicAuroraCarousel(
+            item(key = "mono_hero", span = { GridItemSpan(maxLineSpan) }) {
+                MonoHeroLanding(
                     pager = pager,
                     featured = featured,
                     recent = recents.firstOrNull(),
                     onOpen = onOpen,
                     onPlay = onPlay,
-                    onShuffle = {
-                        if (candidates.size > 1) shuffleOpen = true else candidates.firstOrNull()?.let(onPlay)
-                    },
+                    onOptions = onOptions,
                 )
             }
         }
 
-        // Floating Console Worlds Glass Ribbon
-        if (systems.isNotEmpty()) {
-            item(key = "console_worlds") {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            "Consoles",
-                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 18.sp, letterSpacing = (-0.02).em),
-                            color = Tone.Ink,
-                        )
-                        Text(
-                            "${systems.size} active",
-                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 13.sp),
-                            color = Tone.Muted,
-                        )
-                    }
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 20.dp),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
-                        items(systems, key = { "world_${it.id}" }) { sys ->
-                            ConsoleGlassChip(sys, counts[sys.id] ?: 0) { onOpenSystem(sys) }
+        // Flat Monochrome Console Filter Bar + Section Title
+        item(key = "grid_controls", span = { GridItemSpan(maxLineSpan) }) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (systems.size > 1) {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        item(key = "filter_all") {
+                            MonoConsolePill(
+                                label = "All",
+                                count = games.size,
+                                selected = activeSystem == null,
+                                onClick = { activeSystem = null },
+                            )
+                        }
+                        items(systems, key = { "sys_filter_${it.id}" }) { sys ->
+                            MonoConsolePill(
+                                label = sys.shortName,
+                                count = counts[sys.id],
+                                selected = activeSystem == sys.id,
+                                onClick = { activeSystem = if (activeSystem == sys.id) null else sys.id },
+                            )
                         }
                     }
                 }
-            }
-        }
-
-        // Continue Playing / Jump Back In Horizontal Poster Shelf
-        item(key = "poster_shelf") {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                    Modifier.fillMaxWidth().padding(top = 2.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    val heading = if (activeSystem == null) {
+                        if (recents.isNotEmpty()) "Library" else "Games"
+                    } else {
+                        systems.firstOrNull { it.id == activeSystem }?.name ?: "Games"
+                    }
                     Text(
-                        if (recents.isNotEmpty()) "Continue Playing" else "Your Library",
-                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 18.sp, letterSpacing = (-0.02).em),
+                        heading,
+                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 17.sp, letterSpacing = (-0.02).em),
                         color = Tone.Ink,
                     )
-                    Row(
-                        Modifier
-                            .clip(CircleShape)
+                    Text(
+                        "See all (${games.size})",
+                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 13.sp),
+                        color = Tone.Muted,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
                             .clickable(onClick = onSeeAllGames)
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            "See all",
-                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.sp),
-                            color = Ascend.accent,
-                        )
-                        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Ascend.accent, modifier = Modifier.size(16.dp))
-                    }
-                }
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    items(shelfGames, key = { "poster_${it.id}" }) { game ->
-                        val sub = stats[game.id]?.takeIf { it.seconds >= 60 }?.let { PlayTime.format(it.seconds) }
-                            ?: game.system?.name
-                        GameCard(
-                            game = game,
-                            onClick = { onOpen(game) },
-                            width = 148.dp,
-                            subtitle = sub,
-                            onLongClick = { onOptions(game) },
-                            onPlay = { onPlay(game) },
-                        )
-                    }
+                            .padding(horizontal = 4.dp, vertical = 2.dp),
+                    )
                 }
             }
         }
 
-        // Pinned Favourites & Custom Collections Glass Cards
+        // Dense 3-Column Pure Box-Art Wall (9+ covers visible right on Play!)
+        items(gridGames, key = { "wall_${it.id}" }) { game ->
+            val sub = stats[game.id]?.takeIf { it.seconds >= 60 }?.let { PlayTime.format(it.seconds) }
+                ?: game.system?.shortName
+            GameCard(
+                game = game,
+                onClick = { onOpen(game) },
+                subtitle = sub,
+                onLongClick = { onOptions(game) },
+                onPlay = { onPlay(game) },
+            )
+        }
+
+        // Flat Collections Strip (if present)
         if (favorites.isNotEmpty() || collections.isNotEmpty()) {
-            item(key = "glass_shelves") {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            item(key = "mono_collections", span = { GridItemSpan(maxLineSpan) }) {
+                Column(
+                    Modifier.padding(top = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Box(Modifier.fillMaxWidth().height(1.dp).background(Tone.Line))
                     Text(
                         "Collections",
-                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 18.sp, letterSpacing = (-0.02).em),
+                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 17.sp, letterSpacing = (-0.02).em),
                         color = Tone.Ink,
-                        modifier = Modifier.padding(horizontal = 20.dp),
                     )
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 20.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         if (favorites.isNotEmpty()) {
-                            item(key = "fav_glass") {
-                                GlassCollectionBanner(
+                            item(key = "fav_mono") {
+                                MonoCollectionTile(
                                     title = "Favourites",
-                                    subtitle = "${favorites.size} pinned games",
+                                    count = favorites.size,
                                     games = favorites,
-                                    tint = Ascend.accent,
                                     onClick = { onOpen(favorites.first()) },
                                 )
                             }
                         }
-                        items(collections, key = { "gcol_${it.first.id}" }) { (col, items) ->
-                            GlassCollectionBanner(
+                        items(collections, key = { "mcol_${it.first.id}" }) { (col, items) ->
+                            MonoCollectionTile(
                                 title = col.name,
-                                subtitle = if (items.size == 1) "1 game" else "${items.size} games",
+                                count = items.size,
                                 games = items,
-                                tint = items.firstOrNull()?.system?.color ?: Color(0xFF7B5CFF),
                                 onClick = { onOpenCollection(col) },
                             )
                         }
@@ -474,40 +446,32 @@ fun HomeScreen(
             }
         }
 
-        // Most Played Glass Row
+        // Ultra-Clean Flat Most Played List (hairline dividers, no boxy cards)
         if (mostPlayed.isNotEmpty()) {
-            item(key = "most_played_glass") {
+            item(key = "mono_most_played", span = { GridItemSpan(maxLineSpan) }) {
                 Column(
-                    Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    Modifier.padding(top = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
+                    Box(Modifier.fillMaxWidth().height(1.dp).background(Tone.Line))
                     Text(
-                        "Most Played",
-                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 18.sp, letterSpacing = (-0.02).em),
+                        "Most played",
+                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 17.sp, letterSpacing = (-0.02).em),
                         color = Tone.Ink,
+                        modifier = Modifier.padding(top = 10.dp, bottom = 4.dp),
                     )
-                    mostPlayed.take(3).forEach { game ->
-                        GlassGameStripRow(
+                    mostPlayed.forEachIndexed { i, game ->
+                        MonoFlatGameRow(
                             game = game,
-                            detail = "${game.system?.name.orEmpty()} · ${PlayTime.format(stats[game.id]?.seconds ?: 0)}",
+                            detail = "${game.system?.shortName ?: game.systemId} · ${PlayTime.format(stats[game.id]?.seconds ?: 0)}",
                             onOpen = { onOpen(game) },
                             onPlay = { onPlay(game) },
                             onLongClick = { onOptions(game) },
+                            showDivider = i < mostPlayed.lastIndex,
                         )
                     }
                 }
             }
-        }
-
-        // Explore All Games Pill CTA
-        item(key = "explore_all_cta") {
-            com.retrohero.app.ui.components.GlassPillButton(
-                text = "Explore all ${games.size} games",
-                icon = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                onClick = onSeeAllGames,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-                height = 48.dp,
-            )
         }
     }
 }
@@ -736,166 +700,112 @@ private fun GachaHero(candidates: List<Game>, onPlay: (Game) -> Unit) {
     }
 }
 
-// ---- Midnight Glass & Console Aurora Play Components -------------------------------------------
+// ---- Pure Minimal Monochrome (Box Art First) Play Components -----------------------------------
 
 @Composable
-private fun CinematicAuroraCarousel(
+private fun MonoHeroLanding(
     pager: PagerState,
     featured: List<Game>,
     recent: Game?,
     onOpen: (Game) -> Unit,
     onPlay: (Game) -> Unit,
-    onShuffle: () -> Unit,
+    onOptions: (Game) -> Unit,
 ) {
-    val cardShape = RoundedCornerShape(26.dp)
+    val heroShape = RoundedCornerShape(12.dp)
     HorizontalPager(
         state = pager,
-        contentPadding = PaddingValues(horizontal = 20.dp),
-        pageSpacing = 12.dp,
-        modifier = Modifier.fillMaxWidth().height(312.dp),
+        pageSpacing = 10.dp,
+        modifier = Modifier.fillMaxWidth().height(212.dp),
     ) { page ->
         val game = featured[page]
-        val sysColor = game.system?.color ?: Ascend.accent
         val isRecent = game.id == recent?.id
-        val pageOffset = ((pager.currentPage - page) + pager.currentPageOffsetFraction).coerceIn(-1f, 1f)
-        val scale = 1f - 0.055f * abs(pageOffset)
-        val alpha = 1f - 0.22f * abs(pageOffset)
-
         Box(
             Modifier
                 .fillMaxSize()
-                .graphicsLayer {
-                    scaleX = scale
-                    scaleY = scale
-                    this.alpha = alpha
-                }
-                .clip(cardShape)
-                .background(Color(0xFF0C1120))
-                .border(
-                    width = 1.dp,
-                    brush = Brush.verticalGradient(
-                        listOf(
-                            Color.White.copy(alpha = 0.30f),
-                            sysColor.copy(alpha = 0.28f),
-                            Color.White.copy(alpha = 0.08f),
-                        ),
-                    ),
-                    shape = cardShape,
-                )
-                .clickable { onOpen(game) },
+                .clip(heroShape)
+                .background(Tone.Surface)
+                .border(1.dp, Tone.Line, heroShape)
+                .combinedClickable(
+                    onClick = { onOpen(game) },
+                    onLongClick = { onOptions(game) },
+                ),
         ) {
             GameArt(game, Modifier.fillMaxSize(), showTag = false)
-
-            // Atmospheric midnight vignette + console-colored edge aura
+            // Minimal dark bottom readability scrim so the full box art stays crisp
             Box(
                 Modifier
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
-                            0f to Color(0xFF060912).copy(alpha = 0.30f),
-                            0.38f to Color.Transparent,
-                            0.68f to Color(0xFF070A14).copy(alpha = 0.80f),
-                            1f to Color(0xFF050811).copy(alpha = 0.96f),
-                        ),
-                    ),
-            )
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.radialGradient(
-                            0f to sysColor.copy(alpha = 0.28f),
-                            0.75f to Color.Transparent,
-                            center = Offset(0f, 900f),
-                            radius = 700f,
+                            0f to Color.Transparent,
+                            0.42f to Color.Black.copy(alpha = 0.12f),
+                            0.74f to Color.Black.copy(alpha = 0.72f),
+                            1f to Color.Black.copy(alpha = 0.92f),
                         ),
                     ),
             )
 
-            // Top floating glass badges
+            // Top-left minimal label & top-right page index
             Row(
                 Modifier
                     .align(Alignment.TopStart)
                     .fillMaxWidth()
-                    .padding(14.dp),
+                    .padding(12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Row(
+                Box(
                     Modifier
-                        .clip(CircleShape)
-                        .background(Color(0xFF0A0F1E).copy(alpha = 0.68f))
-                        .border(1.dp, Color.White.copy(alpha = 0.20f), CircleShape)
-                        .padding(horizontal = 10.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color.Black.copy(alpha = 0.72f))
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
                 ) {
-                    Box(Modifier.size(6.dp).clip(CircleShape).background(sysColor))
                     Text(
-                        if (isRecent) "Resume" else "Spotlight",
-                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 11.sp),
+                        if (isRecent) "CONTINUE" else "FEATURED",
+                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 10.sp, letterSpacing = 0.08.em),
                         color = Color.White,
                     )
                 }
-
                 if (featured.size > 1) {
                     Box(
                         Modifier
-                            .clip(CircleShape)
-                            .background(Color(0xFF0A0F1E).copy(alpha = 0.68f))
-                            .border(1.dp, Color.White.copy(alpha = 0.20f), CircleShape)
-                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color.Black.copy(alpha = 0.72f))
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
                     ) {
                         Text(
                             "${page + 1} / ${featured.size}",
-                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 11.sp),
-                            color = Color.White.copy(alpha = 0.92f),
+                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 10.5.sp),
+                            color = Color.White.copy(alpha = 0.90f),
                         )
                     }
                 }
             }
 
-            // Bottom cinematic title + luminous Play Now CTA
-            Column(
+            // Bottom title + high-contrast flat monochrome Play button
+            Row(
                 Modifier
                     .align(Alignment.BottomStart)
                     .fillMaxWidth()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                    .padding(14.dp),
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        Box(
-                            Modifier
-                                .clip(CircleShape)
-                                .background(sysColor.copy(alpha = 0.24f))
-                                .border(0.75.dp, sysColor.copy(alpha = 0.55f), CircleShape)
-                                .padding(horizontal = 8.dp, vertical = 3.dp),
-                        ) {
-                            Text(
-                                game.system?.shortName ?: game.systemId,
-                                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 10.5.sp),
-                                color = Color.White,
-                            )
-                        }
-                        Text(
-                            game.system?.name.orEmpty(),
-                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 12.sp),
-                            color = Color.White.copy(alpha = 0.72f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        game.system?.name.orEmpty(),
+                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 11.5.sp),
+                        color = Color.White.copy(alpha = 0.72f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                     Text(
                         game.title,
                         style = TextStyle(
                             fontFamily = Inter,
-                            fontWeight = FontWeight.ExtraBold,
-                            fontSize = 23.sp,
-                            lineHeight = 26.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 21.sp,
+                            lineHeight = 23.sp,
                             letterSpacing = (-0.025).em,
                         ),
                         color = Color.White,
@@ -905,52 +815,21 @@ private fun CinematicAuroraCarousel(
                 }
 
                 Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    Modifier
+                        .height(38.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color.White)
+                        .clickable { onPlay(game) }
+                        .padding(horizontal = 14.dp),
                     verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Row(
-                        Modifier
-                            .weight(1f)
-                            .height(44.dp)
-                            .clip(CircleShape)
-                            .background(Brush.horizontalGradient(listOf(Ascend.accent, Color(0xFF7B68FF))))
-                            .border(1.dp, Color.White.copy(alpha = 0.34f), CircleShape)
-                            .clickable { onPlay(game) }
-                            .padding(horizontal = 18.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
-                    ) {
-                        Icon(
-                            Icons.Rounded.PlayArrow,
-                            "Play ${game.title}",
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp),
-                        )
-                        Spacer(Modifier.width(6.dp))
-                        Text(
-                            if (isRecent) "Resume Game" else "Play Now",
-                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 14.sp),
-                            color = Color.White,
-                        )
-                    }
-
-                    Box(
-                        Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.14f))
-                            .border(1.dp, Color.White.copy(alpha = 0.26f), CircleShape)
-                            .clickable { onOpen(game) },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                            "Game details",
-                            tint = Color.White,
-                            modifier = Modifier.size(22.dp),
-                        )
-                    }
+                    Icon(Icons.Rounded.PlayArrow, "Play ${game.title}", tint = Color(0xFF0A0A0C), modifier = Modifier.size(18.dp))
+                    Text(
+                        if (isRecent) "Resume" else "Play",
+                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 13.sp),
+                        color = Color(0xFF0A0A0C),
+                    )
                 }
             }
         }
@@ -958,69 +837,63 @@ private fun CinematicAuroraCarousel(
 }
 
 @Composable
-private fun ConsoleGlassChip(system: GameSystem, count: Int, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(18.dp)
+private fun MonoConsolePill(
+    label: String,
+    count: Int?,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(8.dp)
     Row(
         Modifier
-            .height(54.dp)
-            .glassPanel(shape, tint = system.color)
+            .height(32.dp)
+            .clip(shape)
+            .background(if (selected) Ascend.accent else Tone.Surface)
+            .then(if (selected) Modifier else Modifier.border(1.dp, Tone.Line, shape))
             .clickable(onClick = onClick)
-            .padding(horizontal = 13.dp),
+            .padding(horizontal = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
-        Box(
-            Modifier
-                .size(30.dp)
-                .clip(CircleShape)
-                .background(system.color.copy(alpha = 0.22f))
-                .border(1.dp, system.color.copy(alpha = 0.55f), CircleShape),
-            contentAlignment = Alignment.Center,
-        ) {
-            Box(Modifier.size(9.dp).clip(CircleShape).background(system.color))
-        }
-        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+        Text(
+            label,
+            style = TextStyle(
+                fontFamily = Inter,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                fontSize = 12.sp,
+            ),
+            color = if (selected) Ascend.onAccent else Tone.Ink,
+        )
+        if (count != null) {
             Text(
-                system.shortName,
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 13.5.sp),
-                color = Tone.Ink,
-                maxLines = 1,
-            )
-            Text(
-                if (count == 1) "1 title" else "$count titles",
+                count.toString(),
                 style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 11.sp),
-                color = Tone.Muted,
-                maxLines = 1,
+                color = if (selected) Ascend.onAccent.copy(alpha = 0.72f) else Tone.Muted,
             )
         }
     }
 }
 
 @Composable
-private fun GlassCollectionBanner(
+private fun MonoCollectionTile(
     title: String,
-    subtitle: String,
+    count: Int,
     games: List<Game>,
-    tint: Color,
     onClick: () -> Unit,
 ) {
-    val shape = RoundedCornerShape(22.dp)
-    Row(
+    val artShape = RoundedCornerShape(8.dp)
+    Column(
         Modifier
-            .width(248.dp)
-            .height(92.dp)
-            .glassPanel(shape, tint = tint, elevated = true)
-            .clickable(onClick = onClick)
-            .padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+            .width(124.dp)
+            .clickable(onClick = onClick),
     ) {
         Box(
             Modifier
-                .size(66.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(Tone.Bg)
-                .border(1.dp, Color.White.copy(alpha = if (Tone.isDark) 0.16f else 0.55f), RoundedCornerShape(14.dp)),
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .clip(artShape)
+                .background(Tone.Surface)
+                .border(0.75.dp, Tone.Line, artShape),
         ) {
             val covers = games.take(4)
             when {
@@ -1032,77 +905,78 @@ private fun GlassCollectionBanner(
                 covers.isNotEmpty() -> GameArt(covers.first(), Modifier.fillMaxSize(), showTag = false)
             }
         }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(
-                title,
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 15.sp),
-                color = Tone.Ink,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                subtitle,
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 12.sp),
-                color = Tone.Muted,
-                maxLines = 1,
-            )
-        }
-        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Tone.Muted, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.height(6.dp))
+        Text(
+            title,
+            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.sp),
+            color = Tone.Ink,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            if (count == 1) "1 game" else "$count games",
+            style = TextStyle(fontFamily = Inter, fontSize = 11.sp),
+            color = Tone.Muted,
+        )
     }
 }
 
 @Composable
-private fun GlassGameStripRow(
+private fun MonoFlatGameRow(
     game: Game,
     detail: String,
     onOpen: () -> Unit,
     onPlay: () -> Unit,
     onLongClick: () -> Unit,
+    showDivider: Boolean,
 ) {
-    val shape = RoundedCornerShape(20.dp)
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .glassPanel(shape)
-            .combinedClickable(onClick = onOpen, onLongClick = onLongClick)
-            .padding(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        GameArt(
-            game,
+    Column(Modifier.fillMaxWidth()) {
+        Row(
             Modifier
-                .size(52.dp)
-                .clip(RoundedCornerShape(13.dp))
-                .border(1.dp, Color.White.copy(alpha = if (Tone.isDark) 0.16f else 0.40f), RoundedCornerShape(13.dp)),
-            showTag = false,
-        )
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                game.title,
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp),
-                color = Tone.Ink,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                detail,
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 12.sp),
-                color = Tone.Muted,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        Box(
-            Modifier
-                .size(38.dp)
-                .clip(CircleShape)
-                .background(Brush.linearGradient(listOf(Ascend.accent, Color(0xFF7B68FF))))
-                .border(1.dp, Color.White.copy(alpha = 0.28f), CircleShape)
-                .clickable(onClick = onPlay),
-            contentAlignment = Alignment.Center,
+                .fillMaxWidth()
+                .combinedClickable(onClick = onOpen, onLongClick = onLongClick)
+                .padding(vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Icon(Icons.Rounded.PlayArrow, "Play ${game.title}", tint = Color.White, modifier = Modifier.size(19.dp))
+            GameArt(
+                game,
+                Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .border(0.75.dp, Tone.Line, RoundedCornerShape(6.dp)),
+                showTag = false,
+            )
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    game.title,
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.sp),
+                    color = Tone.Ink,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    detail,
+                    style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+                    color = Tone.Muted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Box(
+                Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(Tone.Surface)
+                    .border(1.dp, Tone.Line, CircleShape)
+                    .clickable(onClick = onPlay),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Rounded.PlayArrow, "Play ${game.title}", tint = Tone.Ink, modifier = Modifier.size(18.dp))
+            }
+        }
+        if (showDivider) {
+            Box(Modifier.fillMaxWidth().padding(start = 56.dp).height(1.dp).background(Tone.Line))
         }
     }
 }

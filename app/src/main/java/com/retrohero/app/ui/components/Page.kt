@@ -63,7 +63,7 @@ object Page {
     val Divider: Color get() = Tone.Line
 }
 
-fun Modifier.emberBackground(): Modifier = auroraBackdrop()
+fun Modifier.emberBackground(): Modifier = background(Tone.Bg)
 
 @Composable
 fun ArchiveLabel(text: String, modifier: Modifier = Modifier, color: Color = Tone.Muted) {
