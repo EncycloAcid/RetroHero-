@@ -80,7 +80,7 @@ object Ascend {
     private val isDeck: Boolean get() = Salmon == com.retrohero.app.ui.theme.DeckCyanColor
     private val drawnAccent: Color get() = Salmon.compositeOver(Tone.Bg)
     val accent: Color get() = when {
-        isMono -> Tone.Ink
+        isMono && !Tone.isDark -> Tone.Ink
         isDeck -> if (Tone.isDark) Color(0xFF1AA8FF) else Color(0xFF0A8FE6)
         isLime -> if (Tone.isDark) Color(0xFFD8FF3E) else Color(0xFFC8F526)
         Tone.isDark && drawnAccent.luminance() < 0.25f -> lerp(Salmon, Color.White, 0.5f)

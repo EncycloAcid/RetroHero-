@@ -692,7 +692,7 @@ private fun App(vm: AppViewModel) {
                 shape = RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card),
                 containerColor = com.retrohero.app.ui.theme.Tone.Surface,
                 contentColor = com.retrohero.app.ui.theme.Tone.Ink,
-                actionColor = com.retrohero.app.ui.theme.Salmon,
+                actionColor = com.retrohero.app.ui.components.Ascend.accent,
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
         }

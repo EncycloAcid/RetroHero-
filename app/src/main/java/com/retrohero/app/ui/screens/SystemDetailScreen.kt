@@ -412,7 +412,7 @@ private fun Header(
                         .height(44.dp)
                         .press3D(maxTilt = 4f)
                         .clip(btnShape)
-                        .background(com.retrohero.app.ui.theme.Salmon)
+                        .background(com.retrohero.app.ui.components.Ascend.accent)
                         .border(1.dp, Color.White.copy(alpha = 0.22f), btnShape)
                         .clickable(enabled = games.isNotEmpty(), onClick = onPlayRandom)
                         .padding(start = 16.dp, end = 7.dp),
@@ -507,15 +507,15 @@ private fun GameRow(
             Modifier
                 .size(36.dp)
                 .clip(playBoxShape)
-                .background(com.retrohero.app.ui.theme.Salmon.copy(alpha = 0.14f))
-                .border(1.dp, com.retrohero.app.ui.theme.Salmon.copy(alpha = 0.40f), playBoxShape)
+                .background(com.retrohero.app.ui.components.Ascend.accent.copy(alpha = 0.14f))
+                .border(1.dp, com.retrohero.app.ui.components.Ascend.accent.copy(alpha = 0.40f), playBoxShape)
                 .clickable(onClick = onPlay),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 Icons.Rounded.PlayArrow,
                 "Play ${game.title}",
-                tint = com.retrohero.app.ui.theme.Salmon,
+                tint = com.retrohero.app.ui.components.Ascend.accent,
                 modifier = Modifier.size(18.dp),
             )
         }

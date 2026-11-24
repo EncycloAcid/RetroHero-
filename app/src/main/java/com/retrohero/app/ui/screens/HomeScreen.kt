@@ -132,7 +132,6 @@ import com.retrohero.app.ui.components.launchRise
 import com.retrohero.app.ui.components.press3D
 import com.retrohero.app.ui.theme.Inter
 import com.retrohero.app.ui.theme.PixelFont
-import com.retrohero.app.ui.theme.Salmon
 import com.retrohero.app.ui.theme.Tone
 import com.retrohero.app.ui.theme.polygon
 import com.retrohero.app.ui.theme.tag
@@ -1041,7 +1040,7 @@ private fun GachaHero(candidates: List<Game>, onPlay: (Game) -> Unit) {
                     scaleX = pop
                     scaleY = pop
                 }
-                .background(Salmon, pointerShape),
+                .background(Ascend.accent, pointerShape),
         )
 
         // The big cover is a button too: roll, or play the result once landed.
