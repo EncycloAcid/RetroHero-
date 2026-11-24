@@ -67,6 +67,7 @@ import com.retrohero.app.data.Systems
 import com.retrohero.app.ui.components.Ascend
 import com.retrohero.app.ui.components.LocalNavSpace
 import com.retrohero.app.ui.theme.Inter
+import com.retrohero.app.ui.theme.InterDisplay
 import com.retrohero.app.ui.theme.Salmon
 import com.retrohero.app.ui.theme.Tone
 
@@ -146,7 +147,7 @@ internal fun SystemControlDeckPage(
                 )
                 Text(
                     text = "System & Engine",
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 28.sp, letterSpacing = (-0.03).em),
+                    style = TextStyle(fontFamily = InterDisplay, fontWeight = FontWeight.Bold, fontSize = 32.sp, letterSpacing = (-0.04).em),
                     color = Tone.Ink,
                 )
             }

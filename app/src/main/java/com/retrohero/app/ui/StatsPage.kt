@@ -54,6 +54,7 @@ import com.retrohero.app.ui.components.CoverArt
 import com.retrohero.app.ui.components.LocalNavSpace
 import com.retrohero.app.ui.components.ShelfBucket
 import com.retrohero.app.ui.theme.Inter
+import com.retrohero.app.ui.theme.InterDisplay
 import com.retrohero.app.ui.theme.Tone
 import kotlin.math.roundToInt
 
@@ -109,7 +110,7 @@ internal fun StatsDashboardPage(
                 )
                 Text(
                     text = "Stats & Insights",
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 28.sp, letterSpacing = (-0.03).em),
+                    style = TextStyle(fontFamily = InterDisplay, fontWeight = FontWeight.Bold, fontSize = 32.sp, letterSpacing = (-0.04).em),
                     color = Tone.Ink,
                 )
             }

@@ -59,8 +59,8 @@ import androidx.compose.material.icons.outlined.PieChart
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.ViewAgenda
+import androidx.compose.material.icons.outlined.ViewCarousel
 import androidx.compose.material.icons.outlined.ViewWeek
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CardGiftcard
@@ -69,7 +69,7 @@ import androidx.compose.material.icons.rounded.Layers
 import androidx.compose.material.icons.rounded.PieChart
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material.icons.rounded.ViewCarousel
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -126,6 +126,7 @@ import com.retrohero.app.ui.components.packagingFor
 import com.retrohero.app.ui.components.ShelfBucket
 import com.retrohero.app.ui.components.posterAccentColor
 import com.retrohero.app.ui.theme.Inter
+import com.retrohero.app.ui.theme.InterDisplay
 import com.retrohero.app.ui.theme.Tone
 import java.util.Locale
 
@@ -134,7 +135,7 @@ internal enum class MainTab(
     val selectedIcon: ImageVector,
     val unselectedIcon: ImageVector,
 ) {
-    Shelves("Shelves", Icons.Rounded.Tune, Icons.Outlined.Tune),
+    Shelves("Shelves", Icons.Rounded.ViewCarousel, Icons.Outlined.ViewCarousel),
     Library("Vault", Icons.Rounded.Layers, Icons.Outlined.Layers),
     Stats("Stats", Icons.Rounded.PieChart, Icons.Outlined.PieChart),
     System("System", Icons.Rounded.Settings, Icons.Outlined.Settings),
@@ -408,13 +409,13 @@ private fun ShelvesPage(
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
-                            text = "COLLECTION · ${games.size} TITLES",
+                            text = "RETROHERO · ${games.size} TITLES",
                             style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 10.5.sp, letterSpacing = 0.14.em),
                             color = Ascend.accent,
                         )
                         Text(
                             text = "Shelves",
-                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 28.sp, letterSpacing = (-0.03).em),
+                            style = TextStyle(fontFamily = InterDisplay, fontWeight = FontWeight.Bold, fontSize = 32.sp, letterSpacing = (-0.04).em),
                             color = Tone.Ink,
                         )
                     }
@@ -770,7 +771,7 @@ private fun LibraryVaultPage(
                     )
                     Text(
                         text = "Vault",
-                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 28.sp, letterSpacing = (-0.03).em),
+                        style = TextStyle(fontFamily = InterDisplay, fontWeight = FontWeight.Bold, fontSize = 32.sp, letterSpacing = (-0.04).em),
                         color = Tone.Ink,
                     )
                 }
