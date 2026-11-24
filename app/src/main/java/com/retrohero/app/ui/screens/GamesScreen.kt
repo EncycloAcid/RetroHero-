@@ -33,7 +33,6 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyGridScope
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -67,6 +66,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -80,10 +80,12 @@ import com.retrohero.app.data.GameSort
 import com.retrohero.app.data.PlayStat
 import com.retrohero.app.data.PlayTime
 import com.retrohero.app.data.Systems
+import com.retrohero.app.ui.components.AccentButton
 import com.retrohero.app.ui.components.Ascend
 import com.retrohero.app.ui.components.EmptyState
 import com.retrohero.app.ui.components.GameArt
 import com.retrohero.app.ui.components.GameCard
+import com.retrohero.app.ui.components.Key
 import com.retrohero.app.ui.components.LocalNavSpace
 import com.retrohero.app.ui.components.PillChip
 import com.retrohero.app.ui.theme.Inter
@@ -91,9 +93,10 @@ import com.retrohero.app.ui.theme.Tone
 import kotlinx.coroutines.launch
 
 /**
- * Pure Minimal Monochrome Search screen:
- * Flat OLED/white canvas, crisp search bar, flat monochrome console chips,
- * default dense 3-column pure box-art wall (toggleable to flat hairline list), and A–Z scrubber.
+ * Handheld Console OS Software Browser (Steam Deck Library / Nintendo Switch All Software):
+ * Pill search capsule, console switcher chips, expandable sort/filter drawer, dense 3-column
+ * vertical box-art grid (5-column in landscape/tablet) with console badges and quick-play triggers,
+ * toggleable to slate cartridge rows, plus A–Z edge jump rail.
  */
 @Composable
 fun GamesScreen(
@@ -123,18 +126,19 @@ fun GamesScreen(
     var gridMode by rememberSaveable { mutableStateOf(true) }
     val grid = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
     val scope = rememberCoroutineScope()
+    val wide = LocalConfiguration.current.screenWidthDp >= 600
 
     if (!hasFolders && games.isEmpty()) {
         EmptyState(
             title = "Start your library",
-            body = "Add a folder of games to build your first shelf. RetroHero finds the system and sets up its emulator when you play.",
+            body = "Add a folder of games to build your console home. RetroHero detects each system and sets up its emulator automatically.",
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                com.retrohero.app.ui.components.AccentButton("Choose game folder", onAddFolder, Modifier.fillMaxWidth(), icon = Icons.Default.CreateNewFolder)
+                AccentButton("Choose game folder", onAddFolder, Modifier.fillMaxWidth(), icon = Icons.Default.CreateNewFolder)
                 if (onHomebrew != null) {
-                    com.retrohero.app.ui.components.Key("Browse free homebrew", onHomebrew, Modifier.fillMaxWidth())
+                    Key("Browse free homebrew", onHomebrew, Modifier.fillMaxWidth())
                 }
-                com.retrohero.app.ui.components.Key("Download from a link", onDownload, Modifier.fillMaxWidth(), icon = Icons.Default.Download)
+                Key("Download from a link", onDownload, Modifier.fillMaxWidth(), icon = Icons.Default.Download)
             }
         }
         return
@@ -152,6 +156,7 @@ fun GamesScreen(
         return
     }
 
+    val counts = remember(games) { games.groupingBy { it.systemId }.eachCount() }
     val systemsPresent = remember(games) {
         val ids = games.mapTo(HashSet()) { it.systemId }
         Systems.all.filter { it.id in ids }
@@ -176,10 +181,10 @@ fun GamesScreen(
     Box(Modifier.fillMaxSize().background(Tone.Bg)) {
         LazyVerticalGrid(
             state = grid,
-            columns = GridCells.Fixed(2),
-            contentPadding = PaddingValues(start = 18.dp, end = if (showScroller) 30.dp else 18.dp, bottom = 28.dp + LocalNavSpace.current),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
+            columns = GridCells.Fixed(if (wide) 5 else 3),
+            contentPadding = PaddingValues(start = 16.dp, end = if (showScroller) 28.dp else 16.dp, bottom = 28.dp + LocalNavSpace.current),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
             fullWidth {
@@ -187,24 +192,24 @@ fun GamesScreen(
                     Modifier
                         .fillMaxWidth()
                         .windowInsetsPadding(WindowInsets.statusBars)
-                        .padding(top = 14.dp)
+                        .padding(top = 16.dp)
                         .animateContentSize(),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Row(
                         Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                             Text(
-                                "EXPLORE",
-                                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 10.5.sp, letterSpacing = 0.12.em),
+                                "${filtered.size} software · ${systemsPresent.size} consoles",
+                                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.02.em),
                                 color = Tone.Muted,
                             )
                             Text(
                                 title,
-                                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 27.sp, letterSpacing = (-0.03).em),
+                                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 28.sp, letterSpacing = (-0.03).em),
                                 color = Tone.Ink,
                             )
                         }
@@ -212,9 +217,9 @@ fun GamesScreen(
                             Box(
                                 Modifier
                                     .size(40.dp)
-                                    .clip(RoundedCornerShape(12.dp))
+                                    .clip(CircleShape)
                                     .background(Tone.Surface)
-                                    .border(1.dp, Tone.Line, RoundedCornerShape(12.dp))
+                                    .border(1.dp, Tone.Line, CircleShape)
                                     .clickable { gridMode = !gridMode },
                                 contentAlignment = Alignment.Center,
                             ) {
@@ -229,11 +234,11 @@ fun GamesScreen(
                             Row(
                                 Modifier
                                     .height(40.dp)
-                                    .clip(RoundedCornerShape(12.dp))
+                                    .clip(CircleShape)
                                     .background(if (active) Ascend.accent else Tone.Surface)
-                                    .then(if (active) Modifier else Modifier.border(1.dp, Tone.Line, RoundedCornerShape(12.dp)))
+                                    .then(if (active) Modifier else Modifier.border(1.dp, Tone.Line, CircleShape))
                                     .clickable { filtersOpen = !filtersOpen }
-                                    .padding(horizontal = 13.dp),
+                                    .padding(horizontal = 14.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(5.dp),
                             ) {
@@ -245,19 +250,19 @@ fun GamesScreen(
                                 )
                                 Text(
                                     "Filters",
-                                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp),
+                                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 12.5.sp),
                                     color = if (active) Ascend.onAccent else Tone.Ink,
                                 )
                             }
                         }
                     }
 
-                    MonoSearchField(query, games.size) { query = it }
+                    ConsoleSearchBar(query, games.size) { query = it }
 
                     if (showSystemFilter && systemsPresent.size > 1) {
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                             item {
-                                MonoFilterChip(
+                                ConsoleFilterPill(
                                     label = "All",
                                     count = games.size,
                                     selected = systemFilter == null,
@@ -265,9 +270,9 @@ fun GamesScreen(
                                 )
                             }
                             items(systemsPresent, key = { it.id }) { sys ->
-                                MonoFilterChip(
+                                ConsoleFilterPill(
                                     label = sys.shortName,
-                                    count = null,
+                                    count = counts[sys.id],
                                     selected = systemFilter == sys.id,
                                     onClick = { systemFilter = if (systemFilter == sys.id) null else sys.id },
                                 )
@@ -276,19 +281,19 @@ fun GamesScreen(
                     }
 
                     AnimatedVisibility(visible = filtersOpen) {
-                        val panelShape = RoundedCornerShape(12.dp)
+                        val panelShape = RoundedCornerShape(Ascend.Radius.Card)
                         Column(
                             Modifier
                                 .fillMaxWidth()
                                 .clip(panelShape)
                                 .background(Tone.Surface)
                                 .border(1.dp, Tone.Line, panelShape)
-                                .padding(12.dp),
+                                .padding(14.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
                             Text(
-                                "Sort",
-                                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 12.sp),
+                                "SORT BY",
+                                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 10.5.sp, letterSpacing = 0.08.em),
                                 color = Tone.Muted,
                             )
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -297,8 +302,8 @@ fun GamesScreen(
                                 }
                             }
                             Text(
-                                "Filter",
-                                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 12.sp),
+                                "SHOW ONLY",
+                                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 10.5.sp, letterSpacing = 0.08.em),
                                 color = Tone.Muted,
                             )
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -320,7 +325,7 @@ fun GamesScreen(
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         Text(
-                            "No matching games",
+                            "No matching software",
                             style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 15.sp),
                             color = Tone.Ink,
                         )
@@ -332,32 +337,34 @@ fun GamesScreen(
                     }
                 }
             } else if (gridMode) {
-                // Default: 2-Column Tall Box-Art Poster Grid matching Figma layout
                 items(filtered, key = { "grid_${it.id}" }) { game ->
-                    val year = systemReleaseYear(game.systemId)
+                    val st = stats[game.id]
+                    val subtitle = if (st != null && st.seconds >= 60) {
+                        PlayTime.format(st.seconds)
+                    } else {
+                        systemReleaseYear(game.systemId)
+                    }
                     GameCard(
                         game = game,
                         onClick = { onPlay(game) },
-                        subtitle = "${game.system?.shortName ?: game.systemId}   $year",
+                        subtitle = subtitle,
                         onLongClick = { onGameOptions(game) },
                         onPlay = onQuickPlay?.let { qp -> { qp(game) } } ?: { onPlay(game) },
-                        progress = computeGameProgress(stats[game.id], false),
+                        progress = computeGameProgress(st, false),
                         isFavorite = game.id in favorites,
                         onToggleFavorite = { onToggleFavorite(game) },
                     )
                 }
             } else {
-                // Alternate: Ultra-Clean Flat Hairline List (no cards around rows)
-                itemsIndexed(
+                items(
                     items = filtered,
-                    key = { _, it -> "row_${it.id}" },
-                    span = { _, _ -> GridItemSpan(maxLineSpan) },
-                ) { idx, game ->
-                    MonoCatalogueRow(
+                    key = { "row_${it.id}" },
+                    span = { GridItemSpan(maxLineSpan) },
+                ) { game ->
+                    ConsoleSoftwareRow(
                         game = game,
                         isFavorite = game.id in favorites,
                         stat = stats[game.id],
-                        showDivider = idx < filtered.lastIndex,
                         onOpen = { onPlay(game) },
                         onQuickPlay = { (onQuickPlay ?: onPlay)(game) },
                         onLongClick = { onGameOptions(game) },
@@ -377,19 +384,19 @@ fun GamesScreen(
 }
 
 @Composable
-private fun MonoSearchField(query: String, total: Int, onChange: (String) -> Unit) {
-    val shape = RoundedCornerShape(10.dp)
+private fun ConsoleSearchBar(query: String, total: Int, onChange: (String) -> Unit) {
+    val shape = CircleShape
     TextField(
         value = query,
         onValueChange = onChange,
         placeholder = {
             Text(
                 "Search $total games or consoles…",
-                style = TextStyle(fontFamily = Inter, fontSize = 14.sp),
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 14.sp),
                 color = Tone.Muted,
             )
         },
-        leadingIcon = { Icon(Icons.Default.Search, null, tint = Tone.Muted, modifier = Modifier.size(19.dp)) },
+        leadingIcon = { Icon(Icons.Default.Search, null, tint = Ascend.accent, modifier = Modifier.size(19.dp)) },
         trailingIcon = {
             if (query.isNotEmpty()) {
                 IconButton(onClick = { onChange("") }) {
@@ -410,116 +417,112 @@ private fun MonoSearchField(query: String, total: Int, onChange: (String) -> Uni
         modifier = Modifier
             .fillMaxWidth()
             .clip(shape)
-            .border(1.dp, Tone.Line, shape),
+            .border(1.dp, if (query.isNotEmpty()) Ascend.accent else Tone.Line, shape),
     )
 }
 
 @Composable
-private fun MonoFilterChip(
+private fun ConsoleFilterPill(
     label: String,
     count: Int?,
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    val shape = RoundedCornerShape(8.dp)
     Row(
         Modifier
-            .height(32.dp)
-            .clip(shape)
-            .background(if (selected) Ascend.accent else Tone.Surface)
-            .then(if (selected) Modifier else Modifier.border(1.dp, Tone.Line, shape))
+            .height(34.dp)
+            .clip(CircleShape)
+            .background(if (selected) Tone.Ink else Tone.Surface)
+            .then(if (selected) Modifier else Modifier.border(1.dp, Tone.Line, CircleShape))
             .clickable(onClick = onClick)
-            .padding(horizontal = 11.dp),
+            .padding(horizontal = 13.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(5.dp),
     ) {
         Text(
             label,
-            style = TextStyle(fontFamily = Inter, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, fontSize = 12.sp),
-            color = if (selected) Ascend.onAccent else Tone.Ink,
+            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 12.sp),
+            color = if (selected) Tone.Bg else Tone.Ink,
         )
         if (count != null) {
             Text(
                 count.toString(),
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 11.sp),
-                color = if (selected) Ascend.onAccent.copy(alpha = 0.72f) else Tone.Muted,
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 11.sp),
+                color = if (selected) Ascend.accent else Tone.Muted,
             )
         }
     }
 }
 
 @Composable
-private fun MonoCatalogueRow(
+private fun ConsoleSoftwareRow(
     game: Game,
     isFavorite: Boolean,
     stat: PlayStat?,
-    showDivider: Boolean,
     onOpen: () -> Unit,
     onQuickPlay: () -> Unit,
     onLongClick: () -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth()) {
-        Row(
+    val shape = RoundedCornerShape(Ascend.Radius.Card)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(Tone.Surface)
+            .border(1.dp, Tone.Line, shape)
+            .combinedClickable(onClick = onOpen, onLongClick = onLongClick)
+            .padding(horizontal = 10.dp, vertical = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        GameArt(
+            game,
             Modifier
-                .fillMaxWidth()
-                .combinedClickable(onClick = onOpen, onLongClick = onLongClick)
-                .padding(vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            GameArt(
-                game,
-                Modifier
-                    .size(46.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .border(0.75.dp, Tone.Line, RoundedCornerShape(6.dp)),
-                showTag = false,
-            )
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text(
-                        game.title,
-                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp),
-                        color = Tone.Ink,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                    if (isFavorite) {
-                        Icon(Icons.Rounded.Favorite, "Pinned", tint = Tone.Ink, modifier = Modifier.size(12.dp))
-                    }
-                }
-                val detail = buildString {
-                    append(game.system?.shortName ?: game.systemId)
-                    if (stat != null && stat.seconds >= 60) {
-                        append(" · ")
-                        append(PlayTime.format(stat.seconds))
-                    } else {
-                        append(" · ")
-                        append(game.fileName.substringAfterLast('.').uppercase())
-                    }
-                }
-                Text(detail, style = TextStyle(fontFamily = Inter, fontSize = 12.sp), color = Tone.Muted)
-            }
-            Box(
-                Modifier
-                    .size(34.dp)
-                    .clip(CircleShape)
-                    .background(Tone.Surface)
-                    .border(1.dp, Tone.Line, CircleShape)
-                    .clickable(onClick = onQuickPlay),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.Rounded.PlayArrow,
-                    "Play ${game.title}",
-                    tint = Tone.Ink,
-                    modifier = Modifier.size(18.dp),
+                .size(48.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .border(0.75.dp, Tone.Line, RoundedCornerShape(8.dp)),
+            showTag = false,
+        )
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    game.title,
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 14.sp),
+                    color = Tone.Ink,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
                 )
+                if (isFavorite) {
+                    Icon(Icons.Rounded.Favorite, "Pinned", tint = Ascend.accent, modifier = Modifier.size(13.dp))
+                }
             }
+            val detail = buildString {
+                append(game.system?.shortName ?: game.systemId.uppercase())
+                if (stat != null && stat.seconds >= 60) {
+                    append(" · ")
+                    append(PlayTime.format(stat.seconds))
+                } else {
+                    append(" · ")
+                    append(systemReleaseYear(game.systemId))
+                }
+            }
+            Text(detail, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 12.sp), color = Tone.Muted)
         }
-        if (showDivider) {
-            Box(Modifier.fillMaxWidth().padding(start = 58.dp).height(1.dp).background(Tone.Line))
+        Box(
+            Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(Ascend.accent)
+                .clickable(onClick = onQuickPlay),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Rounded.PlayArrow,
+                "Play ${game.title}",
+                tint = Ascend.onAccent,
+                modifier = Modifier.size(18.dp),
+            )
         }
     }
 }
@@ -572,7 +575,7 @@ private fun AlphaScroller(games: List<Game>, modifier: Modifier = Modifier, onJu
             Text(
                 c.toString(),
                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                color = if (c == active) Tone.Ink else Tone.Muted,
+                color = if (c == active) Ascend.accent else Tone.Muted,
                 modifier = Modifier.padding(vertical = 0.5.dp).semantics { contentDescription = "Jump to $c" },
             )
         }
@@ -602,9 +605,9 @@ private fun SkeletonGrid() {
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .aspectRatio(0.76f)
+                    .aspectRatio(0.75f)
                     .graphicsLayer { alpha = pulse }
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(Ascend.Radius.Card))
                     .background(Tone.Surface),
             )
         }

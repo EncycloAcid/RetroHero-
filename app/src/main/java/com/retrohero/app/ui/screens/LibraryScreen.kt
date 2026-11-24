@@ -46,6 +46,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -84,9 +87,8 @@ enum class LibraryTab(val label: String) {
 data class Shot(val game: Game, val file: File)
 
 /**
- * Pure Minimal Monochrome Consoles screen:
- * Flat OLED/white canvas, hairline underline tab bar, crisp flat monochrome console list
- * with real box-art thumbnails, 3-column pinned cover grid, and flat hairline history list.
+ * Handheld Console OS Consoles screen:
+ * Slate hardware cards with fanned cover art, console switcher pills, shelves, pinned titles, captures, and session history.
  */
 @Composable
 fun LibraryScreen(
@@ -131,30 +133,25 @@ fun LibraryScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxSize().background(Tone.Bg),
     ) {
-        // YOUR HARDWARE / Consoles Header + Acid Lime '+' Square
+        // Console OS header: hardware count eyebrow, bold title, round console actions.
         span {
             Row(
                 Modifier
                     .fillMaxWidth()
                     .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(top = 14.dp, bottom = 2.dp),
+                    .padding(top = 16.dp, bottom = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     Text(
-                        "YOUR HARDWARE",
-                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 10.5.sp, letterSpacing = 0.12.em),
+                        "${activeSystems.size} active · ${Systems.all.size} supported",
+                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.02.em),
                         color = Tone.Muted,
                     )
                     Text(
                         "Consoles",
-                        style = TextStyle(
-                            fontFamily = Inter,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 27.sp,
-                            letterSpacing = (-0.03).em,
-                        ),
+                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 28.sp, letterSpacing = (-0.03).em),
                         color = Tone.Ink,
                     )
                 }
@@ -163,9 +160,9 @@ fun LibraryScreen(
                         Box(
                             Modifier
                                 .size(40.dp)
-                                .clip(RoundedCornerShape(12.dp))
+                                .clip(CircleShape)
                                 .background(Tone.Surface)
-                                .border(1.dp, Tone.Line, RoundedCornerShape(12.dp))
+                                .border(1.dp, Tone.Line, CircleShape)
                                 .clickable(onClick = onCoverFlow),
                             contentAlignment = Alignment.Center,
                         ) {
@@ -175,7 +172,7 @@ fun LibraryScreen(
                     Box(
                         Modifier
                             .size(40.dp)
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(CircleShape)
                             .background(Ascend.accent)
                             .clickable(onClick = onNewCollection),
                         contentAlignment = Alignment.Center,
@@ -186,43 +183,33 @@ fun LibraryScreen(
             }
         }
 
-        // Crisp Editorial Underline Tab Bar with Acid Lime active indicator
+        // Console OS section chips.
         span {
-            Column(Modifier.fillMaxWidth()) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    LibraryTab.entries.forEach { item ->
-                        val selected = item == tab
-                        Column(
-                            Modifier
-                                .clickable { tab = item }
-                                .padding(top = 4.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                        ) {
-                            Text(
-                                item.label,
-                                style = TextStyle(
-                                    fontFamily = Inter,
-                                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                                    fontSize = 12.5.sp,
-                                ),
-                                color = if (selected) Tone.Ink else Tone.Muted,
-                                maxLines = 1,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
-                            )
-                            Box(
-                                Modifier
-                                    .width(28.dp)
-                                    .height(2.5.dp)
-                                    .clip(CircleShape)
-                                    .background(if (selected) Ascend.accent else Tone.Bg),
-                            )
-                        }
+            androidx.compose.foundation.lazy.LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.padding(top = 4.dp, bottom = 6.dp),
+            ) {
+                items(LibraryTab.entries.size) { i ->
+                    val item = LibraryTab.entries[i]
+                    val selected = item == tab
+                    Box(
+                        Modifier
+                            .height(34.dp)
+                            .clip(CircleShape)
+                            .background(if (selected) Tone.Ink else Tone.Surface)
+                            .then(if (selected) Modifier else Modifier.border(1.dp, Tone.Line, CircleShape))
+                            .clickable { tab = item }
+                            .padding(horizontal = 11.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            item.label,
+                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 12.5.sp),
+                            color = if (selected) Tone.Bg else Tone.Ink,
+                            maxLines = 1,
+                        )
                     }
                 }
-                Box(Modifier.fillMaxWidth().height(1.dp).background(Tone.Line))
             }
         }
 
@@ -236,14 +223,13 @@ fun LibraryScreen(
                         )
                     }
                 } else {
-                    // Pure Flat Monochrome Console List (box art thumbnail carries all color)
-                    activeSystems.forEachIndexed { idx, sys ->
+                    // Steam Deck / Switch hardware cards: cover fan, console badge, ROM count.
+                    activeSystems.forEach { sys ->
                         val sysGames = gamesBySystem[sys.id].orEmpty()
-                        item(key = "hw_row_${sys.id}", span = { GridItemSpan(maxLineSpan) }) {
-                            MonoConsoleRow(
+                        item(key = "hw_card_${sys.id}") {
+                            ConsoleHardwareCard(
                                 system = sys,
                                 games = sysGames,
-                                showDivider = idx < activeSystems.lastIndex,
                                 onClick = { onOpenSystem(sys) },
                             )
                         }
@@ -321,11 +307,11 @@ fun LibraryScreen(
                     )
                 }
                 item(key = "create_shelf_tile") {
-                    val shape = RoundedCornerShape(8.dp)
+                    val shape = RoundedCornerShape(Ascend.Radius.Card)
                     Column(
                         Modifier
                             .fillMaxWidth()
-                            .aspectRatio(1f)
+                            .aspectRatio(1.15f)
                             .clip(shape)
                             .background(Tone.Surface)
                             .border(1.dp, Tone.Line, shape)
@@ -488,6 +474,81 @@ fun LibraryScreen(
 }
 
 @Composable
+private fun ConsoleHardwareCard(
+    system: GameSystem,
+    games: List<Game>,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(Ascend.Radius.Card)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(Tone.Surface)
+            .border(1.dp, Tone.Line, shape)
+            .clickable(onClick = onClick),
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(1.35f)
+                .background(Tone.Raised),
+        ) {
+            val covers = games.take(3)
+            if (covers.isNotEmpty()) {
+                GameArt(covers.first(), Modifier.fillMaxSize().graphicsLayer { alpha = 0.35f }, showTag = false)
+                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Transparent, Tone.Surface))))
+                Row(
+                    Modifier.align(Alignment.Center),
+                    horizontalArrangement = Arrangement.spacedBy((-18).dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    covers.forEachIndexed { i, g ->
+                        val tileShape = RoundedCornerShape(8.dp)
+                        GameArt(
+                            g,
+                            Modifier
+                                .size(if (i == 0) 64.dp else 54.dp)
+                                .graphicsLayer { rotationZ = (i - 1) * 6f }
+                                .clip(tileShape)
+                                .border(1.5.dp, Tone.Surface, tileShape),
+                            showTag = false,
+                        )
+                    }
+                }
+            }
+            Text(
+                system.shortName,
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 9.5.sp, letterSpacing = 0.08.em),
+                color = Ascend.onAccent,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(8.dp)
+                    .clip(RoundedCornerShape(5.dp))
+                    .background(Ascend.accent)
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+            )
+        }
+        Column(Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                system.name,
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 13.5.sp),
+                color = Tone.Ink,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                "${if (games.size == 1) "1 game" else "${games.size} games"} · ${system.manufacturer}",
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 11.5.sp),
+                color = Tone.Muted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
 private fun MonoConsoleRow(
     system: GameSystem,
     games: List<Game>,
@@ -589,16 +650,20 @@ private fun MonoShelfTile(
     games: List<Game>,
     onClick: () -> Unit,
 ) {
-    val artShape = RoundedCornerShape(8.dp)
+    val artShape = RoundedCornerShape(Ascend.Radius.Card)
     Column(
         Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .clip(artShape)
+            .background(Tone.Surface)
+            .border(1.dp, Tone.Line, artShape)
+            .clickable(onClick = onClick)
+            .padding(8.dp),
     ) {
         Box(
             Modifier
                 .fillMaxWidth()
-                .aspectRatio(1f)
+                .aspectRatio(1.2f)
                 .clip(artShape)
                 .background(Tone.Surface)
                 .border(0.75.dp, Tone.Line, artShape),

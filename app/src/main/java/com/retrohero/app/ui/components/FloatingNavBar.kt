@@ -2,35 +2,28 @@ package com.retrohero.app.ui.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -41,222 +34,144 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import com.retrohero.app.ui.theme.Inter
 import com.retrohero.app.ui.theme.Tone
 
-/** Space the bottom nav takes; scrolling screens pad their content by it. */
+/**
+ * Space reserved at the bottom of scrolling screens. With the Handheld Console OS layout there is
+ * no bottom tab bar any more, so this is only the gesture inset plus the mini player when shown.
+ */
 val LocalNavSpace = compositionLocalOf { 0.dp }
 
 class NavItem(val label: String, val selectedIcon: ImageVector, val icon: ImageVector)
 
-val FloatingNavHeight = 72.dp
+/** Height of the top Console OS bar (below the status bar). */
+val FloatingNavHeight = 52.dp
 
+/**
+ * The Handheld Console OS bar (Switch / Steam Deck): docked at the top under the status bar with
+ * text tabs and a glowing accent underline on the active section, plus a console-style clock and
+ * battery readout on the right. Kept under its old name so existing call sites keep compiling.
+ */
 @Composable
 fun FloatingNavBar(items: List<NavItem>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
-    val dockShape = RoundedCornerShape(18.dp)
-    val dark = Tone.isDark
-    val dockBg = if (dark) Color(0xFF0E0F0E) else Color(0xFFFFFFFF)
-    val dockBorder = Tone.Line
-    Box(
+    ConsoleTopBar(items, selected, onSelect, modifier)
+}
+
+@Composable
+fun ConsoleTopBar(items: List<NavItem>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
+    Column(
         modifier
             .fillMaxWidth()
-            .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .shadow(
-                elevation = if (dark) 12.dp else 6.dp,
-                shape = dockShape,
-                ambientColor = Color.Black.copy(alpha = if (dark) 0.70f else 0.10f),
-                spotColor = Color.Black.copy(alpha = if (dark) 0.80f else 0.14f),
-            )
-            .clip(dockShape)
-            .background(dockBg)
-            .border(1.dp, dockBorder, dockShape),
+            .background(Tone.Bg)
+            .windowInsetsPadding(WindowInsets.statusBars),
     ) {
         Row(
             Modifier
                 .fillMaxWidth()
-                .height(58.dp)
-                .padding(horizontal = 6.dp, vertical = 6.dp)
-                .selectableGroup(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                .height(FloatingNavHeight)
+                .padding(start = 8.dp, end = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            items.forEachIndexed { index, item ->
-                val active = index == selected
-                val interaction = remember { MutableInteractionSource() }
-                val pressed by interaction.collectIsPressedAsState()
-                val scale by animateFloatAsState(
-                    if (pressed) 0.94f else 1f,
-                    spring(dampingRatio = 0.7f, stiffness = 650f),
-                    label = "navScale",
-                )
-                val tint by animateColorAsState(
-                    when {
-                        active && dark -> Ascend.accent
-                        active && !dark -> Tone.Ink
-                        else -> Tone.Muted
-                    },
-                    tween(160),
-                    label = "navTint",
-                )
-                val pill by animateColorAsState(
-                    if (active) Tone.Raised else Color.Transparent,
-                    tween(180),
-                    label = "navPill",
-                )
-                val keyShape = RoundedCornerShape(12.dp)
-                Box(
-                    Modifier
-                        .weight(if (active) 1.44f else 0.94f)
-                        .fillMaxHeight()
-                        .graphicsLayer { scaleX = scale; scaleY = scale }
-                        .clip(keyShape)
-                        .background(pill)
-                        .then(
-                            if (active) Modifier.border(1.dp, Tone.Line, keyShape)
-                            else Modifier,
-                        )
-                        .selectable(
-                            selected = active,
-                            interactionSource = interaction,
-                            indication = null,
-                            role = Role.Tab,
-                            onClick = { onSelect(index) },
-                        ),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (active) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.padding(horizontal = 10.dp),
-                        ) {
-                            Icon(item.selectedIcon, null, tint = tint, modifier = Modifier.size(18.dp))
-                            Text(
-                                item.label,
-                                color = tint,
-                                maxLines = 1,
-                                softWrap = false,
-                                style = TextStyle(
-                                    fontFamily = com.retrohero.app.ui.theme.Inter,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 11.5.sp,
-                                ),
-                            )
-                        }
-                    } else {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(1.dp),
-                        ) {
-                            Icon(item.icon, null, tint = tint, modifier = Modifier.size(19.dp))
-                            Text(
-                                item.label,
-                                color = tint,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                style = TextStyle(
-                                    fontFamily = com.retrohero.app.ui.theme.Inter,
-                                    fontWeight = FontWeight.Medium,
-                                    fontSize = 10.sp,
-                                ),
-                            )
-                        }
-                    }
+            Row(
+                Modifier.fillMaxHeight().selectableGroup(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                items.forEachIndexed { index, item ->
+                    ConsoleTab(item, active = index == selected, onClick = { onSelect(index) })
                 }
             }
+            Box(Modifier.weight(1f).clip(RoundedCornerShape(0.dp)), contentAlignment = Alignment.CenterEnd) { ConsoleStatus() }
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Tone.Line))
+    }
+}
+
+@Composable
+private fun ConsoleTab(item: NavItem, active: Boolean, onClick: () -> Unit) {
+    val tint by animateColorAsState(if (active) Tone.Ink else Tone.Muted, tween(160), label = "tabTint")
+    val bar by animateDpAsState(if (active) 18.dp else 0.dp, spring(dampingRatio = 0.7f, stiffness = 600f), label = "tabBar")
+    Box(
+        Modifier
+            .fillMaxHeight()
+            .selectable(
+                selected = active,
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                role = Role.Tab,
+                onClick = onClick,
+            )
+            .padding(horizontal = 8.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+            if (active) {
+                Icon(item.selectedIcon, null, tint = com.retrohero.app.ui.components.Ascend.accent, modifier = Modifier.size(16.dp))
+            }
+            Text(
+                item.label,
+                color = tint,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Clip,
+                style = TextStyle(
+                    fontFamily = Inter,
+                    fontWeight = if (active) FontWeight.Bold else FontWeight.SemiBold,
+                    fontSize = 13.5.sp,
+                    letterSpacing = (-0.005).em,
+                ),
+            )
+        }
+        Box(
+            Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 6.dp)
+                .width(bar)
+                .height(3.dp)
+                .shadow(if (active) 6.dp else 0.dp, CircleShape, ambientColor = Ascend.accent, spotColor = Ascend.accent)
+                .clip(CircleShape)
+                .background(Ascend.accent),
+        )
+    }
+}
+
+/** Console-OS status cluster: clock plus a tiny battery glyph. */
+@Composable
+private fun ConsoleStatus() {
+    val time = remember {
+        java.text.SimpleDateFormat("H:mm", java.util.Locale.getDefault()).format(java.util.Date())
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            time,
+            color = Tone.Ink,
+            maxLines = 1,
+            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.sp),
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                Modifier
+                    .size(width = 20.dp, height = 10.dp)
+                    .border(1.25.dp, Tone.Muted, RoundedCornerShape(3.dp))
+                    .padding(2.dp),
+            ) {
+                Box(Modifier.fillMaxHeight().fillMaxWidth(0.72f).clip(RoundedCornerShape(1.dp)).background(Tone.Ink))
+            }
+            Box(Modifier.padding(start = 1.dp).size(width = 2.dp, height = 4.dp).background(Tone.Muted, RoundedCornerShape(1.dp)))
         }
     }
 }
 
-/** Instrument vertical navigation rail for landscape and wide tablet screens. */
+/** Kept for API compatibility; wide screens now also use the top Console OS bar. */
 @Composable
 fun InstrumentNavRail(items: List<NavItem>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
-    Row(modifier.fillMaxHeight().background(Ascend.Surface)) {
-        Column(
-            Modifier
-                .width(76.dp)
-                .fillMaxHeight()
-                .windowInsetsPadding(WindowInsets.statusBars)
-                .windowInsetsPadding(WindowInsets.navigationBars)
-                .verticalScroll(rememberScrollState())
-                .padding(vertical = 8.dp, horizontal = 6.dp)
-                .selectableGroup(),
-            verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterVertically),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            items.forEachIndexed { index, item ->
-                val active = index == selected
-                val interaction = remember { MutableInteractionSource() }
-                val pressed by interaction.collectIsPressedAsState()
-                val scale by animateFloatAsState(
-                    if (pressed) 0.94f else 1f,
-                    spring(dampingRatio = 0.7f, stiffness = 650f),
-                    label = "railScale",
-                )
-                val tint by animateColorAsState(if (active) Tone.Ink else Tone.Muted, tween(160), label = "railTint")
-                val pill by animateColorAsState(
-                    if (active) Tone.Raised else Color.Transparent,
-                    tween(160),
-                    label = "railPill",
-                )
-                val shape = RoundedCornerShape(10.dp)
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(52.dp)
-                        .graphicsLayer { scaleX = scale; scaleY = scale }
-                        .clip(shape)
-                        .background(pill)
-                        .then(if (active) Modifier.border(1.dp, Tone.Line, shape) else Modifier)
-                        .selectable(
-                            selected = active,
-                            interactionSource = interaction,
-                            indication = null,
-                            role = Role.Tab,
-                            onClick = { onSelect(index) },
-                        ),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (active) {
-                        Box(
-                            Modifier
-                                .align(Alignment.CenterStart)
-                                .padding(start = 3.dp)
-                                .size(width = 2.5.dp, height = 16.dp)
-                                .background(Ascend.accent, CircleShape),
-                        )
-                    }
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(2.dp),
-                    ) {
-                        Icon(if (active) item.selectedIcon else item.icon, null, tint = tint, modifier = Modifier.size(20.dp))
-                        Text(
-                            item.label.uppercase(),
-                            color = tint,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            style = TextStyle(
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
-                                fontSize = 8.sp,
-                                letterSpacing = 0.04.em,
-                            ),
-                        )
-                    }
-                }
-            }
-        }
-        Box(Modifier.width(1.dp).fillMaxHeight().background(Page.Divider))
-    }
+    ConsoleTopBar(items, selected, onSelect, modifier)
 }

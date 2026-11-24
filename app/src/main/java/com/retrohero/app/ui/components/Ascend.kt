@@ -65,10 +65,10 @@ import com.retrohero.app.ui.theme.Tone
 
 object Ascend {
     object Radius {
-        val Cover = 10.dp
-        val Control = 12.dp
-        val Card = 14.dp
-        val Hero = 18.dp
+        val Cover = 8.dp
+        val Control = 10.dp
+        val Card = 12.dp
+        val Hero = 16.dp
     }
 
     val Surface: Color get() = Tone.Surface
@@ -77,9 +77,11 @@ object Ascend {
     val CardShape = RoundedCornerShape(Radius.Card)
     private val isMono: Boolean get() = Salmon == com.retrohero.app.ui.theme.MonoAccentColor
     private val isLime: Boolean get() = Salmon == com.retrohero.app.ui.theme.AcidLimeColor
+    private val isDeck: Boolean get() = Salmon == com.retrohero.app.ui.theme.DeckCyanColor
     private val drawnAccent: Color get() = Salmon.compositeOver(Tone.Bg)
     val accent: Color get() = when {
         isMono -> Tone.Ink
+        isDeck -> if (Tone.isDark) Color(0xFF1AA8FF) else Color(0xFF0A8FE6)
         isLime -> if (Tone.isDark) Color(0xFFD8FF3E) else Color(0xFFC8F526)
         Tone.isDark && drawnAccent.luminance() < 0.25f -> lerp(Salmon, Color.White, 0.5f)
         !Tone.isDark && drawnAccent.luminance() > 0.6f -> lerp(Salmon, Color.Black, 0.35f)
@@ -88,14 +90,18 @@ object Ascend {
     /** Readable accent colour for small inline text labels on Bg/Surface. */
     val accentText: Color get() = when {
         isLime && !Tone.isDark -> Color(0xFF557200)
+        isDeck && !Tone.isDark -> Color(0xFF0773BA)
         else -> accent
     }
     val onAccent: Color get() = when {
         isMono -> Tone.Bg
+        isDeck -> Color.White
         isLime -> Color(0xFF0A0B0A)
         accent.luminance() > 0.35f -> Color(0xFF0A0B0A)
         else -> Color.White
     }
+    /** The glowing console focus ring drawn around the selected tile. */
+    val focusRing: Color get() = if (Tone.isDark) Color(0xFFE9F6FF) else accent
 }
 
 fun Modifier.ascendCard(shape: androidx.compose.ui.graphics.Shape = Ascend.CardShape): Modifier =
@@ -117,14 +123,16 @@ fun SectionTitle(
             .padding(vertical = verticalPadding),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Box(Modifier.size(width = 3.dp, height = 14.dp).clip(CircleShape).background(Ascend.accent))
+        Spacer(Modifier.width(8.dp))
         Text(
             title,
             modifier = Modifier.weight(1f),
             style = TextStyle(
                 fontFamily = Inter,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 18.sp,
-                letterSpacing = (-0.02).em,
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp,
+                letterSpacing = (-0.01).em,
             ),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -133,9 +141,13 @@ fun SectionTitle(
         if (count != null) {
             Text(
                 "$count titles",
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Normal, fontSize = 13.sp),
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 11.sp, letterSpacing = 0.04.em),
                 color = Tone.Muted,
-                modifier = Modifier.padding(start = 8.dp),
+                modifier = Modifier
+                    .padding(start = 8.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Tone.Raised)
+                    .padding(horizontal = 7.dp, vertical = 3.dp),
             )
         }
         if (onClick != null) {
@@ -150,9 +162,8 @@ fun SectionTitle(
 }
 
 /**
- * Figma-inspired tall box-art poster card:
- * Rounded 16.dp full-bleed cover art with thin bottom progress bar, clean title + tappable Acid Lime heart,
- * and muted console + year metadata underneath.
+ * Handheld Console OS game tile (Switch / Steam Deck): square-cornered box art on a slate plate,
+ * a crisp focus ring while pressed, a play-time bar along the bottom edge and a compact title row.
  */
 @Composable
 fun GameCard(
@@ -170,65 +181,78 @@ fun GameCard(
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(
-        if (pressed) 0.97f else 1f,
-        spring(dampingRatio = 0.7f, stiffness = 600f),
+        if (pressed) 1.04f else 1f,
+        spring(dampingRatio = 0.6f, stiffness = 700f),
         label = "gameCardScale",
     )
-    val artShape = RoundedCornerShape(16.dp)
+    val artShape = RoundedCornerShape(Ascend.Radius.Card)
     Column(
         modifier
             .then(if (width != null) Modifier.width(width) else Modifier.fillMaxWidth())
-            .graphicsLayer { scaleX = scale; scaleY = scale }
             .combinedClickable(interactionSource = interaction, indication = null, onClick = onClick, onLongClick = onLongClick),
     ) {
         Box(
             Modifier
                 .fillMaxWidth()
-                .aspectRatio(0.73f)
-                .clip(artShape)
-                .background(Tone.Surface)
-                .border(1.dp, Tone.Line, artShape),
+                .aspectRatio(0.75f)
+                .graphicsLayer { scaleX = scale; scaleY = scale }
+                .then(
+                    if (pressed) Modifier.border(2.5.dp, Ascend.focusRing, artShape).padding(4.dp)
+                    else Modifier,
+                )
+                .clip(if (pressed) RoundedCornerShape(Ascend.Radius.Cover) else artShape)
+                .background(Tone.Raised),
         ) {
             GameArt(game, Modifier.fillMaxSize(), showTag = false)
+            Box(
+                Modifier
+                    .align(Alignment.TopStart)
+                    .padding(7.dp)
+                    .clip(RoundedCornerShape(5.dp))
+                    .background(Color(0xFF0F131A).copy(alpha = 0.78f))
+                    .padding(horizontal = 6.dp, vertical = 2.dp),
+            ) {
+                Text(
+                    game.system?.shortName ?: game.systemId.uppercase(),
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 9.sp, letterSpacing = 0.06.em),
+                    color = Color.White,
+                    maxLines = 1,
+                )
+            }
             if (onPlay != null) {
                 Box(
                     Modifier
-                        .align(Alignment.TopEnd)
+                        .align(Alignment.BottomEnd)
                         .padding(8.dp)
-                        .size(30.dp)
+                        .size(32.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFF0A0B0A).copy(alpha = 0.72f))
-                        .border(0.75.dp, Color.White.copy(alpha = 0.22f), CircleShape)
+                        .background(Ascend.accent)
                         .clickable(onClick = onPlay),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
                         Icons.Rounded.PlayArrow,
                         "Play ${game.title}",
-                        tint = Color.White,
-                        modifier = Modifier.size(16.dp),
+                        tint = Ascend.onAccent,
+                        modifier = Modifier.size(18.dp),
                     )
                 }
             }
-            // Thin sleek bottom progress bar inside cover art (matching Figma reference)
             val barProgress = progress?.coerceIn(0f, 1f)
             if (barProgress != null) {
                 Box(
                     Modifier
-                        .align(Alignment.BottomCenter)
+                        .align(Alignment.BottomStart)
                         .fillMaxWidth()
-                        .padding(horizontal = 10.dp, vertical = 10.dp)
                         .height(3.dp)
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.50f)),
+                        .background(Color.Black.copy(alpha = 0.45f)),
                 ) {
                     if (barProgress > 0f) {
                         Box(
                             Modifier
                                 .fillMaxWidth(barProgress)
                                 .fillMaxHeight()
-                                .clip(CircleShape)
-                                .background(if (isFavorite) Ascend.accent else Color.White.copy(alpha = 0.88f)),
+                                .background(Ascend.accent),
                         )
                     }
                 }
@@ -242,7 +266,7 @@ fun GameCard(
         ) {
             Text(
                 game.title,
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 13.5.sp, lineHeight = 16.sp),
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, lineHeight = 16.sp),
                 color = Tone.Ink,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -250,11 +274,11 @@ fun GameCard(
             )
             if (onToggleFavorite != null) {
                 Icon(
-                    imageVector = if (isFavorite) androidx.compose.material.icons.Icons.Rounded.Favorite else androidx.compose.material.icons.Icons.Rounded.FavoriteBorder,
+                    imageVector = if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
                     contentDescription = if (isFavorite) "Unpin ${game.title}" else "Pin ${game.title}",
                     tint = if (isFavorite) Ascend.accent else Tone.Faint,
                     modifier = Modifier
-                        .size(18.dp)
+                        .size(17.dp)
                         .clickable(onClick = onToggleFavorite),
                 )
             }
@@ -262,11 +286,11 @@ fun GameCard(
         if (!subtitle.isNullOrBlank()) {
             Text(
                 subtitle,
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Normal, fontSize = 11.5.sp),
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 11.sp),
                 color = Tone.Muted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 2.dp),
+                modifier = Modifier.padding(top = 1.dp),
             )
         }
     }
@@ -293,7 +317,7 @@ fun Key(
         spring(dampingRatio = 0.7f, stiffness = 600f),
         label = "keyScale",
     )
-    val shape = RoundedCornerShape(12.dp)
+    val shape = CircleShape
     val view = LocalView.current
     val contentAlpha = if (enabled) 1f else 0.4f
     val fg = if (primary) Ascend.onAccent else Tone.Ink
@@ -301,7 +325,7 @@ fun Key(
     Row(
         modifier
             .graphicsLayer { scaleX = scale; scaleY = scale; alpha = contentAlpha }
-            .height(44.dp)
+            .height(46.dp)
             .clip(shape)
             .background(bg)
             .then(if (primary) Modifier else Modifier.border(1.dp, Tone.Line, shape))
@@ -309,7 +333,7 @@ fun Key(
                 view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                 onClick()
             }
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 20.dp),
         horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(7.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -318,7 +342,7 @@ fun Key(
         }
         Text(
             text,
-            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.sp),
+            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 14.sp),
             color = fg,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -326,6 +350,7 @@ fun Key(
     }
 }
 
+/** Console OS tab strip: plain labels with a glowing accent bar under the active one. */
 @Composable
 fun Segmented(
     options: List<String>,
@@ -339,35 +364,35 @@ fun Segmented(
     BoxWithConstraints(
         modifier
             .fillMaxWidth()
-            .height(48.dp)
-            .then(
-                if (Tone.isDark) Modifier else Modifier.shadow(
-                    2.dp,
-                    trackShape,
-                    ambientColor = Color.Black.copy(alpha = 0.06f),
-                    spotColor = Color.Black.copy(alpha = 0.10f),
-                ),
-            )
+            .height(46.dp)
             .clip(trackShape)
-            .background(Tone.Raised)
-            .border(1.dp, Tone.Line, trackShape)
-            .padding(4.dp),
+            .background(Tone.Surface)
+            .border(1.dp, Tone.Line, trackShape),
     ) {
         val optionWidth = maxWidth / options.size
         val indicatorX by animateDpAsState(
             (optionWidth.value * selectedIndex).dp,
-            spring(dampingRatio = 0.7f, stiffness = 600f),
+            spring(dampingRatio = 0.75f, stiffness = 600f),
             label = "segmentIndicator",
         )
-        val indicatorShape = RoundedCornerShape(Ascend.Radius.Control)
         Box(
             Modifier
                 .offset(x = indicatorX)
                 .width(optionWidth)
                 .fillMaxHeight()
-                .then(if (Tone.isDark) Modifier else Modifier.shadow(1.dp, indicatorShape))
-                .clip(indicatorShape)
-                .background(Tone.Ink),
+                .padding(4.dp)
+                .clip(RoundedCornerShape(Ascend.Radius.Control - 3.dp))
+                .background(Tone.Raised),
+        )
+        Box(
+            Modifier
+                .align(Alignment.BottomStart)
+                .offset(x = indicatorX + optionWidth * 0.3f)
+                .padding(bottom = 6.dp)
+                .width(optionWidth * 0.4f)
+                .height(2.5.dp)
+                .clip(CircleShape)
+                .background(Ascend.accent),
         )
         Row(Modifier.fillMaxSize().selectableGroup()) {
             options.forEachIndexed { index, label ->
@@ -380,9 +405,14 @@ fun Segmented(
                 ) {
                     Text(
                         label,
-                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 13.sp),
-                        color = if (selectedIndex == index) Tone.Bg else Tone.Ink,
+                        style = TextStyle(
+                            fontFamily = Inter,
+                            fontWeight = if (selectedIndex == index) FontWeight.Bold else FontWeight.Medium,
+                            fontSize = 13.sp,
+                        ),
+                        color = if (selectedIndex == index) Tone.Ink else Tone.Muted,
                         maxLines = 1,
+                        modifier = Modifier.padding(bottom = 3.dp),
                     )
                 }
             }

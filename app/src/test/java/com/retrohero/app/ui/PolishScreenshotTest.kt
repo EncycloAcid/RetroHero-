@@ -387,7 +387,7 @@ class PolishScreenshotTest {
         }
         compose.mainClock.advanceTimeBy(1500)
         save("hero_page1")
-        compose.onNodeWithText("1 / 4").performTouchInput { swipeLeft() }
+        compose.onNodeWithText("1 / 6").performTouchInput { swipeLeft() }
         compose.mainClock.advanceTimeBy(1500)
         save("hero_page2")
         compose.onNodeWithText("Shuffle").performClick()
@@ -497,17 +497,15 @@ class PolishScreenshotTest {
         val couch = com.retrohero.app.data.GameCollection("c1", "Couch co-op", games.take(4).map { it.id })
         compose.setContent {
             RetroHeroTheme {
-                Box(Modifier.fillMaxSize()) {
-                    androidx.compose.runtime.CompositionLocalProvider(com.retrohero.app.ui.components.LocalNavSpace provides com.retrohero.app.ui.components.FloatingNavHeight) {
-                        com.retrohero.app.ui.screens.ShelvesScreen(
-                            games = games, recents = listOf(games[0], games[2], games[4]), favorites = listOf(games[1], games[3]),
-                            collections = listOf(couch to games.take(4)), stats = stats,
-                            onOpenGame = {}, onOptions = {}, onOpenCollection = {}, onNewShelf = {}, onCoverFlow = {},
-                        )
-                    }
+                Column(Modifier.fillMaxSize()) {
                     com.retrohero.app.ui.components.FloatingNavBar(
                         items = navigationItems,
-                        selected = 1, onSelect = {}, modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter),
+                        selected = 1, onSelect = {},
+                    )
+                    com.retrohero.app.ui.screens.ShelvesScreen(
+                        games = games, recents = listOf(games[0], games[2], games[4]), favorites = listOf(games[1], games[3]),
+                        collections = listOf(couch to games.take(4)), stats = stats,
+                        onOpenGame = {}, onOptions = {}, onOpenCollection = {}, onNewShelf = {}, onCoverFlow = {},
                     )
                 }
             }
@@ -532,7 +530,7 @@ class PolishScreenshotTest {
         val collection = com.retrohero.app.data.GameCollection("instrument", "Couch co-op", games.take(3).map { it.id })
         val history = sampleHistory()
         val settings = com.retrohero.app.data.Settings(ApplicationProvider.getApplicationContext())
-        settings.accent = "ember"
+        settings.accent = "deck"
         val activeScreen = mutableStateOf("home")
         settings.darkMode = false
         Tone.setDarkMode(false)
@@ -544,19 +542,14 @@ class PolishScreenshotTest {
                         favorites = favorites, onOpenSystem = {}, onSeeAllGames = {}, topActions = {},
                         bottomPadding = 100.dp, stats = stats, collections = listOf(collection to games.take(3)),
                     )
-                    "shelves" -> Box(Modifier.fillMaxSize()) {
-                        androidx.compose.runtime.CompositionLocalProvider(
-                            com.retrohero.app.ui.components.LocalNavSpace provides com.retrohero.app.ui.components.FloatingNavHeight,
-                        ) {
-                            com.retrohero.app.ui.screens.ShelvesScreen(
-                                games = games, recents = recents, favorites = favorites,
-                                collections = listOf(collection to games.take(3)), stats = stats,
-                                onOpenGame = {}, onOptions = {}, onOpenCollection = {}, onNewShelf = {}, onCoverFlow = {},
-                            )
-                        }
+                    "shelves" -> Column(Modifier.fillMaxSize()) {
                         com.retrohero.app.ui.components.FloatingNavBar(
                             navigationItems, selected = 1, onSelect = {},
-                            modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter),
+                        )
+                        com.retrohero.app.ui.screens.ShelvesScreen(
+                            games = games, recents = recents, favorites = favorites,
+                            collections = listOf(collection to games.take(3)), stats = stats,
+                            onOpenGame = {}, onOptions = {}, onOpenCollection = {}, onNewShelf = {}, onCoverFlow = {},
                         )
                     }
                     "search" -> GamesScreen(

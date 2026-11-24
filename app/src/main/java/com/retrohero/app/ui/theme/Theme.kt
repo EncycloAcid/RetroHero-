@@ -18,26 +18,29 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 
+/** Handheld Console OS default accent: Deck Cyan focus-ring blue. */
+val DeckCyanColor = Color(0xFF1AA8FF)
 val AcidLimeColor = Color(0xFFD8FF3E)
 val MonoAccentColor = Color(0xFFFAFAFA)
-private val accentState = mutableStateOf(AcidLimeColor)
+private val accentState = mutableStateOf(DeckCyanColor)
 private val darkState = mutableStateOf(true)
 
 object Tone {
     val isDark: Boolean get() = darkState.value
     fun setDarkMode(dark: Boolean) { darkState.value = dark }
 
-    val Bg: Color get() = if (isDark) Color(0xFF0A0B0A) else Color(0xFFF7F8F5)
-    val Surface: Color get() = if (isDark) Color(0xFF141614) else Color(0xFFFFFFFF)
-    val Raised: Color get() = if (isDark) Color(0xFF1D201D) else Color(0xFFECEDE9)
-    val Ink: Color get() = if (isDark) Color(0xFFF5F6F4) else Color(0xFF101210)
-    val Muted: Color get() = if (isDark) Color(0xFF8A8E88) else Color(0xFF666A65)
-    val Faint: Color get() = if (isDark) Color(0xFF535752) else Color(0xFF9EA39C)
-    val Line: Color get() = if (isDark) Color(0xFF252825) else Color(0xFFE0E2DC)
+    // Handheld Console OS: Steam Deck slate-charcoal at night, Switch light-grey by day.
+    val Bg: Color get() = if (isDark) Color(0xFF0F131A) else Color(0xFFEBECEF)
+    val Surface: Color get() = if (isDark) Color(0xFF19202B) else Color(0xFFFFFFFF)
+    val Raised: Color get() = if (isDark) Color(0xFF232C3B) else Color(0xFFF4F5F8)
+    val Ink: Color get() = if (isDark) Color(0xFFF5F7FA) else Color(0xFF14181F)
+    val Muted: Color get() = if (isDark) Color(0xFF8D98AA) else Color(0xFF5F6878)
+    val Faint: Color get() = if (isDark) Color(0xFF566174) else Color(0xFF9AA2B1)
+    val Line: Color get() = if (isDark) Color(0xFF2C3647) else Color(0xFFDADEE5)
 }
 
 /**
- * The accent colour (Electric Acid Lime #D8FF3E by default) paired with matte obsidian surfaces.
+ * The accent colour (Deck Cyan #1AA8FF by default) paired with slate console surfaces.
  * It follows the chosen look; reading it in a composable recomposes when the look changes.
  */
 val Salmon: Color get() = accentState.value

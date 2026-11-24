@@ -190,7 +190,7 @@ fun GameDetailScreen(
                         ),
                 )
 
-                // Floating Minimal Top Controls
+                // Console OS Top Floating Controls
                 Row(
                     Modifier
                         .align(Alignment.TopStart)
@@ -202,10 +202,10 @@ fun GameDetailScreen(
                 ) {
                     Box(
                         Modifier
-                            .size(38.dp)
+                            .size(40.dp)
                             .clip(CircleShape)
-                            .background(Color.Black.copy(alpha = 0.65f))
-                            .border(0.75.dp, Color.White.copy(alpha = 0.22f), CircleShape)
+                            .background(Color(0xFF0F131A).copy(alpha = 0.78f))
+                            .border(1.dp, Color.White.copy(alpha = 0.22f), CircleShape)
                             .clickable(onClick = onClose),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -215,10 +215,10 @@ fun GameDetailScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Box(
                             Modifier
-                                .size(38.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (isFavorite) Ascend.accent else Color(0xFF0A0B0A).copy(alpha = 0.72f))
-                                .border(0.75.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(12.dp))
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(if (isFavorite) Ascend.accent else Color(0xFF0F131A).copy(alpha = 0.78f))
+                                .border(1.dp, Color.White.copy(alpha = 0.22f), CircleShape)
                                 .clickable(onClick = onToggleFavorite),
                             contentAlignment = Alignment.Center,
                         ) {
@@ -231,10 +231,10 @@ fun GameDetailScreen(
                         }
                         Box(
                             Modifier
-                                .size(38.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Color(0xFF0A0B0A).copy(alpha = 0.72f))
-                                .border(0.75.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(12.dp))
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF0F131A).copy(alpha = 0.78f))
+                                .border(1.dp, Color.White.copy(alpha = 0.22f), CircleShape)
                                 .clickable(onClick = onAddToCollection),
                             contentAlignment = Alignment.Center,
                         ) {
@@ -243,57 +243,80 @@ fun GameDetailScreen(
                     }
                 }
 
-                // Bottom Hero Title + Acid Lime Eyebrow + Sharp Acid Lime Play CTA
+                // Steam Deck Game Page Hero Dock: floating box-art badge + title + console pill CTA
                 Column(
                     Modifier
                         .align(Alignment.BottomStart)
                         .fillMaxWidth()
                         .padding(horizontal = 18.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.Bottom,
+                        horizontalArrangement = Arrangement.spacedBy(14.dp),
                     ) {
-                        Text(
-                            "${system.shortName} · $region".uppercase(),
-                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 0.10.em),
-                            color = Ascend.accentText,
+                        GameArt(
+                            game,
+                            Modifier
+                                .width(78.dp)
+                                .height(102.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .border(2.dp, Ascend.focusRing, RoundedCornerShape(10.dp)),
+                            showTag = false,
                         )
-                        if (stat.lastPlayed > 0) {
+                        Column(
+                            Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(5.dp),
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(7.dp),
+                            ) {
+                                Text(
+                                    "${system.shortName} · $region".uppercase(),
+                                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 10.sp, letterSpacing = 0.08.em),
+                                    color = Ascend.accentText,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(5.dp))
+                                        .background(Ascend.accent.copy(alpha = 0.16f))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                                )
+                                if (stat.lastPlayed > 0) {
+                                    Text(
+                                        DateUtils.getRelativeTimeSpanString(
+                                            stat.lastPlayed,
+                                            System.currentTimeMillis(),
+                                            DateUtils.MINUTE_IN_MILLIS,
+                                        ).toString().lowercase(Locale.getDefault()),
+                                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 11.5.sp),
+                                        color = Tone.Muted,
+                                        maxLines = 1,
+                                    )
+                                }
+                            }
                             Text(
-                                "· " + DateUtils.getRelativeTimeSpanString(
-                                    stat.lastPlayed,
-                                    System.currentTimeMillis(),
-                                    DateUtils.MINUTE_IN_MILLIS,
-                                ).toString().lowercase(Locale.getDefault()),
-                                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 12.sp),
+                                game.title,
+                                style = TextStyle(
+                                    fontFamily = Inter,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 24.sp,
+                                    lineHeight = 28.sp,
+                                    letterSpacing = (-0.03).em,
+                                ),
+                                color = Tone.Ink,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                synopsis,
+                                style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp, lineHeight = 17.sp),
                                 color = Tone.Muted,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                     }
-
-                    Text(
-                        game.title,
-                        style = TextStyle(
-                            fontFamily = Inter,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 27.sp,
-                            lineHeight = 30.sp,
-                            letterSpacing = (-0.03).em,
-                        ),
-                        color = Tone.Ink,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-
-                    Text(
-                        synopsis,
-                        style = TextStyle(fontFamily = Inter, fontSize = 13.sp, lineHeight = 18.sp),
-                        color = Tone.Muted,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
 
                     Row(
                         Modifier.fillMaxWidth().padding(top = 4.dp),

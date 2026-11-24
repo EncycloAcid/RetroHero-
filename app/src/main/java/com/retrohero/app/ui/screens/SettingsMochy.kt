@@ -116,9 +116,9 @@ private val categories = listOf(
 )
 
 /**
- * Pure Minimal Monochrome System screen:
- * Flat OLED/white canvas, crisp inline Light/Dark switcher, flat search field,
- * and an ultra-clean monochrome hairline settings list with zero gradients or boxy chrome.
+ * Handheld Console OS System Settings (Switch / Steam Deck):
+ * Featured Libretro engine status card, console theme switcher, pill search bar,
+ * and grouped slate hardware/software setting panels with tinted icon badges.
  */
 @Composable
 fun SettingsHome(
@@ -144,53 +144,104 @@ fun SettingsHome(
             .background(Tone.Bg)
             .verticalScroll(rememberScrollState())
             .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 28.dp + LocalNavSpace.current),
+            .padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 28.dp + LocalNavSpace.current),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        // PREFERENCES / System Header
+        // Console OS Header
         Row(
             Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 Text(
-                    "PREFERENCES",
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 10.5.sp, letterSpacing = 0.12.em),
+                    "Handheld Console OS · $abiLabel",
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.02.em),
                     color = Tone.Muted,
                 )
                 Text(
                     "System",
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 27.sp, letterSpacing = (-0.03).em),
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 28.sp, letterSpacing = (-0.03).em),
                     color = Tone.Ink,
                 )
             }
             Row(
                 Modifier
                     .height(38.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .clip(CircleShape)
                     .background(Tone.Surface)
-                    .border(1.dp, Tone.Line, RoundedCornerShape(12.dp))
+                    .border(1.dp, Tone.Line, CircleShape)
                     .clickable { onOpen("about") }
-                    .padding(horizontal = 13.dp),
+                    .padding(horizontal = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(5.dp),
             ) {
-                Icon(Icons.Rounded.Info, null, tint = Tone.Ink, modifier = Modifier.size(15.dp))
-                Text("About", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp), color = Tone.Ink)
+                Icon(Icons.Rounded.Info, null, tint = Ascend.accent, modifier = Modifier.size(15.dp))
+                Text("About", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 12.5.sp), color = Tone.Ink)
             }
         }
 
-        // Inline Flat Monochrome Light / Dark Switcher
+        // Featured Console Engine Card + Theme Mode Switcher
+        val cardShape = RoundedCornerShape(Ascend.Radius.Card)
         Row(
             Modifier
                 .fillMaxWidth()
-                .height(38.dp)
-                .clip(RoundedCornerShape(10.dp))
+                .clip(cardShape)
                 .background(Tone.Surface)
-                .border(1.dp, Tone.Line, RoundedCornerShape(10.dp))
-                .padding(3.dp),
-            horizontalArrangement = Arrangement.spacedBy(3.dp),
+                .border(1.dp, Tone.Line, cardShape)
+                .clickable { onOpen("cores") }
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(13.dp),
+        ) {
+            Box(
+                Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(11.dp))
+                    .background(Ascend.accent.copy(alpha = 0.16f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Rounded.Memory, null, tint = Ascend.accent, modifier = Modifier.size(22.dp))
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    "Emulator Cores",
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 15.5.sp),
+                    color = Tone.Ink,
+                )
+                Text(
+                    "Download & manage libretro engines ($abiLabel)",
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 12.sp),
+                    color = Tone.Muted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Box(
+                Modifier
+                    .clip(CircleShape)
+                    .background(Ascend.accent)
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+            ) {
+                Text(
+                    "$installedCoresCount/$totalCoresCount",
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 11.5.sp),
+                    color = Ascend.onAccent,
+                )
+            }
+            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Tone.Muted, modifier = Modifier.size(19.dp))
+        }
+
+        // Console OS Display Theme Switcher (Light / Dark)
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .height(42.dp)
+                .clip(CircleShape)
+                .background(Tone.Surface)
+                .border(1.dp, Tone.Line, CircleShape)
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             listOf("Light" to false, "Dark" to true).forEach { (label, dark) ->
                 val selected = Tone.isDark == dark
@@ -198,8 +249,8 @@ fun SettingsHome(
                     Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .clip(RoundedCornerShape(7.dp))
-                        .background(if (selected) Ascend.accent else Color.Transparent)
+                        .clip(CircleShape)
+                        .background(if (selected) Tone.Ink else Color.Transparent)
                         .clickable {
                             settings.darkMode = dark
                             Tone.setDarkMode(dark)
@@ -208,34 +259,33 @@ fun SettingsHome(
                 ) {
                     Text(
                         label,
-                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp),
-                        color = if (selected) Ascend.onAccent else Tone.Muted,
+                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 12.5.sp),
+                        color = if (selected) Tone.Bg else Tone.Muted,
                     )
                 }
             }
         }
 
-        // Flat Monochrome Search Input
-        val searchShape = RoundedCornerShape(10.dp)
+        // Pill Search Bar
         Row(
             Modifier
                 .fillMaxWidth()
-                .height(42.dp)
-                .clip(searchShape)
+                .height(44.dp)
+                .clip(CircleShape)
                 .background(Tone.Surface)
-                .border(1.dp, Tone.Line, searchShape)
-                .padding(horizontal = 12.dp),
+                .border(1.dp, Tone.Line, CircleShape)
+                .padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Rounded.Search, null, tint = Placeholder, modifier = Modifier.size(18.dp))
+            Icon(Icons.Rounded.Search, null, tint = Ascend.accent, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(9.dp))
             Box(Modifier.weight(1f)) {
-                if (query.isEmpty()) Text("Search settings", style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = Placeholder)
+                if (query.isEmpty()) Text("Search system settings…", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 13.5.sp), color = Placeholder)
                 BasicTextField(
                     query, { query = it },
                     singleLine = true,
                     textStyle = TextStyle(fontFamily = Inter, fontSize = 14.sp, color = Tone.Ink),
-                    cursorBrush = SolidColor(Tone.Ink),
+                    cursorBrush = SolidColor(Ascend.accent),
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
@@ -246,42 +296,36 @@ fun SettingsHome(
             val hits = categories.flatMap { c ->
                 (listOf(c.title.lowercase()) + c.keywords).filter { it.contains(q) }.map { c to it }
             }.distinctBy { it.second }
-            Column {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     "${hits.size} matches",
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 12.sp),
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 12.sp),
                     color = Tone.Muted,
-                    modifier = Modifier.padding(bottom = 6.dp),
                 )
                 if (hits.isEmpty()) {
                     Text("Nothing matches “${query.trim()}”.", style = MaterialTheme.typography.bodyMedium, color = Tone.Muted, modifier = Modifier.padding(vertical = 8.dp))
                 } else {
-                    hits.forEachIndexed { i, (c, label) ->
-                        MonoSettingsRow(
-                            title = label.replaceFirstChar { it.uppercase() },
-                            subtitle = "System › ${c.title}",
-                            icon = c.icon,
-                            trailingValue = null,
-                            onClick = { onOpen(c.id) },
-                            showDivider = i < hits.lastIndex,
-                        )
+                    ConsoleSettingsPanel {
+                        hits.forEachIndexed { i, (c, label) ->
+                            ConsoleSettingsRow(
+                                title = label.replaceFirstChar { it.uppercase() },
+                                subtitle = "System › ${c.title}",
+                                icon = c.icon,
+                                trailingValue = null,
+                                onClick = { onOpen(c.id) },
+                                showDivider = i < hits.lastIndex,
+                            )
+                        }
                     }
                 }
             }
             return@Column
         }
 
-        // Ultra-Clean Flat Hairline Settings List
-        Column(Modifier.fillMaxWidth()) {
-            MonoSettingsRow(
-                title = "Emulator Cores",
-                subtitle = "Download & manage libretro engines ($abiLabel)",
-                icon = Icons.Rounded.Memory,
-                trailingValue = "$installedCoresCount/$totalCoresCount",
-                onClick = { onOpen("cores") },
-                showDivider = true,
-            )
-            MonoSettingsRow(
+        // Section 1: Library & Play
+        ConsoleSectionHeading("LIBRARY & PLAY")
+        ConsoleSettingsPanel {
+            ConsoleSettingsRow(
                 title = "Your stats & recap",
                 subtitle = "Play time, sessions & personal highlights",
                 icon = Icons.Rounded.Insights,
@@ -290,7 +334,7 @@ fun SettingsHome(
                 showDivider = true,
             )
             val lib = categories.first { it.id == "library" }
-            MonoSettingsRow(
+            ConsoleSettingsRow(
                 title = lib.title,
                 subtitle = lib.subtitle,
                 icon = lib.icon,
@@ -298,17 +342,8 @@ fun SettingsHome(
                 onClick = { onOpen(lib.id) },
                 showDivider = true,
             )
-            val looks = categories.first { it.id == "looks" }
-            MonoSettingsRow(
-                title = looks.title,
-                subtitle = looks.subtitle,
-                icon = looks.icon,
-                trailingValue = null,
-                onClick = { onOpen(looks.id) },
-                showDivider = true,
-            )
             val gp = categories.first { it.id == "gameplay" }
-            MonoSettingsRow(
+            ConsoleSettingsRow(
                 title = gp.title,
                 subtitle = "${settings.fastForwardSpeed.toInt()}× fast-forward · ${if (settings.autoSave) "auto-save on" else "manual saves"}",
                 icon = gp.icon,
@@ -317,16 +352,30 @@ fun SettingsHome(
                 showDivider = true,
             )
             val ctrl = categories.first { it.id == "controls" }
-            MonoSettingsRow(
+            ConsoleSettingsRow(
                 title = ctrl.title,
                 subtitle = ctrl.subtitle,
                 icon = ctrl.icon,
                 trailingValue = null,
                 onClick = { onOpen(ctrl.id) },
+                showDivider = false,
+            )
+        }
+
+        // Section 2: Appearance & Hardware
+        ConsoleSectionHeading("APPEARANCE & HARDWARE")
+        ConsoleSettingsPanel {
+            val looks = categories.first { it.id == "looks" }
+            ConsoleSettingsRow(
+                title = looks.title,
+                subtitle = looks.subtitle,
+                icon = looks.icon,
+                trailingValue = null,
+                onClick = { onOpen(looks.id) },
                 showDivider = true,
             )
             val bios = categories.first { it.id == "bios" }
-            MonoSettingsRow(
+            ConsoleSettingsRow(
                 title = bios.title,
                 subtitle = bios.subtitle,
                 icon = bios.icon,
@@ -335,7 +384,7 @@ fun SettingsHome(
                 showDivider = true,
             )
             val bkp = categories.first { it.id == "backup" }
-            MonoSettingsRow(
+            ConsoleSettingsRow(
                 title = bkp.title,
                 subtitle = bkp.subtitle,
                 icon = bkp.icon,
@@ -348,7 +397,37 @@ fun SettingsHome(
 }
 
 @Composable
-private fun MonoSettingsRow(
+private fun ConsoleSectionHeading(text: String) {
+    Row(
+        Modifier.padding(top = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(7.dp),
+    ) {
+        Box(Modifier.size(width = 3.dp, height = 12.dp).clip(CircleShape).background(Ascend.accent))
+        Text(
+            text,
+            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 0.08.em),
+            color = Tone.Muted,
+        )
+    }
+}
+
+@Composable
+private fun ConsoleSettingsPanel(content: @Composable ColumnScope.() -> Unit) {
+    val shape = RoundedCornerShape(Ascend.Radius.Card)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(Tone.Surface)
+            .border(1.dp, Tone.Line, shape)
+            .padding(horizontal = 14.dp),
+        content = content,
+    )
+}
+
+@Composable
+private fun ConsoleSettingsRow(
     title: String,
     subtitle: String,
     icon: ImageVector,
@@ -360,22 +439,30 @@ private fun MonoSettingsRow(
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(vertical = 13.dp),
+                .padding(vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Icon(icon, null, tint = Tone.Ink, modifier = Modifier.size(20.dp))
+            Box(
+                Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Tone.Raised),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(icon, null, tint = Ascend.accent, modifier = Modifier.size(18.dp))
+            }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     title,
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp),
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 14.5.sp),
                     color = Tone.Ink,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     subtitle,
-                    style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 12.sp),
                     color = Tone.Muted,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -384,17 +471,17 @@ private fun MonoSettingsRow(
             if (trailingValue != null) {
                 Text(
                     trailingValue,
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 13.sp),
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp),
                     color = Tone.Muted,
                 )
             }
-            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Tone.Faint, modifier = Modifier.size(18.dp))
+            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Tone.Muted, modifier = Modifier.size(18.dp))
         }
         if (showDivider) {
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .padding(start = 34.dp)
+                    .padding(start = 48.dp)
                     .height(1.dp)
                     .background(Tone.Line),
             )
@@ -402,7 +489,7 @@ private fun MonoSettingsRow(
     }
 }
 
-/** A settings sub-page: flat monochrome canvas, crisp circular back icon, bold title, and scrolling content. */
+/** Console OS settings sub-page with circular back button and bold section title. */
 @Composable
 fun SubSettings(title: String, onBack: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     Column(
@@ -411,14 +498,14 @@ fun SubSettings(title: String, onBack: () -> Unit, content: @Composable ColumnSc
             .background(Tone.Bg)
             .verticalScroll(rememberScrollState())
             .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 24.dp + LocalNavSpace.current),
+            .padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 24.dp + LocalNavSpace.current),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Column {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     Modifier
-                        .size(36.dp)
+                        .size(38.dp)
                         .clip(CircleShape)
                         .background(Tone.Surface)
                         .border(1.dp, Tone.Line, CircleShape)
@@ -435,15 +522,15 @@ fun SubSettings(title: String, onBack: () -> Unit, content: @Composable ColumnSc
                 Spacer(Modifier.width(10.dp))
                 Text(
                     "System / $title",
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 12.5.sp),
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp),
                     color = Tone.Muted,
                 )
             }
             Text(
                 title,
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 26.sp, letterSpacing = (-0.03).em),
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 27.sp, letterSpacing = (-0.03).em),
                 color = Tone.Ink,
-                modifier = Modifier.padding(top = 12.dp, bottom = 8.dp),
+                modifier = Modifier.padding(top = 12.dp, bottom = 10.dp),
             )
             Box(Modifier.fillMaxWidth().height(1.dp).background(Tone.Line))
         }
