@@ -36,8 +36,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Casino
+import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.VideogameAsset
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -217,6 +220,53 @@ private fun AlbumScreen(
             item(key = "header") {
                 Header(title, tag, subtitle, color, emptyShape(), games, tint, headerHeight, onPlayRandom)
             }
+            item(key = "telemetry") {
+                val pinnedCount = games.count { it.id in favorites }
+                val localCount = games.count { it.isLocal }
+                Column(Modifier.padding(top = 12.dp, bottom = 6.dp)) {
+                    com.retrohero.app.ui.components.BentoTelemetryStrip(
+                        metrics = listOf(
+                            com.retrohero.app.ui.components.BentoMetric(
+                                icon = Icons.Rounded.VideogameAsset,
+                                value = games.size.toString(),
+                                label = "GAMES",
+                            ),
+                            com.retrohero.app.ui.components.BentoMetric(
+                                icon = Icons.Rounded.Favorite,
+                                value = pinnedCount.toString(),
+                                label = "PINNED",
+                            ),
+                            com.retrohero.app.ui.components.BentoMetric(
+                                icon = Icons.Rounded.DownloadDone,
+                                value = localCount.toString(),
+                                label = "DOWNLOADED",
+                            ),
+                            com.retrohero.app.ui.components.BentoMetric(
+                                icon = Icons.Rounded.Memory,
+                                value = tag.take(8).uppercase(),
+                                label = "PLATFORM",
+                            ),
+                        ),
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        com.retrohero.app.ui.components.ArchiveLabel(
+                            "ROM ARCHIVE CATALOGUE",
+                            color = com.retrohero.app.ui.theme.Tone.Ink,
+                        )
+                        com.retrohero.app.ui.components.ArchiveLabel(
+                            "${games.size} TITLES",
+                            color = com.retrohero.app.ui.theme.Salmon,
+                        )
+                    }
+                }
+            }
             if (games.isEmpty() && emptyText != null) item(key = "empty") {
                 Text(
                     emptyText,
@@ -256,11 +306,13 @@ private fun AlbumScreen(
                     .padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                val backShape = RoundedCornerShape(10.dp)
                 Box(
                     Modifier
-                        .size(42.dp)
-                        .clip(CircleShape)
-                        .background(lerp(Color.Black.copy(alpha = 0.35f), com.retrohero.app.ui.theme.Tone.Raised, progress))
+                        .size(40.dp)
+                        .clip(backShape)
+                        .background(lerp(Color.Black.copy(alpha = 0.45f), com.retrohero.app.ui.theme.Tone.Raised, progress))
+                        .border(1.dp, lerp(Color.White.copy(alpha = 0.18f), com.retrohero.app.ui.theme.Tone.Line, progress), backShape)
                         .clickable(onClick = onBack),
                     contentAlignment = Alignment.Center,
                 ) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back", tint = lerp(Color.White, com.retrohero.app.ui.theme.Tone.Ink, progress)) }
@@ -312,21 +364,33 @@ private fun Header(
                     0f to Color.Black.copy(alpha = 0.35f),
                     0.2f to Color.Transparent,
                     0.4f to Color.Transparent,
-                    0.85f to Color.Black.copy(alpha = 0.8f),
+                    0.85f to Color.Black.copy(alpha = 0.85f),
                     1f to com.retrohero.app.ui.components.Page.Bg,
                 ),
             ),
         )
-        Column(Modifier.align(Alignment.BottomStart).padding(start = 22.dp, end = 22.dp, bottom = 22.dp)) {
-            Text(
-                tag,
-                style = TextStyle(fontFamily = PixelFont, fontSize = 10.sp),
-                color = Color.White,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Control))
-                    .background(Color.Black.copy(alpha = 0.35f))
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-            )
+        Column(Modifier.align(Alignment.BottomStart).padding(start = 20.dp, end = 20.dp, bottom = 18.dp)) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    Modifier
+                        .size(7.dp)
+                        .clip(CircleShape)
+                        .background(com.retrohero.app.ui.theme.Salmon),
+                )
+                Text(
+                    tag,
+                    style = TextStyle(fontFamily = PixelFont, fontSize = 10.sp),
+                    color = Color.White,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(Color.Black.copy(alpha = 0.55f))
+                        .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(6.dp))
+                        .padding(horizontal = 8.dp, vertical = 5.dp),
+                )
+            }
             Text(
                 title,
                 style = MaterialTheme.typography.headlineLargeEmphasized,
@@ -340,20 +404,41 @@ private fun Header(
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color.White.copy(alpha = 0.8f),
             )
-            Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                val btnShape = RoundedCornerShape(11.dp)
+                val iconBoxShape = RoundedCornerShape(8.dp)
                 Row(
                     Modifier
-                        .height(40.dp)
+                        .height(44.dp)
                         .press3D(maxTilt = 4f)
-                        .clip(com.retrohero.app.ui.components.Ascend.CardShape)
+                        .clip(btnShape)
                         .background(com.retrohero.app.ui.theme.Salmon)
+                        .border(1.dp, Color.White.copy(alpha = 0.22f), btnShape)
                         .clickable(enabled = games.isNotEmpty(), onClick = onPlayRandom)
-                        .padding(horizontal = 18.dp),
+                        .padding(start = 16.dp, end = 7.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(Icons.Rounded.Casino, null, tint = com.retrohero.app.ui.components.Ascend.onAccent, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Play random", style = MaterialTheme.typography.labelLargeEmphasized, color = com.retrohero.app.ui.components.Ascend.onAccent)
+                    Text(
+                        "Play random",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+                        color = com.retrohero.app.ui.components.Ascend.onAccent,
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Box(
+                        Modifier
+                            .size(30.dp)
+                            .clip(iconBoxShape)
+                            .background(Color.Black.copy(alpha = 0.18f))
+                            .border(1.dp, Color.White.copy(alpha = 0.24f), iconBoxShape),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            Icons.Rounded.Casino,
+                            null,
+                            tint = com.retrohero.app.ui.components.Ascend.onAccent,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
                 }
             }
         }
@@ -369,59 +454,70 @@ private fun GameRow(
     onPlay: () -> Unit,
     onLongPress: () -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth()) {
-        Row(
+    val rowShape = RoundedCornerShape(11.dp)
+    val playBoxShape = RoundedCornerShape(9.dp)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .clip(rowShape)
+            .background(com.retrohero.app.ui.theme.Tone.Surface)
+            .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, rowShape)
+            .combinedClickable(onClick = onOpen, onLongClick = onLongPress)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        com.retrohero.app.ui.components.ArchiveLabel(
+            index.toString().padStart(2, '0'),
+            Modifier.width(22.dp),
+            color = com.retrohero.app.ui.theme.Tone.Faint,
+        )
+        Spacer(Modifier.width(8.dp))
+        val coverShape = RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Cover)
+        GameArt(
+            game,
             Modifier
-                .fillMaxWidth()
-                .combinedClickable(onClick = onOpen, onLongClick = onLongPress)
-                .padding(horizontal = 20.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            com.retrohero.app.ui.components.ArchiveLabel(
-                index.toString().padStart(2, '0'),
-                Modifier.width(24.dp),
-                color = com.retrohero.app.ui.theme.Tone.Faint,
-            )
-            Spacer(Modifier.width(10.dp))
-            val coverShape = RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Cover)
-            GameArt(
-                game,
-                Modifier
-                    .size(50.dp)
-                    .clip(coverShape)
-                    .background(com.retrohero.app.ui.theme.Tone.Raised)
-                    .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, coverShape),
-                showTag = false,
-            )
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(game.title, style = MaterialTheme.typography.titleMedium, color = com.retrohero.app.ui.theme.Tone.Ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                    if (isFavorite) Icon(Icons.Rounded.Favorite, "Pinned", tint = Salmon, modifier = Modifier.padding(start = 6.dp).size(14.dp))
-                }
+                .size(48.dp)
+                .clip(coverShape)
+                .background(com.retrohero.app.ui.theme.Tone.Raised)
+                .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, coverShape),
+            showTag = false,
+        )
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    game.fileName.substringAfterLast('.').uppercase() + if (game.isLocal) " · Downloaded" else "",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = com.retrohero.app.ui.theme.Tone.Muted,
+                    game.title,
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+                    color = com.retrohero.app.ui.theme.Tone.Ink,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
                 )
+                if (isFavorite) Icon(Icons.Rounded.Favorite, "Pinned", tint = Salmon, modifier = Modifier.padding(start = 6.dp).size(14.dp))
             }
-            Spacer(Modifier.width(10.dp))
-            Box(
-                Modifier
-                    .size(38.dp)
-                    .clip(CircleShape)
-                    .background(com.retrohero.app.ui.theme.Tone.Raised)
-                    .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, CircleShape)
-                    .clickable(onClick = onPlay),
-                contentAlignment = Alignment.Center,
-            ) { Icon(Icons.Rounded.PlayArrow, "Play ${game.title}", tint = com.retrohero.app.ui.theme.Tone.Ink, modifier = Modifier.size(20.dp)) }
+            Spacer(Modifier.height(2.dp))
+            com.retrohero.app.ui.components.ArchiveLabel(
+                game.fileName.substringAfterLast('.').uppercase() + if (game.isLocal) " · DOWNLOADED" else " · CLOUD ARCHIVE",
+                color = com.retrohero.app.ui.theme.Tone.Muted,
+            )
         }
+        Spacer(Modifier.width(10.dp))
         Box(
             Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .height(1.dp)
-                .background(com.retrohero.app.ui.components.Page.Divider),
-        )
+                .size(36.dp)
+                .clip(playBoxShape)
+                .background(com.retrohero.app.ui.theme.Salmon.copy(alpha = 0.14f))
+                .border(1.dp, com.retrohero.app.ui.theme.Salmon.copy(alpha = 0.40f), playBoxShape)
+                .clickable(onClick = onPlay),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Rounded.PlayArrow,
+                "Play ${game.title}",
+                tint = com.retrohero.app.ui.theme.Salmon,
+                modifier = Modifier.size(18.dp),
+            )
+        }
     }
 }

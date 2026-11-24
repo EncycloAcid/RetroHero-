@@ -49,32 +49,47 @@ fun CoresScreen(
     val (installed, available) = cores.partition { states[it.first.id] is CoreState.Installed }
     LazyColumn(
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp + LocalNavSpace.current),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
         item { com.retrohero.app.ui.components.PageHeader("Emulators", "${installed.size} of ${cores.size} installed", index = pageIndex) }
         item {
-            Box(Modifier.glossCard()) {
-                Column(Modifier.padding(20.dp)) {
-                    com.retrohero.app.ui.components.ArchiveLabel("Core management")
+            val abiLabel = when (val raw = CoreManager.abi().lowercase()) {
+                "arm64-v8a" -> "ARM64"
+                "armeabi-v7a" -> "ARM32"
+                else -> raw.uppercase()
+            }
+            com.retrohero.app.ui.components.BentoTelemetryStrip(
+                metrics = listOf(
+                    com.retrohero.app.ui.components.BentoMetric(installed.size.toString(), "INSTALLED", Icons.Outlined.CloudDownload),
+                    com.retrohero.app.ui.components.BentoMetric(cores.size.toString(), "ENGINES", Icons.Outlined.CloudDownload),
+                    com.retrohero.app.ui.components.BentoMetric(Systems.all.size.toString(), "CONSOLES", Icons.Outlined.CloudDownload),
+                    com.retrohero.app.ui.components.BentoMetric(abiLabel, "TARGET ABI", Icons.Outlined.CloudDownload),
+                ),
+            )
+        }
+        item {
+            com.retrohero.app.ui.components.BentoPanel(
+                header = "LIBRETRO ENGINE ARCHITECTURE",
+                badge = "AUTO-FETCH",
+            ) {
+                Column(Modifier.padding(6.dp)) {
                     Text(
                         "Ready on first play",
-                        style = MaterialTheme.typography.titleLarge,
+                        style = MaterialTheme.typography.titleMedium,
                         color = com.retrohero.app.ui.theme.Tone.Ink,
-                        modifier = Modifier.padding(top = 12.dp),
                     )
                     Text(
-                        "Cores download automatically the first time you play a system. " +
-                            "Built for ${CoreManager.abi()}. Each one is an independent open-source project.",
-                        style = MaterialTheme.typography.bodyMedium,
+                        "Emulator engines download automatically the first time you launch a console, or pre-install any engine below. Built for ${CoreManager.abi()}.",
+                        style = MaterialTheme.typography.bodySmall,
                         color = com.retrohero.app.ui.theme.Tone.Muted,
                         modifier = Modifier.padding(top = 4.dp),
                     )
                 }
             }
         }
-        if (installed.isNotEmpty()) item { CoreGroup("Installed", installed, states, onDownload, onDelete) }
-        if (available.isNotEmpty()) item { CoreGroup("Available", available, states, onDownload, onDelete) }
+        if (installed.isNotEmpty()) item { CoreGroup("INSTALLED ENGINES", installed, states, onDownload, onDelete) }
+        if (available.isNotEmpty()) item { CoreGroup("AVAILABLE ENGINES", available, states, onDownload, onDelete) }
     }
 }
 
@@ -86,62 +101,60 @@ private fun CoreGroup(
     onDownload: (CoreInfo) -> Unit,
     onDelete: (CoreInfo) -> Unit,
 ) {
-    SegmentedGroup(title, cores.size) {
-        cores.forEachIndexed { i, (core, systems) ->
+    com.retrohero.app.ui.components.BentoPanel(
+        header = title,
+        badge = "${cores.size} CORES",
+    ) {
+        cores.forEach { (core, systems) ->
             val state = states[core.id] ?: CoreState.NotInstalled
-            SegmentedListItem(
-                shapes = shapes(i),
-                colors = segmentColors(),
-                leadingContent = { SystemBadge(systems.first(), 44.dp) },
-                supportingContent = {
-                    Text(
-                        buildString {
-                            append(systems.joinToString { it.shortName })
-                            append(" · ")
-                            append(
-                                when (state) {
-                                    is CoreState.Installed -> if (state.bundled) "Bundled" else "${state.sizeBytes / (1024 * 1024)} MB"
-                                    is CoreState.Downloading -> "Downloading…"
-                                    is CoreState.Failed -> "Failed: ${state.message}"
-                                    CoreState.NotInstalled -> core.license
-                                },
-                            )
-                        },
-                        color = if (state is CoreState.Failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+            val statusText = when (state) {
+                is CoreState.Installed -> if (state.bundled) "BUNDLED" else "${(state.sizeBytes / (1024 * 1024)).coerceAtLeast(1)} MB"
+                is CoreState.Downloading -> "${(state.progress * 100).toInt()}%"
+                is CoreState.Failed -> "RETRY"
+                CoreState.NotInstalled -> core.license.uppercase()
+            }
+            com.retrohero.app.ui.components.BentoItemRow(
+                title = core.displayName,
+                subtitle = systems.joinToString { it.shortName },
+                rightText = statusText,
+                highlighted = state is CoreState.Installed,
+                leading = {
+                    com.retrohero.app.ui.components.ArchiveLabel(
+                        systems.first().shortName.take(4),
+                        color = if (state is CoreState.Installed) com.retrohero.app.ui.components.Ascend.onAccent else com.retrohero.app.ui.theme.Tone.Ink,
                     )
                 },
-                trailingContent = {
+                trailing = {
                     when (state) {
                         is CoreState.Downloading -> CircularWavyProgressIndicator(
                             progress = { state.progress },
-                            modifier = Modifier.size(38.dp),
+                            modifier = Modifier.size(32.dp),
                         )
                         is CoreState.Installed -> if (!state.bundled) {
                             IconButton(
                                 onClick = { onDelete(core) },
                                 shapes = IconButtonDefaults.shapes(),
                                 modifier = Modifier
-                                    .size(38.dp)
+                                    .size(34.dp)
                                     .background(com.retrohero.app.ui.theme.Tone.Raised, CircleShape)
                                     .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, CircleShape),
                             ) {
-                                Icon(Icons.Outlined.Delete, "Delete ${core.displayName}", tint = com.retrohero.app.ui.theme.Tone.Ink, modifier = Modifier.size(18.dp))
+                                Icon(Icons.Outlined.Delete, "Delete ${core.displayName}", tint = com.retrohero.app.ui.theme.Tone.Ink, modifier = Modifier.size(16.dp))
                             }
                         }
                         else -> IconButton(
                             onClick = { onDownload(core) },
                             shapes = IconButtonDefaults.shapes(),
                             modifier = Modifier
-                                .size(38.dp)
+                                .size(34.dp)
                                 .background(com.retrohero.app.ui.theme.Tone.Raised, CircleShape)
                                 .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, CircleShape),
                         ) {
-                            Icon(Icons.Outlined.CloudDownload, "Download ${core.displayName}", tint = com.retrohero.app.ui.theme.Tone.Ink, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Outlined.CloudDownload, "Download ${core.displayName}", tint = com.retrohero.app.ui.theme.Tone.Ink, modifier = Modifier.size(16.dp))
                         }
                     }
                 },
-                verticalAlignment = Alignment.CenterVertically,
-            ) { Text(core.displayName, style = MaterialTheme.typography.titleMedium) }
+            )
         }
     }
 }

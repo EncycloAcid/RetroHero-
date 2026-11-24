@@ -109,7 +109,7 @@ private val categories = listOf(
     Category("about", "About", "Version info & emulator core licenses", Icons.Rounded.Info, listOf("version", "about", "libretro", "licence")),
 )
 
-/** The settings home: big title, search pill, then a column of category bubbles. */
+/** The settings home in the Game Record Bento & Telemetry aesthetic. */
 @Composable
 fun SettingsHome(settings: Settings, onOpen: (String) -> Unit, onOpenStats: () -> Unit, pageIndex: Int = 6) {
     var query by remember { mutableStateOf("") }
@@ -119,26 +119,61 @@ fun SettingsHome(settings: Settings, onOpen: (String) -> Unit, onOpenStats: () -
             .emberBackground()
             .verticalScroll(rememberScrollState())
             .padding(start = 20.dp, end = 20.dp, bottom = 24.dp + LocalNavSpace.current),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        com.retrohero.app.ui.components.PageHeader("Settings", "Library, controls and appearance", index = pageIndex)
-        Spacer(Modifier.height(14.dp))
-        AppearanceSwitch(settings)
-        Spacer(Modifier.height(16.dp))
+        com.retrohero.app.ui.components.PageHeader("Settings", "App & controls", index = pageIndex)
+
+        // 4-Cell Bento Telemetry Strip
+        com.retrohero.app.ui.components.BentoTelemetryStrip(
+            metrics = listOf(
+                com.retrohero.app.ui.components.BentoMetric(if (Tone.isDark) "DARK" else "LIGHT", "THEME", Icons.Rounded.Palette),
+                com.retrohero.app.ui.components.BentoMetric(Systems.all.size.toString(), "SYSTEMS", Icons.Rounded.Memory),
+                com.retrohero.app.ui.components.BentoMetric(if (settings.autoSave) "ON" else "OFF", "AUTO-SAVE", Icons.Rounded.Backup),
+                com.retrohero.app.ui.components.BentoMetric("${settings.fastForwardSpeed.toInt()}×", "FAST-FWD", Icons.Rounded.Tune),
+            ),
+        )
+
+        // Appearance & Stats Boxed Deck
+        com.retrohero.app.ui.components.BentoPanel(
+            header = "APPEARANCE & TELEMETRY",
+            badge = if (Tone.isDark) "DARK MODE" else "LIGHT MODE",
+        ) {
+            Segmented(
+                options = listOf("Light", "Dark"),
+                selected = if (Tone.isDark) 1 else 0,
+                onSelect = { index ->
+                    val dark = index == 1
+                    settings.darkMode = dark
+                    Tone.setDarkMode(dark)
+                },
+            )
+            com.retrohero.app.ui.components.BentoItemRow(
+                title = "Your stats & recap",
+                subtitle = "Play time, favourite systems, your month",
+                rightText = "JOURNAL",
+                highlighted = true,
+                onClick = onOpenStats,
+                leading = {
+                    Icon(Icons.Rounded.Insights, null, tint = com.retrohero.app.ui.components.Ascend.onAccent, modifier = Modifier.size(20.dp))
+                },
+            )
+        }
+
         // Search pill.
         val focused = query.isNotEmpty()
         val fill by animateColorAsState(if (focused) Tone.Raised else SearchFill, tween(200), label = "searchFill")
         Row(
-            Modifier.fillMaxWidth().height(48.dp).glossCard(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Control)).background(fill.copy(alpha = if (focused) 0.6f else 0f)).padding(horizontal = 16.dp),
+            Modifier.fillMaxWidth().height(46.dp).glossCard(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Control)).background(fill.copy(alpha = if (focused) 0.6f else 0f)).padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(Icons.Rounded.Search, null, tint = Placeholder, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(10.dp))
             Box(Modifier.weight(1f)) {
-                if (query.isEmpty()) Text("Search settings", style = TextStyle(fontFamily = Inter, fontSize = 15.sp), color = Placeholder)
+                if (query.isEmpty()) Text("Search settings", style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp), color = Placeholder)
                 BasicTextField(
                     query, { query = it },
                     singleLine = true,
-                    textStyle = TextStyle(fontFamily = Inter, fontSize = 15.sp, color = Tone.Ink),
+                    textStyle = TextStyle(fontFamily = Inter, fontSize = 14.5.sp, color = Tone.Ink),
                     cursorBrush = SolidColor(Salmon),
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -150,101 +185,50 @@ fun SettingsHome(settings: Settings, onOpen: (String) -> Unit, onOpenStats: () -
             val hits = categories.flatMap { c ->
                 (listOf(c.title.lowercase()) + c.keywords).filter { it.contains(q) }.map { c to it }
             }.distinctBy { it.second }
-            Text("Results", style = TextStyle(fontFamily = Inter, fontSize = 15.sp), color = Tone.Muted, modifier = Modifier.padding(top = 22.dp, bottom = 8.dp, start = 4.dp))
-            if (hits.isEmpty()) {
-                Text("Nothing matches “${query.trim()}”.", style = MaterialTheme.typography.bodyMedium, color = Tone.Muted, modifier = Modifier.padding(4.dp))
-            }
-            hits.forEach { (c, label) ->
-                Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card)).clickable { onOpen(c.id) }.padding(horizontal = 16.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Box(Modifier.size(38.dp).clip(CircleShape).background(IconTile), contentAlignment = Alignment.Center) {
-                        Icon(c.icon, null, tint = Tone.Ink, modifier = Modifier.size(19.dp))
-                    }
-                    Spacer(Modifier.width(11.dp))
-                    Column {
-                        Text(label.replaceFirstChar { it.uppercase() }, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 16.sp), color = Tone.Ink)
-                        Text("Settings › ${c.title}", style = TextStyle(fontFamily = Inter, fontSize = 12.sp), color = Tone.Muted)
-                    }
+            com.retrohero.app.ui.components.BentoPanel(
+                header = "SEARCH RESULTS",
+                badge = "${hits.size} MATCHES",
+            ) {
+                if (hits.isEmpty()) {
+                    Text("Nothing matches “${query.trim()}”.", style = MaterialTheme.typography.bodyMedium, color = Tone.Muted, modifier = Modifier.padding(8.dp))
+                }
+                hits.forEach { (c, label) ->
+                    com.retrohero.app.ui.components.BentoItemRow(
+                        title = label.replaceFirstChar { it.uppercase() },
+                        subtitle = "Settings › ${c.title}",
+                        onClick = { onOpen(c.id) },
+                        leading = {
+                            Icon(c.icon, null, tint = Tone.Ink, modifier = Modifier.size(19.dp))
+                        },
+                    )
                 }
             }
             return@Column
         }
 
-        Spacer(Modifier.height(14.dp))
-        // Your stats card.
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .glossCard(RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card))
-                .clickable(onClick = onOpenStats)
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(Modifier.size(38.dp).clip(CircleShape).background(Salmon), contentAlignment = Alignment.Center) {
-                Icon(Icons.Rounded.Insights, null, tint = com.retrohero.app.ui.components.Ascend.onAccent, modifier = Modifier.size(19.dp))
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text("Your stats & recap", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 16.sp), color = Tone.Ink)
-                Text("Play time, favourite systems, your month", style = MaterialTheme.typography.bodySmall, color = Tone.Muted)
-            }
-            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Tone.Muted)
-        }
-
         val groups = listOf(
-            "Library & Files" to categories.filter { it.id in setOf("library", "bios", "backup") },
-            "Gameplay & Controls" to categories.filter { it.id in setOf("gameplay", "controls", "looks") },
-            "System" to categories.filter { it.id == "about" },
+            "LIBRARY & FILES" to categories.filter { it.id in setOf("library", "bios", "backup") },
+            "GAMEPLAY & CONTROLS" to categories.filter { it.id in setOf("gameplay", "controls", "looks") },
+            "SYSTEM & LICENSES" to categories.filter { it.id == "about" },
         )
-        val groupShape = RoundedCornerShape(com.retrohero.app.ui.components.Ascend.Radius.Card)
         groups.forEach { (groupTitle, items) ->
-            Spacer(Modifier.height(16.dp))
-            ArchiveLabel(groupTitle, Modifier.padding(start = 4.dp, bottom = 6.dp), color = Tone.Muted)
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(groupShape)
-                    .background(Tone.Surface)
-                    .border(1.dp, Tone.Line, groupShape),
+            com.retrohero.app.ui.components.BentoPanel(
+                header = groupTitle,
+                badge = "0${items.size}",
             ) {
-                items.forEachIndexed { index, c ->
-                    CategoryBubble(index + 1, c.title, c.subtitle, c.icon) { onOpen(c.id) }
-                    if (index < items.lastIndex) {
-                        androidx.compose.material3.HorizontalDivider(color = com.retrohero.app.ui.components.Page.Divider)
-                    }
+                items.forEachIndexed { idx, c ->
+                    com.retrohero.app.ui.components.BentoItemRow(
+                        title = c.title,
+                        subtitle = c.subtitle,
+                        rightText = "0${idx + 1}",
+                        onClick = { onOpen(c.id) },
+                        leading = {
+                            Icon(c.icon, null, tint = Tone.Ink, modifier = Modifier.size(19.dp))
+                        },
+                    )
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun CategoryBubble(index: Int, title: String, subtitle: String, icon: ImageVector, onClick: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            Modifier
-                .size(36.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(Tone.Raised)
-                .border(1.dp, Tone.Line, RoundedCornerShape(10.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(icon, null, tint = Tone.Ink, modifier = Modifier.size(18.dp))
-        }
-        Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f)) {
-            Text(title, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.5.sp), color = Tone.Ink)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Tone.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-        Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Tone.Muted)
     }
 }
 

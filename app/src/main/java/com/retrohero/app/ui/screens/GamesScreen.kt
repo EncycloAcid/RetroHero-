@@ -175,58 +175,79 @@ fun GamesScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
-        fullWidth { PageHeader(title, if (games.size == 1) "1 game" else "${games.size} games across ${systemsPresent.size} ${if (systemsPresent.size == 1) "system" else "systems"}", index = pageIndex) }
+        fullWidth { PageHeader(title, if (games.size == 1) "1 game" else "${games.size} games · ${systemsPresent.size} ${if (systemsPresent.size == 1) "system" else "systems"}", index = pageIndex) }
         fullWidth {
-            Column(Modifier.animateContentSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Box(Modifier.weight(1f)) { SearchField(query, games.size) { query = it } }
-                    val filtersActive = systemFilter != null || onlyFavourites || onlyUnplayed
-                    Box {
-                        com.retrohero.app.ui.components.Key("Sort", { filtersOpen = !filtersOpen })
-                        if (filtersActive) {
-                            Box(
-                                Modifier
-                                    .align(Alignment.TopEnd)
-                                    .padding(top = 9.dp, end = 9.dp)
-                                    .size(6.dp)
-                                    .background(com.retrohero.app.ui.components.Ascend.accent, CircleShape),
-                            )
-                        }
-                    }
-                }
-                if (showSystemFilter && systemsPresent.size > 1) {
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        item { PillChip("All", systemFilter == null, { systemFilter = null }, selectedStyle = true) }
-                        items(systemsPresent, key = { it.id }) { system ->
-                            PillChip(
-                                system.shortName,
-                                systemFilter == system.id,
-                                { systemFilter = if (systemFilter == system.id) null else system.id },
-                                color = system.color,
-                                selectedStyle = true,
-                            )
-                        }
-                    }
-                }
-                if (filtersOpen) {
-                    Segmented(
-                        options = com.retrohero.app.data.GameSort.entries.map {
-                            when (it) {
-                                com.retrohero.app.data.GameSort.Recent -> "Recent"
-                                com.retrohero.app.data.GameSort.Name -> "A–Z"
-                                com.retrohero.app.data.GameSort.MostPlayed -> "Most played"
-                                com.retrohero.app.data.GameSort.System -> "System"
+            val sortBadge = when (sort) {
+                com.retrohero.app.data.GameSort.Name -> "A–Z"
+                com.retrohero.app.data.GameSort.Recent -> "RECENT"
+                com.retrohero.app.data.GameSort.MostPlayed -> "PLAYED"
+                com.retrohero.app.data.GameSort.System -> "SYSTEM"
+            }
+            com.retrohero.app.ui.components.BentoTelemetryStrip(
+                metrics = listOf(
+                    com.retrohero.app.ui.components.BentoMetric(filtered.size.toString(), "RESULTS", Icons.Default.Search),
+                    com.retrohero.app.ui.components.BentoMetric(systemsPresent.size.toString(), "CONSOLES", Icons.Default.SwapVert),
+                    com.retrohero.app.ui.components.BentoMetric(favorites.size.toString(), "PINNED", Icons.Default.Check),
+                    com.retrohero.app.ui.components.BentoMetric(sortBadge, "ORDER", Icons.Default.SwapVert),
+                ),
+            )
+        }
+        fullWidth {
+            com.retrohero.app.ui.components.BentoPanel(
+                header = "SEARCH & CONSOLE FILTER",
+                badge = "${filtered.size}/${games.size}",
+            ) {
+                Column(Modifier.animateContentSize(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Box(Modifier.weight(1f)) { SearchField(query, games.size) { query = it } }
+                        val filtersActive = systemFilter != null || onlyFavourites || onlyUnplayed
+                        Box {
+                            com.retrohero.app.ui.components.Key("Filters", { filtersOpen = !filtersOpen }, icon = Icons.Default.SwapVert)
+                            if (filtersActive) {
+                                Box(
+                                    Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(top = 6.dp, end = 6.dp)
+                                        .size(6.dp)
+                                        .background(com.retrohero.app.ui.components.Ascend.accent, CircleShape),
+                                )
                             }
-                        },
-                        selected = com.retrohero.app.data.GameSort.entries.indexOf(sort).coerceAtLeast(0),
-                        onSelect = { index ->
-                            sort = com.retrohero.app.data.GameSort.entries[index]
-                            scope.launch { grid.scrollToItem(0) }
-                        },
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        PillChip("Favourites", onlyFavourites, { onlyFavourites = !onlyFavourites }, selectedStyle = true)
-                        PillChip("Not played yet", onlyUnplayed, { onlyUnplayed = !onlyUnplayed }, selectedStyle = true)
+                        }
+                    }
+                    if (showSystemFilter && systemsPresent.size > 1) {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            item { PillChip("All", systemFilter == null, { systemFilter = null }, selectedStyle = true) }
+                            items(systemsPresent, key = { it.id }) { system ->
+                                PillChip(
+                                    system.shortName,
+                                    systemFilter == system.id,
+                                    { systemFilter = if (systemFilter == system.id) null else system.id },
+                                    color = system.color,
+                                    selectedStyle = true,
+                                )
+                            }
+                        }
+                    }
+                    if (filtersOpen) {
+                        Segmented(
+                            options = com.retrohero.app.data.GameSort.entries.map {
+                                when (it) {
+                                    com.retrohero.app.data.GameSort.Recent -> "Recent"
+                                    com.retrohero.app.data.GameSort.Name -> "A–Z"
+                                    com.retrohero.app.data.GameSort.MostPlayed -> "Most played"
+                                    com.retrohero.app.data.GameSort.System -> "System"
+                                }
+                            },
+                            selected = com.retrohero.app.data.GameSort.entries.indexOf(sort).coerceAtLeast(0),
+                            onSelect = { index ->
+                                sort = com.retrohero.app.data.GameSort.entries[index]
+                                scope.launch { grid.scrollToItem(0) }
+                            },
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            PillChip("Favourites", onlyFavourites, { onlyFavourites = !onlyFavourites }, selectedStyle = true)
+                            PillChip("Not played yet", onlyUnplayed, { onlyUnplayed = !onlyUnplayed }, selectedStyle = true)
+                        }
                     }
                 }
             }
@@ -234,25 +255,21 @@ fun GamesScreen(
 
         if (browsing && recents.isNotEmpty()) {
             fullWidth {
-                com.retrohero.app.ui.components.SectionTitle(
-                    "Jump back in",
-                    Modifier.padding(top = 8.dp),
-                    count = recents.size,
-                    index = 1,
-                    verticalPadding = 0.dp,
-                )
-            }
-            fullWidth {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    items(recents, key = { "rec_" + it.id }) { game ->
-                        GameCard(
-                            game = game,
-                            onClick = { onPlay(game) },
-                            width = 116.dp,
-                            subtitle = game.system?.shortName,
-                            onLongClick = { onGameOptions(game) },
-                            onPlay = onQuickPlay?.let { { it(game) } },
-                        )
+                com.retrohero.app.ui.components.BentoPanel(
+                    header = "JUMP BACK IN",
+                    badge = "${recents.size} RECENT",
+                ) {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        items(recents, key = { "rec_" + it.id }) { game ->
+                            GameCard(
+                                game = game,
+                                onClick = { onPlay(game) },
+                                width = 114.dp,
+                                subtitle = game.system?.shortName,
+                                onLongClick = { onGameOptions(game) },
+                                onPlay = onQuickPlay?.let { { it(game) } },
+                            )
+                        }
                     }
                 }
             }
@@ -260,7 +277,7 @@ fun GamesScreen(
         fullWidth {
             com.retrohero.app.ui.components.SectionTitle(
                 if (browsing) "All games" else "Results",
-                Modifier.padding(top = 8.dp),
+                Modifier.padding(top = 4.dp),
                 count = filtered.size,
                 index = 2,
                 verticalPadding = 0.dp,
