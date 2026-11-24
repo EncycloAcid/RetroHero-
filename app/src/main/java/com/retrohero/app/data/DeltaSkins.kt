@@ -4,6 +4,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.InputStream
+import java.security.MessageDigest
 import java.util.zip.ZipInputStream
 
 /** A rectangle in Delta skin mapping-point coordinates. */
@@ -464,16 +465,33 @@ object DeltaSkins {
                 throw IllegalArgumentException("Skin asset “${previewAsset ?: "?"}” is missing from the archive")
             }
 
-            val folderName = sanitizeFolderName(parsed.identifier)
+            val folderName = "${sanitizeFolderName(parsed.identifier).take(64)}-${sha1Prefix(parsed.identifier)}"
             val target = File(rootDir, folderName)
-            if (target.exists()) target.deleteRecursively()
-            if (contentRoot == tmp) {
-                if (!tmp.renameTo(target)) {
-                    tmp.copyRecursively(target, overwrite = true)
-                    tmp.deleteRecursively()
+            val rootCanonical = rootDir.canonicalFile
+            require(target.canonicalFile.parentFile == rootCanonical) {
+                "Invalid skin import directory"
+            }
+            val tmpCanonical = tmp.canonicalFile
+            val existingDir = list(rootDir)
+                .firstOrNull { it.identifier == parsed.identifier && it.dir.canonicalFile != tmpCanonical }
+                ?.dir
+            if (existingDir != null) {
+                require(existingDir.canonicalFile.parentFile == rootCanonical) {
+                    "Existing skin directory is outside the skin folder"
                 }
+                existingDir.deleteRecursively()
+            }
+            if (target.exists()) {
+                throw IllegalArgumentException("Skin import directory already exists")
+            }
+            require(target.canonicalFile.parentFile == rootCanonical) {
+                "Invalid skin import directory"
+            }
+            if (contentRoot == tmp) {
+                tmp.copyRecursively(target, overwrite = false)
+                tmp.deleteRecursively()
             } else {
-                contentRoot.copyRecursively(target, overwrite = true)
+                contentRoot.copyRecursively(target, overwrite = false)
                 tmp.deleteRecursively()
             }
             return parsed.copy(dir = target)
@@ -530,5 +548,11 @@ object DeltaSkins {
     }
 
     private fun sanitizeFolderName(identifier: String): String =
-        Regex("[^a-zA-Z0-9._-]+").replace(identifier, "_").trim('_').ifEmpty { "skin" }.take(80)
+        Regex("[^a-zA-Z0-9._-]+").replace(identifier, "_").trim('_').ifEmpty { "skin" }
+
+    private fun sha1Prefix(identifier: String): String =
+        MessageDigest.getInstance("SHA-1")
+            .digest(identifier.toByteArray(Charsets.UTF_8))
+            .take(4)
+            .joinToString("") { "%02x".format(it.toInt() and 0xff) }
 }

@@ -157,6 +157,37 @@ class DeltaSkinsTest {
     }
 
     @Test
+    fun importsDotDotIdentifierInsideSkinRootWithoutDeletingSiblingFiles() {
+        val storeDir = tmp.newFolder("delta_skins_dotdot")
+        val outside = File(tmp.root, "unrelated-save.state").apply { writeText("keep") }
+        val info = sampleGbaInfo.replace("com.example.gba.instrument", "..")
+        val archive = buildZip(
+            "info.json" to info.toByteArray(),
+            "portrait.pdf" to "%PDF-1.4".toByteArray(),
+        )
+
+        val imported = DeltaSkins.import(storeDir, ByteArrayInputStream(archive))
+
+        assertEquals(storeDir.canonicalFile, imported.dir.canonicalFile.parentFile)
+        assertEquals("keep", outside.readText())
+    }
+
+    @Test
+    fun sanitizedIdentifierCollisionsGetDistinctSkinDirectories() {
+        val storeDir = tmp.newFolder("delta_skins_collisions")
+        fun archive(identifier: String) = buildZip(
+            "info.json" to sampleGbaInfo.replace("com.example.gba.instrument", identifier).toByteArray(),
+            "portrait.pdf" to "%PDF-1.4".toByteArray(),
+        )
+
+        val first = DeltaSkins.import(storeDir, ByteArrayInputStream(archive("com.example/a")))
+        val second = DeltaSkins.import(storeDir, ByteArrayInputStream(archive("com.example?a")))
+
+        assertTrue(first.dir != second.dir)
+        assertEquals(2, DeltaSkins.list(storeDir).size)
+    }
+
+    @Test
     fun gbcSkinMatchesBothGbAndGbc() {
         assertEquals(listOf("gbc", "gb"), DeltaSkins.systemIdsFor("com.rileytestut.delta.game.gbc"))
         assertEquals(listOf("gba"), DeltaSkins.systemIdsFor("com.rileytestut.Delta.game.gba"))
