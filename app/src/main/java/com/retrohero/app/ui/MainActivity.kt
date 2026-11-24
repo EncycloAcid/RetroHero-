@@ -10,37 +10,30 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -49,14 +42,18 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.retrohero.app.R
 import com.retrohero.app.data.CoreManager.CoreState
 import com.retrohero.app.data.DeltaSkins
-import com.retrohero.app.data.Game
+import com.retrohero.app.ui.components.LocalArtPaths
+import com.retrohero.app.ui.components.LocalArtVersion
+import com.retrohero.app.ui.theme.ElectricLimeColor
 import com.retrohero.app.ui.theme.RetroHeroTheme
 import com.retrohero.app.ui.theme.Tone
+import com.retrohero.app.ui.theme.setAccent
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -67,6 +64,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        setAccent(ElectricLimeColor)
         Tone.setDarkMode(vm.settings.darkMode)
         lifecycleScope.launch(Dispatchers.IO) {
             DeltaSkins.installBundledDefaults(this@MainActivity, vm.paths.deltaSkins, vm.settings)
@@ -82,7 +80,13 @@ class MainActivity : ComponentActivity() {
                         isAppearanceLightNavigationBars = lightBars
                     }
                 }
-                RomLauncherScreen(vm)
+                val artVersion by vm.artVersion.collectAsStateWithLifecycle()
+                CompositionLocalProvider(
+                    LocalArtPaths provides vm.paths,
+                    LocalArtVersion provides artVersion,
+                ) {
+                    LibraryHost(vm)
+                }
             }
         }
     }
@@ -109,15 +113,52 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-internal fun RomLauncherScreen(vm: AppViewModel) {
+private fun LibraryHost(vm: AppViewModel) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val games by vm.games.collectAsStateWithLifecycle()
+    val recents by vm.recents.collectAsStateWithLifecycle()
+    val favoriteIds by vm.favoriteIds.collectAsStateWithLifecycle()
+    val stats by vm.stats.collectAsStateWithLifecycle()
+    val folders by vm.folders.collectAsStateWithLifecycle()
     val scanning by vm.scanning.collectAsStateWithLifecycle()
     val launchState by vm.launchState.collectAsStateWithLifecycle()
     val coreStates by vm.coreStates.collectAsStateWithLifecycle()
+    val download by vm.download.collectAsStateWithLifecycle()
+
+    var inspectingGameId by rememberSaveable { mutableStateOf<String?>(null) }
+    var homebrewOpen by rememberSaveable { mutableStateOf(false) }
+
+    LifecycleResumeEffect(Unit) {
+        vm.refreshStats()
+        onPauseOrDispose { }
+    }
+    LaunchedEffect(games.size) { vm.refreshStats() }
 
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) vm.addFolder(uri)
+    }
+    val biosPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isNotEmpty()) vm.importBios(uris)
+    }
+    val skinPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isNotEmpty()) scope.launch {
+            var count = 0
+            withContext(Dispatchers.IO) {
+                for (uri in uris) {
+                    runCatching {
+                        context.contentResolver.openInputStream(uri)!!.use { stream ->
+                            DeltaSkins.import(vm.paths.deltaSkins, stream)
+                        }
+                    }.onSuccess { skin ->
+                        skin.systemIds.forEach { vm.settings.setDeltaSkinFor(it, skin.identifier) }
+                        count++
+                    }
+                }
+            }
+            val msg = if (count > 0) "Imported $count controller skin${if (count == 1) "" else "s"}" else "Couldn't import .deltaskin"
+            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+        }
     }
 
     LaunchedEffect(Unit) {
@@ -127,89 +168,111 @@ internal fun RomLauncherScreen(vm: AppViewModel) {
         }
     }
 
-    RomListContent(
+    GameLibraryView(
         games = games,
+        recents = recents,
+        favoriteIds = favoriteIds,
+        stats = stats,
         scanning = scanning,
+        hasFolders = folders.isNotEmpty(),
         onAddFolder = { folderPicker.launch(null) },
+        onRescan = vm::rescan,
+        onOpenHomebrew = { homebrewOpen = true },
+        onOpenDownload = { vm.openDownload(AppViewModel.DownloadKind.Game) },
+        onImportBios = { biosPicker.launch(arrayOf("*/*")) },
+        onImportSkin = { skinPicker.launch(arrayOf("*/*")) },
         onPlay = vm::play,
+        onToggleFavorite = { vm.toggleFavorite(it) },
+        onInspectGame = { inspectingGameId = it.id },
     )
 
+    val inspected = inspectingGameId?.let { id -> games.firstOrNull { it.id == id } }
+    if (inspected != null) {
+        GameOptionsSheet(
+            game = inspected,
+            stat = stats[inspected.id],
+            saveSlots = remember(inspected.id, launchState) { vm.saveSlots(inspected) },
+            currentCore = inspected.system?.let { vm.settings.coreFor(it) },
+            onPlay = { slot -> vm.play(inspected, slot) },
+            onSelectCore = { core -> inspected.system?.let { vm.setCore(it, core) } },
+            onDelete = if (inspected.isLocal) ({ vm.deleteGame(inspected) }) else null,
+            onDismiss = { inspectingGameId = null },
+        )
+    }
+
+    if (homebrewOpen) {
+        HomebrewCatalogSheet(
+            installedNames = vm.installedHomebrew(games),
+            onInstall = vm::installHomebrew,
+            onDismiss = { homebrewOpen = false },
+        )
+    }
+
+    DownloadDialogs(download, vm)
     LaunchDialogs(launchState, coreStates, vm)
 }
 
 @Composable
-internal fun RomListContent(
-    games: List<Game>,
-    scanning: Boolean,
-    onAddFolder: () -> Unit,
-    onPlay: (Game) -> Unit,
-) {
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(Tone.Bg)
-            .windowInsetsPadding(WindowInsets.statusBars)
-            .windowInsetsPadding(WindowInsets.navigationBars),
-    ) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Text(
-                text = if (scanning) "Scanning…" else "${games.size} ROMs",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Tone.Muted,
-            )
-            OutlinedButton(onClick = onAddFolder) {
-                Text("Add folder")
-            }
-        }
-        HorizontalDivider(color = Tone.Line)
-
-        if (games.isEmpty()) {
-            Box(
-                Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = if (scanning) "Scanning folder…" else "No ROMs loaded",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = Tone.Muted,
-                )
-            }
-        } else {
-            LazyColumn(Modifier.fillMaxSize()) {
-                items(games, key = { it.id }) { game ->
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .height(52.dp)
-                            .clickable { onPlay(game) }
-                            .padding(horizontal = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(
-                            text = game.title,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = Tone.Ink,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f).padding(end = 12.dp),
+private fun DownloadDialogs(state: AppViewModel.DownloadState?, vm: AppViewModel) {
+    when (state) {
+        null -> Unit
+        is AppViewModel.DownloadState.Input -> {
+            var url by remember { mutableStateOf("") }
+            AlertDialog(
+                onDismissRequest = vm::cancelDownload,
+                title = { Text("Download ROM from link") },
+                text = {
+                    Column {
+                        OutlinedTextField(
+                            value = url,
+                            onValueChange = { url = it },
+                            placeholder = { Text("https://…") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
                         )
-                        Text(
-                            text = game.system?.shortName ?: game.systemId.uppercase(),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Tone.Muted,
-                        )
+                        if (state.error != null) {
+                            Text(state.error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
+                        }
                     }
-                    HorizontalDivider(color = Tone.Line)
-                }
+                },
+                confirmButton = { TextButton(onClick = { vm.startDownload(state.kind, url) }) { Text("Download") } },
+                dismissButton = { TextButton(onClick = vm::cancelDownload) { Text("Cancel") } },
+            )
+        }
+        is AppViewModel.DownloadState.Running -> BusyDialog(state.label ?: "Downloading…") {
+            val total = state.total
+            if (total != null && total > 0L) {
+                LinearProgressIndicator(progress = { (state.read.toFloat() / total.toFloat()).coerceIn(0f, 1f) }, modifier = Modifier.fillMaxWidth())
+            } else {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
         }
+        is AppViewModel.DownloadState.Folder -> AlertDialog(
+            onDismissRequest = vm::cancelDownload,
+            title = { Text("Download ${state.entries.size} files?") },
+            text = { Text(state.entries.take(6).joinToString("\n") { it.name }) },
+            confirmButton = { TextButton(onClick = { vm.downloadFolderEntries(state.entries) }) { Text("Download all") } },
+            dismissButton = { TextButton(onClick = vm::cancelDownload) { Text("Cancel") } },
+        )
+        is AppViewModel.DownloadState.Done -> AlertDialog(
+            onDismissRequest = vm::cancelDownload,
+            title = { Text(state.title) },
+            text = { Text(state.detail) },
+            confirmButton = {
+                if (state.game != null) {
+                    TextButton(onClick = { vm.playDownloaded(state.game) }) { Text("Play now") }
+                } else {
+                    TextButton(onClick = vm::cancelDownload) { Text("OK") }
+                }
+            },
+            dismissButton = if (state.game != null) ({ TextButton(onClick = vm::cancelDownload) { Text("Done") } }) else null,
+        )
+        is AppViewModel.DownloadState.Failed -> AlertDialog(
+            onDismissRequest = vm::cancelDownload,
+            title = { Text("Download failed") },
+            text = { Text(state.message) },
+            confirmButton = { TextButton(onClick = vm::cancelDownload) { Text("OK") } },
+        )
     }
 }
 
@@ -221,7 +284,7 @@ private fun LaunchDialogs(state: AppViewModel.LaunchState?, coreStates: Map<Stri
             onDismissRequest = vm::dismissLaunch,
             title = { Text("Download ${state.core.displayName}?") },
             text = {
-                Text("${state.game.system?.name ?: state.game.systemId} uses ${state.core.displayName}.")
+                Text("${state.game.system?.name ?: state.game.systemId} runs on ${state.core.displayName} (${state.core.license}).")
             },
             confirmButton = { TextButton(onClick = vm::confirmCoreDownload) { Text("Download & play") } },
             dismissButton = { TextButton(onClick = vm::dismissLaunch) { Text("Cancel") } },
