@@ -144,8 +144,8 @@ fun OnboardingScreen(
                     .padding(bottom = 20.dp)
                     .fillMaxWidth()
                     .height(54.dp)
-                    .clip(Ascend.CardShape)
-                    .background(Salmon)
+                    .clip(CircleShape)
+                    .background(Ascend.accent)
                     .clickable { if (page < pages - 1) page++ else onFinish() },
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,

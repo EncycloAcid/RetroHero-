@@ -90,63 +90,37 @@ fun PageHeader(
     index: Int = 1,
     trailing: @Composable () -> Unit = {},
 ) {
-    Column(modifier.windowInsetsPadding(WindowInsets.statusBars).fillMaxWidth().padding(top = 10.dp)) {
-        // Top telemetry breadcrumb bar (matches Game Record header)
-        Row(
-            Modifier.fillMaxWidth().padding(bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Box(
-                    Modifier
-                        .size(26.dp)
-                        .clip(RoundedCornerShape(7.dp))
-                        .background(Tone.Surface)
-                        .border(1.dp, Tone.Line, RoundedCornerShape(7.dp)),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    androidx.compose.foundation.Image(
-                        androidx.compose.ui.res.painterResource(com.retrohero.app.R.drawable.ic_logo_mark),
-                        null,
-                        Modifier.size(14.dp).launchMarkTarget(),
-                        colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Tone.Ink),
-                    )
-                }
-                ArchiveLabel("${index.toString().padStart(2, '0')} — ${title.uppercase()} RECORD")
-            }
+    // Handheld Console OS page header: small console-style eyebrow, bold title, trailing actions.
+    Row(
+        modifier.windowInsetsPadding(WindowInsets.statusBars).fillMaxWidth().padding(top = 16.dp, bottom = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             if (subtitle != null) {
-                Box(
-                    Modifier
-                        .background(Tone.Surface, RoundedCornerShape(7.dp))
-                        .border(1.dp, Tone.Line, RoundedCornerShape(7.dp))
-                        .padding(horizontal = 8.dp, vertical = 3.dp),
-                ) {
-                    ArchiveLabel(subtitle, color = Tone.Ink)
-                }
+                Text(
+                    subtitle,
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp, letterSpacing = 0.02.em),
+                    color = Tone.Muted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
-        }
-        Row(
-            Modifier.fillMaxWidth().padding(bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
             Text(
                 title,
                 style = TextStyle(
                     fontFamily = Inter,
                     fontWeight = FontWeight.Bold,
-                    fontSize = 26.sp,
+                    fontSize = 28.sp,
                     letterSpacing = (-0.03).em,
                 ),
                 color = Tone.Ink,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.launchMarkTarget(),
             )
-            trailing()
         }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(Page.Divider))
+        trailing()
     }
 }
 

@@ -1,5 +1,9 @@
 package com.retrohero.app.ui
 
+import androidx.compose.foundation.layout.statusBars
+
+import androidx.compose.foundation.layout.consumeWindowInsets
+
 import android.app.ActivityOptions
 import android.os.Bundle
 import androidx.compose.animation.AnimatedVisibility
@@ -66,7 +70,6 @@ import com.retrohero.app.ui.screens.RemapScreen
 import com.retrohero.app.ui.screens.rememberControllers
 import com.retrohero.app.data.GameCollection
 import androidx.lifecycle.compose.LifecycleResumeEffect
-import com.retrohero.app.ui.components.FloatingNavHeight
 import com.retrohero.app.ui.components.NavItem
 import com.retrohero.app.ui.screens.HomeScreen
 import com.retrohero.app.R
@@ -379,19 +382,25 @@ private fun App(vm: AppViewModel) {
     val miniGame = recents.firstOrNull()?.takeIf { !isHome && !miniHidden && !albumOpen && tab != Tab.Settings && !(tab == Tab.Library && shelfFlow) && sheetFor == null && !statsOpen && recap == null }
     val navBarInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     val glass = rememberHazeState()
-    val floatingNavSpace = (if (wide || albumOpen) 0.dp else FloatingNavHeight + 1.dp + navBarInset) +
-        (if (miniGame != null && !wide) MiniPlayerSpace else 0.dp)
+    // Handheld Console OS layout: the section bar lives at the top, nothing is docked at the bottom.
+    val floatingNavSpace = (if (albumOpen) 0.dp else navBarInset) +
+        (if (miniGame != null) MiniPlayerSpace else 0.dp)
 
     Box(Modifier.fillMaxSize().emberBackground()) {
-    Row(Modifier.fillMaxSize()) {
-        if (wide && !albumOpen) {
-            com.retrohero.app.ui.components.InstrumentNavRail(
+    Column(Modifier.fillMaxSize()) {
+        if (!albumOpen) {
+            FloatingNavBar(
                 items = navigationItems,
                 selected = tab.ordinal,
                 onSelect = { tab = Tab.entries[it] },
             )
         }
-    Box(Modifier.weight(1f).fillMaxHeight()) {
+    Box(
+        Modifier
+            .weight(1f)
+            .fillMaxWidth()
+            .then(if (!albumOpen) Modifier.consumeWindowInsets(WindowInsets.statusBars) else Modifier),
+    ) {
     Scaffold(
         containerColor = Color.Transparent,
         contentColor = MaterialTheme.colorScheme.onBackground,
@@ -467,7 +476,7 @@ private fun App(vm: AppViewModel) {
                             Box(
                                 androidx.compose.ui.Modifier
                                     .size(40.dp)
-                                    .clip(RoundedCornerShape(12.dp))
+                                    .clip(androidx.compose.foundation.shape.CircleShape)
                                     .background(com.retrohero.app.ui.components.Ascend.accent)
                                     .clickable { addMenu = true },
                                 contentAlignment = Alignment.Center,
@@ -603,7 +612,7 @@ private fun App(vm: AppViewModel) {
         }
       }
     }
-        if (miniGame != null && !wide) {
+        if (miniGame != null) {
             MiniPlayer(
                 game = miniGame,
                 stat = stats[miniGame.id],
@@ -611,15 +620,7 @@ private fun App(vm: AppViewModel) {
                 onOpen = { sheetFor = miniGame.id },
                 onPlay = { vm.play(miniGame) },
                 onHide = { miniHidden = true },
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = navBarInset + FloatingNavHeight + 11.dp),
-            )
-        }
-        if (!wide && !albumOpen) {
-            FloatingNavBar(
-                items = navigationItems,
-                selected = tab.ordinal,
-                onSelect = { tab = Tab.entries[it] },
-                modifier = Modifier.align(Alignment.BottomCenter),
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = navBarInset + 10.dp),
             )
         }
     }
