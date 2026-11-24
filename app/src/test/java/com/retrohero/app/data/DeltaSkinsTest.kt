@@ -188,6 +188,18 @@ class DeltaSkinsTest {
     }
 
     @Test
+    fun skippedZipEntriesStillCountTowardEntryLimit() {
+        val entries = List(257) { index ->
+            "__MACOSX/file-$index" to byteArrayOf(index.toByte())
+        }
+        val error = runCatching {
+            DeltaSkins.import(tmp.newFolder("delta_skin_many_skipped"), ByteArrayInputStream(buildZip(*entries.toTypedArray())))
+        }.exceptionOrNull()
+
+        assertEquals("Skin archive has too many entries", error?.message)
+    }
+
+    @Test
     fun gbcSkinMatchesBothGbAndGbc() {
         assertEquals(listOf("gbc", "gb"), DeltaSkins.systemIdsFor("com.rileytestut.delta.game.gbc"))
         assertEquals(listOf("gba"), DeltaSkins.systemIdsFor("com.rileytestut.Delta.game.gba"))

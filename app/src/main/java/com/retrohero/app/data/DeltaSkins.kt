@@ -510,29 +510,30 @@ object DeltaSkins {
             while (true) {
                 val entry = zis.nextEntry ?: break
                 val name = entry.name
-                if (name.startsWith("__MACOSX/") || name.endsWith("/.DS_Store") || name == ".DS_Store") {
-                    zis.closeEntry()
-                    continue
-                }
-                if (++entries > MAX_ENTRIES) throw IllegalArgumentException("Skin archive has too many files")
-                val out = File(destDir, name)
-                val outCanonical = out.canonicalPath
-                if (!outCanonical.startsWith(destCanonical)) {
-                    throw IllegalArgumentException("Invalid path in skin archive")
-                }
-                if (entry.isDirectory) {
-                    out.mkdirs()
-                } else {
-                    out.parentFile?.mkdirs()
-                    out.outputStream().use { fos ->
-                        while (true) {
-                            val n = zis.read(buf)
-                            if (n <= 0) break
-                            totalBytes += n
-                            if (totalBytes > MAX_BYTES) throw IllegalArgumentException("Skin archive is too large")
-                            fos.write(buf, 0, n)
-                        }
+                if (++entries > MAX_ENTRIES) throw IllegalArgumentException("Skin archive has too many entries")
+                val skipped = name == "__MACOSX" ||
+                    name.startsWith("__MACOSX/") ||
+                    name.endsWith("/.DS_Store") ||
+                    name == ".DS_Store"
+                val out = if (skipped) null else File(destDir, name)
+                if (out != null) {
+                    if (!out.canonicalPath.startsWith(destCanonical)) {
+                        throw IllegalArgumentException("Invalid path in skin archive")
                     }
+                    if (entry.isDirectory) out.mkdirs() else out.parentFile?.mkdirs()
+                }
+                val fos = if (out != null && !entry.isDirectory) out.outputStream() else null
+                try {
+                    while (true) {
+                        val n = zis.read(buf)
+                        if (n < 0) break
+                        if (n == 0) continue
+                        totalBytes += n
+                        if (totalBytes > MAX_BYTES) throw IllegalArgumentException("Skin archive is too large")
+                        fos?.write(buf, 0, n)
+                    }
+                } finally {
+                    fos?.close()
                 }
                 zis.closeEntry()
             }
