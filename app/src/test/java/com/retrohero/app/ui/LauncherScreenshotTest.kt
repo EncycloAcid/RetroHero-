@@ -16,6 +16,8 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import com.retrohero.app.data.Game
 import com.retrohero.app.data.PlayStat
+import com.retrohero.app.ui.components.InteractiveGameCaseModal
+import com.retrohero.app.ui.components.ShelfBucket
 import com.retrohero.app.ui.theme.EmberOrangeColor
 import com.retrohero.app.ui.theme.RetroHeroTheme
 import com.retrohero.app.ui.theme.Tone
@@ -143,4 +145,36 @@ class LauncherScreenshotTest {
         compose.onNodeWithText("Gameplay & Comfort").assertIsDisplayed()
         save("page4_system")
     }
+
+    private fun renderCase(game: Game, open: Boolean, name: String) {
+        compose.setContent {
+            RetroHeroTheme {
+                InteractiveGameCaseModal(
+                    game = game,
+                    stat = PlayStat(seconds = 5_400, sessions = 4, lastPlayed = 2000L),
+                    isFavorite = false,
+                    shelfBucket = ShelfBucket.Playing,
+                    saveSlots = emptyList(),
+                    currentCore = null,
+                    autoOpenOnMount = open,
+                    onSetShelfBucket = {},
+                    onToggleFavorite = {},
+                    onPlay = {},
+                    onSelectCore = {},
+                    onDelete = null,
+                    onClose = {},
+                )
+            }
+        }
+        compose.mainClock.advanceTimeBy(900)
+        save(name)
+    }
+
+    @Test fun realCasePs1Closed() = renderCase(sampleGames()[0], open = false, name = "real_case_ps1_closed")
+    @Test fun realCasePs1Open() = renderCase(sampleGames()[0], open = true, name = "real_case_ps1_open")
+    @Test fun realCaseSnesClosed() = renderCase(sampleGames()[3], open = false, name = "real_case_snes_closed")
+    @Test fun realCaseSnesOpen() = renderCase(sampleGames()[3], open = true, name = "real_case_snes_open")
+    @Test fun realCaseGcOpen() = renderCase(sampleGames()[2], open = true, name = "real_case_gc_open")
+    @Test fun realCaseGbaOpen() = renderCase(sampleGames()[1], open = true, name = "real_case_gba_open")
+    @Test fun realCaseGenesisOpen() = renderCase(sampleGames()[8], open = true, name = "real_case_genesis_open")
 }
