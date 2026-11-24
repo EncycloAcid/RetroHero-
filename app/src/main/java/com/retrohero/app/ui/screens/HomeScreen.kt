@@ -418,7 +418,7 @@ fun HomeScreen(
                                 game = game,
                                 focused = page == pager.currentPage,
                                 resume = game.id == recents.firstOrNull()?.id,
-                                progress = computeGameProgress(stats[game.id], game.id == recents.firstOrNull()?.id),
+                                progress = computeGameProgress(stats[game.id]),
                                 onClick = { onOpen(game) },
                                 onLongClick = { onOptions(game) },
                                 pager = pager,
@@ -1089,11 +1089,11 @@ internal fun systemReleaseYear(systemId: String): String = when (systemId) {
     else -> "Retro"
 }
 
-internal fun computeGameProgress(stat: PlayStat?, isRecent: Boolean): Float? {
+internal fun computeGameProgress(stat: PlayStat?): Float? {
     if (stat != null && stat.seconds > 0) {
         return (0.18f + (stat.seconds.toFloat() / 7200f) * 0.78f).coerceIn(0.18f, 0.96f)
     }
-    return if (isRecent) 0.42f else 0.14f
+    return null
 }
 
 @Composable
