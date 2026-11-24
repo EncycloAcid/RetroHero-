@@ -312,7 +312,7 @@ private fun App(vm: AppViewModel) {
     val deltaSkinPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) lookScope.launch {
             val imported = mutableListOf<com.retrohero.app.data.DeltaSkin>()
-            var lastError: String? = null
+            val failures = mutableListOf<String>()
             withContext(Dispatchers.IO) {
                 for (uri in uris) {
                     runCatching {
@@ -320,17 +320,25 @@ private fun App(vm: AppViewModel) {
                             com.retrohero.app.data.DeltaSkins.import(vm.paths.deltaSkins, stream)
                         }
                     }.onSuccess { imported += it }
-                        .onFailure { lastError = it.message }
+                        .onFailure {
+                            failures += it.message?.takeIf(String::isNotBlank) ?: "Couldn't import .deltaskin file."
+                        }
                 }
             }
             if (imported.isNotEmpty()) {
                 imported.forEach { skin -> skin.systemIds.forEach { vm.settings.setDeltaSkinFor(it, skin.identifier) } }
                 deltaSkinVersion++
-                val msg = if (imported.size == 1) "Added Delta skin “${imported[0].name}”"
-                else "Added ${imported.size} Delta skins"
+                val msg = when {
+                    failures.isNotEmpty() -> {
+                        val label = if (imported.size == 1) "skin" else "skins"
+                        "Added ${imported.size} $label · ${failures.size} skipped: ${failures.first()}"
+                    }
+                    imported.size == 1 -> "Added Delta skin “${imported[0].name}”"
+                    else -> "Added ${imported.size} Delta skins"
+                }
                 Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
             } else {
-                Toast.makeText(context, lastError ?: "Couldn't import .deltaskin file.", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, failures.firstOrNull() ?: "Couldn't import .deltaskin file.", Toast.LENGTH_LONG).show()
             }
         }
     }
