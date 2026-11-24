@@ -118,8 +118,8 @@ fun MiniPlayer(
             game,
             Modifier
                 .size(44.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(12.dp)),
+                .clip(RoundedCornerShape(8.dp))
+                .border(1.dp, Tone.Line, RoundedCornerShape(8.dp)),
             showTag = false,
         )
         Spacer(Modifier.width(12.dp))
@@ -157,18 +157,17 @@ fun MiniPlayer(
         Spacer(Modifier.width(8.dp))
         Box(
             Modifier
-                .size(40.dp)
+                .size(38.dp)
                 .clip(CircleShape)
-                .background(Brush.linearGradient(listOf(Ascend.accent, Color(0xFF7B68FF))))
-                .border(1.dp, Color.White.copy(alpha = 0.28f), CircleShape)
+                .background(Ascend.accent)
                 .clickable(onClick = onPlay),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 Icons.Rounded.PlayArrow,
                 "Resume ${game.title}",
-                tint = Color.White,
-                modifier = Modifier.size(22.dp),
+                tint = Ascend.onAccent,
+                modifier = Modifier.size(21.dp),
             )
         }
     }
