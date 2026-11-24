@@ -1,6 +1,7 @@
 package com.retrohero.app.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -18,7 +19,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,7 +27,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -65,13 +64,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -82,21 +82,24 @@ import com.retrohero.app.data.GameSort
 import com.retrohero.app.data.PlayStat
 import com.retrohero.app.data.PlayTime
 import com.retrohero.app.data.Systems
-import com.retrohero.app.ui.components.ArchiveLabel
 import com.retrohero.app.ui.components.Ascend
 import com.retrohero.app.ui.components.EmptyState
 import com.retrohero.app.ui.components.GameArt
 import com.retrohero.app.ui.components.GameCard
+import com.retrohero.app.ui.components.GlassOrb
 import com.retrohero.app.ui.components.LocalNavSpace
 import com.retrohero.app.ui.components.PillChip
+import com.retrohero.app.ui.components.auroraBackdrop
+import com.retrohero.app.ui.components.glassPanel
 import com.retrohero.app.ui.theme.Inter
 import com.retrohero.app.ui.theme.Tone
 import kotlinx.coroutines.launch
 
 /**
- * Command Search & Switchable List/Grid Catalogue:
- * Top command search bar with 1-tap List/Grid switcher, Filters drawer, color-coded console pills,
- * detailed cartridge list rows (or 2-column cover grid), and an A–Z side scrubber.
+ * Midnight Glass & Console Aurora Search screen:
+ * Floating glass Spotlight bar, dynamic console-tinted aurora backdrop,
+ * 2-column cinematic full-bleed poster wall (toggleable to frosted glass rows),
+ * translucent filter drawer, and an A–Z glass scrubber.
  */
 @Composable
 fun GamesScreen(
@@ -122,7 +125,7 @@ fun GamesScreen(
     var onlyFavourites by rememberSaveable { mutableStateOf(false) }
     var onlyUnplayed by rememberSaveable { mutableStateOf(false) }
     var filtersOpen by rememberSaveable { mutableStateOf(false) }
-    var gridMode by rememberSaveable { mutableStateOf(false) }
+    var gridMode by rememberSaveable { mutableStateOf(true) }
     val grid = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
     val scope = rememberCoroutineScope()
 
@@ -175,24 +178,28 @@ fun GamesScreen(
     val filtersActive = systemFilter != null || onlyFavourites || onlyUnplayed || sort != GameSort.Name
     val showScroller = sort == GameSort.Name && filtered.size > 12
 
-    Box(Modifier.fillMaxSize().background(Tone.Bg)) {
+    val selectedSysColor = systemsPresent.firstOrNull { it.id == systemFilter }?.color ?: Ascend.accent
+    val auraPrimary by animateColorAsState(selectedSysColor, tween(450), label = "searchAura")
+    val auraSecondary by animateColorAsState(lerp(selectedSysColor, Color(0xFF7B5CFF), 0.55f), tween(450), label = "searchAura2")
+
+    Box(Modifier.fillMaxSize().auroraBackdrop(auraPrimary, auraSecondary)) {
         LazyVerticalGrid(
             state = grid,
             columns = GridCells.Fixed(2),
             contentPadding = PaddingValues(start = 20.dp, end = if (showScroller) 30.dp else 20.dp, bottom = 28.dp + LocalNavSpace.current),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
-            // Compact Command Search Header + View Switcher
+            // Floating Glass Search Header + Spotlight Bar
             fullWidth {
                 Column(
                     Modifier
                         .fillMaxWidth()
                         .windowInsetsPadding(WindowInsets.statusBars)
-                        .padding(top = 12.dp)
+                        .padding(top = 14.dp)
                         .animateContentSize(),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Row(
                         Modifier.fillMaxWidth(),
@@ -202,72 +209,62 @@ fun GamesScreen(
                         Column {
                             Text(
                                 title,
-                                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Black, fontSize = 26.sp, letterSpacing = (-0.03).em),
+                                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 26.sp, letterSpacing = (-0.03).em),
                                 color = Tone.Ink,
                             )
-                            ArchiveLabel(
-                                "${filtered.size} OF ${games.size} TITLES · ${sort.label.uppercase()}",
+                            Text(
+                                "${filtered.size} of ${games.size} titles · ${sort.label}",
+                                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 12.5.sp),
                                 color = Tone.Muted,
                             )
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            // List / Grid Toggle Button
-                            val toggleShape = RoundedCornerShape(11.dp)
-                            Box(
+                            GlassOrb(
+                                icon = if (gridMode) Icons.Rounded.ViewAgenda else Icons.Rounded.GridView,
+                                contentDescription = if (gridMode) "Switch to list view" else "Switch to grid view",
+                                onClick = { gridMode = !gridMode },
+                                size = 38.dp,
+                            )
+                            val filterMod = if (filtersOpen || filtersActive) {
                                 Modifier
-                                    .size(40.dp)
-                                    .clip(toggleShape)
-                                    .background(Tone.Surface)
-                                    .border(1.dp, Tone.Line, toggleShape)
-                                    .clickable { gridMode = !gridMode },
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    if (gridMode) Icons.Rounded.ViewAgenda else Icons.Rounded.GridView,
-                                    if (gridMode) "Switch to list view" else "Switch to grid view",
-                                    tint = Tone.Ink,
-                                    modifier = Modifier.size(19.dp),
-                                )
+                                    .clip(CircleShape)
+                                    .background(Brush.horizontalGradient(listOf(Ascend.accent, Color(0xFF7B68FF))))
+                                    .border(1.dp, Color.White.copy(alpha = 0.30f), CircleShape)
+                            } else {
+                                Modifier.glassPanel(CircleShape, elevated = true)
                             }
-                            // Filters Toggle Button
-                            val filterShape = RoundedCornerShape(11.dp)
                             Row(
                                 Modifier
-                                    .height(40.dp)
-                                    .clip(filterShape)
-                                    .background(if (filtersOpen || filtersActive) Tone.Ink else Tone.Surface)
-                                    .border(1.dp, if (filtersOpen || filtersActive) Tone.Ink else Tone.Line, filterShape)
+                                    .height(38.dp)
+                                    .then(filterMod)
                                     .clickable { filtersOpen = !filtersOpen }
-                                    .padding(horizontal = 12.dp),
+                                    .padding(horizontal = 13.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
                                 Icon(
                                     Icons.Rounded.Tune,
                                     null,
-                                    tint = if (filtersOpen || filtersActive) Tone.Bg else Tone.Ink,
+                                    tint = if (filtersOpen || filtersActive) Color.White else Tone.Ink,
                                     modifier = Modifier.size(16.dp),
                                 )
                                 Text(
                                     "Filters",
                                     style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.sp),
-                                    color = if (filtersOpen || filtersActive) Tone.Bg else Tone.Ink,
+                                    color = if (filtersOpen || filtersActive) Color.White else Tone.Ink,
                                 )
-                                if (filtersActive) {
-                                    Box(Modifier.size(6.dp).clip(CircleShape).background(Ascend.accent))
-                                }
                             }
                         }
                     }
 
-                    // Command Search Input
-                    CommandSearchField(query, games.size) { query = it }
+                    // Translucent Frosted Glass Spotlight Input
+                    SpotlightGlassSearch(query, games.size) { query = it }
 
-                    // Color-Coded Console Hardware Filter Chips
+                    // Luminous Console Filter Pills
                     if (showSystemFilter && systemsPresent.size > 1) {
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             item {
-                                ConsoleDotChip(
+                                ConsoleAuroraPill(
                                     label = "All",
                                     count = games.size,
                                     dotColor = Ascend.accent,
@@ -276,7 +273,7 @@ fun GamesScreen(
                                 )
                             }
                             items(systemsPresent, key = { it.id }) { sys ->
-                                ConsoleDotChip(
+                                ConsoleAuroraPill(
                                     label = sys.shortName,
                                     count = null,
                                     dotColor = sys.color,
@@ -287,25 +284,30 @@ fun GamesScreen(
                         }
                     }
 
-                    // Expandable Sort & Filter Controls
+                    // Expandable Frosted Glass Filter Drawer
                     AnimatedVisibility(visible = filtersOpen) {
-                        val panelShape = RoundedCornerShape(14.dp)
                         Column(
                             Modifier
                                 .fillMaxWidth()
-                                .clip(panelShape)
-                                .background(Tone.Surface)
-                                .border(1.dp, Tone.Line, panelShape)
-                                .padding(12.dp),
+                                .glassPanel(RoundedCornerShape(20.dp), elevated = true)
+                                .padding(14.dp),
                             verticalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
-                            ArchiveLabel("SORT ORDER", color = Tone.Muted)
+                            Text(
+                                "Sort order",
+                                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 12.sp),
+                                color = Tone.Muted,
+                            )
                             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 items(GameSort.entries) { option ->
                                     PillChip(option.label, sort == option, { sort = option }, selectedStyle = true)
                                 }
                             }
-                            ArchiveLabel("QUICK FILTERS", color = Tone.Muted)
+                            Text(
+                                "Quick filters",
+                                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 12.sp),
+                                color = Tone.Muted,
+                            )
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 PillChip("Favourites", onlyFavourites, { onlyFavourites = !onlyFavourites }, selectedStyle = true)
                                 PillChip("Not played yet", onlyUnplayed, { onlyUnplayed = !onlyUnplayed }, selectedStyle = true)
@@ -317,21 +319,18 @@ fun GamesScreen(
 
             if (filtered.isEmpty()) {
                 fullWidth {
-                    val emptyShape = RoundedCornerShape(16.dp)
                     Column(
                         Modifier
                             .fillMaxWidth()
                             .padding(top = 12.dp)
-                            .clip(emptyShape)
-                            .background(Tone.Surface)
-                            .border(1.dp, Tone.Line, emptyShape)
+                            .glassPanel(RoundedCornerShape(22.dp), elevated = true)
                             .padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         Text(
                             "No matching games",
-                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 15.sp),
+                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 15.5.sp),
                             color = Tone.Ink,
                         )
                         Text(
@@ -342,23 +341,24 @@ fun GamesScreen(
                     }
                 }
             } else if (gridMode) {
+                // Default: 2-Column Cinematic Full-Bleed Poster Wall
                 items(filtered, key = { "grid_${it.id}" }) { game ->
                     GameCard(
                         game = game,
                         onClick = { onPlay(game) },
                         subtitle = game.system?.shortName,
                         onLongClick = { onGameOptions(game) },
-                        onPlay = onQuickPlay?.let { qp -> { qp(game) } },
+                        onPlay = onQuickPlay?.let { qp -> { qp(game) } } ?: { onPlay(game) },
                     )
                 }
             } else {
-                // Detailed Cartridge List Rows (default view — fast & scannable)
+                // Alternate: Frosted Glass List Strips
                 items(
                     items = filtered,
                     key = { "row_${it.id}" },
                     span = { GridItemSpan(maxLineSpan) },
                 ) { game ->
-                    CatalogueCartridgeRow(
+                    GlassCatalogueRow(
                         game = game,
                         isFavorite = game.id in favorites,
                         stat = stats[game.id],
@@ -381,15 +381,15 @@ fun GamesScreen(
 }
 
 @Composable
-private fun CommandSearchField(query: String, total: Int, onChange: (String) -> Unit) {
-    val shape = RoundedCornerShape(14.dp)
+private fun SpotlightGlassSearch(query: String, total: Int, onChange: (String) -> Unit) {
+    val shape = RoundedCornerShape(18.dp)
     TextField(
         value = query,
         onValueChange = onChange,
         placeholder = {
             Text(
                 "Search $total games or consoles…",
-                style = TextStyle(fontFamily = Inter, fontSize = 14.sp),
+                style = TextStyle(fontFamily = Inter, fontSize = 14.5.sp),
                 color = Tone.Muted,
             )
         },
@@ -406,56 +406,60 @@ private fun CommandSearchField(query: String, total: Int, onChange: (String) -> 
         colors = TextFieldDefaults.colors(
             focusedIndicatorColor = Color.Transparent,
             unfocusedIndicatorColor = Color.Transparent,
-            focusedContainerColor = Tone.Surface,
-            unfocusedContainerColor = Tone.Surface,
+            focusedContainerColor = Color.Transparent,
+            unfocusedContainerColor = Color.Transparent,
             focusedTextColor = Tone.Ink,
             unfocusedTextColor = Tone.Ink,
         ),
         modifier = Modifier
             .fillMaxWidth()
-            .clip(shape)
-            .border(1.dp, Tone.Line, shape),
+            .glassPanel(shape, elevated = true),
     )
 }
 
 @Composable
-private fun ConsoleDotChip(
+private fun ConsoleAuroraPill(
     label: String,
     count: Int?,
     dotColor: Color,
     selected: Boolean,
     onClick: () -> Unit,
 ) {
-    val shape = RoundedCornerShape(10.dp)
+    val mod = if (selected) {
+        Modifier
+            .clip(CircleShape)
+            .background(Brush.horizontalGradient(listOf(dotColor, lerp(dotColor, Color(0xFF7B68FF), 0.45f))))
+            .border(1.dp, Color.White.copy(alpha = 0.34f), CircleShape)
+    } else {
+        Modifier.glassPanel(CircleShape)
+    }
     Row(
         Modifier
             .height(34.dp)
-            .clip(shape)
-            .background(if (selected) Tone.Ink else Tone.Surface)
-            .border(1.dp, if (selected) Tone.Ink else Tone.Line, shape)
+            .then(mod)
             .clickable(onClick = onClick)
-            .padding(horizontal = 11.dp),
+            .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Box(Modifier.size(6.dp).clip(CircleShape).background(dotColor))
+        Box(Modifier.size(7.dp).clip(CircleShape).background(if (selected) Color.White else dotColor))
         Text(
             label,
             style = TextStyle(fontFamily = Inter, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, fontSize = 12.5.sp),
-            color = if (selected) Tone.Bg else Tone.Ink,
+            color = if (selected) Color.White else Tone.Ink,
         )
         if (count != null) {
             Text(
                 count.toString(),
-                style = TextStyle(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 10.sp),
-                color = if (selected) Tone.Bg.copy(alpha = 0.7f) else Tone.Muted,
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 11.sp),
+                color = if (selected) Color.White.copy(alpha = 0.80f) else Tone.Muted,
             )
         }
     }
 }
 
 @Composable
-private fun CatalogueCartridgeRow(
+private fun GlassCatalogueRow(
     game: Game,
     isFavorite: Boolean,
     stat: PlayStat?,
@@ -463,15 +467,12 @@ private fun CatalogueCartridgeRow(
     onQuickPlay: () -> Unit,
     onLongClick: () -> Unit,
 ) {
-    val shape = RoundedCornerShape(14.dp)
-    val playShape = RoundedCornerShape(10.dp)
+    val shape = RoundedCornerShape(20.dp)
     val sysColor = game.system?.color ?: Ascend.accent
     Row(
         Modifier
             .fillMaxWidth()
-            .clip(shape)
-            .background(Tone.Surface)
-            .border(1.dp, Tone.Line, shape)
+            .glassPanel(shape)
             .combinedClickable(onClick = onOpen, onLongClick = onLongClick)
             .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -480,16 +481,16 @@ private fun CatalogueCartridgeRow(
         GameArt(
             game,
             Modifier
-                .size(52.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .border(1.dp, Tone.Line, RoundedCornerShape(10.dp)),
+                .size(54.dp)
+                .clip(RoundedCornerShape(13.dp))
+                .border(1.dp, Color.White.copy(alpha = if (Tone.isDark) 0.16f else 0.40f), RoundedCornerShape(13.dp)),
             showTag = false,
         )
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     game.title,
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 14.5.sp, letterSpacing = (-0.01).em),
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp),
                     color = Tone.Ink,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -511,21 +512,22 @@ private fun CatalogueCartridgeRow(
                         append(game.fileName.substringAfterLast('.').uppercase())
                     }
                 }
-                ArchiveLabel(detail, color = Tone.Muted)
+                Text(detail, style = TextStyle(fontFamily = Inter, fontSize = 12.sp), color = Tone.Muted)
             }
         }
         Box(
             Modifier
                 .size(38.dp)
-                .clip(playShape)
-                .background(Ascend.accent)
+                .clip(CircleShape)
+                .background(Brush.linearGradient(listOf(Ascend.accent, Color(0xFF7B68FF))))
+                .border(1.dp, Color.White.copy(alpha = 0.28f), CircleShape)
                 .clickable(onClick = onQuickPlay),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
                 Icons.Rounded.PlayArrow,
                 "Play ${game.title}",
-                tint = Ascend.onAccent,
+                tint = Color.White,
                 modifier = Modifier.size(20.dp),
             )
         }
@@ -550,9 +552,7 @@ private fun AlphaScroller(games: List<Game>, modifier: Modifier = Modifier, onJu
     Column(
         modifier
             .padding(end = 4.dp)
-            .clip(CircleShape)
-            .background(Tone.Surface.copy(alpha = if (active != null) 0.96f else 0.85f))
-            .border(1.dp, Tone.Line, CircleShape)
+            .glassPanel(CircleShape, elevated = true)
             .pointerInput(present) {
                 fun pick(y: Float) {
                     val i = ((y / size.height) * present.size).toInt().coerceIn(0, present.lastIndex)
@@ -599,21 +599,21 @@ private fun SkeletonGrid() {
         animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
         label = "skeletonAlpha",
     )
-    val tone = MaterialTheme.colorScheme.surfaceContainerHighest
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(124.dp),
-        contentPadding = PaddingValues(16.dp),
+        columns = GridCells.Fixed(2),
+        contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 88.dp, bottom = 24.dp + LocalNavSpace.current),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        userScrollEnabled = false,
-        modifier = Modifier.fillMaxSize().graphicsLayer { alpha = pulse },
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxSize().auroraBackdrop(),
     ) {
-        items(12) {
-            Column {
-                Box(Modifier.fillMaxWidth().aspectRatio(0.74f).background(tone, MaterialTheme.shapes.extraLarge))
-                Box(Modifier.padding(top = 10.dp).fillMaxWidth(0.8f).height(14.dp).background(tone, CircleShape))
-                Box(Modifier.padding(top = 6.dp).fillMaxWidth(0.45f).height(11.dp).background(tone, CircleShape))
-            }
+        items(6) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(0.84f)
+                    .graphicsLayer { alpha = pulse }
+                    .glassPanel(RoundedCornerShape(20.dp)),
+            )
         }
     }
 }

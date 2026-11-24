@@ -520,13 +520,12 @@ private fun App(vm: AppViewModel) {
                     onSeeAllGames = { tab = Tab.Games },
                     topActions = {
                         Box {
-                            com.retrohero.app.ui.components.AccentButton(
-                                text = "Add games",
-                                onClick = { addMenu = true },
+                            com.retrohero.app.ui.components.GlassOrb(
                                 icon = Icons.Rounded.Add,
-                                modifier = androidx.compose.ui.Modifier.semantics {
-                                    this.contentDescription = "Add games"
-                                },
+                                contentDescription = "Add games",
+                                onClick = { addMenu = true },
+                                size = 38.dp,
+                                accent = true,
                             )
                             DropdownMenu(
                                 expanded = addMenu,

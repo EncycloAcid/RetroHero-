@@ -86,11 +86,11 @@ class Settings(context: Context) {
 
     /** Accent colour id from [Looks.accents], or "look:<id>" for an imported look. */
     var accent: String
-        get() = prefs.getString("accent", "ember")!!
+        get() = prefs.getString("accent", "aurora")!!
         set(v) = prefs.edit { putString("accent", v) }
 
     var darkMode: Boolean
-        get() = prefs.getBoolean("dark_mode", false)
+        get() = prefs.getBoolean("dark_mode", true)
         set(v) = prefs.edit { putBoolean("dark_mode", v) }
 
     /** Touch-pad skin id from [Looks.skins], or "look:<id>" for an imported look. */

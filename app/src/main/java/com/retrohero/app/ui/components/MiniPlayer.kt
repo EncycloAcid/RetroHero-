@@ -117,30 +117,21 @@ fun MiniPlayer(
         GameArt(
             game,
             Modifier
-                .size(46.dp)
-                .clip(RoundedCornerShape(9.dp))
-                .border(1.dp, Tone.Line, RoundedCornerShape(9.dp)),
+                .size(44.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(12.dp)),
             showTag = false,
         )
         Spacer(Modifier.width(12.dp))
         Column(
             Modifier
                 .weight(1f)
-                // Text fades out at the right edge instead of being cut.
                 .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
                 .drawWithContent {
                     drawContent()
                     drawRect(Brush.horizontalGradient(0.85f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
                 },
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(6.dp).clip(CircleShape).background(Ascend.accent))
-                Spacer(Modifier.width(6.dp))
-                ArchiveLabel(
-                    "LAST SESSION · ${(game.system?.shortName ?: game.systemId).uppercase()}",
-                    color = Ascend.accent,
-                )
-            }
             Text(
                 game.title,
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
@@ -155,42 +146,30 @@ fun MiniPlayer(
                     append(DateUtils.getRelativeTimeSpanString(stat.lastPlayed, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS))
                 }
             }
-            ArchiveLabel(sub, color = Tone.Muted)
+            Text(
+                sub,
+                style = MaterialTheme.typography.bodySmall,
+                color = Tone.Muted,
+                maxLines = 1,
+                softWrap = false,
+            )
         }
         Spacer(Modifier.width(8.dp))
-        val playShape = RoundedCornerShape(10.dp)
-        val innerShape = RoundedCornerShape(7.dp)
-        Row(
+        Box(
             Modifier
-                .height(38.dp)
-                .clip(playShape)
-                .background(Ascend.accent)
-                .border(1.dp, Color.White.copy(alpha = 0.20f), playShape)
-                .clickable(onClick = onPlay)
-                .padding(start = 10.dp, end = 5.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(Brush.linearGradient(listOf(Ascend.accent, Color(0xFF7B68FF))))
+                .border(1.dp, Color.White.copy(alpha = 0.28f), CircleShape)
+                .clickable(onClick = onPlay),
+            contentAlignment = Alignment.Center,
         ) {
-            Text(
-                "Play",
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                color = Ascend.onAccent,
+            Icon(
+                Icons.Rounded.PlayArrow,
+                "Resume ${game.title}",
+                tint = Color.White,
+                modifier = Modifier.size(22.dp),
             )
-            Spacer(Modifier.width(6.dp))
-            Box(
-                Modifier
-                    .size(26.dp)
-                    .clip(innerShape)
-                    .background(Color.Black.copy(alpha = 0.18f))
-                    .border(1.dp, Color.White.copy(alpha = 0.22f), innerShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.Rounded.PlayArrow,
-                    "Resume ${game.title}",
-                    tint = Ascend.onAccent,
-                    modifier = Modifier.size(16.dp),
-                )
-            }
         }
     }
 }

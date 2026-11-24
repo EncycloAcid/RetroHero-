@@ -1,7 +1,10 @@
 package com.retrohero.app.ui.screens
 
-import com.retrohero.app.ui.components.emberBackground
 import com.retrohero.app.ui.components.ArchiveLabel
+import com.retrohero.app.ui.components.Ascend
+import com.retrohero.app.ui.components.GlassOrb
+import com.retrohero.app.ui.components.auroraBackdrop
+import com.retrohero.app.ui.components.glassPanel
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -64,6 +67,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -97,23 +101,30 @@ private val IconTile get() = Tone.Raised
 private val SearchFill get() = Tone.Surface
 private val Placeholder get() = Tone.Muted
 
-private class Category(val id: String, val title: String, val subtitle: String, val icon: ImageVector, val keywords: List<String>)
+private class Category(
+    val id: String,
+    val title: String,
+    val subtitle: String,
+    val icon: ImageVector,
+    val badgeColor: Color,
+    val keywords: List<String>,
+)
 
 private val categories = listOf(
-    Category("library", "Game folders", "Add ROM folders & rescan your library", Icons.Rounded.Folder, listOf("folders", "add folder", "rescan", "library", "scan")),
-    Category("gameplay", "Gameplay & comfort", "Auto-save, fast-forward, shaders & haptics", Icons.Rounded.Tune, listOf("reduce motion", "animations", "tilt", "gyroscope", "accessibility", "sharp pixels", "haptic", "vibration", "opacity", "touch controls", "fast-forward speed", "auto save", "resume", "screenshots", "gallery", "stick", "d-pad")),
-    Category("controls", "Controls", "Controller remapping & touch button layout", Icons.Rounded.SportsEsports, listOf("controller", "buttons", "remap", "rebind", "rewind", "gamepad")),
-    Category("looks", "Customisation", "Themes, accents & Delta controller skins", Icons.Rounded.Palette, listOf("look", "theme", "accent", "colour", "color", "pad skin", "touch buttons", "import look", "delta", "deltaskin", "controller skin", "skin")),
-    Category("bios", "BIOS & system files", "PS1, Sega CD & console BIOS status", Icons.Rounded.Memory, listOf("bios", "system files", "playstation", "import bios", "download bios")),
-    Category("backup", "Backup & restore", "Export or restore saves, states & shelves", Icons.Rounded.Backup, listOf("backup", "restore", "export", "new phone", "saves")),
-    Category("about", "About", "Version info & emulator core licenses", Icons.Rounded.Info, listOf("version", "about", "libretro", "licence")),
+    Category("library", "Game folders", "Add ROM folders & rescan your library", Icons.Rounded.Folder, Color(0xFF5B8CFF), listOf("folders", "add folder", "rescan", "library", "scan")),
+    Category("gameplay", "Gameplay & comfort", "Auto-save, fast-forward, shaders & haptics", Icons.Rounded.Tune, Color(0xFF2DC98A), listOf("reduce motion", "animations", "tilt", "gyroscope", "accessibility", "sharp pixels", "haptic", "vibration", "opacity", "touch controls", "fast-forward speed", "auto save", "resume", "screenshots", "gallery", "stick", "d-pad")),
+    Category("controls", "Controls", "Controller remapping & touch button layout", Icons.Rounded.SportsEsports, Color(0xFFF5A623), listOf("controller", "buttons", "remap", "rebind", "rewind", "gamepad")),
+    Category("looks", "Customisation", "Themes, accents & Delta controller skins", Icons.Rounded.Palette, Color(0xFF9B7BFF), listOf("look", "theme", "accent", "colour", "color", "pad skin", "touch buttons", "import look", "delta", "deltaskin", "controller skin", "skin")),
+    Category("bios", "BIOS & system files", "PS1, Sega CD & console BIOS status", Icons.Rounded.Memory, Color(0xFFFF6B8B), listOf("bios", "system files", "playstation", "import bios", "download bios")),
+    Category("backup", "Backup & restore", "Export or restore saves, states & shelves", Icons.Rounded.Backup, Color(0xFF38BDF8), listOf("backup", "restore", "export", "new phone", "saves")),
+    Category("about", "About", "Version info & emulator core licenses", Icons.Rounded.Info, Color(0xFF8B98B8), listOf("version", "about", "libretro", "licence")),
 )
 
 /**
- * System Control Center:
- * Compact header + top 2-column split hero tiles (Appearance switcher + Emulator Cores manager),
- * 2-column Bento module cards (Game folders, Customisation, Gameplay & comfort, Controls, BIOS, Backup),
- * and full-width Ember Play Journal + About footer.
+ * Midnight Glass & Console Aurora System Control Center:
+ * Translucent aurora hero pair (Live Midnight/Frost theme toggle + Emulator Cores),
+ * floating glass search field, Apple/PS5 frosted glass grouped settings sheets with vibrant squircle badges,
+ * and a luminous Aurora-to-Violet Play Journal & Recap card.
  */
 @Composable
 fun SettingsHome(
@@ -136,13 +147,13 @@ fun SettingsHome(
     Column(
         Modifier
             .fillMaxSize()
-            .emberBackground()
+            .auroraBackdrop(Ascend.accent, Color(0xFF7B68FF))
             .verticalScroll(rememberScrollState())
             .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 28.dp + LocalNavSpace.current),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+            .padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 28.dp + LocalNavSpace.current),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        // Minimal System Control Header
+        // Floating Midnight Glass Header
         Row(
             Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -151,46 +162,42 @@ fun SettingsHome(
             Column {
                 Text(
                     "System",
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Black, fontSize = 26.sp, letterSpacing = (-0.03).em),
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 26.sp, letterSpacing = (-0.03).em),
                     color = Tone.Ink,
                 )
-                com.retrohero.app.ui.components.ArchiveLabel(
-                    "CONTROL CENTER · ${Systems.all.size} SYSTEMS",
+                Text(
+                    "Control center · ${Systems.all.size} systems",
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 12.5.sp),
                     color = Tone.Muted,
                 )
             }
-            val aboutShape = RoundedCornerShape(11.dp)
             Row(
                 Modifier
                     .height(38.dp)
-                    .clip(aboutShape)
-                    .background(Tone.Surface)
-                    .border(1.dp, Tone.Line, aboutShape)
+                    .glassPanel(CircleShape, elevated = true)
                     .clickable { onOpen("about") }
-                    .padding(horizontal = 12.dp),
+                    .padding(horizontal = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 Icon(Icons.Rounded.Info, null, tint = Tone.Ink, modifier = Modifier.size(16.dp))
-                Text("About", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp), color = Tone.Ink)
+                Text("About", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.sp), color = Tone.Ink)
             }
         }
 
-        // Top 2-Column Split Hardware Hero Tiles: Appearance + Emulator Cores
+        // Top 2-Column Frosted Glass Hero Pair: Live Appearance + Emulator Cores
         Row(
-            Modifier.fillMaxWidth().height(142.dp),
+            Modifier.fillMaxWidth().height(144.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // Left Tile: Appearance Live Switcher
-            val cardShape = RoundedCornerShape(18.dp)
+            val heroShape = RoundedCornerShape(24.dp)
+            // Left: Live Midnight / Frost Appearance Switcher
             Column(
                 Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .clip(cardShape)
-                    .background(Tone.Surface)
-                    .border(1.dp, Tone.Line, cardShape)
-                    .padding(12.dp),
+                    .glassPanel(heroShape, elevated = true)
+                    .padding(14.dp),
                 verticalArrangement = Arrangement.SpaceBetween,
             ) {
                 Row(
@@ -198,43 +205,51 @@ fun SettingsHome(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    com.retrohero.app.ui.components.ArchiveLabel("THEME", color = Tone.Muted)
+                    Text(
+                        "Appearance",
+                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 12.sp),
+                        color = Tone.Muted,
+                    )
                     Box(
                         Modifier
                             .size(28.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Tone.Raised)
-                            .border(1.dp, Tone.Line, RoundedCornerShape(8.dp)),
+                            .clip(CircleShape)
+                            .background(Color(0xFF9B7BFF).copy(alpha = 0.22f)),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(Icons.Rounded.Palette, null, tint = Tone.Ink, modifier = Modifier.size(15.dp))
+                        Icon(Icons.Rounded.Palette, null, tint = Color(0xFF9B7BFF), modifier = Modifier.size(15.dp))
                     }
                 }
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        if (Tone.isDark) "Obsidian" else "Cream",
-                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Black, fontSize = 17.sp, letterSpacing = (-0.02).em),
+                        if (Tone.isDark) "Midnight" else "Frost",
+                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 18.sp, letterSpacing = (-0.02).em),
                         color = Tone.Ink,
                     )
-                    // Inline 2-way tactile Light / Dark switch
                     Row(
                         Modifier
                             .fillMaxWidth()
                             .height(34.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(Tone.Bg)
-                            .border(1.dp, Tone.Line, RoundedCornerShape(10.dp))
+                            .clip(CircleShape)
+                            .background(if (Tone.isDark) Color.Black.copy(alpha = 0.34f) else Color(0xFFDCE3F2))
+                            .border(1.dp, Tone.Line, CircleShape)
                             .padding(3.dp),
                         horizontalArrangement = Arrangement.spacedBy(3.dp),
                     ) {
                         listOf("Light" to false, "Dark" to true).forEach { (label, dark) ->
                             val selected = Tone.isDark == dark
+                            val selMod = if (selected) {
+                                Modifier
+                                    .clip(CircleShape)
+                                    .background(Brush.horizontalGradient(listOf(Ascend.accent, Color(0xFF7B68FF))))
+                            } else {
+                                Modifier.clip(CircleShape)
+                            }
                             Box(
                                 Modifier
                                     .weight(1f)
                                     .fillMaxHeight()
-                                    .clip(RoundedCornerShape(7.dp))
-                                    .background(if (selected) Tone.Ink else Color.Transparent)
+                                    .then(selMod)
                                     .clickable {
                                         settings.darkMode = dark
                                         Tone.setDarkMode(dark)
@@ -244,7 +259,7 @@ fun SettingsHome(
                                 Text(
                                     label,
                                     style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 11.5.sp),
-                                    color = if (selected) Tone.Bg else Tone.Muted,
+                                    color = if (selected) Color.White else Tone.Muted,
                                 )
                             }
                         }
@@ -252,15 +267,14 @@ fun SettingsHome(
                 }
             }
 
-            // Right Tile: High-Contrast Obsidian Emulator Cores Card
+            // Right: Luminous Aurora Emulator Cores Card
             Column(
                 Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .clip(cardShape)
-                    .background(Tone.Ink)
+                    .glassPanel(heroShape, tint = Ascend.accent, elevated = true)
                     .clickable { onOpen("cores") }
-                    .padding(12.dp),
+                    .padding(14.dp),
                 verticalArrangement = Arrangement.SpaceBetween,
             ) {
                 Row(
@@ -268,47 +282,52 @@ fun SettingsHome(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    com.retrohero.app.ui.components.ArchiveLabel(abiLabel, color = Tone.Bg.copy(alpha = 0.65f))
+                    Text(
+                        abiLabel,
+                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 12.sp),
+                        color = Tone.Muted,
+                    )
                     Box(
                         Modifier
                             .size(28.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(com.retrohero.app.ui.components.Ascend.accent),
+                            .clip(CircleShape)
+                            .background(Brush.linearGradient(listOf(Ascend.accent, Color(0xFF7B68FF)))),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(Icons.Rounded.Memory, null, tint = com.retrohero.app.ui.components.Ascend.onAccent, modifier = Modifier.size(15.dp))
+                        Icon(Icons.Rounded.Memory, null, tint = Color.White, modifier = Modifier.size(15.dp))
                     }
                 }
-                Column {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
                         "$installedCoresCount / $totalCoresCount",
-                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Black, fontSize = 22.sp, letterSpacing = (-0.02).em),
-                        color = Tone.Bg,
+                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.ExtraBold, fontSize = 23.sp, letterSpacing = (-0.02).em),
+                        color = Tone.Ink,
                     )
                     Text(
                         "Emulator Cores",
-                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 13.5.sp),
-                        color = Tone.Bg,
+                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp),
+                        color = Tone.Ink,
                         maxLines = 1,
                     )
-                    com.retrohero.app.ui.components.ArchiveLabel("MANAGE ENGINES →", color = com.retrohero.app.ui.components.Ascend.accent)
+                    Text(
+                        "Manage engines →",
+                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp),
+                        color = Ascend.accent,
+                    )
                 }
             }
         }
 
-        // Inline Search Input
-        val searchShape = RoundedCornerShape(13.dp)
+        // Floating Glass Search Pill
         Row(
             Modifier
                 .fillMaxWidth()
-                .height(44.dp)
-                .clip(searchShape)
-                .background(Tone.Surface)
-                .border(1.dp, Tone.Line, searchShape)
+                .height(46.dp)
+                .glassPanel(RoundedCornerShape(18.dp), elevated = true)
                 .padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Rounded.Search, null, tint = Placeholder, modifier = Modifier.size(18.dp))
+            Icon(Icons.Rounded.Search, null, tint = Placeholder, modifier = Modifier.size(19.dp))
             Spacer(Modifier.width(10.dp))
             Box(Modifier.weight(1f)) {
                 if (query.isEmpty()) Text("Search settings", style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = Placeholder)
@@ -316,7 +335,7 @@ fun SettingsHome(
                     query, { query = it },
                     singleLine = true,
                     textStyle = TextStyle(fontFamily = Inter, fontSize = 14.sp, color = Tone.Ink),
-                    cursorBrush = SolidColor(Salmon),
+                    cursorBrush = SolidColor(Ascend.accent),
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
@@ -328,91 +347,144 @@ fun SettingsHome(
                 (listOf(c.title.lowercase()) + c.keywords).filter { it.contains(q) }.map { c to it }
             }.distinctBy { it.second }
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                com.retrohero.app.ui.components.ArchiveLabel("${hits.size} MATCHES", color = Tone.Muted)
+                Text("${hits.size} matches", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.sp), color = Tone.Muted)
                 if (hits.isEmpty()) {
                     Text("Nothing matches “${query.trim()}”.", style = MaterialTheme.typography.bodyMedium, color = Tone.Muted, modifier = Modifier.padding(8.dp))
-                }
-                hits.forEach { (c, label) ->
-                    com.retrohero.app.ui.components.BentoItemRow(
-                        title = label.replaceFirstChar { it.uppercase() },
-                        subtitle = "System › ${c.title}",
-                        onClick = { onOpen(c.id) },
-                        leading = {
-                            Icon(c.icon, null, tint = Tone.Ink, modifier = Modifier.size(19.dp))
-                        },
-                    )
+                } else {
+                    GlassSettingsGroup {
+                        hits.forEachIndexed { i, (c, label) ->
+                            GlassSettingsRow(
+                                title = label.replaceFirstChar { it.uppercase() },
+                                subtitle = "System › ${c.title}",
+                                icon = c.icon,
+                                badgeColor = c.badgeColor,
+                                onClick = { onOpen(c.id) },
+                                showDivider = i < hits.lastIndex,
+                            )
+                        }
+                    }
                 }
             }
             return@Column
         }
 
-        // 2-Column Bento Control Modules Grid (replaces repetitive vertical list)
-        val gridItems = listOf(
-            Triple(categories.first { it.id == "library" }, "ROMS", "Folders & scan"),
-            Triple(categories.first { it.id == "looks" }, "SKINS", "Themes & Delta"),
-            Triple(categories.first { it.id == "gameplay" }, "${settings.fastForwardSpeed.toInt()}× FF", if (settings.autoSave) "Auto-save ON" else "Shaders & pad"),
-            Triple(categories.first { it.id == "controls" }, "INPUT", "Gamepad remap"),
-            Triple(categories.first { it.id == "bios" }, "BIOS", "PS1 & Sega CD"),
-            Triple(categories.first { it.id == "backup" }, "ZIP", "Saves & shelves"),
-        )
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            gridItems.chunked(2).forEach { pair ->
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    pair.forEach { (cat, tag, micro) ->
-                        ControlModuleTile(
-                            title = cat.title,
-                            subtitle = micro,
-                            badge = tag,
-                            icon = cat.icon,
-                            onClick = { onOpen(cat.id) },
-                            modifier = Modifier.weight(1f),
-                        )
-                    }
-                    if (pair.size == 1) Spacer(Modifier.weight(1f))
-                }
+        // Grouped Frosted Glass Settings Sheet 1: Library & Style
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                "Library & Appearance",
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.sp),
+                color = Tone.Muted,
+                modifier = Modifier.padding(start = 4.dp),
+            )
+            GlassSettingsGroup {
+                val lib = categories.first { it.id == "library" }
+                val looks = categories.first { it.id == "looks" }
+                GlassSettingsRow(
+                    title = lib.title,
+                    subtitle = lib.subtitle,
+                    icon = lib.icon,
+                    badgeColor = lib.badgeColor,
+                    onClick = { onOpen(lib.id) },
+                    showDivider = true,
+                )
+                GlassSettingsRow(
+                    title = looks.title,
+                    subtitle = looks.subtitle,
+                    icon = looks.icon,
+                    badgeColor = looks.badgeColor,
+                    onClick = { onOpen(looks.id) },
+                    showDivider = false,
+                )
             }
         }
 
-        // Ember Play Journal Full-Width Highlight Card
-        val journalShape = RoundedCornerShape(16.dp)
+        // Grouped Frosted Glass Settings Sheet 2: Emulation & Data
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                "Emulation & Data",
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.sp),
+                color = Tone.Muted,
+                modifier = Modifier.padding(start = 4.dp),
+            )
+            GlassSettingsGroup {
+                val gp = categories.first { it.id == "gameplay" }
+                val ctrl = categories.first { it.id == "controls" }
+                val bios = categories.first { it.id == "bios" }
+                val bkp = categories.first { it.id == "backup" }
+                GlassSettingsRow(
+                    title = gp.title,
+                    subtitle = "${settings.fastForwardSpeed.toInt()}× fast-forward · ${if (settings.autoSave) "auto-save on" else "manual saves"}",
+                    icon = gp.icon,
+                    badgeColor = gp.badgeColor,
+                    onClick = { onOpen(gp.id) },
+                    showDivider = true,
+                )
+                GlassSettingsRow(
+                    title = ctrl.title,
+                    subtitle = ctrl.subtitle,
+                    icon = ctrl.icon,
+                    badgeColor = ctrl.badgeColor,
+                    onClick = { onOpen(ctrl.id) },
+                    showDivider = true,
+                )
+                GlassSettingsRow(
+                    title = bios.title,
+                    subtitle = bios.subtitle,
+                    icon = bios.icon,
+                    badgeColor = bios.badgeColor,
+                    onClick = { onOpen(bios.id) },
+                    showDivider = true,
+                )
+                GlassSettingsRow(
+                    title = bkp.title,
+                    subtitle = bkp.subtitle,
+                    icon = bkp.icon,
+                    badgeColor = bkp.badgeColor,
+                    onClick = { onOpen(bkp.id) },
+                    showDivider = false,
+                )
+            }
+        }
+
+        // Luminous Aurora-to-Violet Play Journal & Recap Banner
+        val journalShape = RoundedCornerShape(22.dp)
         Row(
             Modifier
                 .fillMaxWidth()
                 .clip(journalShape)
-                .background(com.retrohero.app.ui.components.Ascend.accent)
+                .background(Brush.horizontalGradient(listOf(Ascend.accent, Color(0xFF7B68FF))))
+                .border(1.dp, Color.White.copy(alpha = 0.32f), journalShape)
                 .clickable(onClick = onOpenStats)
-                .padding(horizontal = 16.dp, vertical = 14.dp),
+                .padding(horizontal = 16.dp, vertical = 15.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Box(
                 Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(11.dp))
-                    .background(Color.Black.copy(alpha = 0.18f))
-                    .border(1.dp, Color.White.copy(alpha = 0.24f), RoundedCornerShape(11.dp)),
+                    .size(42.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.20f))
+                    .border(1.dp, Color.White.copy(alpha = 0.30f), CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Rounded.Insights, null, tint = com.retrohero.app.ui.components.Ascend.onAccent, modifier = Modifier.size(20.dp))
+                Icon(Icons.Rounded.Insights, null, tint = Color.White, modifier = Modifier.size(21.dp))
             }
-            Column(Modifier.weight(1f)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     "Your stats & recap",
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Black, fontSize = 15.sp),
-                    color = com.retrohero.app.ui.components.Ascend.onAccent,
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 15.5.sp),
+                    color = Color.White,
                 )
-                com.retrohero.app.ui.components.ArchiveLabel(
-                    "PLAY TIME · CONSOLES · RECAP",
-                    color = com.retrohero.app.ui.components.Ascend.onAccent.copy(alpha = 0.80f),
+                Text(
+                    "Play time · consoles · personal highlights",
+                    style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+                    color = Color.White.copy(alpha = 0.82f),
                 )
             }
             Icon(
                 Icons.AutoMirrored.Rounded.KeyboardArrowRight,
                 null,
-                tint = com.retrohero.app.ui.components.Ascend.onAccent,
+                tint = Color.White,
                 modifier = Modifier.size(22.dp),
             )
         }
@@ -420,89 +492,90 @@ fun SettingsHome(
 }
 
 @Composable
-private fun ControlModuleTile(
+private fun GlassSettingsGroup(content: @Composable ColumnScope.() -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .glassPanel(RoundedCornerShape(22.dp), elevated = true),
+        content = content,
+    )
+}
+
+@Composable
+private fun GlassSettingsRow(
     title: String,
     subtitle: String,
-    badge: String,
     icon: ImageVector,
+    badgeColor: Color,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier,
+    showDivider: Boolean,
 ) {
-    val shape = RoundedCornerShape(16.dp)
-    Column(
-        modifier
-            .height(112.dp)
-            .clip(shape)
-            .background(Tone.Surface)
-            .border(1.dp, Tone.Line, shape)
-            .clickable(onClick = onClick)
-            .padding(12.dp),
-        verticalArrangement = Arrangement.SpaceBetween,
-    ) {
+    Column(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 13.dp),
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(13.dp),
         ) {
             Box(
                 Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(Tone.Raised)
-                    .border(1.dp, Tone.Line, RoundedCornerShape(10.dp)),
+                    .size(38.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(badgeColor.copy(alpha = if (Tone.isDark) 0.22f else 0.14f))
+                    .border(1.dp, badgeColor.copy(alpha = 0.42f), RoundedCornerShape(12.dp)),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(icon, null, tint = Tone.Ink, modifier = Modifier.size(18.dp))
+                Icon(icon, null, tint = badgeColor, modifier = Modifier.size(19.dp))
             }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    title,
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp),
+                    color = Tone.Ink,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    subtitle,
+                    style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
+                    color = Tone.Muted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Icon(Icons.AutoMirrored.Rounded.KeyboardArrowRight, null, tint = Tone.Muted, modifier = Modifier.size(19.dp))
+        }
+        if (showDivider) {
             Box(
                 Modifier
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(Tone.Bg)
-                    .border(1.dp, Tone.Line, RoundedCornerShape(6.dp))
-                    .padding(horizontal = 6.dp, vertical = 2.dp),
-            ) {
-                com.retrohero.app.ui.components.ArchiveLabel(badge, color = Tone.Muted)
-            }
-        }
-        Column {
-            Text(
-                title,
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 14.sp, letterSpacing = (-0.01).em),
-                color = Tone.Ink,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                subtitle,
-                style = TextStyle(fontFamily = Inter, fontSize = 11.5.sp),
-                color = Tone.Muted,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                    .fillMaxWidth()
+                    .padding(start = 65.dp, end = 14.dp)
+                    .height(1.dp)
+                    .background(Tone.Line),
             )
         }
     }
 }
 
-/** A settings sub-page: round back button, mono breadcrumb, big title, divider, and scrolling content. */
+/** A settings sub-page: Midnight Glass backdrop, floating circular glass back orb, clean title, and scrolling content. */
 @Composable
 fun SubSettings(title: String, onBack: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     Column(
         Modifier
             .fillMaxSize()
-            .emberBackground()
+            .auroraBackdrop(Ascend.accent, Color(0xFF7B68FF))
             .verticalScroll(rememberScrollState())
             .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 24.dp + LocalNavSpace.current),
+            .padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 24.dp + LocalNavSpace.current),
         verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
         Column {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     Modifier
-                        .size(38.dp)
-                        .clip(CircleShape)
-                        .background(Tone.Raised)
-                        .border(1.dp, Tone.Line, CircleShape)
+                        .size(40.dp)
+                        .glassPanel(CircleShape, elevated = true)
                         .clickable(onClick = onBack),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -514,15 +587,18 @@ fun SubSettings(title: String, onBack: () -> Unit, content: @Composable ColumnSc
                     )
                 }
                 Spacer(Modifier.width(12.dp))
-                ArchiveLabel("06 — SETTINGS / ${title.uppercase()}")
+                Text(
+                    "System / $title",
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 13.sp),
+                    color = Tone.Muted,
+                )
             }
             Text(
                 title,
-                style = MaterialTheme.typography.headlineLargeEmphasized,
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 28.sp, letterSpacing = (-0.03).em),
                 color = Tone.Ink,
-                modifier = Modifier.padding(top = 12.dp, bottom = 10.dp),
+                modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
             )
-            Box(Modifier.fillMaxWidth().height(1.dp).background(com.retrohero.app.ui.components.Page.Divider))
         }
         content()
     }
