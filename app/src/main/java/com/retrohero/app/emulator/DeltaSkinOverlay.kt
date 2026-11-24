@@ -308,6 +308,7 @@ fun DeltaSkinOverlay(
 
                         // Delta's Hold-Menu Button Sustain combo (reverse-engineered from Delta/GameViewController.swift):
                         // Hold MENU + tap any button to latch/unlatch it held down; release MENU alone to open pause menu.
+                        val prevSustainedButtons = sustainedButtons
                         val menuDownNow = DeltaAction.MENU in nextActions
                         val menuWasDown = DeltaAction.MENU in pressedActions
                         if (menuDownNow && !menuWasDown) {
@@ -334,7 +335,7 @@ fun DeltaSkinOverlay(
                         }
 
                         // Effective pressed buttons = physically held OR sustained via Delta Hold-Button
-                        val prevEffective = pressedButtons + sustainedButtons
+                        val prevEffective = pressedButtons + prevSustainedButtons
                         val nextEffective = nextButtons + sustainedButtons
                         if (nextEffective != prevEffective) {
                             val newlyActive = nextEffective - prevEffective
