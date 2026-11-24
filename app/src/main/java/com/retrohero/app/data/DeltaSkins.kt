@@ -56,6 +56,8 @@ data class DeltaItem(
     val frame: DeltaRect,
     val extendedEdges: DeltaEdges,
     val thumbstick: DeltaThumbstick? = null,
+    /** Optional per-button graphic asset name (e.g. `iphone_a.pdf` in Delta's Standard GBA skin). */
+    val asset: String? = null,
 ) {
     /** Hit-test rectangle with [extendedEdges] applied around [frame]. */
     val hitRect: DeltaRect
@@ -137,6 +139,7 @@ enum class DeltaAction {
     FAST_FORWARD_HOLD,
     FAST_FORWARD_TOGGLE,
     REWIND_HOLD,
+    SCREENSHOT,
 }
 
 /** Resolved target of a single Delta input string. */
@@ -188,6 +191,7 @@ object DeltaSkins {
             "fastforward" -> return DeltaMappedInput.Action(DeltaAction.FAST_FORWARD_HOLD)
             "togglefastforward" -> return DeltaMappedInput.Action(DeltaAction.FAST_FORWARD_TOGGLE)
             "rewind", "togglerewind" -> return DeltaMappedInput.Action(DeltaAction.REWIND_HOLD)
+            "screenshot" -> return DeltaMappedInput.Action(DeltaAction.SCREENSHOT)
         }
         // Genesis maps A/B/C/X/Y/Z/Mode onto RetroPad differently from Nintendo systems.
         if (systemId == "genesis" || systemId == "segacd" || systemId == "32x" || systemId == "saturn") {
@@ -363,7 +367,8 @@ object DeltaSkins {
             }
             else -> return null
         }
-        return DeltaItem(inputs = inputs, frame = frame, extendedEdges = edges, thumbstick = thumb)
+        val itemAsset = o.optJSONObject("asset")?.optString("name")?.takeIf { it.isNotBlank() }
+        return DeltaItem(inputs = inputs, frame = frame, extendedEdges = edges, thumbstick = thumb, asset = itemAsset)
     }
 
     private fun parseRect(o: JSONObject?): DeltaRect? {
