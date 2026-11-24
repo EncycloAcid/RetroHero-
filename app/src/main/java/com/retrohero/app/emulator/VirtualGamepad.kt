@@ -195,6 +195,7 @@ fun VirtualGamepad(
                         }
                         if (now != pressed) {
                             val old = pressed
+                            val prevSustained = sustained
                             val newlyDown = now - old
                             val newlyUp = old - now
 
@@ -230,7 +231,7 @@ fun VirtualGamepad(
                                 onSustainedChanged(sustained)
                             }
 
-                            val prevEffective = old.filter { it < ID_MENU }.toSet() + sustained
+                            val prevEffective = old.filter { it < ID_MENU }.toSet() + prevSustained
                             val nextEffective = now.filter { it < ID_MENU }.toSet() + sustained
                             for (id in nextEffective - prevEffective) onButton(id, true)
                             for (id in prevEffective - nextEffective) onButton(id, false)
