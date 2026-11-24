@@ -297,6 +297,22 @@ class DeltaSkinsTest {
         assertEquals(1080f, landLayout.screenRect.height, 0.1f)
     }
 
+    @Test
+    fun smallPortraitLetterboxUsesFullContainerForImplicitScreen() {
+        val skin = DeltaSkins.parseInfo(sampleGbaInfo, tmp.root)
+        val portrait = skin.representations.pick(landscape = false, tablet = false, tallPhone = true)!!
+            .copy(screens = emptyList())
+
+        val layout = computeDeltaLayout(1080f, 2400f, portrait, landscape = false)
+
+        assertFalse(layout.explicitScreen)
+        assertTrue(layout.skinRect.top < 2400f * 0.2f)
+        assertEquals(0f, layout.screenRect.left, 0.1f)
+        assertEquals(0f, layout.screenRect.top, 0.1f)
+        assertEquals(1080f, layout.screenRect.width, 0.1f)
+        assertEquals(2400f, layout.screenRect.height, 0.1f)
+    }
+
     private fun buildZip(vararg entries: Pair<String, ByteArray>): ByteArray {
         val baos = ByteArrayOutputStream()
         ZipOutputStream(baos).use { zos ->

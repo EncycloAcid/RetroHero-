@@ -99,7 +99,11 @@ fun computeDeltaLayout(
         }
         Rect(minL, minT, maxR, maxB)
     } else if (!landscape) {
-        Rect(0f, 0f, containerW, offsetY.coerceAtLeast(1f))
+        if (offsetY < containerH * 0.2f) {
+            Rect(0f, 0f, containerW, containerH)
+        } else {
+            Rect(0f, 0f, containerW, offsetY.coerceAtLeast(1f))
+        }
     } else {
         Rect(0f, 0f, containerW, containerH)
     }
