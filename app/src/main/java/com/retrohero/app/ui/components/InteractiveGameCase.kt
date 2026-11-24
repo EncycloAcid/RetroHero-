@@ -62,13 +62,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -92,11 +89,9 @@ import com.retrohero.app.ui.theme.Inter
 import com.retrohero.app.ui.theme.Tone
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 import kotlin.math.roundToInt
-
-private val DiscSystems = setOf(
-    "psx", "ps2", "psp", "gc", "wii", "dc", "dreamcast", "saturn", "segacd", "pcecd", "neocd", "3do", "fds",
-)
+import kotlin.math.sin
 
 enum class ShelfBucket(val id: String, val label: String) {
     Playing("playing", "Currently Playing"),
@@ -105,12 +100,9 @@ enum class ShelfBucket(val id: String, val label: String) {
 }
 
 /**
- * Interactive 3D Physical Game Case stage:
- * - Closed case tilts in 3D with a dynamic plastic-sleeve glare.
- * - Tap the cover or drag horizontally across the case to unlatch & swing the front door open (-132°),
- *   revealing the printed instruction booklet on the left inside clips and the spinning optical disc
- *   or sculpted ROM cartridge nestled in the molded right tray.
- * - Tap the disc/cartridge inside the open tray to eject it upward with a haptic snap and launch the game!
+ * Interactive 3D Physical Game Case stage using authentic console-specific packaging
+ * (CD Jewel Case, DVD/GameCube/DS Keep Case, PSP UMD Case, Sega Clamshell, SNES/N64 Landscape Box,
+ * and GBA/GB/NES Retail Cardboard Box).
  */
 @Composable
 fun InteractiveGameCaseModal(
@@ -133,21 +125,20 @@ fun InteractiveGameCaseModal(
     val scope = rememberCoroutineScope()
     val view = LocalView.current
     val density = LocalDensity.current
-    val isDisc = game.systemId in DiscSystems
+    val kind = remember(game.systemId) { packagingFor(game.systemId) }
+    val shellColor = remember(game.systemId) { caseShellColor(game.systemId) }
     val ambientGlow = remember(game.id) { posterAccentColor(game) }
 
-    // 0f = snapped shut, 1f = swung wide open (-132 deg)
+    // 0f = snapped shut, 1f = swung wide open (-134 deg)
     val lid = remember(game.id) { Animatable(if (autoOpenOnMount) 1f else 0f) }
     val eject = remember(game.id) { Animatable(0f) }
-    var tiltX by remember(game.id) { mutableFloatStateOf(4f) }
-    var tiltY by remember(game.id) { mutableFloatStateOf(-12f) }
+    var tiltX by remember(game.id) { mutableFloatStateOf(5f) }
+    var tiltY by remember(game.id) { mutableFloatStateOf(-15f) }
 
-    // Subtle entrance settle
     LaunchedEffect(game.id) {
         if (!autoOpenOnMount) {
-            delay(160)
-            // Tiny tactile peek wiggle so the user immediately feels it's a 3D hinged case
-            lid.animateTo(0.08f, tween(240, easing = FastOutSlowInEasing))
+            delay(150)
+            lid.animateTo(0.08f, tween(230, easing = FastOutSlowInEasing))
             lid.animateTo(0f, spring(dampingRatio = 0.55f, stiffness = 380f))
         }
     }
@@ -189,16 +180,15 @@ fun InteractiveGameCaseModal(
                 onClick = {},
             ),
     ) {
-        // Ambient cover-tinted spotlight behind the physical case
         Canvas(Modifier.fillMaxSize()) {
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(ambientGlow.copy(alpha = 0.22f), Color.Transparent),
-                    center = Offset(size.width * 0.5f, size.height * 0.34f),
-                    radius = size.width * 0.78f,
+                    colors = listOf(ambientGlow.copy(alpha = 0.24f), Color.Transparent),
+                    center = Offset(size.width * 0.5f, size.height * 0.33f),
+                    radius = size.width * 0.80f,
                 ),
-                radius = size.width * 0.78f,
-                center = Offset(size.width * 0.5f, size.height * 0.34f),
+                radius = size.width * 0.80f,
+                center = Offset(size.width * 0.5f, size.height * 0.33f),
             )
         }
 
@@ -211,7 +201,7 @@ fun InteractiveGameCaseModal(
                 .padding(horizontal = 20.dp, vertical = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            // Top bar: Close & Case Open/Close toggle + Favourite heart
+            // Top bar: Close · Open/Close Case · Favourite
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -262,18 +252,20 @@ fun InteractiveGameCaseModal(
                 }
             }
 
-            Spacer(Modifier.height(18.dp))
+            Spacer(Modifier.height(14.dp))
 
-            // ---- Interactive 3D Physical Case Stage --------------------------------------------
-            val caseW = 160.dp
-            val caseH = 228.dp
-            val shiftPx = with(density) { (caseW * 0.47f).toPx() } * lid.value
+            // ---- Authentic 3D Physical Case Stage -----------------------------------------------
+            val caseW = kind.closedWidth
+            val caseH = kind.closedHeight
+            val stageScale = 1f - (1f - kind.openScale) * lid.value
+            val shiftPx = with(density) { (caseW * 0.46f * stageScale).toPx() } * lid.value
             val cam = 22f * density.density
+            val caseShape = RoundedCornerShape(kind.cornerRadius)
 
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .height(266.dp)
+                    .height(258.dp)
                     .semantics { contentDescription = "3D game case for ${game.title}" }
                     .pointerInput(game.id) {
                         var crossedHalf = lid.value > 0.5f
@@ -284,12 +276,11 @@ fun InteractiveGameCaseModal(
                                 scope.launch {
                                     lid.animateTo(snap, spring(dampingRatio = 0.72f, stiffness = 230f))
                                 }
-                                tiltX = 4f
-                                tiltY = -12f
+                                tiltX = 5f
+                                tiltY = -15f
                             },
                         ) { change, drag ->
                             change.consume()
-                            // Dragging left swings the cover open; dragging right closes it; vertical drag tilts in 3D!
                             val nextLid = (lid.value - drag.x / 230f).coerceIn(0f, 1f)
                             if ((nextLid > 0.5f) != crossedHalf) {
                                 crossedHalf = nextLid > 0.5f
@@ -297,75 +288,82 @@ fun InteractiveGameCaseModal(
                             }
                             scope.launch { lid.snapTo(nextLid) }
                             tiltX = (tiltX - drag.y * 0.06f).coerceIn(-12f, 14f)
-                            tiltY = (-12f + (1f - nextLid) * (drag.x * 0.08f)).coerceIn(-22f, 16f)
+                            tiltY = (-15f + (1f - nextLid) * (drag.x * 0.08f)).coerceIn(-24f, 16f)
                         }
                     },
                 contentAlignment = Alignment.Center,
             ) {
-                // Soft floor shadow underneath the case
+                // Ground contact shadow
                 Canvas(
                     Modifier
                         .align(Alignment.BottomCenter)
-                        .width(if (lid.value > 0.3f) 280.dp else 170.dp)
+                        .width(if (lid.value > 0.3f) 290.dp else (caseW + 18.dp))
                         .height(22.dp),
                 ) {
                     drawOval(
                         brush = Brush.radialGradient(
-                            colors = listOf(Color.Black.copy(alpha = 0.75f), Color.Transparent),
+                            colors = listOf(Color.Black.copy(alpha = 0.78f), Color.Transparent),
                         ),
                     )
                 }
 
-                // 1. Right / Back Molded Media Tray (shifts right as lid opens so both halves stay centered)
                 val effectiveRotY = tiltY * (1f - lid.value)
                 val effectiveRotX = tiltX * (1f - lid.value * 0.5f)
 
-                Box(
-                    Modifier
+                // Subtle 3D extruded left spine depth visible when the closed box is angled
+                if (lid.value < 0.15f && abs(effectiveRotY) > 3f) {
+                    val depthBase = when (kind) {
+                        PackagingKind.JewelCase -> 10.dp
+                        PackagingKind.LandscapeCardboard,
+                        PackagingKind.PortraitCardboard -> 20.dp
+                        PackagingKind.KeepCaseDs,
+                        PackagingKind.SegaClamshell -> 18.dp
+                        else -> 14.dp
+                    }
+                    val projSpine = depthBase * abs(sin(Math.toRadians(effectiveRotY.toDouble()))).toFloat().coerceAtLeast(0.28f)
+                    val halfCasePx = with(density) { (caseW * stageScale / 2f).toPx() }
+                    val sideSign = if (effectiveRotY < 0f) -1 else 1
+                    Box(
+                        Modifier
+                            .width(projSpine)
+                            .height(caseH * stageScale * 0.98f)
+                            .offset { IntOffset((sideSign * halfCasePx).roundToInt(), 0) }
+                            .graphicsLayer {
+                                rotationX = effectiveRotX
+                                cameraDistance = cam
+                            }
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(
+                                        shellColor.copy(alpha = 0.95f),
+                                        Color.Black.copy(alpha = 0.65f),
+                                    ),
+                                ),
+                            )
+                            .border(0.6.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(2.dp)),
+                    )
+                }
+
+                // 1. Right / Back Authentic Media Tray (Jewel CD rosette, PS2/GC DVD tray, UMD, DS card, Clamshell, or Die-cut Cardboard Tray)
+                RealisticMediaTray(
+                    game = game,
+                    spinDegrees = spin * lid.value,
+                    ejectProgress = eject.value,
+                    enabled = lid.value > 0.55f,
+                    onEjectAndPlay = { ejectAndLaunch(null) },
+                    modifier = Modifier
                         .size(caseW, caseH)
                         .offset { IntOffset(shiftPx.roundToInt(), 0) }
                         .graphicsLayer {
+                            scaleX = stageScale
+                            scaleY = stageScale
                             cameraDistance = cam
                             rotationY = effectiveRotY
                             rotationX = effectiveRotX
                         }
-                        .shadow(20.dp, RoundedCornerShape(10.dp))
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(Color(0xFF1D1D24), Color(0xFF121217)),
-                            ),
-                        )
-                        .border(2.dp, Color(0xFF2B2B35), RoundedCornerShape(10.dp)),
-                ) {
-                    // Plastic clasp lip along right edge
-                    Box(
-                        Modifier
-                            .align(Alignment.CenterEnd)
-                            .width(5.dp)
-                            .fillMaxHeight(0.75f)
-                            .clip(RoundedCornerShape(topStart = 3.dp, bottomStart = 3.dp))
-                            .background(Color(0xFF292933)),
-                    )
-
-                    // Inner recessed media well + interactive Disc or Cartridge!
-                    if (isDisc) {
-                        DiscTrayInterior(
-                            game = game,
-                            spinDegrees = spin * lid.value,
-                            ejectProgress = eject.value,
-                            enabled = lid.value > 0.55f,
-                            onEjectAndPlay = { ejectAndLaunch(null) },
-                        )
-                    } else {
-                        CartridgeTrayInterior(
-                            game = game,
-                            ejectProgress = eject.value,
-                            enabled = lid.value > 0.55f,
-                            onEjectAndPlay = { ejectAndLaunch(null) },
-                        )
-                    }
-                }
+                        .shadow(20.dp, caseShape),
+                )
 
                 // 2. Hinged Front Cover Door (pivots around left spine TransformOrigin(0f, 0.5f))
                 val doorAngle = effectiveRotY - 134f * lid.value
@@ -376,84 +374,45 @@ fun InteractiveGameCaseModal(
                         .size(caseW, caseH)
                         .offset { IntOffset(shiftPx.roundToInt(), 0) }
                         .graphicsLayer {
+                            scaleX = stageScale
+                            scaleY = stageScale
                             cameraDistance = cam
                             transformOrigin = TransformOrigin(0f, 0.5f)
                             rotationY = doorAngle
                             rotationX = effectiveRotX
                         }
-                        .shadow(if (showingInside) 12.dp else 22.dp, RoundedCornerShape(10.dp))
-                        .clip(RoundedCornerShape(10.dp))
+                        .shadow(if (showingInside) 12.dp else 22.dp, caseShape)
+                        .clip(caseShape)
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
                         ) { toggleCase() },
                 ) {
                     if (showingInside) {
-                        // Mirror horizontally so the inside cover & manual booklet read left-to-right!
-                        Box(
-                            Modifier
+                        RealisticInsideLid(
+                            game = game,
+                            stat = stat,
+                            modifier = Modifier
                                 .fillMaxSize()
-                                .graphicsLayer { scaleX = -1f }
-                                .background(Color(0xFF17171D))
-                                .border(2.dp, Color(0xFF2A2A34), RoundedCornerShape(10.dp))
-                                .padding(10.dp),
-                        ) {
-                            InsideBookletInsert(game = game, stat = stat)
-                        }
+                                .graphicsLayer { scaleX = -1f },
+                        )
                     } else {
-                        // Closed / opening exterior front cover with spine & glossy plastic sheen
-                        Box(Modifier.fillMaxSize()) {
-                            CoverArt(game, Modifier.fillMaxSize())
-
-                            // Left plastic hinge spine ridge
-                            Box(
-                                Modifier
-                                    .align(Alignment.CenterStart)
-                                    .width(9.dp)
-                                    .fillMaxHeight()
-                                    .background(
-                                        Brush.horizontalGradient(
-                                            listOf(
-                                                Color.Black.copy(alpha = 0.55f),
-                                                Color.White.copy(alpha = 0.14f),
-                                                Color.Black.copy(alpha = 0.35f),
-                                            ),
-                                        ),
-                                    ),
-                            )
-
-                            // Dynamic clear-sleeve specular light sweep
-                            val sheenShift = lid.value * 220f
-                            Canvas(Modifier.fillMaxSize()) {
-                                drawRect(
-                                    brush = Brush.linearGradient(
-                                        colors = listOf(
-                                            Color.Transparent,
-                                            Color.White.copy(alpha = 0.16f),
-                                            Color.Transparent,
-                                        ),
-                                        start = Offset(-60f + sheenShift, 0f),
-                                        end = Offset(size.width * 0.65f + sheenShift, size.height * 0.75f),
-                                    ),
-                                )
-                            }
-
-                            Box(
-                                Modifier
-                                    .fillMaxSize()
-                                    .border(1.dp, Color.White.copy(alpha = 0.14f), RoundedCornerShape(10.dp)),
-                            )
-                        }
+                        RealisticCaseFront(
+                            game = game,
+                            sheenOffset = lid.value * 210f + (tiltY + 15f) * 4f,
+                            compact = false,
+                            modifier = Modifier.fillMaxSize(),
+                        )
                     }
                 }
             }
 
-            // Interactive gesture cue directly beneath the 3D case
+            //Packaging-aware interactive gesture cue
             Text(
                 text = if (lid.value > 0.6f) {
-                    "Tap ${if (isDisc) "disc" else "cartridge"} to insert & play · Drag case to close"
+                    "Tap ${kind.mediaNoun} to insert & play · Drag case to close"
                 } else {
-                    "Tap or drag cover to open physical case"
+                    "Tap or drag cover to open ${packagingDisplayName(kind)}"
                 },
                 style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 12.sp),
                 color = Tone.Muted,
@@ -489,7 +448,7 @@ fun InteractiveGameCaseModal(
                 modifier = Modifier.padding(top = 4.dp, bottom = 18.dp),
             )
 
-            // Primary Warm Ember Play / Resume CTA
+            // Primary Play / Resume CTA
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -500,18 +459,18 @@ fun InteractiveGameCaseModal(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center,
             ) {
-                Icon(Icons.Rounded.PlayArrow, null, tint = Color.White, modifier = Modifier.size(21.dp))
+                Icon(Icons.Rounded.PlayArrow, null, tint = Ascend.onAccent, modifier = Modifier.size(21.dp))
                 Spacer(Modifier.width(6.dp))
                 Text(
                     text = if (saveSlots.any { it.first == AppPaths.AUTO_SLOT }) "Resume game" else "Play game",
                     style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp),
-                    color = Color.White,
+                    color = Ascend.onAccent,
                 )
             }
 
             Spacer(Modifier.height(16.dp))
 
-            // Shelf Bucket Selector (Currently Playing · Completed · Backlog)
+            // Shelf Bucket Selector
             Column(
                 Modifier
                     .fillMaxWidth()
@@ -565,7 +524,7 @@ fun InteractiveGameCaseModal(
                 }
             }
 
-            // Save States (if present)
+            // Save States
             if (saveSlots.isNotEmpty()) {
                 Spacer(Modifier.height(12.dp))
                 Column(
@@ -605,7 +564,7 @@ fun InteractiveGameCaseModal(
                 }
             }
 
-            // Core Selector (when multiple cores exist for this system)
+            // Core Selector
             val system = game.system
             if (system != null && system.cores.size > 1) {
                 Spacer(Modifier.height(12.dp))
@@ -654,223 +613,13 @@ fun InteractiveGameCaseModal(
     }
 }
 
-@Composable
-private fun InsideBookletInsert(game: Game, stat: PlayStat?) {
-    Box(Modifier.fillMaxSize()) {
-        // Booklet paper card
-        Column(
-            Modifier
-                .fillMaxSize()
-                .padding(horizontal = 4.dp, vertical = 6.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(Color(0xFF202028))
-                .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(6.dp)),
-        ) {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(92.dp),
-            ) {
-                CoverArt(game, Modifier.fillMaxSize())
-                Box(
-                    Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(Color.Transparent, Color(0xFF202028)),
-                            ),
-                        ),
-                )
-            }
-            Column(
-                Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text(
-                        text = "INSTRUCTION BOOKLET",
-                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 7.sp, letterSpacing = 0.14.em),
-                        color = Ascend.accent,
-                    )
-                    Text(
-                        text = game.title,
-                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 11.5.sp, lineHeight = 14.sp),
-                        color = Color.White,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(
-                        text = game.system?.shortName ?: game.systemId.uppercase(),
-                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 9.5.sp),
-                        color = Color.White.copy(alpha = 0.75f),
-                    )
-                    Text(
-                        text = if (stat != null && stat.seconds > 0) PlayTime.format(stat.seconds) else "Unplayed",
-                        style = TextStyle(fontFamily = Inter, fontSize = 9.sp),
-                        color = Tone.Muted,
-                    )
-                }
-            }
-        }
-
-        // Two molded plastic booklet holder tabs on the right edge of the inside lid
-        listOf(0.26f, 0.74f).forEach { frac ->
-            Box(
-                Modifier
-                    .align(Alignment.TopEnd)
-                    .offset(y = (208 * frac).dp)
-                    .size(width = 12.dp, height = 22.dp)
-                    .clip(RoundedCornerShape(topStart = 4.dp, bottomStart = 4.dp))
-                    .background(Color(0xFF2A2A35))
-                    .border(0.75.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(topStart = 4.dp, bottomStart = 4.dp)),
-            )
-        }
-    }
-}
-
-@Composable
-private fun DiscTrayInterior(
-    game: Game,
-    spinDegrees: Float,
-    ejectProgress: Float,
-    enabled: Boolean,
-    onEjectAndPlay: () -> Unit,
-) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        // Recessed circular tray well
-        Canvas(Modifier.size(138.dp)) {
-            drawCircle(color = Color(0xFF0C0C10))
-            drawCircle(color = Color.White.copy(alpha = 0.06f), style = Stroke(width = 2f))
-        }
-
-        // Optical CD / DVD disc with artwork + holographic rainbow sheen + spindle hole
-        Box(
-            Modifier
-                .size(128.dp)
-                .offset { IntOffset(0, (-34f * ejectProgress).roundToInt()) }
-                .graphicsLayer {
-                    val s = 1f + 0.12f * ejectProgress
-                    scaleX = s
-                    scaleY = s
-                    rotationZ = spinDegrees
-                }
-                .shadow(10.dp, CircleShape)
-                .clip(CircleShape)
-                .then(
-                    if (enabled) Modifier.clickable(onClick = onEjectAndPlay) else Modifier,
-                )
-                .semantics { contentDescription = "Optical disc for ${game.title}" },
-            contentAlignment = Alignment.Center,
-        ) {
-            CoverArt(game, Modifier.fillMaxSize())
-
-            // Iridescent optical data-track foil sweep
-            Canvas(Modifier.fillMaxSize()) {
-                drawCircle(
-                    brush = Brush.sweepGradient(
-                        0.00f to Color.White.copy(alpha = 0.24f),
-                        0.18f to Color(0xFF5CE1E6).copy(alpha = 0.18f),
-                        0.34f to Color.Transparent,
-                        0.52f to Color(0xFFFF85C0).copy(alpha = 0.20f),
-                        0.68f to Color.White.copy(alpha = 0.22f),
-                        0.85f to Color.Transparent,
-                        1.00f to Color.White.copy(alpha = 0.24f),
-                    ),
-                )
-                drawCircle(color = Color.White.copy(alpha = 0.30f), style = Stroke(width = 2f))
-                // Clear inner polycarbonate ring + center spindle hub
-                drawCircle(color = Color(0xFFD8D8E0).copy(alpha = 0.55f), radius = size.minDimension * 0.20f)
-                drawCircle(color = Color(0xFF131318), radius = size.minDimension * 0.11f)
-                drawCircle(color = Color.White.copy(alpha = 0.22f), radius = size.minDimension * 0.11f, style = Stroke(width = 1.5f))
-            }
-        }
-    }
-}
-
-@Composable
-private fun CartridgeTrayInterior(
-    game: Game,
-    ejectProgress: Float,
-    enabled: Boolean,
-    onEjectAndPlay: () -> Unit,
-) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        // Molded rectangular cartridge tray cavity
-        Box(
-            Modifier
-                .size(width = 118.dp, height = 154.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(Color(0xFF0C0C10))
-                .border(1.dp, Color.White.copy(alpha = 0.06f), RoundedCornerShape(10.dp)),
-        )
-
-        // Sculpted ROM Cartridge
-        Column(
-            Modifier
-                .size(width = 104.dp, height = 138.dp)
-                .offset { IntOffset(0, (-34f * ejectProgress).roundToInt()) }
-                .graphicsLayer {
-                    val s = 1f + 0.10f * ejectProgress
-                    scaleX = s
-                    scaleY = s
-                }
-                .shadow(10.dp, RoundedCornerShape(8.dp))
-                .clip(RoundedCornerShape(8.dp))
-                .background(
-                    Brush.verticalGradient(
-                        listOf(Color(0xFF34343E), Color(0xFF23232B)),
-                    ),
-                )
-                .border(1.5.dp, Color.White.copy(alpha = 0.14f), RoundedCornerShape(8.dp))
-                .then(
-                    if (enabled) Modifier.clickable(onClick = onEjectAndPlay) else Modifier,
-                )
-                .semantics { contentDescription = "ROM cartridge for ${game.title}" }
-                .padding(horizontal = 8.dp, vertical = 7.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween,
-        ) {
-            // Top grip ribs
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                repeat(3) {
-                    Box(
-                        Modifier
-                            .width(56.dp)
-                            .height(2.dp)
-                            .clip(CircleShape)
-                            .background(Color.Black.copy(alpha = 0.42f)),
-                    )
-                }
-            }
-
-            // Recessed glossy cartridge label sticker
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(92.dp)
-                    .clip(RoundedCornerShape(5.dp))
-                    .border(1.dp, Color.Black.copy(alpha = 0.5f), RoundedCornerShape(5.dp)),
-            ) {
-                CoverArt(game, Modifier.fillMaxSize())
-            }
-
-            // Gold PCB connector pins hint at bottom edge
-            Canvas(Modifier.width(66.dp).height(6.dp)) {
-                val count = 10
-                val step = size.width / count
-                for (i in 0 until count) {
-                    drawRoundRect(
-                        color = Color(0xFFD4AF37).copy(alpha = 0.85f),
-                        topLeft = Offset(i * step + 1.5f, 0f),
-                        size = Size(step - 3f, size.height),
-                        cornerRadius = CornerRadius(1.5f, 1.5f),
-                    )
-                }
-            }
-        }
-    }
+private fun packagingDisplayName(kind: PackagingKind): String = when (kind) {
+    PackagingKind.JewelCase -> "jewel case"
+    PackagingKind.KeepCaseDvd,
+    PackagingKind.KeepCaseMiniDisc,
+    PackagingKind.KeepCaseDs -> "keep case"
+    PackagingKind.PspUmdCase -> "PSP case"
+    PackagingKind.SegaClamshell -> "clamshell case"
+    PackagingKind.LandscapeCardboard,
+    PackagingKind.PortraitCardboard -> "cardboard box"
 }

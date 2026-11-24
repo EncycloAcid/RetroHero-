@@ -119,6 +119,10 @@ import com.retrohero.app.ui.components.FloatingNavRail
 import com.retrohero.app.ui.components.InteractiveGameCaseModal
 import com.retrohero.app.ui.components.LocalNavSpace
 import com.retrohero.app.ui.components.NavItem
+import com.retrohero.app.ui.components.PackagingKind
+import com.retrohero.app.ui.components.RealisticCaseFront
+import com.retrohero.app.ui.components.RealisticCaseSpine
+import com.retrohero.app.ui.components.packagingFor
 import com.retrohero.app.ui.components.ShelfBucket
 import com.retrohero.app.ui.components.posterAccentColor
 import com.retrohero.app.ui.theme.Inter
@@ -516,31 +520,28 @@ private fun DeskSpotlightCard(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            // Mini angled 3D physical game box with plastic spine crease
+            // Mini angled 3D authentic retail case (jewel case, keepcase, cardboard box...)
+            val kind = remember(game.systemId) { packagingFor(game.systemId) }
+            val caseRatio = (kind.closedWidth.value / kind.closedHeight.value).coerceIn(0.62f, 1.40f)
             Box(
-                Modifier
-                    .width(82.dp)
-                    .height(116.dp)
-                    .graphicsLayer {
-                        cameraDistance = 16f * density.density
-                        rotationY = -16f
-                        rotationX = 4f
-                    }
-                    .shadow(14.dp, RoundedCornerShape(8.dp))
-                    .clip(RoundedCornerShape(8.dp))
-                    .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(8.dp)),
+                Modifier.size(width = 108.dp, height = 120.dp),
+                contentAlignment = Alignment.Center,
             ) {
-                CoverArt(game, Modifier.fillMaxSize())
-                Box(
-                    Modifier
-                        .align(Alignment.CenterStart)
-                        .width(6.dp)
-                        .fillMaxHeight()
-                        .background(
-                            Brush.horizontalGradient(
-                                listOf(Color.Black.copy(alpha = 0.55f), Color.White.copy(alpha = 0.16f)),
-                            ),
-                        ),
+                val caseModifier = if (caseRatio >= 0.9f) {
+                    Modifier.width(108.dp).aspectRatio(caseRatio)
+                } else {
+                    Modifier.height(120.dp).aspectRatio(caseRatio)
+                }
+                RealisticCaseFront(
+                    game = game,
+                    compact = true,
+                    modifier = caseModifier
+                        .graphicsLayer {
+                            cameraDistance = 16f * density.density
+                            rotationY = -16f
+                            rotationX = 4f
+                        }
+                        .shadow(14.dp, RoundedCornerShape(6.dp)),
                 )
             }
 
@@ -679,28 +680,34 @@ private fun TactileCoverTile(
         spring(dampingRatio = 0.65f, stiffness = 500f),
         label = "coverPressTilt",
     )
-    val shape = RoundedCornerShape(7.dp)
+    val kind = packagingFor(game.systemId)
+    val caseRatio = (kind.closedWidth.value / kind.closedHeight.value).coerceIn(0.62f, 1.40f)
 
+    // Fixed 0.68 slot; the real case shape stands on the slot's bottom edge.
     Box(
         Modifier
             .then(if (width != null) Modifier.width(width) else Modifier.fillMaxWidth())
             .aspectRatio(0.68f)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-                rotationY = rotY
-            }
-            .clip(shape)
-            .background(Tone.Surface)
-            .border(0.6.dp, Color.White.copy(alpha = 0.09f), shape)
             .combinedClickable(
                 interactionSource = interaction,
                 indication = null,
                 onClick = onClick,
                 onLongClick = onLongClick,
             ),
+        contentAlignment = Alignment.BottomCenter,
     ) {
-        CoverArt(game, Modifier.fillMaxSize())
+        RealisticCaseFront(
+            game = game,
+            compact = true,
+            modifier = (if (caseRatio >= 0.68f) Modifier.fillMaxWidth() else Modifier.fillMaxHeight())
+                .aspectRatio(caseRatio)
+                .graphicsLayer {
+                    scaleX = scale
+                    scaleY = scale
+                    rotationY = rotY
+                }
+                .shadow(6.dp, RoundedCornerShape(6.dp)),
+        )
     }
 }
 
@@ -976,34 +983,31 @@ private fun VaultPhysicalBoxCard(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
 ) {
-    val shape = RoundedCornerShape(9.dp)
+    val kind = packagingFor(game.systemId)
+    val caseRatio = (kind.closedWidth.value / kind.closedHeight.value).coerceIn(0.62f, 1.40f)
     Column(
         Modifier
             .fillMaxWidth()
             .combinedClickable(onClick = onClick, onLongClick = onLongClick),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
+        // Fixed-height slot so mixed case shapes (square jewel, wide SNES box, tall keepcase)
+        // all stand on the same bottom baseline like a real shelf.
         Box(
             Modifier
                 .fillMaxWidth()
-                .aspectRatio(0.70f)
-                .shadow(8.dp, shape)
-                .clip(shape)
-                .background(Tone.Surface)
-                .border(0.8.dp, Color.White.copy(alpha = 0.12f), shape),
+                .aspectRatio(0.70f),
+            contentAlignment = Alignment.BottomCenter,
         ) {
-            CoverArt(game, Modifier.fillMaxSize())
-            // Physical left case hinge spine
-            Box(
-                Modifier
-                    .align(Alignment.CenterStart)
-                    .width(6.dp)
-                    .fillMaxHeight()
-                    .background(
-                        Brush.horizontalGradient(
-                            listOf(Color.Black.copy(alpha = 0.60f), Color.White.copy(alpha = 0.14f)),
-                        ),
-                    ),
+            val boxModifier = if (caseRatio >= 0.70f) {
+                Modifier.fillMaxWidth().aspectRatio(caseRatio)
+            } else {
+                Modifier.fillMaxHeight().aspectRatio(caseRatio)
+            }
+            RealisticCaseFront(
+                game = game,
+                compact = true,
+                modifier = boxModifier.shadow(8.dp, RoundedCornerShape(6.dp)),
             )
         }
         Text(
@@ -1030,69 +1034,21 @@ private fun SpineBookshelfRow(
             horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.Start),
             verticalAlignment = Alignment.Bottom,
         ) {
-            games.forEachIndexed { idx, game ->
-                val accent = remember(game.id) { posterAccentColor(game) }
-                val spineHeight = if (idx % 3 == 0) 164.dp else if (idx % 2 == 0) 156.dp else 160.dp
-                Box(
-                    Modifier
-                        .width(34.dp)
-                        .height(spineHeight)
-                        .shadow(6.dp, RoundedCornerShape(topStart = 5.dp, topEnd = 5.dp))
-                        .clip(RoundedCornerShape(topStart = 5.dp, topEnd = 5.dp))
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(
-                                    accent.copy(alpha = 0.42f),
-                                    Color(0xFF1A1A22),
-                                    Color(0xFF111116),
-                                ),
-                            ),
-                        )
-                        .border(1.dp, Color.White.copy(alpha = 0.14f), RoundedCornerShape(topStart = 5.dp, topEnd = 5.dp))
-                        .clickable { onSelectSpine(game) },
-                ) {
-                    // Top console band on spine
-                    Box(
-                        Modifier
-                            .align(Alignment.TopCenter)
-                            .fillMaxWidth()
-                            .height(22.dp)
-                            .background(Color.Black.copy(alpha = 0.38f)),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = (game.system?.shortName ?: game.systemId).take(4).uppercase(),
-                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.ExtraBold, fontSize = 7.5.sp),
-                            color = Color.White.copy(alpha = 0.85f),
-                            maxLines = 1,
-                        )
-                    }
-
-                    // Vertical rotated spine title
-                    Box(
-                        Modifier
-                            .fillMaxSize()
-                            .padding(top = 24.dp, bottom = 8.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Text(
-                            text = game.title.uppercase(),
-                            style = TextStyle(
-                                fontFamily = Inter,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 9.5.sp,
-                                letterSpacing = 0.06.em,
-                            ),
-                            color = Color.White,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier
-                                .requiredWidth(116.dp)
-                                .graphicsLayer { rotationZ = -90f },
-                        )
-                    }
+            games.forEach { game ->
+                // Authentic per-console spine: slim clear-ribbed jewel case, chunky Sega clamshell,
+                // gloss-white Wii/3DS keepcase, creased cardboard box, etc.
+                val spineHeight = when (packagingFor(game.systemId)) {
+                    PackagingKind.JewelCase -> 164.dp // spine shortens jewel cases internally
+                    PackagingKind.LandscapeCardboard -> 128.dp
+                    PackagingKind.KeepCaseDs -> 142.dp
+                    PackagingKind.PortraitCardboard -> 152.dp
+                    else -> 164.dp
                 }
+                RealisticCaseSpine(
+                    game = game,
+                    height = spineHeight,
+                    onClick = { onSelectSpine(game) },
+                )
             }
         }
         // Dark anodized shelf ledge beneath the standing spines
