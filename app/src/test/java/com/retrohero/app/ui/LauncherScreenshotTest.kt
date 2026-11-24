@@ -16,12 +16,11 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import com.retrohero.app.data.Game
 import com.retrohero.app.data.PlayStat
-import com.retrohero.app.ui.theme.ElectricLimeColor
+import com.retrohero.app.ui.theme.EmberOrangeColor
 import com.retrohero.app.ui.theme.RetroHeroTheme
 import com.retrohero.app.ui.theme.Tone
 import com.retrohero.app.ui.theme.setAccent
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -42,7 +41,7 @@ class LauncherScreenshotTest {
 
     @Before
     fun setupTheme() {
-        setAccent(ElectricLimeColor)
+        setAccent(EmberOrangeColor)
         Tone.setDarkMode(true)
     }
 
@@ -52,89 +51,107 @@ class LauncherScreenshotTest {
         File(outDir, "$name.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
-    @Test
-    fun emptyLibrary() {
-        var added = 0
-        compose.setContent {
-            RetroHeroTheme {
-                GameLibraryView(
-                    games = emptyList(),
-                    recents = emptyList(),
-                    favoriteIds = emptySet(),
-                    stats = emptyMap(),
-                    scanning = false,
-                    hasFolders = false,
-                    onAddFolder = { added++ },
-                    onPlay = {},
-                    onToggleFavorite = {},
-                )
-            }
+    private fun sampleGames(): List<Game> {
+        val tree = "content://com.android.externalstorage.documents/tree/primary%3ARoms"
+        return listOf(
+            "Symphony Ring (USA).chd" to "psx",
+            "Cyber Runner (USA).gba" to "gba",
+            "Zelda Wind Waker (USA).rvz" to "gc",
+            "Hades Quest (USA).sfc" to "snes",
+            "Red Outlaw (USA).chd" to "psx",
+            "Wild Hunt (USA).rvz" to "gc",
+            "Celeste Peak (USA).gbc" to "gbc",
+            "Hollow Cavern (USA).nes" to "nes",
+            "Doom Fortress (USA).md" to "genesis",
+            "Factory Core (USA).gba" to "gba",
+            "Outer Cosmos (USA).n64" to "n64",
+        ).mapIndexed { idx, (name, sys) ->
+            Game("$tree/document/primary%3ARoms%2F$name", name, sys, tree, "primary:Roms", (20 - idx) * 1000L)
         }
-        compose.onNodeWithText("YOUR COLLECTION").assertIsDisplayed()
-        compose.onNodeWithText("Game Library").assertIsDisplayed()
-        compose.onNodeWithText("Add game folder").assertIsDisplayed().performClick()
-        assertEquals(1, added)
-        save("game_library_empty")
     }
 
     @Test
-    fun populatedGameLibrary() {
-        val tree = "content://com.android.externalstorage.documents/tree/primary%3ARoms"
-        val samples = listOf(
-            "Shadow of the Colossus (USA).chd" to "psx",
-            "The Wind Waker (USA).rvz" to "gc",
-            "Moonlight Run (USA).gba" to "gba",
-            "Chrono Trigger (USA).sfc" to "snes",
-            "Castlevania Symphony of the Night (USA).chd" to "psx",
-        ).mapIndexed { i, (name, sys) ->
-            Game("$tree/document/primary%3ARoms%2F$name", name, sys, tree, "primary:Roms", (5 - i) * 1000L)
-        }
-        val yesterday = System.currentTimeMillis() - 86_400_000L
-        val stats = mapOf(
-            samples[0].id to PlayStat(seconds = 4_250, sessions = 4, lastPlayed = yesterday),
-            samples[1].id to PlayStat(seconds = 5_600, sessions = 5, lastPlayed = yesterday - 86_400_000L),
-        )
-        var favorites by mutableStateOf(setOf(samples[1].id))
+    fun shelvesAndInteractiveCase() {
+        val games = sampleGames()
+        var shelfStatuses by mutableStateOf(emptyMap<String, String>())
         var played: Game? = null
 
         compose.setContent {
             RetroHeroTheme {
-                GameLibraryView(
-                    games = samples,
-                    recents = listOf(samples[0], samples[1]),
-                    favoriteIds = favorites,
-                    stats = stats,
-                    scanning = false,
+                ShelvesAppView(
+                    games = games,
+                    recents = games.take(3),
+                    favoriteIds = emptySet(),
+                    stats = mapOf(games[0].id to PlayStat(seconds = 5400, sessions = 4, lastPlayed = 1000L)),
+                    shelfStatuses = shelfStatuses,
                     hasFolders = true,
                     onAddFolder = {},
-                    onPlay = { played = it },
-                    onToggleFavorite = { g ->
-                        favorites = if (g.id in favorites) favorites - g.id else favorites + g.id
-                    },
+                    onSetShelfBucket = { g, b -> shelfStatuses = shelfStatuses + (g.id to b.id) },
+                    onPlay = { g, _ -> played = g },
                 )
             }
         }
 
-        compose.onNodeWithText("YOUR COLLECTION").assertIsDisplayed()
-        compose.onNodeWithText("Game Library").assertIsDisplayed()
-        compose.onNodeWithText("CONTINUE PLAYING").assertIsDisplayed()
-        compose.onNodeWithText("Resume game").assertIsDisplayed().performClick()
-        assertEquals(samples[0].id, played?.id)
+        compose.onAllNodesWithText("Shelves").onFirst().assertIsDisplayed()
+        compose.onNodeWithText("Currently Playing").assertIsDisplayed()
+        compose.onNodeWithText("3 games").assertIsDisplayed()
+        compose.onNodeWithText("Completed").assertIsDisplayed()
+        compose.onAllNodesWithText("4 games").onFirst().assertIsDisplayed()
+        compose.onNodeWithText("Backlog").assertIsDisplayed()
+        save("shelves_main")
 
-        compose.onNodeWithText("All games").assertIsDisplayed()
-        compose.onNodeWithText("5 titles").assertIsDisplayed()
-        save("game_library_main")
+        // Tap a disc game cover ("Symphony Ring") to open the 3D physical case modal
+        compose.onAllNodesWithText("SYMPHONY RING").onFirst().performClick()
+        compose.mainClock.advanceTimeBy(600)
+        compose.waitForIdle()
+        save("case_closed")
 
-        // Switch to Favourites tab via bottom icon bar
-        compose.onNodeWithContentDescription("Favourites").performClick()
-        compose.onNodeWithText("Favourites").assertIsDisplayed()
-        compose.onAllNodesWithText("The Wind Waker").onFirst().assertIsDisplayed()
-        save("game_library_favourites")
+        // Tap "Open case" to swing the 3D front cover open and reveal the booklet + optical disc
+        compose.onNodeWithText("Open case").performClick()
+        compose.mainClock.advanceTimeBy(800)
+        compose.waitForIdle()
+        compose.onNodeWithText("INSTRUCTION BOOKLET").assertIsDisplayed()
+        save("case_open_disc")
 
-        // Switch to Recent tab via bottom icon bar
-        compose.onNodeWithContentDescription("Recent").performClick()
-        compose.onNodeWithText("Recently Played").assertIsDisplayed()
-        assertTrue(favorites.contains(samples[1].id))
-        save("game_library_recent")
+        // Tap the optical disc inside the open tray to eject & launch gameplay!
+        compose.onNodeWithContentDescription("Optical disc for Symphony Ring").performClick()
+        compose.mainClock.advanceTimeBy(600)
+        compose.waitForIdle()
+        assertEquals(games[0].id, played?.id)
+
+        // Close case, switch to Library grid tab
+        compose.onNodeWithContentDescription("Close case").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Library").performClick()
+        compose.waitForIdle()
+        save("library_grid")
+    }
+
+    @Test
+    fun openCartridgeCase() {
+        val games = sampleGames()
+        var played: Game? = null
+        compose.setContent {
+            RetroHeroTheme {
+                ShelvesAppView(
+                    games = games,
+                    recents = games.take(3),
+                    favoriteIds = setOf(games[1].id),
+                    stats = emptyMap(),
+                    initialOpenGameId = games[1].id, // GBA cartridge game
+                    autoOpenCaseOnMount = true,
+                    onAddFolder = {},
+                    onPlay = { g, _ -> played = g },
+                )
+            }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithText("INSTRUCTION BOOKLET").assertIsDisplayed()
+        save("case_open_cartridge")
+
+        compose.onNodeWithContentDescription("ROM cartridge for Cyber Runner").performClick()
+        compose.mainClock.advanceTimeBy(600)
+        compose.waitForIdle()
+        assertEquals(games[1].id, played?.id)
     }
 }

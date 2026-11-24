@@ -1,14 +1,23 @@
 package com.retrohero.app.ui
 
-import android.text.format.DateUtils
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -25,28 +34,34 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.Memory
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.PieChart
 import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.SportsEsports
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CardGiftcard
-import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material.icons.rounded.Favorite
-import androidx.compose.material.icons.rounded.KeyboardArrowDown
-import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Layers
+import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.PieChart
+import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -54,10 +69,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -67,776 +80,942 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
-import com.retrohero.app.data.AppPaths
 import com.retrohero.app.data.CoreInfo
 import com.retrohero.app.data.Game
 import com.retrohero.app.data.Homebrew
 import com.retrohero.app.data.HomebrewGame
 import com.retrohero.app.data.PlayStat
 import com.retrohero.app.data.PlayTime
+import com.retrohero.app.data.Systems
 import com.retrohero.app.ui.components.Ascend
 import com.retrohero.app.ui.components.CoverArt
-import com.retrohero.app.ui.components.HeroCrtBackdrop
+import com.retrohero.app.ui.components.InteractiveGameCaseModal
+import com.retrohero.app.ui.components.ShelfBucket
 import com.retrohero.app.ui.theme.Inter
 import com.retrohero.app.ui.theme.Tone
 import java.util.Locale
-import kotlin.math.roundToInt
 
-internal enum class LibrarySection(val eyebrow: String, val title: String, val contentDescription: String, val icon: ImageVector) {
-    Collection("YOUR COLLECTION", "Game Library", "Library", Icons.Outlined.GridView),
-    Recent("RECENT ACTIVITY", "Recently Played", "Recent", Icons.Outlined.Schedule),
-    Favourites("SAVED TITLES", "Favourites", "Favourites", Icons.Outlined.FavoriteBorder),
+internal enum class MainTab(
+    val label: String,
+    val selectedIcon: ImageVector,
+    val unselectedIcon: ImageVector,
+) {
+    Library("Library", Icons.Rounded.Layers, Icons.Outlined.Layers),
+    Shelves("Shelves", Icons.Rounded.Tune, Icons.Outlined.Tune),
+    Stats("Stats", Icons.Rounded.PieChart, Icons.Outlined.PieChart),
+    Settings("Settings", Icons.Rounded.Person, Icons.Outlined.Person),
 }
 
-private enum class SortOption(val label: String) {
-    RecentlyAdded("Recently added"),
-    RecentlyPlayed("Recently played"),
-    Title("Name A–Z"),
-    System("Console"),
+internal fun resolveShelfBucket(
+    game: Game,
+    index: Int,
+    recentIds: Set<String>,
+    stat: PlayStat?,
+    explicit: Map<String, String>,
+): ShelfBucket {
+    when (explicit[game.id]) {
+        ShelfBucket.Playing.id -> return ShelfBucket.Playing
+        ShelfBucket.Completed.id -> return ShelfBucket.Completed
+        ShelfBucket.Backlog.id -> return ShelfBucket.Backlog
+    }
+    if (game.id in recentIds) return ShelfBucket.Playing
+    if ((stat?.seconds ?: 0) >= 3_600) return ShelfBucket.Completed
+    if ((stat?.seconds ?: 0) > 0) return ShelfBucket.Playing
+    // Smart initial shelf distribution when no play history exists yet
+    return when {
+        index < 3 -> ShelfBucket.Playing
+        index < 7 -> ShelfBucket.Completed
+        else -> ShelfBucket.Backlog
+    }
 }
 
 @Composable
-internal fun GameLibraryView(
+internal fun ShelvesAppView(
     games: List<Game>,
     recents: List<Game>,
     favoriteIds: Set<String>,
     stats: Map<String, PlayStat>,
-    scanning: Boolean,
-    hasFolders: Boolean,
+    shelfStatuses: Map<String, String> = emptyMap(),
+    scanning: Boolean = false,
+    hasFolders: Boolean = false,
+    initialTab: MainTab = MainTab.Shelves,
+    initialOpenGameId: String? = null,
+    autoOpenCaseOnMount: Boolean = false,
+    saveSlotsFor: (Game) -> List<Pair<Int, Long>> = { emptyList() },
+    currentCoreFor: (Game) -> CoreInfo? = { it.system?.cores?.firstOrNull() },
     onAddFolder: () -> Unit,
     onRescan: () -> Unit = {},
     onOpenHomebrew: () -> Unit = {},
     onOpenDownload: () -> Unit = {},
     onImportBios: () -> Unit = {},
     onImportSkin: () -> Unit = {},
-    onPlay: (Game) -> Unit,
-    onToggleFavorite: (Game) -> Unit,
-    onInspectGame: (Game) -> Unit = {},
+    onSetShelfBucket: (Game, ShelfBucket) -> Unit = { _, _ -> },
+    onToggleFavorite: (Game) -> Unit = {},
+    onPlay: (Game, Int?) -> Unit,
+    onSelectCore: (Game, CoreInfo) -> Unit = { _, _ -> },
+    onDeleteGame: ((Game) -> Unit)? = null,
+    onToggleTheme: (() -> Unit)? = null,
 ) {
-    var section by rememberSaveable { mutableStateOf(LibrarySection.Collection) }
-    var sortIndex by rememberSaveable { mutableIntStateOf(0) }
+    var tab by rememberSaveable { mutableStateOf(initialTab) }
+    var openCaseGameId by rememberSaveable { mutableStateOf(initialOpenGameId) }
     var addMenuOpen by remember { mutableStateOf(false) }
 
-    val sort = SortOption.entries[sortIndex % SortOption.entries.size]
-    val heroGame = remember(games, recents) { recents.firstOrNull() ?: games.firstOrNull() }
+    val recentIds = remember(recents) { recents.mapTo(HashSet()) { it.id } }
+    val buckets = remember(games, recentIds, stats, shelfStatuses) {
+        val map = LinkedHashMap<ShelfBucket, MutableList<Game>>().apply {
+            ShelfBucket.entries.forEach { put(it, mutableListOf()) }
+        }
+        games.forEachIndexed { idx, g ->
+            val b = resolveShelfBucket(g, idx, recentIds, stats[g.id], shelfStatuses)
+            map.getValue(b).add(g)
+        }
+        map
+    }
 
-    val displayedGames = remember(games, recents, favoriteIds, section, sort) {
-        when (section) {
-            LibrarySection.Recent -> recents
-            LibrarySection.Favourites -> games.filter { it.id in favoriteIds }
-            LibrarySection.Collection -> when (sort) {
-                SortOption.RecentlyAdded -> games
-                SortOption.RecentlyPlayed -> {
-                    val order = recents.mapIndexed { idx, g -> g.id to idx }.toMap()
-                    games.sortedBy { order[it.id] ?: Int.MAX_VALUE }
+    Box(Modifier.fillMaxSize().background(Tone.Bg)) {
+        Column(Modifier.fillMaxSize()) {
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .windowInsetsPadding(WindowInsets.statusBars),
+            ) {
+                when (tab) {
+                    MainTab.Shelves -> ShelvesScreenContent(
+                        games = games,
+                        buckets = buckets,
+                        favoriteGames = remember(games, favoriteIds) { games.filter { it.id in favoriteIds } },
+                        scanning = scanning,
+                        hasFolders = hasFolders,
+                        addMenuOpen = addMenuOpen,
+                        onAddMenuToggle = { addMenuOpen = it },
+                        onAddFolder = onAddFolder,
+                        onRescan = onRescan,
+                        onOpenHomebrew = onOpenHomebrew,
+                        onOpenDownload = onOpenDownload,
+                        onOpenCase = { openCaseGameId = it.id },
+                        onQuickPlay = { onPlay(it, null) },
+                    )
+                    MainTab.Library -> LibraryGridContent(
+                        games = games,
+                        scanning = scanning,
+                        hasFolders = hasFolders,
+                        addMenuOpen = addMenuOpen,
+                        onAddMenuToggle = { addMenuOpen = it },
+                        onAddFolder = onAddFolder,
+                        onRescan = onRescan,
+                        onOpenHomebrew = onOpenHomebrew,
+                        onOpenDownload = onOpenDownload,
+                        onOpenCase = { openCaseGameId = it.id },
+                        onQuickPlay = { onPlay(it, null) },
+                    )
+                    MainTab.Stats -> StatsScreenContent(
+                        games = games,
+                        buckets = buckets,
+                        stats = stats,
+                        onOpenCase = { openCaseGameId = it.id },
+                    )
+                    MainTab.Settings -> SettingsScreenContent(
+                        gamesCount = games.size,
+                        scanning = scanning,
+                        hasFolders = hasFolders,
+                        onAddFolder = onAddFolder,
+                        onRescan = onRescan,
+                        onOpenHomebrew = onOpenHomebrew,
+                        onOpenDownload = onOpenDownload,
+                        onImportBios = onImportBios,
+                        onImportSkin = onImportSkin,
+                        onToggleTheme = onToggleTheme,
+                    )
                 }
-                SortOption.Title -> games.sortedBy { it.title.lowercase(Locale.getDefault()) }
-                SortOption.System -> games.sortedWith(compareBy({ it.systemId }, { it.title.lowercase(Locale.getDefault()) }))
+            }
+
+            // Bottom 4-Tab Bar with Glowing Warm Ember Top Indicator & Vertical Spotlight
+            EmberBottomTabBar(
+                selected = tab,
+                onSelect = { tab = it },
+            )
+        }
+
+        // Interactive 3D Physical Game Case Overlay
+        val activeCaseGame = openCaseGameId?.let { id -> games.firstOrNull { it.id == id } }
+        var retainedGame by remember { mutableStateOf(activeCaseGame) }
+        if (activeCaseGame != null) retainedGame = activeCaseGame
+
+        AnimatedVisibility(
+            visible = activeCaseGame != null,
+            enter = fadeIn(tween(180)) + scaleIn(tween(220), initialScale = 0.94f),
+            exit = fadeOut(tween(160)) + scaleOut(tween(180), targetScale = 0.95f),
+        ) {
+            val g = retainedGame
+            if (g != null) {
+                val gIdx = games.indexOfFirst { it.id == g.id }.coerceAtLeast(0)
+                val bucket = resolveShelfBucket(g, gIdx, recentIds, stats[g.id], shelfStatuses)
+                InteractiveGameCaseModal(
+                    game = g,
+                    stat = stats[g.id],
+                    isFavorite = g.id in favoriteIds,
+                    shelfBucket = bucket,
+                    saveSlots = saveSlotsFor(g),
+                    currentCore = currentCoreFor(g),
+                    autoOpenOnMount = autoOpenCaseOnMount,
+                    onSetShelfBucket = { onSetShelfBucket(g, it) },
+                    onToggleFavorite = { onToggleFavorite(g) },
+                    onPlay = { slot -> onPlay(g, slot) },
+                    onSelectCore = { core -> onSelectCore(g, core) },
+                    onDelete = if (g.isLocal && onDeleteGame != null) ({ onDeleteGame(g) }) else null,
+                    onClose = { openCaseGameId = null },
+                )
             }
         }
     }
+}
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .background(Tone.Bg),
-    ) {
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 28.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .windowInsetsPadding(WindowInsets.statusBars),
+@Composable
+private fun ShelvesScreenContent(
+    games: List<Game>,
+    buckets: Map<ShelfBucket, List<Game>>,
+    favoriteGames: List<Game>,
+    scanning: Boolean,
+    hasFolders: Boolean,
+    addMenuOpen: Boolean,
+    onAddMenuToggle: (Boolean) -> Unit,
+    onAddFolder: () -> Unit,
+    onRescan: () -> Unit,
+    onOpenHomebrew: () -> Unit,
+    onOpenDownload: () -> Unit,
+    onOpenCase: (Game) -> Unit,
+    onQuickPlay: (Game) -> Unit,
+) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        // Exactly 4 crisp covers fit across standard phone width (18dp outer padding, 9.5dp gaps)
+        val coverWidth = ((maxWidth - 36.dp - 28.5.dp) / 4f).coerceIn(74.dp, 118.dp)
+
+        LazyColumn(
+            contentPadding = PaddingValues(top = 18.dp, bottom = 28.dp),
+            modifier = Modifier.fillMaxSize(),
         ) {
-            // Top Header: YOUR COLLECTION / Game Library + Lime '+' Square
-            item(key = "header", span = { GridItemSpan(maxLineSpan) }) {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(
-                            text = section.eyebrow,
-                            style = TextStyle(
-                                fontFamily = Inter,
-                                fontWeight = FontWeight.Medium,
-                                fontSize = 11.sp,
-                                letterSpacing = 0.14.em,
-                            ),
-                            color = Tone.Muted,
-                        )
-                        Text(
-                            text = section.title,
-                            style = TextStyle(
-                                fontFamily = Inter,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 28.sp,
-                                lineHeight = 32.sp,
-                                letterSpacing = (-0.03).em,
-                            ),
-                            color = Tone.Ink,
-                        )
-                    }
-
-                    Box {
-                        Box(
-                            Modifier
-                                .size(42.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(Ascend.accent)
-                                .clickable { addMenuOpen = true },
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                Icons.Rounded.Add,
-                                contentDescription = "Add games",
-                                tint = Ascend.onAccent,
-                                modifier = Modifier.size(22.dp),
-                            )
-                        }
-
-                        DropdownMenu(
-                            expanded = addMenuOpen,
-                            onDismissRequest = { addMenuOpen = false },
-                            shape = RoundedCornerShape(14.dp),
-                            containerColor = Tone.Surface,
-                            border = BorderStroke(1.dp, Tone.Line),
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text("Add game folder", color = Tone.Ink) },
-                                leadingIcon = { Icon(Icons.Outlined.CreateNewFolder, null, tint = Tone.Muted) },
-                                onClick = { addMenuOpen = false; onAddFolder() },
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Free homebrew games", color = Tone.Ink) },
-                                leadingIcon = { Icon(Icons.Rounded.CardGiftcard, null, tint = Tone.Muted) },
-                                onClick = { addMenuOpen = false; onOpenHomebrew() },
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Download from link", color = Tone.Ink) },
-                                leadingIcon = { Icon(Icons.Outlined.Download, null, tint = Tone.Muted) },
-                                onClick = { addMenuOpen = false; onOpenDownload() },
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Import BIOS files", color = Tone.Ink) },
-                                leadingIcon = { Icon(Icons.Outlined.Memory, null, tint = Tone.Muted) },
-                                onClick = { addMenuOpen = false; onImportBios() },
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Import Delta skin (.deltaskin)", color = Tone.Ink) },
-                                leadingIcon = { Icon(Icons.Outlined.SportsEsports, null, tint = Tone.Muted) },
-                                onClick = { addMenuOpen = false; onImportSkin() },
-                            )
-                            if (hasFolders) {
-                                DropdownMenuItem(
-                                    text = { Text(if (scanning) "Scanning…" else "Rescan library", color = Tone.Ink) },
-                                    leadingIcon = { Icon(Icons.Outlined.Refresh, null, tint = Tone.Muted) },
-                                    enabled = !scanning,
-                                    onClick = { addMenuOpen = false; onRescan() },
-                                )
-                            }
-                        }
-                    }
-                }
+            item(key = "shelves_header") {
+                TopTitleRow(
+                    title = "Shelves",
+                    addMenuOpen = addMenuOpen,
+                    scanning = scanning,
+                    hasFolders = hasFolders,
+                    onAddMenuToggle = onAddMenuToggle,
+                    onAddFolder = onAddFolder,
+                    onRescan = onRescan,
+                    onOpenHomebrew = onOpenHomebrew,
+                    onOpenDownload = onOpenDownload,
+                )
             }
 
-            // Continue Playing Hero Card on the main Game Library tab
-            if (section == LibrarySection.Collection && heroGame != null) {
-                item(key = "continue_hero", span = { GridItemSpan(maxLineSpan) }) {
-                    ContinuePlayingHeroCard(
-                        game = heroGame,
-                        stat = stats[heroGame.id],
-                        isRecent = heroGame.id == recents.firstOrNull()?.id,
-                        onResume = { onPlay(heroGame) },
-                        onDetails = { onInspectGame(heroGame) },
-                    )
-                }
-            }
-
-            // "All games  N titles   Recently added ⌄" bar
-            if (displayedGames.isNotEmpty()) {
-                item(key = "section_bar", span = { GridItemSpan(maxLineSpan) }) {
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(top = 4.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.Bottom,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            Text(
-                                text = when (section) {
-                                    LibrarySection.Collection -> "All games"
-                                    LibrarySection.Recent -> "History"
-                                    LibrarySection.Favourites -> "Saved"
-                                },
-                                style = TextStyle(
-                                    fontFamily = Inter,
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 20.sp,
-                                    letterSpacing = (-0.025).em,
-                                ),
-                                color = Tone.Ink,
-                            )
-                            val count = displayedGames.size
-                            Text(
-                                text = if (count == 1) "1 title" else "$count titles",
-                                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Normal, fontSize = 13.sp),
-                                color = Tone.Muted,
-                                modifier = Modifier.padding(bottom = 2.dp),
-                            )
-                        }
-
-                        if (section == LibrarySection.Collection) {
-                            Row(
-                                Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable { sortIndex = (sortIndex + 1) % SortOption.entries.size }
-                                    .padding(horizontal = 4.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            ) {
-                                Text(
-                                    text = sort.label,
-                                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Normal, fontSize = 13.sp),
-                                    color = Tone.Muted,
-                                )
-                                Icon(
-                                    Icons.Rounded.KeyboardArrowDown,
-                                    contentDescription = "Sort",
-                                    tint = Tone.Faint,
-                                    modifier = Modifier.size(15.dp),
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // 2-Column Tall Box-Art Poster Grid
-                items(displayedGames, key = { "${section.name}_${it.id}" }) { game ->
-                    val stat = stats[game.id]
-                    val isFav = game.id in favoriteIds
-                    PosterGameCard(
-                        game = game,
-                        stat = stat,
-                        isFavorite = isFav,
-                        isRecent = game.id == recents.firstOrNull()?.id,
-                        onPlay = { onPlay(game) },
-                        onLongPress = { onInspectGame(game) },
-                        onToggleFavorite = { onToggleFavorite(game) },
-                    )
+            if (games.isEmpty()) {
+                item(key = "shelves_empty") {
+                    MinimalEmptyState(scanning = scanning, onAddFolder = onAddFolder)
                 }
             } else {
-                // Clean empty state
-                item(key = "empty_state", span = { GridItemSpan(maxLineSpan) }) {
-                    EmptyLibraryCard(
-                        section = section,
-                        scanning = scanning,
-                        onAddFolder = onAddFolder,
-                    )
-                }
-            }
-        }
-
-        // Bottom 3-Icon Navigation Bar (Grid · Clock · Heart, zero text labels)
-        BottomIconNavBar(
-            selected = section,
-            onSelect = { section = it },
-        )
-    }
-}
-
-@Composable
-private fun ContinuePlayingHeroCard(
-    game: Game,
-    stat: PlayStat?,
-    isRecent: Boolean,
-    onResume: () -> Unit,
-    onDetails: () -> Unit,
-) {
-    val shape = RoundedCornerShape(20.dp)
-    val progress = remember(stat, isRecent, game.id) { computeProgress(game.id, stat, isRecent) }
-    val pct = (progress * 100f).roundToInt().coerceIn(8, 98)
-
-    val subtitle = remember(game.id, stat?.lastPlayed, isRecent) {
-        val sys = friendlySystemName(game)
-        when {
-            stat != null && stat.lastPlayed > 0L -> {
-                val rel = DateUtils.getRelativeTimeSpanString(
-                    stat.lastPlayed,
-                    System.currentTimeMillis(),
-                    DateUtils.DAY_IN_MILLIS,
-                ).toString().lowercase(Locale.getDefault())
-                "$sys · Last played $rel"
-            }
-            isRecent -> "$sys · Last played recently"
-            else -> "$sys · ${systemYear(game.systemId)}"
-        }
-    }
-
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .height(246.dp)
-            .clip(shape)
-            .background(Color(0xFF0D0F0D))
-            .border(1.dp, Tone.Line, shape)
-            .clickable(onClick = onDetails),
-    ) {
-        HeroCrtBackdrop(game, Modifier.fillMaxSize())
-
-        Column(
-            Modifier
-                .fillMaxSize()
-                .padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 34.dp),
-            verticalArrangement = Arrangement.SpaceBetween,
-        ) {
-            Column(
-                Modifier.fillMaxWidth(0.76f),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Text(
-                    text = "CONTINUE PLAYING",
-                    style = TextStyle(
-                        fontFamily = Inter,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 10.5.sp,
-                        letterSpacing = 0.12.em,
-                    ),
-                    color = Ascend.accent,
-                )
-                Text(
-                    text = game.title,
-                    style = TextStyle(
-                        fontFamily = Inter,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 28.sp,
-                        lineHeight = 32.sp,
-                        letterSpacing = (-0.03).em,
-                    ),
-                    color = Color.White,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    text = subtitle,
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Normal, fontSize = 13.sp),
-                    color = Tone.Muted,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Row(
-                    Modifier
-                        .height(44.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Ascend.accent)
-                        .clickable(onClick = onResume)
-                        .padding(horizontal = 18.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(7.dp),
-                ) {
-                    Icon(
-                        Icons.Rounded.PlayArrow,
-                        contentDescription = "Resume ${game.title}",
-                        tint = Ascend.onAccent,
-                        modifier = Modifier.size(18.dp),
-                    )
-                    Text(
-                        text = "Resume game",
-                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.sp),
-                        color = Ascend.onAccent,
-                    )
+                ShelfBucket.entries.forEach { bucket ->
+                    val list = buckets[bucket].orEmpty()
+                    if (list.isNotEmpty()) {
+                        item(key = "shelf_${bucket.id}") {
+                            ShelfCoverSection(
+                                title = bucket.label,
+                                games = list,
+                                coverWidth = coverWidth,
+                                onOpenCase = onOpenCase,
+                                onQuickPlay = onQuickPlay,
+                            )
+                        }
+                    }
                 }
 
-                Box(
-                    Modifier
-                        .size(44.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFF151815).copy(alpha = 0.90f))
-                        .border(1.dp, Color(0xFF282C28), RoundedCornerShape(12.dp))
-                        .clickable(onClick = onDetails),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        Icons.AutoMirrored.Rounded.ArrowForward,
-                        contentDescription = "Details for ${game.title}",
-                        tint = Color.White,
-                        modifier = Modifier.size(18.dp),
-                    )
+                if (favoriteGames.isNotEmpty()) {
+                    item(key = "shelf_favourites") {
+                        ShelfCoverSection(
+                            title = "Favourites",
+                            games = favoriteGames,
+                            coverWidth = coverWidth,
+                            onOpenCase = onOpenCase,
+                            onQuickPlay = onQuickPlay,
+                        )
+                    }
                 }
             }
-        }
-
-        // Bottom-right translucent progress capsule ("62%")
-        Box(
-            Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 16.dp, bottom = 16.dp)
-                .width(130.dp)
-                .height(26.dp)
-                .clip(RoundedCornerShape(9.dp))
-                .background(Color(0xFF151712).copy(alpha = 0.86f))
-                .border(0.75.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(9.dp)),
-        ) {
-            Box(
-                Modifier
-                    .fillMaxHeight()
-                    .fillMaxWidth(progress)
-                    .background(Ascend.accent.copy(alpha = 0.22f)),
-            )
-            Text(
-                text = "$pct%",
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 11.sp),
-                color = Color.White.copy(alpha = 0.90f),
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .padding(end = 10.dp),
-            )
         }
     }
 }
 
 @Composable
-private fun PosterGameCard(
-    game: Game,
-    stat: PlayStat?,
-    isFavorite: Boolean,
-    isRecent: Boolean,
-    onPlay: () -> Unit,
-    onLongPress: () -> Unit,
-    onToggleFavorite: () -> Unit,
+private fun ShelfCoverSection(
+    title: String,
+    games: List<Game>,
+    coverWidth: Dp,
+    onOpenCase: (Game) -> Unit,
+    onQuickPlay: (Game) -> Unit,
 ) {
-    val coverShape = RoundedCornerShape(16.dp)
-    val progress = remember(stat, isRecent, game.id) { computeProgress(game.id, stat, isRecent) }
-
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .combinedClickable(onClick = onPlay, onLongClick = onLongPress),
-    ) {
-        Box(
+    Column(Modifier.fillMaxWidth()) {
+        Row(
             Modifier
                 .fillMaxWidth()
-                .aspectRatio(0.71f)
-                .clip(coverShape)
-                .background(Tone.Surface),
-        ) {
-            CoverArt(game, Modifier.fillMaxSize())
-
-            // Subtle bottom scrim so the thin progress bar reads cleanly over bright art
-            Box(
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .height(34.dp)
-                    .background(
-                        Brush.verticalGradient(
-                            0f to Color.Transparent,
-                            1f to Color.Black.copy(alpha = 0.45f),
-                        ),
-                    ),
-            )
-
-            // Thin inset bottom progress bar
-            Box(
-                Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(horizontal = 12.dp, vertical = 10.dp)
-                    .fillMaxWidth()
-                    .height(3.dp)
-                    .clip(CircleShape)
-                    .background(Color.Black.copy(alpha = 0.36f)),
-            ) {
-                Box(
-                    Modifier
-                        .fillMaxWidth(progress)
-                        .fillMaxHeight()
-                        .clip(CircleShape)
-                        .background(if (isFavorite) Color(0xFFE5C146) else Color.White.copy(alpha = 0.85f)),
-                )
-            }
-        }
-
-        Spacer(Modifier.height(10.dp))
-
-        Row(
-            Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                .padding(start = 18.dp, end = 18.dp, top = 18.dp, bottom = 12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Bottom,
         ) {
             Text(
-                text = game.title,
+                text = title,
                 style = TextStyle(
                     fontFamily = Inter,
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 14.5.sp,
-                    lineHeight = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.5.sp,
                     letterSpacing = (-0.015).em,
                 ),
                 color = Tone.Ink,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
             )
-            Icon(
-                imageVector = if (isFavorite) Icons.Rounded.Favorite else Icons.Outlined.FavoriteBorder,
-                contentDescription = if (isFavorite) "Remove ${game.title} from favourites" else "Favourite ${game.title}",
-                tint = if (isFavorite) Ascend.accent else Tone.Faint,
-                modifier = Modifier
-                    .size(19.dp)
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        role = Role.Button,
-                        onClick = onToggleFavorite,
-                    ),
+            Text(
+                text = if (games.size == 1) "1 game" else "${games.size} games",
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Normal, fontSize = 12.5.sp),
+                color = Tone.Muted,
             )
         }
 
-        Text(
-            text = "${friendlySystemName(game)}   ${systemYear(game.systemId)}",
-            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Normal, fontSize = 12.sp),
-            color = Tone.Muted,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 2.dp),
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 18.dp),
+            horizontalArrangement = Arrangement.spacedBy(9.5.dp),
+        ) {
+            items(games, key = { "${title}_${it.id}" }) { game ->
+                TactileCoverTile(
+                    game = game,
+                    width = coverWidth,
+                    onClick = { onOpenCase(game) },
+                    onLongClick = { onQuickPlay(game) },
+                )
+            }
+        }
+
+        Spacer(Modifier.height(18.dp))
+        HorizontalDivider(
+            thickness = 1.dp,
+            color = Tone.Line,
+            modifier = Modifier.padding(horizontal = 18.dp),
         )
     }
 }
 
 @Composable
-private fun BottomIconNavBar(
-    selected: LibrarySection,
-    onSelect: (LibrarySection) -> Unit,
+private fun TactileCoverTile(
+    game: Game,
+    width: Dp?,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        if (pressed) 0.94f else 1f,
+        spring(dampingRatio = 0.65f, stiffness = 550f),
+        label = "coverPressScale",
+    )
+    val rotY by animateFloatAsState(
+        if (pressed) -9f else 0f,
+        spring(dampingRatio = 0.65f, stiffness = 500f),
+        label = "coverPressTilt",
+    )
+    val shape = RoundedCornerShape(7.dp)
+
+    Box(
+        Modifier
+            .then(if (width != null) Modifier.width(width) else Modifier.fillMaxWidth())
+            .aspectRatio(0.68f)
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                rotationY = rotY
+            }
+            .clip(shape)
+            .background(Tone.Surface)
+            .border(0.6.dp, Color.White.copy(alpha = 0.09f), shape)
+            .combinedClickable(
+                interactionSource = interaction,
+                indication = null,
+                onClick = onClick,
+                onLongClick = onLongClick,
+            ),
+    ) {
+        CoverArt(game, Modifier.fillMaxSize())
+    }
+}
+
+@Composable
+private fun LibraryGridContent(
+    games: List<Game>,
+    scanning: Boolean,
+    hasFolders: Boolean,
+    addMenuOpen: Boolean,
+    onAddMenuToggle: (Boolean) -> Unit,
+    onAddFolder: () -> Unit,
+    onRescan: () -> Unit,
+    onOpenHomebrew: () -> Unit,
+    onOpenDownload: () -> Unit,
+    onOpenCase: (Game) -> Unit,
+    onQuickPlay: (Game) -> Unit,
+) {
+    var query by rememberSaveable { mutableStateOf("") }
+    var selectedSystem by rememberSaveable { mutableStateOf<String?>(null) }
+
+    val systems = remember(games) {
+        val ids = games.mapTo(HashSet()) { it.systemId }
+        Systems.all.filter { it.id in ids }
+    }
+    val filtered = remember(games, query, selectedSystem) {
+        val q = query.trim().lowercase(Locale.getDefault())
+        games.filter { g ->
+            (selectedSystem == null || g.systemId == selectedSystem) &&
+                (q.isEmpty() || g.title.lowercase(Locale.getDefault()).contains(q) || g.systemId.contains(q))
+        }
+    }
+
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(4),
+        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 18.dp, bottom = 28.dp),
+        horizontalArrangement = Arrangement.spacedBy(9.5.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        item(key = "lib_header", span = { GridItemSpan(maxLineSpan) }) {
+            TopTitleRow(
+                title = "Library",
+                addMenuOpen = addMenuOpen,
+                scanning = scanning,
+                hasFolders = hasFolders,
+                onAddMenuToggle = onAddMenuToggle,
+                onAddFolder = onAddFolder,
+                onRescan = onRescan,
+                onOpenHomebrew = onOpenHomebrew,
+                onOpenDownload = onOpenDownload,
+                horizontalPadding = 0.dp,
+            )
+        }
+
+        if (games.isNotEmpty()) {
+            item(key = "lib_search", span = { GridItemSpan(maxLineSpan) }) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(40.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Tone.Surface)
+                            .border(1.dp, Tone.Line, RoundedCornerShape(10.dp))
+                            .padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(Icons.Outlined.Search, null, tint = Tone.Muted, modifier = Modifier.size(17.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Box(Modifier.weight(1f)) {
+                            if (query.isEmpty()) {
+                                Text(
+                                    "Search ${games.size} games…",
+                                    style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                                    color = Tone.Muted,
+                                )
+                            }
+                            BasicTextField(
+                                value = query,
+                                onValueChange = { query = it },
+                                singleLine = true,
+                                textStyle = TextStyle(fontFamily = Inter, fontSize = 13.5.sp, color = Tone.Ink),
+                                cursorBrush = SolidColor(Ascend.accent),
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                        if (query.isNotEmpty()) {
+                            Icon(
+                                Icons.Rounded.Close,
+                                contentDescription = "Clear",
+                                tint = Tone.Muted,
+                                modifier = Modifier.size(16.dp).clickable { query = "" },
+                            )
+                        }
+                    }
+
+                    if (systems.size > 1) {
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            item {
+                                SystemFilterPill("All", selectedSystem == null) { selectedSystem = null }
+                            }
+                            items(systems, key = { it.id }) { sys ->
+                                SystemFilterPill(sys.shortName, selectedSystem == sys.id) {
+                                    selectedSystem = if (selectedSystem == sys.id) null else sys.id
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if (games.isEmpty()) {
+            item(key = "lib_empty", span = { GridItemSpan(maxLineSpan) }) {
+                MinimalEmptyState(scanning = scanning, onAddFolder = onAddFolder)
+            }
+        } else {
+            items(filtered, key = { "grid_${it.id}" }) { game ->
+                TactileCoverTile(
+                    game = game,
+                    width = null,
+                    onClick = { onOpenCase(game) },
+                    onLongClick = { onQuickPlay(game) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SystemFilterPill(label: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .height(28.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (selected) Ascend.accent.copy(alpha = 0.18f) else Tone.Surface)
+            .border(1.dp, if (selected) Ascend.accent else Tone.Line, RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            style = TextStyle(fontFamily = Inter, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, fontSize = 12.sp),
+            color = if (selected) Ascend.accent else Tone.Muted,
+        )
+    }
+}
+
+@Composable
+private fun StatsScreenContent(
+    games: List<Game>,
+    buckets: Map<ShelfBucket, List<Game>>,
+    stats: Map<String, PlayStat>,
+    onOpenCase: (Game) -> Unit,
+) {
+    val totalSeconds = remember(stats) { stats.values.sumOf { it.seconds } }
+    val totalSessions = remember(stats) { stats.values.sumOf { it.sessions } }
+    val playingCount = buckets[ShelfBucket.Playing]?.size ?: 0
+    val completedCount = buckets[ShelfBucket.Completed]?.size ?: 0
+    val backlogCount = buckets[ShelfBucket.Backlog]?.size ?: 0
+    val mostPlayed = remember(games, stats) {
+        games.sortedByDescending { stats[it.id]?.seconds ?: 0 }.take(4)
+    }
+
+    LazyColumn(
+        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 18.dp, bottom = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        item {
+            Text(
+                text = "Stats",
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 30.sp, letterSpacing = (-0.03).em),
+                color = Tone.Ink,
+            )
+        }
+
+        item {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                StatMetricCard("Play Time", if (totalSeconds > 0) PlayTime.format(totalSeconds) else "0m", Modifier.weight(1f))
+                StatMetricCard("Sessions", totalSessions.toString(), Modifier.weight(1f))
+                StatMetricCard("Library", games.size.toString(), Modifier.weight(1f))
+            }
+        }
+
+        item {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Tone.Surface)
+                    .border(1.dp, Tone.Line, RoundedCornerShape(12.dp))
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Text("Shelf Breakdown", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 15.sp), color = Tone.Ink)
+                val total = (playingCount + completedCount + backlogCount).coerceAtLeast(1)
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(CircleShape)
+                        .background(Tone.Raised),
+                ) {
+                    if (playingCount > 0) Box(Modifier.weight(playingCount.toFloat() / total).fillMaxHeight().background(Ascend.accent))
+                    if (completedCount > 0) Box(Modifier.weight(completedCount.toFloat() / total).fillMaxHeight().background(Color(0xFF3FD8A4)))
+                    if (backlogCount > 0) Box(Modifier.weight(backlogCount.toFloat() / total).fillMaxHeight().background(Color(0xFF4C5566)))
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("Playing · $playingCount", style = TextStyle(fontFamily = Inter, fontSize = 12.sp), color = Ascend.accent)
+                    Text("Completed · $completedCount", style = TextStyle(fontFamily = Inter, fontSize = 12.sp), color = Color(0xFF3FD8A4))
+                    Text("Backlog · $backlogCount", style = TextStyle(fontFamily = Inter, fontSize = 12.sp), color = Tone.Muted)
+                }
+            }
+        }
+
+        if (mostPlayed.isNotEmpty()) {
+            item {
+                Text("Top Covers", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 16.5.sp), color = Tone.Ink)
+            }
+            item {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.5.dp)) {
+                    mostPlayed.forEach { game ->
+                        Box(Modifier.weight(1f)) {
+                            TactileCoverTile(game = game, width = null, onClick = { onOpenCase(game) }, onLongClick = {})
+                        }
+                    }
+                    repeat((4 - mostPlayed.size).coerceAtLeast(0)) {
+                        Spacer(Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatMetricCard(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(Tone.Surface)
+            .border(1.dp, Tone.Line, RoundedCornerShape(12.dp))
+            .padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(value, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 19.sp), color = Tone.Ink, maxLines = 1)
+        Text(label, style = TextStyle(fontFamily = Inter, fontSize = 11.5.sp), color = Tone.Muted, maxLines = 1)
+    }
+}
+
+@Composable
+private fun SettingsScreenContent(
+    gamesCount: Int,
+    scanning: Boolean,
+    hasFolders: Boolean,
+    onAddFolder: () -> Unit,
+    onRescan: () -> Unit,
+    onOpenHomebrew: () -> Unit,
+    onOpenDownload: () -> Unit,
+    onImportBios: () -> Unit,
+    onImportSkin: () -> Unit,
+    onToggleTheme: (() -> Unit)?,
+) {
+    LazyColumn(
+        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 18.dp, bottom = 28.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        item {
+            Text(
+                text = "Settings",
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 30.sp, letterSpacing = (-0.03).em),
+                color = Tone.Ink,
+                modifier = Modifier.padding(bottom = 4.dp),
+            )
+        }
+
+        item {
+            SettingsActionCard(
+                icon = Icons.Outlined.CreateNewFolder,
+                title = "Add game folder",
+                subtitle = "$gamesCount games indexed across 46 supported consoles",
+                onClick = onAddFolder,
+            )
+        }
+        if (hasFolders) {
+            item {
+                SettingsActionCard(
+                    icon = Icons.Outlined.Refresh,
+                    title = if (scanning) "Scanning library…" else "Rescan folders",
+                    subtitle = "Refresh ROMs from your selected folders",
+                    onClick = { if (!scanning) onRescan() },
+                )
+            }
+        }
+        item {
+            SettingsActionCard(
+                icon = Icons.Rounded.CardGiftcard,
+                title = "Free homebrew games",
+                subtitle = "Install openly licensed retro games in one tap",
+                onClick = onOpenHomebrew,
+            )
+        }
+        item {
+            SettingsActionCard(
+                icon = Icons.Outlined.Download,
+                title = "Download from link",
+                subtitle = "Fetch a ROM or folder from your cloud or server",
+                onClick = onOpenDownload,
+            )
+        }
+        item {
+            SettingsActionCard(
+                icon = Icons.Outlined.Memory,
+                title = "Import BIOS files",
+                subtitle = "PlayStation, Sega CD, PC Engine CD & Lynx firmware",
+                onClick = onImportBios,
+            )
+        }
+        item {
+            SettingsActionCard(
+                icon = Icons.Outlined.SportsEsports,
+                title = "Import controller skin (.deltaskin)",
+                subtitle = "Custom portrait & landscape console shells",
+                onClick = onImportSkin,
+            )
+        }
+        if (onToggleTheme != null) {
+            item {
+                SettingsActionCard(
+                    icon = Icons.Outlined.Tune,
+                    title = if (Tone.isDark) "Appearance: Pitch Dark" else "Appearance: Light",
+                    subtitle = "Tap to switch theme mode",
+                    onClick = onToggleTheme,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsActionCard(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Tone.Surface)
+            .border(1.dp, Tone.Line, RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(13.dp),
+    ) {
+        Icon(icon, null, tint = Ascend.accent, modifier = Modifier.size(20.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp), color = Tone.Ink)
+            Text(subtitle, style = TextStyle(fontFamily = Inter, fontSize = 12.sp), color = Tone.Muted)
+        }
+    }
+}
+
+@Composable
+private fun TopTitleRow(
+    title: String,
+    addMenuOpen: Boolean,
+    scanning: Boolean,
+    hasFolders: Boolean,
+    onAddMenuToggle: (Boolean) -> Unit,
+    onAddFolder: () -> Unit,
+    onRescan: () -> Unit,
+    onOpenHomebrew: () -> Unit,
+    onOpenDownload: () -> Unit,
+    horizontalPadding: Dp = 18.dp,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = horizontalPadding),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = title,
+            style = TextStyle(
+                fontFamily = Inter,
+                fontWeight = FontWeight.Bold,
+                fontSize = 30.sp,
+                lineHeight = 35.sp,
+                letterSpacing = (-0.03).em,
+            ),
+            color = Tone.Ink,
+        )
+
+        Box {
+            Box(
+                Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(Tone.Surface)
+                    .border(1.dp, Tone.Line, CircleShape)
+                    .clickable { onAddMenuToggle(true) },
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.Rounded.Add, contentDescription = "Add games", tint = Tone.Ink, modifier = Modifier.size(19.dp))
+            }
+
+            DropdownMenu(
+                expanded = addMenuOpen,
+                onDismissRequest = { onAddMenuToggle(false) },
+                shape = RoundedCornerShape(12.dp),
+                containerColor = Tone.Surface,
+                border = BorderStroke(1.dp, Tone.Line),
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Add game folder", color = Tone.Ink) },
+                    leadingIcon = { Icon(Icons.Outlined.CreateNewFolder, null, tint = Ascend.accent) },
+                    onClick = { onAddMenuToggle(false); onAddFolder() },
+                )
+                DropdownMenuItem(
+                    text = { Text("Free homebrew games", color = Tone.Ink) },
+                    leadingIcon = { Icon(Icons.Rounded.CardGiftcard, null, tint = Ascend.accent) },
+                    onClick = { onAddMenuToggle(false); onOpenHomebrew() },
+                )
+                DropdownMenuItem(
+                    text = { Text("Download from link", color = Tone.Ink) },
+                    leadingIcon = { Icon(Icons.Outlined.Download, null, tint = Ascend.accent) },
+                    onClick = { onAddMenuToggle(false); onOpenDownload() },
+                )
+                if (hasFolders) {
+                    DropdownMenuItem(
+                        text = { Text(if (scanning) "Scanning…" else "Rescan library", color = Tone.Ink) },
+                        leadingIcon = { Icon(Icons.Outlined.Refresh, null, tint = Ascend.accent) },
+                        enabled = !scanning,
+                        onClick = { onAddMenuToggle(false); onRescan() },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MinimalEmptyState(scanning: Boolean, onAddFolder: () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 80.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        Text(
+            text = if (scanning) "Scanning your ROM folder…" else "Your shelves are empty",
+            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 16.sp),
+            color = Tone.Ink,
+        )
+        if (!scanning) {
+            Row(
+                Modifier
+                    .height(44.dp)
+                    .clip(RoundedCornerShape(11.dp))
+                    .background(Ascend.accent)
+                    .clickable(onClick = onAddFolder)
+                    .padding(horizontal = 20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Icon(Icons.Rounded.Add, null, tint = Color.White, modifier = Modifier.size(18.dp))
+                Text(
+                    text = "Add game folder",
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.sp),
+                    color = Color.White,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Exact 4-tab bottom bar matching the reference screenshot:
+ * Pitch-dark bar, thin top border, and on the active tab a 2.5dp glowing Warm Ember top bar
+ * with a soft vertical warm-amber spotlight column behind the active icon & label.
+ */
+@Composable
+private fun EmberBottomTabBar(
+    selected: MainTab,
+    onSelect: (MainTab) -> Unit,
 ) {
     Column(
         Modifier
             .fillMaxWidth()
-            .background(Tone.Bg)
+            .background(Tone.Surface)
             .windowInsetsPadding(WindowInsets.navigationBars),
     ) {
         HorizontalDivider(thickness = 1.dp, color = Tone.Line)
         Row(
             Modifier
                 .fillMaxWidth()
-                .height(62.dp)
-                .padding(horizontal = 14.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                .height(64.dp),
         ) {
-            LibrarySection.entries.forEach { tab ->
-                val active = tab == selected
+            MainTab.entries.forEach { item ->
+                val active = item == selected
                 Box(
                     Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(if (active) Color(0xFF181B18) else Color.Transparent)
+                        .then(
+                            if (active) {
+                                Modifier.background(
+                                    Brush.verticalGradient(
+                                        0f to Ascend.accent.copy(alpha = 0.19f),
+                                        0.65f to Ascend.accent.copy(alpha = 0.06f),
+                                        1f to Color.Transparent,
+                                    ),
+                                )
+                            } else {
+                                Modifier
+                            },
+                        )
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
                             role = Role.Tab,
-                            onClick = { onSelect(tab) },
+                            onClick = { onSelect(item) },
                         ),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(
-                        imageVector = tab.icon,
-                        contentDescription = tab.contentDescription,
-                        tint = if (active) Tone.Ink else Tone.Muted,
-                        modifier = Modifier.size(21.dp),
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun EmptyLibraryCard(
-    section: LibrarySection,
-    scanning: Boolean,
-    onAddFolder: () -> Unit,
-) {
-    val message = when {
-        scanning -> "Scanning your ROM folder…"
-        section == LibrarySection.Recent -> "Games you play will show up here."
-        section == LibrarySection.Favourites -> "Tap the heart on any game to keep it here."
-        else -> "Add a ROM folder to populate your collection."
-    }
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(vertical = 72.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Text(
-            text = message,
-            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Normal, fontSize = 14.5.sp),
-            color = Tone.Muted,
-        )
-        if (section == LibrarySection.Collection && !scanning) {
-            Row(
-                Modifier
-                    .height(44.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Ascend.accent)
-                    .clickable(onClick = onAddFolder)
-                    .padding(horizontal = 20.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(7.dp),
-            ) {
-                Icon(Icons.Rounded.Add, null, tint = Ascend.onAccent, modifier = Modifier.size(18.dp))
-                Text(
-                    text = "Add game folder",
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.sp),
-                    color = Ascend.onAccent,
-                )
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-internal fun GameOptionsSheet(
-    game: Game,
-    stat: PlayStat?,
-    saveSlots: List<Pair<Int, Long>>,
-    currentCore: CoreInfo?,
-    onPlay: (Int?) -> Unit,
-    onSelectCore: (CoreInfo) -> Unit,
-    onDelete: (() -> Unit)?,
-    onDismiss: () -> Unit,
-) {
-    val system = game.system
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = Tone.Surface,
-        contentColor = Tone.Ink,
-    ) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .padding(start = 20.dp, end = 20.dp, bottom = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = "${friendlySystemName(game)} · ${systemYear(game.systemId)}".uppercase(Locale.getDefault()),
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 10.5.sp, letterSpacing = 0.12.em),
-                    color = Ascend.accent,
-                )
-                Text(
-                    text = game.title,
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 22.sp),
-                    color = Tone.Ink,
-                )
-                if (stat != null && stat.seconds > 0) {
-                    Text(
-                        text = "Played ${PlayTime.format(stat.seconds)} across ${stat.sessions} ${if (stat.sessions == 1) "session" else "sessions"}",
-                        style = TextStyle(fontFamily = Inter, fontSize = 13.sp),
-                        color = Tone.Muted,
-                    )
-                }
-            }
-
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .height(46.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Ascend.accent)
-                    .clickable { onDismiss(); onPlay(null) },
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center,
-            ) {
-                Icon(Icons.Rounded.PlayArrow, null, tint = Ascend.onAccent, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = if (saveSlots.any { it.first == AppPaths.AUTO_SLOT }) "Resume game" else "Play game",
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp),
-                    color = Ascend.onAccent,
-                )
-            }
-
-            if (saveSlots.isNotEmpty()) {
-                Text(
-                    text = "Save states",
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.sp),
-                    color = Tone.Muted,
-                )
-                saveSlots.forEach { (slot, timestamp) ->
-                    val label = if (slot == AppPaths.AUTO_SLOT) "Auto-save" else "Slot $slot"
-                    val rel = DateUtils.getRelativeTimeSpanString(timestamp, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS)
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(Tone.Raised)
-                            .clickable { onDismiss(); onPlay(slot) }
-                            .padding(horizontal = 14.dp, vertical = 11.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(label, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 14.sp), color = Tone.Ink)
-                        Text(rel.toString(), style = TextStyle(fontFamily = Inter, fontSize = 12.sp), color = Tone.Muted)
+                    if (active) {
+                        Box(
+                            Modifier
+                                .align(Alignment.TopCenter)
+                                .fillMaxWidth(0.76f)
+                                .height(2.5.dp)
+                                .background(Ascend.accent),
+                        )
                     }
-                }
-            }
-
-            if (system != null && system.cores.size > 1) {
-                Text(
-                    text = "Emulator core",
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.sp),
-                    color = Tone.Muted,
-                )
-                system.cores.forEach { core ->
-                    val active = core.id == currentCore?.id
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(Tone.Raised)
-                            .clickable { onSelectCore(core) }
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        Text(core.displayName, style = TextStyle(fontFamily = Inter, fontSize = 14.sp), color = Tone.Ink)
-                        if (active) Icon(Icons.Rounded.Check, null, tint = Ascend.accent, modifier = Modifier.size(18.dp))
+                        Icon(
+                            imageVector = if (active) item.selectedIcon else item.unselectedIcon,
+                            contentDescription = item.label,
+                            tint = if (active) Ascend.accent else Tone.Muted,
+                            modifier = Modifier.size(21.dp),
+                        )
+                        Text(
+                            text = item.label,
+                            style = TextStyle(
+                                fontFamily = Inter,
+                                fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
+                                fontSize = 11.sp,
+                            ),
+                            color = if (active) Ascend.accent else Tone.Muted,
+                            maxLines = 1,
+                        )
                     }
-                }
-            }
-
-            if (onDelete != null) {
-                TextButton(
-                    onClick = { onDismiss(); onDelete() },
-                    modifier = Modifier.align(Alignment.End),
-                ) {
-                    Text("Remove from device", color = Color(0xFFFF6B6B))
                 }
             }
         }
@@ -863,7 +1042,7 @@ internal fun HomebrewCatalogSheet(
         ) {
             Text(
                 text = "Free homebrew games",
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 20.sp),
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 20.sp),
                 color = Tone.Ink,
             )
             Homebrew.catalog.forEach { entry ->
@@ -879,7 +1058,7 @@ internal fun HomebrewCatalogSheet(
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     Column(Modifier.weight(1f).padding(end = 12.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(entry.title, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 14.5.sp), color = Tone.Ink)
+                        Text(entry.title, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp), color = Tone.Ink)
                         Text("${entry.system?.shortName ?: entry.systemId.uppercase()} · ${entry.author}", style = TextStyle(fontFamily = Inter, fontSize = 12.sp), color = Tone.Muted)
                     }
                     Text(
@@ -891,44 +1070,4 @@ internal fun HomebrewCatalogSheet(
             }
         }
     }
-}
-
-private fun friendlySystemName(game: Game): String = when (game.systemId) {
-    "gc" -> "GameCube"
-    "psx" -> "PS1"
-    "ps2" -> "PS2"
-    "genesis" -> "Genesis"
-    "arcade" -> "Arcade"
-    else -> game.system?.shortName ?: game.systemId.uppercase(Locale.getDefault())
-}
-
-private fun systemYear(systemId: String): String = when (systemId) {
-    "atari2600" -> "1977"
-    "atari5200", "coleco", "vectrex" -> "1982"
-    "nes", "fds" -> "1985"
-    "sms", "atari7800" -> "1986"
-    "pce" -> "1987"
-    "genesis", "gb", "lynx" -> "1989"
-    "neogeo", "gg" -> "1990"
-    "snes", "segacd" -> "1991"
-    "3do", "jaguar" -> "1993"
-    "psx", "saturn", "32x" -> "1994"
-    "vb" -> "1995"
-    "n64" -> "1996"
-    "gbc", "ngp", "dc" -> "1998"
-    "ws" -> "1999"
-    "ps2" -> "2000"
-    "gba", "gc" -> "2001"
-    "nds", "psp" -> "2004"
-    "3ds" -> "2011"
-    else -> "1995"
-}
-
-private fun computeProgress(gameId: String, stat: PlayStat?, isRecent: Boolean): Float {
-    if (stat != null && stat.seconds > 0) {
-        return (0.20f + (stat.seconds.toFloat() / 7200f) * 0.72f).coerceIn(0.20f, 0.94f)
-    }
-    if (isRecent) return 0.62f
-    val bucket = ((gameId.hashCode() and 0x7FFFFFFF) % 55) / 100f
-    return (0.28f + bucket).coerceIn(0.28f, 0.84f)
 }

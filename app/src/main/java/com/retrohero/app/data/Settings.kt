@@ -86,7 +86,7 @@ class Settings(context: Context) {
 
     /** Accent colour id from [Looks.accents], or "look:<id>" for an imported look. */
     var accent: String
-        get() = prefs.getString("accent", "lime")!!
+        get() = prefs.getString("accent", "ember")!!
         set(v) = prefs.edit { putString("accent", v) }
 
     var darkMode: Boolean
@@ -141,6 +141,31 @@ class Settings(context: Context) {
     var stickAsDpad: Boolean
         get() = prefs.getBoolean("stick_as_dpad", true)
         set(v) = prefs.edit { putBoolean("stick_as_dpad", v) }
+
+    private val _shelfStatuses = MutableStateFlow(loadShelfStatuses())
+    val shelfStatuses: StateFlow<Map<String, String>> = _shelfStatuses
+
+    private fun loadShelfStatuses(): Map<String, String> {
+        val raw = prefs.getString("shelf_statuses_json", null) ?: return emptyMap()
+        return runCatching {
+            val obj = org.json.JSONObject(raw)
+            buildMap {
+                val keys = obj.keys()
+                while (keys.hasNext()) {
+                    val k = keys.next()
+                    put(k, obj.optString(k))
+                }
+            }
+        }.getOrDefault(emptyMap())
+    }
+
+    fun setShelfStatus(gameId: String, status: String) {
+        val updated = _shelfStatuses.value.toMutableMap().apply { put(gameId, status) }
+        val obj = org.json.JSONObject()
+        updated.forEach { (k, v) -> obj.put(k, v) }
+        prefs.edit { putString("shelf_statuses_json", obj.toString()) }
+        _shelfStatuses.value = updated
+    }
 
     private val _favorites = MutableStateFlow(prefs.getStringSet(KEY_FAVORITES, emptySet())!!.toSet())
     /** Pinned games, shown in the home "Speed dial". */

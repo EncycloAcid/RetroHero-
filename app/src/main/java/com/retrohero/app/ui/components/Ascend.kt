@@ -21,5 +21,5 @@ object Ascend {
     val Muted: Color get() = Tone.Muted
     val CardShape = RoundedCornerShape(Radius.Card)
     val accent: Color get() = Salmon
-    val onAccent: Color get() = if (accent.luminance() > 0.35f) Color(0xFF0B0C0B) else Color.White
+    val onAccent: Color get() = if (accent.luminance() > 0.52f) Color(0xFF0B0C0B) else Color.White
 }
