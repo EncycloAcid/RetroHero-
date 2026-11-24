@@ -18,25 +18,26 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 
+val AcidLimeColor = Color(0xFFD8FF3E)
 val MonoAccentColor = Color(0xFFFAFAFA)
-private val accentState = mutableStateOf(MonoAccentColor)
+private val accentState = mutableStateOf(AcidLimeColor)
 private val darkState = mutableStateOf(true)
 
 object Tone {
     val isDark: Boolean get() = darkState.value
     fun setDarkMode(dark: Boolean) { darkState.value = dark }
 
-    val Bg: Color get() = if (isDark) Color(0xFF000000) else Color(0xFFFFFFFF)
-    val Surface: Color get() = if (isDark) Color(0xFF111113) else Color(0xFFF5F5F7)
-    val Raised: Color get() = if (isDark) Color(0xFF1C1C1F) else Color(0xFFEBEBEF)
-    val Ink: Color get() = if (isDark) Color(0xFFFFFFFF) else Color(0xFF0A0A0C)
-    val Muted: Color get() = if (isDark) Color(0xFF8E8E93) else Color(0xFF6E6E73)
-    val Faint: Color get() = if (isDark) Color(0xFF525258) else Color(0xFFA1A1A6)
-    val Line: Color get() = if (isDark) Color(0xFF232327) else Color(0xFFE5E5EA)
+    val Bg: Color get() = if (isDark) Color(0xFF0A0B0A) else Color(0xFFF7F8F5)
+    val Surface: Color get() = if (isDark) Color(0xFF141614) else Color(0xFFFFFFFF)
+    val Raised: Color get() = if (isDark) Color(0xFF1D201D) else Color(0xFFECEDE9)
+    val Ink: Color get() = if (isDark) Color(0xFFF5F6F4) else Color(0xFF101210)
+    val Muted: Color get() = if (isDark) Color(0xFF8A8E88) else Color(0xFF666A65)
+    val Faint: Color get() = if (isDark) Color(0xFF535752) else Color(0xFF9EA39C)
+    val Line: Color get() = if (isDark) Color(0xFF252825) else Color(0xFFE0E2DC)
 }
 
 /**
- * The accent colour (Monochrome by default, adapting to Ink/Bg so game box art carries all the colour).
+ * The accent colour (Electric Acid Lime #D8FF3E by default) paired with matte obsidian surfaces.
  * It follows the chosen look; reading it in a composable recomposes when the look changes.
  */
 val Salmon: Color get() = accentState.value

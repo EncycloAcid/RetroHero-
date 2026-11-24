@@ -63,9 +63,9 @@ val FloatingNavHeight = 72.dp
 
 @Composable
 fun FloatingNavBar(items: List<NavItem>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
-    val dockShape = RoundedCornerShape(20.dp)
+    val dockShape = RoundedCornerShape(18.dp)
     val dark = Tone.isDark
-    val dockBg = if (dark) Color(0xFF0E0E10) else Color(0xFFFFFFFF)
+    val dockBg = if (dark) Color(0xFF0E0F0E) else Color(0xFFFFFFFF)
     val dockBorder = Tone.Line
     Box(
         modifier
@@ -100,23 +100,31 @@ fun FloatingNavBar(items: List<NavItem>, selected: Int, onSelect: (Int) -> Unit,
                     label = "navScale",
                 )
                 val tint by animateColorAsState(
-                    if (active) Ascend.onAccent else Tone.Muted,
+                    when {
+                        active && dark -> Ascend.accent
+                        active && !dark -> Tone.Ink
+                        else -> Tone.Muted
+                    },
                     tween(160),
                     label = "navTint",
                 )
                 val pill by animateColorAsState(
-                    if (active) Ascend.accent else Color.Transparent,
+                    if (active) Tone.Raised else Color.Transparent,
                     tween(180),
                     label = "navPill",
                 )
-                val keyShape = RoundedCornerShape(14.dp)
+                val keyShape = RoundedCornerShape(12.dp)
                 Box(
                     Modifier
-                        .weight(if (active) 1.48f else 0.92f)
+                        .weight(if (active) 1.44f else 0.94f)
                         .fillMaxHeight()
                         .graphicsLayer { scaleX = scale; scaleY = scale }
                         .clip(keyShape)
                         .background(pill)
+                        .then(
+                            if (active) Modifier.border(1.dp, Tone.Line, keyShape)
+                            else Modifier,
+                        )
                         .selectable(
                             selected = active,
                             interactionSource = interaction,

@@ -124,53 +124,48 @@ fun LibraryScreen(
         games.filter { (stats[it.id]?.sessions ?: 0) == 0 }
     }
 
-    val columns = when (tab) {
-        LibraryTab.Favourites -> 3
-        else -> 2
-    }
-
     LazyVerticalGrid(
-        columns = GridCells.Fixed(columns),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 28.dp + LocalNavSpace.current),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        columns = GridCells.Fixed(2),
+        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, bottom = 28.dp + LocalNavSpace.current),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier.fillMaxSize().background(Tone.Bg),
     ) {
-        // Minimal Flat Header
+        // YOUR HARDWARE / Consoles Header + Acid Lime '+' Square
         span {
             Row(
                 Modifier
                     .fillMaxWidth()
                     .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(top = 12.dp, bottom = 2.dp),
+                    .padding(top = 14.dp, bottom = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Column {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        "YOUR HARDWARE",
+                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 10.5.sp, letterSpacing = 0.12.em),
+                        color = Tone.Muted,
+                    )
                     Text(
                         "Consoles",
                         style = TextStyle(
                             fontFamily = Inter,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 24.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 27.sp,
                             letterSpacing = (-0.03).em,
                         ),
                         color = Tone.Ink,
-                    )
-                    Text(
-                        "${activeSystems.size} active · ${Systems.all.size} supported · ${games.size} games",
-                        style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
-                        color = Tone.Muted,
                     )
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (onCoverFlow != null && games.isNotEmpty()) {
                         Box(
                             Modifier
-                                .size(36.dp)
-                                .clip(CircleShape)
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(12.dp))
                                 .background(Tone.Surface)
-                                .border(1.dp, Tone.Line, CircleShape)
+                                .border(1.dp, Tone.Line, RoundedCornerShape(12.dp))
                                 .clickable(onClick = onCoverFlow),
                             contentAlignment = Alignment.Center,
                         ) {
@@ -179,19 +174,19 @@ fun LibraryScreen(
                     }
                     Box(
                         Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(12.dp))
                             .background(Ascend.accent)
                             .clickable(onClick = onNewCollection),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Icon(Icons.Rounded.Add, "New shelf", tint = Ascend.onAccent, modifier = Modifier.size(19.dp))
+                        Icon(Icons.Rounded.Add, "New shelf", tint = Ascend.onAccent, modifier = Modifier.size(21.dp))
                     }
                 }
             }
         }
 
-        // Crisp Editorial Underline Tab Bar (all 5 tabs fit cleanly across 411dp)
+        // Crisp Editorial Underline Tab Bar with Acid Lime active indicator
         span {
             Column(Modifier.fillMaxWidth()) {
                 Row(
@@ -203,14 +198,14 @@ fun LibraryScreen(
                         Column(
                             Modifier
                                 .clickable { tab = item }
-                                .padding(top = 6.dp),
+                                .padding(top = 4.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Text(
                                 item.label,
                                 style = TextStyle(
                                     fontFamily = Inter,
-                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
                                     fontSize = 12.5.sp,
                                 ),
                                 color = if (selected) Tone.Ink else Tone.Muted,
@@ -220,8 +215,9 @@ fun LibraryScreen(
                             Box(
                                 Modifier
                                     .width(28.dp)
-                                    .height(2.dp)
-                                    .background(if (selected) Tone.Ink else Tone.Bg),
+                                    .height(2.5.dp)
+                                    .clip(CircleShape)
+                                    .background(if (selected) Ascend.accent else Tone.Bg),
                             )
                         }
                     }

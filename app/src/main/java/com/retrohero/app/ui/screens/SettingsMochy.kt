@@ -144,35 +144,35 @@ fun SettingsHome(
             .background(Tone.Bg)
             .verticalScroll(rememberScrollState())
             .windowInsetsPadding(WindowInsets.statusBars)
-            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 28.dp + LocalNavSpace.current),
+            .padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 28.dp + LocalNavSpace.current),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        // Minimal Flat Header
+        // PREFERENCES / System Header
         Row(
             Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Column {
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
-                    "System",
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 24.sp, letterSpacing = (-0.03).em),
-                    color = Tone.Ink,
+                    "PREFERENCES",
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 10.5.sp, letterSpacing = 0.12.em),
+                    color = Tone.Muted,
                 )
                 Text(
-                    "${Systems.all.size} systems · $abiLabel",
-                    style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
-                    color = Tone.Muted,
+                    "System",
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 27.sp, letterSpacing = (-0.03).em),
+                    color = Tone.Ink,
                 )
             }
             Row(
                 Modifier
-                    .height(34.dp)
-                    .clip(CircleShape)
+                    .height(38.dp)
+                    .clip(RoundedCornerShape(12.dp))
                     .background(Tone.Surface)
-                    .border(1.dp, Tone.Line, CircleShape)
+                    .border(1.dp, Tone.Line, RoundedCornerShape(12.dp))
                     .clickable { onOpen("about") }
-                    .padding(horizontal = 12.dp),
+                    .padding(horizontal = 13.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(5.dp),
             ) {

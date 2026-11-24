@@ -112,6 +112,7 @@ fun GamesScreen(
     onQuickPlay: ((Game) -> Unit)? = null,
     pageIndex: Int = 3,
     onHomebrew: (() -> Unit)? = null,
+    onToggleFavorite: (Game) -> Unit = {},
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var systemFilter by rememberSaveable { mutableStateOf<String?>(null) }
@@ -175,10 +176,10 @@ fun GamesScreen(
     Box(Modifier.fillMaxSize().background(Tone.Bg)) {
         LazyVerticalGrid(
             state = grid,
-            columns = GridCells.Fixed(3),
-            contentPadding = PaddingValues(start = 16.dp, end = if (showScroller) 28.dp else 16.dp, bottom = 28.dp + LocalNavSpace.current),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            columns = GridCells.Fixed(2),
+            contentPadding = PaddingValues(start = 18.dp, end = if (showScroller) 30.dp else 18.dp, bottom = 28.dp + LocalNavSpace.current),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
             fullWidth {
@@ -186,7 +187,7 @@ fun GamesScreen(
                     Modifier
                         .fillMaxWidth()
                         .windowInsetsPadding(WindowInsets.statusBars)
-                        .padding(top = 12.dp)
+                        .padding(top = 14.dp)
                         .animateContentSize(),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
@@ -195,25 +196,25 @@ fun GamesScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        Column {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(
-                                title,
-                                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 24.sp, letterSpacing = (-0.03).em),
-                                color = Tone.Ink,
+                                "EXPLORE",
+                                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 10.5.sp, letterSpacing = 0.12.em),
+                                color = Tone.Muted,
                             )
                             Text(
-                                "${filtered.size} of ${games.size} titles · ${sort.label}",
-                                style = TextStyle(fontFamily = Inter, fontSize = 12.sp),
-                                color = Tone.Muted,
+                                title,
+                                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 27.sp, letterSpacing = (-0.03).em),
+                                color = Tone.Ink,
                             )
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Box(
                                 Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
+                                    .size(40.dp)
+                                    .clip(RoundedCornerShape(12.dp))
                                     .background(Tone.Surface)
-                                    .border(1.dp, Tone.Line, CircleShape)
+                                    .border(1.dp, Tone.Line, RoundedCornerShape(12.dp))
                                     .clickable { gridMode = !gridMode },
                                 contentAlignment = Alignment.Center,
                             ) {
@@ -227,12 +228,12 @@ fun GamesScreen(
                             val active = filtersOpen || filtersActive
                             Row(
                                 Modifier
-                                    .height(36.dp)
-                                    .clip(CircleShape)
+                                    .height(40.dp)
+                                    .clip(RoundedCornerShape(12.dp))
                                     .background(if (active) Ascend.accent else Tone.Surface)
-                                    .then(if (active) Modifier else Modifier.border(1.dp, Tone.Line, CircleShape))
+                                    .then(if (active) Modifier else Modifier.border(1.dp, Tone.Line, RoundedCornerShape(12.dp)))
                                     .clickable { filtersOpen = !filtersOpen }
-                                    .padding(horizontal = 12.dp),
+                                    .padding(horizontal = 13.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(5.dp),
                             ) {
@@ -275,7 +276,7 @@ fun GamesScreen(
                     }
 
                     AnimatedVisibility(visible = filtersOpen) {
-                        val panelShape = RoundedCornerShape(10.dp)
+                        val panelShape = RoundedCornerShape(12.dp)
                         Column(
                             Modifier
                                 .fillMaxWidth()
@@ -331,14 +332,18 @@ fun GamesScreen(
                     }
                 }
             } else if (gridMode) {
-                // Default: Dense 3-Column Pure Box-Art Wall
+                // Default: 2-Column Tall Box-Art Poster Grid matching Figma layout
                 items(filtered, key = { "grid_${it.id}" }) { game ->
+                    val year = systemReleaseYear(game.systemId)
                     GameCard(
                         game = game,
                         onClick = { onPlay(game) },
-                        subtitle = game.system?.shortName,
+                        subtitle = "${game.system?.shortName ?: game.systemId}   $year",
                         onLongClick = { onGameOptions(game) },
                         onPlay = onQuickPlay?.let { qp -> { qp(game) } } ?: { onPlay(game) },
+                        progress = computeGameProgress(stats[game.id], false),
+                        isFavorite = game.id in favorites,
+                        onToggleFavorite = { onToggleFavorite(game) },
                     )
                 }
             } else {

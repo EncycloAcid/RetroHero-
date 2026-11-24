@@ -36,13 +36,13 @@ object Looks {
     val skins = listOf(Console, Instrument, Glass, Classic, Minimal, Neon, Stealth)
 
     val accents = listOf(
+        "lime" to ("Acid Lime" to Color(0xFFD8FF3E)),
         "mono" to ("Monochrome" to Color(0xFFFAFAFA)),
         "ember" to ("Ember" to Color(0xFFFF5A1F)),
         "crimson" to ("Crimson" to Color(0xFFE60012)),
         "mint" to ("Mint" to Color(0xFF3FD8A4)),
         "sky" to ("Sky" to Color(0xFF4CC9FF)),
         "aurora" to ("Cobalt" to Color(0xFF5B8CFF)),
-        "salmon" to ("Rose" to Color(0xFFFF6B8B)),
         "butter" to ("Gold" to Color(0xFFF6C85F)),
     )
 

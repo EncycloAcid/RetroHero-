@@ -8,6 +8,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -30,6 +31,8 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -73,16 +76,24 @@ object Ascend {
     val Muted: Color get() = Tone.Muted
     val CardShape = RoundedCornerShape(Radius.Card)
     private val isMono: Boolean get() = Salmon == com.retrohero.app.ui.theme.MonoAccentColor
+    private val isLime: Boolean get() = Salmon == com.retrohero.app.ui.theme.AcidLimeColor
     private val drawnAccent: Color get() = Salmon.compositeOver(Tone.Bg)
     val accent: Color get() = when {
         isMono -> Tone.Ink
+        isLime -> if (Tone.isDark) Color(0xFFD8FF3E) else Color(0xFFC8F526)
         Tone.isDark && drawnAccent.luminance() < 0.25f -> lerp(Salmon, Color.White, 0.5f)
         !Tone.isDark && drawnAccent.luminance() > 0.6f -> lerp(Salmon, Color.Black, 0.35f)
         else -> Salmon
     }
+    /** Readable accent colour for small inline text labels on Bg/Surface. */
+    val accentText: Color get() = when {
+        isLime && !Tone.isDark -> Color(0xFF557200)
+        else -> accent
+    }
     val onAccent: Color get() = when {
         isMono -> Tone.Bg
-        accent.luminance() > 0.35f -> Color(0xFF0A0A0C)
+        isLime -> Color(0xFF0A0B0A)
+        accent.luminance() > 0.35f -> Color(0xFF0A0B0A)
         else -> Color.White
     }
 }
@@ -111,8 +122,8 @@ fun SectionTitle(
             modifier = Modifier.weight(1f),
             style = TextStyle(
                 fontFamily = Inter,
-                fontWeight = FontWeight.Bold,
-                fontSize = 17.sp,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 18.sp,
                 letterSpacing = (-0.02).em,
             ),
             maxLines = 1,
@@ -121,8 +132,8 @@ fun SectionTitle(
         )
         if (count != null) {
             Text(
-                count.toString(),
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 13.sp),
+                "$count titles",
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Normal, fontSize = 13.sp),
                 color = Tone.Muted,
                 modifier = Modifier.padding(start = 8.dp),
             )
@@ -138,7 +149,11 @@ fun SectionTitle(
     }
 }
 
-/** Pure Box-Art First card: sharp full-bleed cover art with clean monochrome title underneath and zero gradients. */
+/**
+ * Figma-inspired tall box-art poster card:
+ * Rounded 16.dp full-bleed cover art with thin bottom progress bar, clean title + tappable Acid Lime heart,
+ * and muted console + year metadata underneath.
+ */
 @Composable
 fun GameCard(
     game: Game,
@@ -148,6 +163,9 @@ fun GameCard(
     subtitle: String? = game.system?.shortName,
     onLongClick: (() -> Unit)? = null,
     onPlay: (() -> Unit)? = null,
+    progress: Float? = null,
+    isFavorite: Boolean = false,
+    onToggleFavorite: (() -> Unit)? = null,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
@@ -156,7 +174,7 @@ fun GameCard(
         spring(dampingRatio = 0.7f, stiffness = 600f),
         label = "gameCardScale",
     )
-    val artShape = RoundedCornerShape(8.dp)
+    val artShape = RoundedCornerShape(16.dp)
     Column(
         modifier
             .then(if (width != null) Modifier.width(width) else Modifier.fillMaxWidth())
@@ -166,21 +184,21 @@ fun GameCard(
         Box(
             Modifier
                 .fillMaxWidth()
-                .aspectRatio(0.76f)
+                .aspectRatio(0.73f)
                 .clip(artShape)
                 .background(Tone.Surface)
-                .border(0.75.dp, Tone.Line, artShape),
+                .border(1.dp, Tone.Line, artShape),
         ) {
             GameArt(game, Modifier.fillMaxSize(), showTag = false)
             if (onPlay != null) {
                 Box(
                     Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(6.dp)
-                        .size(26.dp)
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                        .size(30.dp)
                         .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.78f))
-                        .border(0.75.dp, Color.White.copy(alpha = 0.28f), CircleShape)
+                        .background(Color(0xFF0A0B0A).copy(alpha = 0.72f))
+                        .border(0.75.dp, Color.White.copy(alpha = 0.22f), CircleShape)
                         .clickable(onClick = onPlay),
                     contentAlignment = Alignment.Center,
                 ) {
@@ -188,27 +206,67 @@ fun GameCard(
                         Icons.Rounded.PlayArrow,
                         "Play ${game.title}",
                         tint = Color.White,
-                        modifier = Modifier.size(15.dp),
+                        modifier = Modifier.size(16.dp),
                     )
                 }
             }
+            // Thin sleek bottom progress bar inside cover art (matching Figma reference)
+            val barProgress = progress?.coerceIn(0f, 1f)
+            if (barProgress != null) {
+                Box(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 10.dp)
+                        .height(3.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.50f)),
+                ) {
+                    if (barProgress > 0f) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth(barProgress)
+                                .fillMaxHeight()
+                                .clip(CircleShape)
+                                .background(if (isFavorite) Ascend.accent else Color.White.copy(alpha = 0.88f)),
+                        )
+                    }
+                }
+            }
         }
-        Spacer(Modifier.height(6.dp))
-        Text(
-            game.title,
-            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp, lineHeight = 15.sp),
-            color = Tone.Ink,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        Spacer(Modifier.height(8.dp))
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(
+                game.title,
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 13.5.sp, lineHeight = 16.sp),
+                color = Tone.Ink,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            if (onToggleFavorite != null) {
+                Icon(
+                    imageVector = if (isFavorite) androidx.compose.material.icons.Icons.Rounded.Favorite else androidx.compose.material.icons.Icons.Rounded.FavoriteBorder,
+                    contentDescription = if (isFavorite) "Unpin ${game.title}" else "Pin ${game.title}",
+                    tint = if (isFavorite) Ascend.accent else Tone.Faint,
+                    modifier = Modifier
+                        .size(18.dp)
+                        .clickable(onClick = onToggleFavorite),
+                )
+            }
+        }
         if (!subtitle.isNullOrBlank()) {
             Text(
                 subtitle,
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Normal, fontSize = 11.sp),
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Normal, fontSize = 11.5.sp),
                 color = Tone.Muted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(top = 1.dp),
+                modifier = Modifier.padding(top = 2.dp),
             )
         }
     }
@@ -235,7 +293,7 @@ fun Key(
         spring(dampingRatio = 0.7f, stiffness = 600f),
         label = "keyScale",
     )
-    val shape = RoundedCornerShape(10.dp)
+    val shape = RoundedCornerShape(12.dp)
     val view = LocalView.current
     val contentAlpha = if (enabled) 1f else 0.4f
     val fg = if (primary) Ascend.onAccent else Tone.Ink
@@ -243,7 +301,7 @@ fun Key(
     Row(
         modifier
             .graphicsLayer { scaleX = scale; scaleY = scale; alpha = contentAlpha }
-            .height(42.dp)
+            .height(44.dp)
             .clip(shape)
             .background(bg)
             .then(if (primary) Modifier else Modifier.border(1.dp, Tone.Line, shape))
@@ -256,11 +314,11 @@ fun Key(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (icon != null) {
-            Icon(icon, null, tint = fg, modifier = Modifier.size(17.dp))
+            Icon(icon, null, tint = fg, modifier = Modifier.size(18.dp))
         }
         Text(
             text,
-            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp),
+            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.sp),
             color = fg,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
