@@ -264,7 +264,23 @@ fun HomeScreen(
             .take(StripMax)
     }
     val pager = rememberPagerState { strip.size.coerceAtLeast(1) }
-    LaunchedEffect(activeSystem) { if (strip.isNotEmpty()) pager.scrollToPage(0) }
+    var focusedGameId by rememberSaveable { mutableStateOf(strip.getOrNull(pager.currentPage)?.id) }
+    var previousActiveSystem by remember { mutableStateOf(activeSystem) }
+    LaunchedEffect(pager.currentPage) {
+        strip.getOrNull(pager.currentPage)?.let { focusedGameId = it.id }
+    }
+    LaunchedEffect(strip) {
+        if (previousActiveSystem != activeSystem) {
+            previousActiveSystem = activeSystem
+            if (strip.isNotEmpty()) {
+                focusedGameId = strip.first().id
+                pager.scrollToPage(0)
+            }
+        } else {
+            val newIndex = focusedGameId?.let { id -> strip.indexOfFirst { it.id == id } } ?: -1
+            if (newIndex >= 0 && newIndex != pager.currentPage) pager.scrollToPage(newIndex)
+        }
+    }
     val focused = strip.getOrNull(pager.currentPage.coerceIn(0, (strip.size - 1).coerceAtLeast(0)))
 
     val screenW = LocalConfiguration.current.screenWidthDp.dp
@@ -410,7 +426,10 @@ fun HomeScreen(
                             state = pager,
                             pageSize = androidx.compose.foundation.pager.PageSize.Fixed(tile),
                             pageSpacing = 12.dp,
-                            contentPadding = PaddingValues(start = 20.dp, end = 20.dp),
+                            contentPadding = PaddingValues(
+                                start = 20.dp,
+                                end = (screenW - tile - 20.dp).coerceAtLeast(20.dp),
+                            ),
                             modifier = Modifier.fillMaxWidth().height(tile + 8.dp),
                         ) { page ->
                             val game = strip[page]
