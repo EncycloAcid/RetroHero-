@@ -7,10 +7,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -97,7 +99,11 @@ fun computeDeltaLayout(
         }
         Rect(minL, minT, maxR, maxB)
     } else if (!landscape) {
-        Rect(0f, 0f, containerW, offsetY.coerceAtLeast(1f))
+        if (offsetY < containerH * 0.2f) {
+            Rect(0f, 0f, containerW, containerH)
+        } else {
+            Rect(0f, 0f, containerW, offsetY.coerceAtLeast(1f))
+        }
     } else {
         Rect(0f, 0f, containerW, containerH)
     }
@@ -223,6 +229,20 @@ fun DeltaSkinOverlay(
     var thumbOffsets by remember(skin.identifier, representation) { mutableStateOf(emptyMap<Int, Offset>()) }
     var pointerActive by remember(skin.identifier, representation) { mutableStateOf(false) }
 
+    val currentPressedButtons by rememberUpdatedState(pressedButtons)
+    val currentSustainedButtons by rememberUpdatedState(sustainedButtons)
+    val currentPressedActions by rememberUpdatedState(pressedActions)
+    val currentOnButton by rememberUpdatedState(onButton)
+    val currentOnAction by rememberUpdatedState(onAction)
+    DisposableEffect(Unit) {
+        onDispose {
+            (currentPressedButtons + currentSustainedButtons).forEach { currentOnButton(it, false) }
+            currentPressedActions
+                .filter { it == DeltaAction.FAST_FORWARD_HOLD || it == DeltaAction.REWIND_HOLD }
+                .forEach { currentOnAction(it, false) }
+        }
+    }
+
     // Detect if this is a DS skin with a split bottom touch screen so pointer Y maps to [0..1].
     val dsBottomOnly = remember(systemId, representation) {
         systemId == "nds" && representation.screens.any { s ->
@@ -308,6 +328,7 @@ fun DeltaSkinOverlay(
 
                         // Delta's Hold-Menu Button Sustain combo (reverse-engineered from Delta/GameViewController.swift):
                         // Hold MENU + tap any button to latch/unlatch it held down; release MENU alone to open pause menu.
+                        val prevSustainedButtons = sustainedButtons
                         val menuDownNow = DeltaAction.MENU in nextActions
                         val menuWasDown = DeltaAction.MENU in pressedActions
                         if (menuDownNow && !menuWasDown) {
@@ -334,7 +355,7 @@ fun DeltaSkinOverlay(
                         }
 
                         // Effective pressed buttons = physically held OR sustained via Delta Hold-Button
-                        val prevEffective = pressedButtons + sustainedButtons
+                        val prevEffective = pressedButtons + prevSustainedButtons
                         val nextEffective = nextButtons + sustainedButtons
                         if (nextEffective != prevEffective) {
                             val newlyActive = nextEffective - prevEffective

@@ -4,6 +4,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.InputStream
+import java.security.MessageDigest
 import java.util.zip.ZipInputStream
 
 /** A rectangle in Delta skin mapping-point coordinates. */
@@ -424,33 +425,38 @@ object DeltaSkins {
      * and sets each as the default skin for its compatible system(s) if no skin is selected yet.
      */
     fun installBundledDefaults(context: android.content.Context, rootDir: File, settings: Settings) {
-        val marker = File(rootDir, ".defaults_v1")
-        if (marker.isFile) return
+        val marker = File(rootDir, ".defaults")
+        val legacyMarker = File(rootDir, ".defaults_v1")
+        val installed = linkedSetOf<String>().apply {
+            addAll(runCatching { marker.readLines() }.getOrDefault(emptyList()).filter { it.isNotBlank() })
+            addAll(runCatching { legacyMarker.readLines() }.getOrDefault(emptyList()).filter { it.isNotBlank() })
+        }
         val names = runCatching { context.assets.list("default_skins") }.getOrNull().orEmpty()
             .filter { it.endsWith(".deltaskin", ignoreCase = true) || it.endsWith(".zip", ignoreCase = true) }
             .sorted()
-        if (names.isEmpty()) return
+        if (names.isEmpty() && installed.isEmpty()) return
         rootDir.mkdirs()
-        for (name in names) {
-            runCatching {
+        for (name in names.filterNot { it in installed }) {
+            val succeeded = runCatching {
                 context.assets.open("default_skins/$name").use { stream ->
-                    val skin = import(rootDir, stream)
+                    val skin = import(rootDir, stream, replaceExisting = false)
                     for (sysId in skin.systemIds) {
                         if (settings.deltaSkinFor(sysId) == null) {
                             settings.setDeltaSkinFor(sysId, skin.identifier)
                         }
                     }
                 }
-            }
+            }.isSuccess
+            if (succeeded) installed += name
         }
-        runCatching { marker.writeText(names.joinToString("\n")) }
+        runCatching { marker.writeText(installed.joinToString("\n")) }
     }
 
     /**
      * Imports a `.deltaskin` (ZIP) stream into [rootDir].
      * Re-importing a skin with the same `identifier` replaces the previous copy.
      */
-    fun import(rootDir: File, stream: InputStream): DeltaSkin {
+    fun import(rootDir: File, stream: InputStream, replaceExisting: Boolean = true): DeltaSkin {
         rootDir.mkdirs()
         val tmp = File(rootDir, ".import-${System.nanoTime()}").apply { mkdirs() }
         try {
@@ -464,16 +470,36 @@ object DeltaSkins {
                 throw IllegalArgumentException("Skin asset “${previewAsset ?: "?"}” is missing from the archive")
             }
 
-            val folderName = sanitizeFolderName(parsed.identifier)
+            val folderName = "${sanitizeFolderName(parsed.identifier).take(64)}-${sha1Prefix(parsed.identifier)}"
             val target = File(rootDir, folderName)
-            if (target.exists()) target.deleteRecursively()
-            if (contentRoot == tmp) {
-                if (!tmp.renameTo(target)) {
-                    tmp.copyRecursively(target, overwrite = true)
-                    tmp.deleteRecursively()
+            val rootCanonical = rootDir.canonicalFile
+            require(target.canonicalFile.parentFile == rootCanonical) {
+                "Invalid skin import directory"
+            }
+            val tmpCanonical = tmp.canonicalFile
+            val existingSkin = list(rootDir)
+                .firstOrNull { it.identifier == parsed.identifier && it.dir.canonicalFile != tmpCanonical }
+            if (existingSkin != null) {
+                require(existingSkin.dir.canonicalFile.parentFile == rootCanonical) {
+                    "Existing skin directory is outside the skin folder"
                 }
+                if (!replaceExisting) {
+                    tmp.deleteRecursively()
+                    return existingSkin
+                }
+                existingSkin.dir.deleteRecursively()
+            }
+            if (target.exists()) {
+                throw IllegalArgumentException("Skin import directory already exists")
+            }
+            require(target.canonicalFile.parentFile == rootCanonical) {
+                "Invalid skin import directory"
+            }
+            if (contentRoot == tmp) {
+                tmp.copyRecursively(target, overwrite = false)
+                tmp.deleteRecursively()
             } else {
-                contentRoot.copyRecursively(target, overwrite = true)
+                contentRoot.copyRecursively(target, overwrite = false)
                 tmp.deleteRecursively()
             }
             return parsed.copy(dir = target)
@@ -492,29 +518,30 @@ object DeltaSkins {
             while (true) {
                 val entry = zis.nextEntry ?: break
                 val name = entry.name
-                if (name.startsWith("__MACOSX/") || name.endsWith("/.DS_Store") || name == ".DS_Store") {
-                    zis.closeEntry()
-                    continue
-                }
-                if (++entries > MAX_ENTRIES) throw IllegalArgumentException("Skin archive has too many files")
-                val out = File(destDir, name)
-                val outCanonical = out.canonicalPath
-                if (!outCanonical.startsWith(destCanonical)) {
-                    throw IllegalArgumentException("Invalid path in skin archive")
-                }
-                if (entry.isDirectory) {
-                    out.mkdirs()
-                } else {
-                    out.parentFile?.mkdirs()
-                    out.outputStream().use { fos ->
-                        while (true) {
-                            val n = zis.read(buf)
-                            if (n <= 0) break
-                            totalBytes += n
-                            if (totalBytes > MAX_BYTES) throw IllegalArgumentException("Skin archive is too large")
-                            fos.write(buf, 0, n)
-                        }
+                if (++entries > MAX_ENTRIES) throw IllegalArgumentException("Skin archive has too many entries")
+                val skipped = name == "__MACOSX" ||
+                    name.startsWith("__MACOSX/") ||
+                    name.endsWith("/.DS_Store") ||
+                    name == ".DS_Store"
+                val out = if (skipped) null else File(destDir, name)
+                if (out != null) {
+                    if (!out.canonicalPath.startsWith(destCanonical)) {
+                        throw IllegalArgumentException("Invalid path in skin archive")
                     }
+                    if (entry.isDirectory) out.mkdirs() else out.parentFile?.mkdirs()
+                }
+                val fos = if (out != null && !entry.isDirectory) out.outputStream() else null
+                try {
+                    while (true) {
+                        val n = zis.read(buf)
+                        if (n < 0) break
+                        if (n == 0) continue
+                        totalBytes += n
+                        if (totalBytes > MAX_BYTES) throw IllegalArgumentException("Skin archive is too large")
+                        fos?.write(buf, 0, n)
+                    }
+                } finally {
+                    fos?.close()
                 }
                 zis.closeEntry()
             }
@@ -530,5 +557,11 @@ object DeltaSkins {
     }
 
     private fun sanitizeFolderName(identifier: String): String =
-        Regex("[^a-zA-Z0-9._-]+").replace(identifier, "_").trim('_').ifEmpty { "skin" }.take(80)
+        Regex("[^a-zA-Z0-9._-]+").replace(identifier, "_").trim('_').ifEmpty { "skin" }
+
+    private fun sha1Prefix(identifier: String): String =
+        MessageDigest.getInstance("SHA-1")
+            .digest(identifier.toByteArray(Charsets.UTF_8))
+            .take(4)
+            .joinToString("") { "%02x".format(it.toInt() and 0xff) }
 }

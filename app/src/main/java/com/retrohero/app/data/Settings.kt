@@ -86,7 +86,7 @@ class Settings(context: Context) {
 
     /** Accent colour id from [Looks.accents], or "look:<id>" for an imported look. */
     var accent: String
-        get() = prefs.getString("accent", "deck")!!
+        get() = prefs.getString("accent", "mono")!!
         set(v) = prefs.edit { putString("accent", v) }
 
     var darkMode: Boolean

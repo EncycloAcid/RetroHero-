@@ -147,6 +147,7 @@ class GameLibrary(private val context: Context, private val paths: AppPaths) {
         }
         if (candidates.isEmpty()) return null
         return when (ext) {
+            "m3u" -> Systems.get("psx")
             "bin" -> if (size > 16L * 1024 * 1024) Systems.get("psx") else Systems.get("genesis")
             "cue", "chd", "iso", "img" -> Systems.get("psx")
             else -> candidates.first()
