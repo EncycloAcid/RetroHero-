@@ -29,6 +29,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -36,6 +37,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.style.TextAlign
@@ -64,7 +66,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setAccent(EmberOrangeColor)
+        setAccent(resolveSavedAccent(vm.settings.accent))
         Tone.setDarkMode(vm.settings.darkMode)
         lifecycleScope.launch(Dispatchers.IO) {
             DeltaSkins.installBundledDefaults(this@MainActivity, vm.paths.deltaSkins, vm.settings)
@@ -89,6 +91,14 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private fun resolveSavedAccent(id: String): Color = when (id) {
+        "lime" -> Color(0xFFD7FA3C)
+        "deck" -> Color(0xFF1AA8FF)
+        "crimson" -> Color(0xFFFF385C)
+        "mint" -> Color(0xFF3FD8A4)
+        else -> EmberOrangeColor
     }
 
     private fun handleIncomingDeltaSkin(intent: Intent?) {
@@ -127,6 +137,9 @@ private fun ShelvesHost(vm: AppViewModel) {
     val coreStates by vm.coreStates.collectAsStateWithLifecycle()
     val download by vm.download.collectAsStateWithLifecycle()
 
+    var autoSave by remember { mutableStateOf(vm.settings.autoSave) }
+    var haptics by remember { mutableStateOf(vm.settings.haptics) }
+    var fastForward by remember { mutableFloatStateOf(vm.settings.fastForwardSpeed) }
     var homebrewOpen by rememberSaveable { mutableStateOf(false) }
 
     LifecycleResumeEffect(Unit) {
@@ -176,6 +189,11 @@ private fun ShelvesHost(vm: AppViewModel) {
         shelfStatuses = shelfStatuses,
         scanning = scanning,
         hasFolders = folders.isNotEmpty(),
+        foldersCount = folders.size,
+        autoSave = autoSave,
+        haptics = haptics,
+        fastForwardSpeed = fastForward,
+        coreStates = coreStates,
         saveSlotsFor = { g -> vm.saveSlots(g) },
         currentCoreFor = { g -> g.system?.let { vm.settings.coreFor(it) } },
         onAddFolder = { folderPicker.launch(null) },
@@ -189,11 +207,17 @@ private fun ShelvesHost(vm: AppViewModel) {
         onPlay = { g, slot -> vm.play(g, slot) },
         onSelectCore = { g, core -> g.system?.let { vm.setCore(it, core) } },
         onDeleteGame = { g -> vm.deleteGame(g) },
+        onSetAutoSave = { autoSave = it; vm.settings.autoSave = it },
+        onSetHaptics = { haptics = it; vm.settings.haptics = it },
+        onSetFastForward = { fastForward = it; vm.settings.fastForwardSpeed = it },
+        onSelectAccent = { id, col -> vm.settings.accent = id; setAccent(col) },
         onToggleTheme = {
             val next = !Tone.isDark
             vm.settings.darkMode = next
             Tone.setDarkMode(next)
         },
+        onDownloadCore = vm::downloadCore,
+        onDeleteCore = vm::deleteCore,
     )
 
     if (homebrewOpen) {

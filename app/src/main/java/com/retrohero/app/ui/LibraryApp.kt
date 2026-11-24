@@ -1,6 +1,8 @@
 package com.retrohero.app.ui
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
@@ -8,7 +10,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,6 +27,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -32,6 +37,7 @@ import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -47,20 +53,22 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.Download
+import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Layers
-import androidx.compose.material.icons.outlined.Memory
-import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.PieChart
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.SportsEsports
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.ViewAgenda
+import androidx.compose.material.icons.outlined.ViewWeek
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.CardGiftcard
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Layers
-import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.PieChart
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -70,6 +78,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -78,12 +87,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -92,6 +104,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.retrohero.app.data.CoreInfo
+import com.retrohero.app.data.CoreManager.CoreState
 import com.retrohero.app.data.Game
 import com.retrohero.app.data.Homebrew
 import com.retrohero.app.data.HomebrewGame
@@ -100,8 +113,14 @@ import com.retrohero.app.data.PlayTime
 import com.retrohero.app.data.Systems
 import com.retrohero.app.ui.components.Ascend
 import com.retrohero.app.ui.components.CoverArt
+import com.retrohero.app.ui.components.FloatingNavBar
+import com.retrohero.app.ui.components.FloatingNavBarHeight
+import com.retrohero.app.ui.components.FloatingNavRail
 import com.retrohero.app.ui.components.InteractiveGameCaseModal
+import com.retrohero.app.ui.components.LocalNavSpace
+import com.retrohero.app.ui.components.NavItem
 import com.retrohero.app.ui.components.ShelfBucket
+import com.retrohero.app.ui.components.posterAccentColor
 import com.retrohero.app.ui.theme.Inter
 import com.retrohero.app.ui.theme.Tone
 import java.util.Locale
@@ -111,11 +130,19 @@ internal enum class MainTab(
     val selectedIcon: ImageVector,
     val unselectedIcon: ImageVector,
 ) {
-    Library("Library", Icons.Rounded.Layers, Icons.Outlined.Layers),
     Shelves("Shelves", Icons.Rounded.Tune, Icons.Outlined.Tune),
+    Library("Vault", Icons.Rounded.Layers, Icons.Outlined.Layers),
     Stats("Stats", Icons.Rounded.PieChart, Icons.Outlined.PieChart),
-    Settings("Settings", Icons.Rounded.Person, Icons.Outlined.Person),
+    System("System", Icons.Rounded.Settings, Icons.Outlined.Settings),
 }
+
+internal enum class VaultViewMode(val label: String, val icon: ImageVector) {
+    Boxes("Boxes", Icons.Outlined.GridView),
+    Spines("Spines", Icons.Outlined.ViewWeek),
+    Index("Index", Icons.Outlined.ViewAgenda),
+}
+
+private val NavItems = MainTab.entries.map { NavItem(it.label, it.selectedIcon, it.unselectedIcon) }
 
 internal fun resolveShelfBucket(
     game: Game,
@@ -132,7 +159,6 @@ internal fun resolveShelfBucket(
     if (game.id in recentIds) return ShelfBucket.Playing
     if ((stat?.seconds ?: 0) >= 3_600) return ShelfBucket.Completed
     if ((stat?.seconds ?: 0) > 0) return ShelfBucket.Playing
-    // Smart initial shelf distribution when no play history exists yet
     return when {
         index < 3 -> ShelfBucket.Playing
         index < 7 -> ShelfBucket.Completed
@@ -149,7 +175,13 @@ internal fun ShelvesAppView(
     shelfStatuses: Map<String, String> = emptyMap(),
     scanning: Boolean = false,
     hasFolders: Boolean = false,
+    foldersCount: Int = if (hasFolders) 1 else 0,
+    autoSave: Boolean = true,
+    haptics: Boolean = true,
+    fastForwardSpeed: Float = 3f,
+    coreStates: Map<String, CoreState> = emptyMap(),
     initialTab: MainTab = MainTab.Shelves,
+    initialVaultMode: VaultViewMode = VaultViewMode.Boxes,
     initialOpenGameId: String? = null,
     autoOpenCaseOnMount: Boolean = false,
     saveSlotsFor: (Game) -> List<Pair<Int, Long>> = { emptyList() },
@@ -165,11 +197,22 @@ internal fun ShelvesAppView(
     onPlay: (Game, Int?) -> Unit,
     onSelectCore: (Game, CoreInfo) -> Unit = { _, _ -> },
     onDeleteGame: ((Game) -> Unit)? = null,
-    onToggleTheme: (() -> Unit)? = null,
+    onSetAutoSave: (Boolean) -> Unit = {},
+    onSetHaptics: (Boolean) -> Unit = {},
+    onSetFastForward: (Float) -> Unit = {},
+    onSelectAccent: (String, Color) -> Unit = { _, _ -> },
+    onToggleTheme: () -> Unit = {},
+    onDownloadCore: (CoreInfo) -> Unit = {},
+    onDeleteCore: (CoreInfo) -> Unit = {},
 ) {
     var tab by rememberSaveable { mutableStateOf(initialTab) }
     var openCaseGameId by rememberSaveable { mutableStateOf(initialOpenGameId) }
+    var autoSwingOpen by rememberSaveable { mutableStateOf(autoOpenCaseOnMount) }
     var addMenuOpen by remember { mutableStateOf(false) }
+
+    val wide = LocalConfiguration.current.screenWidthDp >= 600
+    val navInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    val bottomNavSpace = if (wide) 16.dp else (FloatingNavBarHeight + 28.dp + navInset)
 
     val recentIds = remember(recents) { recents.mapTo(HashSet()) { it.id } }
     val buckets = remember(games, recentIds, stats, shelfStatuses) {
@@ -183,110 +226,150 @@ internal fun ShelvesAppView(
         map
     }
 
-    Box(Modifier.fillMaxSize().background(Tone.Bg)) {
-        Column(Modifier.fillMaxSize()) {
-            Box(
-                Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .windowInsetsPadding(WindowInsets.statusBars),
-            ) {
-                when (tab) {
-                    MainTab.Shelves -> ShelvesScreenContent(
-                        games = games,
-                        buckets = buckets,
-                        favoriteGames = remember(games, favoriteIds) { games.filter { it.id in favoriteIds } },
-                        scanning = scanning,
-                        hasFolders = hasFolders,
-                        addMenuOpen = addMenuOpen,
-                        onAddMenuToggle = { addMenuOpen = it },
-                        onAddFolder = onAddFolder,
-                        onRescan = onRescan,
-                        onOpenHomebrew = onOpenHomebrew,
-                        onOpenDownload = onOpenDownload,
-                        onOpenCase = { openCaseGameId = it.id },
-                        onQuickPlay = { onPlay(it, null) },
+    CompositionLocalProvider(LocalNavSpace provides bottomNavSpace) {
+        Box(Modifier.fillMaxSize().background(Tone.Bg)) {
+            Row(Modifier.fillMaxSize()) {
+                if (wide) {
+                    FloatingNavRail(
+                        items = NavItems,
+                        selected = tab.ordinal,
+                        onSelect = { tab = MainTab.entries[it] },
                     )
-                    MainTab.Library -> LibraryGridContent(
-                        games = games,
-                        scanning = scanning,
-                        hasFolders = hasFolders,
-                        addMenuOpen = addMenuOpen,
-                        onAddMenuToggle = { addMenuOpen = it },
-                        onAddFolder = onAddFolder,
-                        onRescan = onRescan,
-                        onOpenHomebrew = onOpenHomebrew,
-                        onOpenDownload = onOpenDownload,
-                        onOpenCase = { openCaseGameId = it.id },
-                        onQuickPlay = { onPlay(it, null) },
-                    )
-                    MainTab.Stats -> StatsScreenContent(
-                        games = games,
-                        buckets = buckets,
-                        stats = stats,
-                        onOpenCase = { openCaseGameId = it.id },
-                    )
-                    MainTab.Settings -> SettingsScreenContent(
-                        gamesCount = games.size,
-                        scanning = scanning,
-                        hasFolders = hasFolders,
-                        onAddFolder = onAddFolder,
-                        onRescan = onRescan,
-                        onOpenHomebrew = onOpenHomebrew,
-                        onOpenDownload = onOpenDownload,
-                        onImportBios = onImportBios,
-                        onImportSkin = onImportSkin,
-                        onToggleTheme = onToggleTheme,
-                    )
+                }
+
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .windowInsetsPadding(WindowInsets.statusBars),
+                ) {
+                    AnimatedContent(
+                        targetState = tab,
+                        transitionSpec = {
+                            fadeIn(tween(200, easing = FastOutSlowInEasing)) togetherWith
+                                fadeOut(tween(150, easing = FastOutSlowInEasing))
+                        },
+                        label = "mainPageTransition",
+                    ) { currentTab ->
+                        when (currentTab) {
+                            MainTab.Shelves -> ShelvesPage(
+                                games = games,
+                                recents = recents,
+                                buckets = buckets,
+                                favoriteGames = remember(games, favoriteIds) { games.filter { it.id in favoriteIds } },
+                                stats = stats,
+                                scanning = scanning,
+                                hasFolders = hasFolders,
+                                addMenuOpen = addMenuOpen,
+                                onAddMenuToggle = { addMenuOpen = it },
+                                onAddFolder = onAddFolder,
+                                onRescan = onRescan,
+                                onOpenHomebrew = onOpenHomebrew,
+                                onOpenDownload = onOpenDownload,
+                                onOpenCase = { autoSwingOpen = false; openCaseGameId = it.id },
+                                onOpenCaseOpened = { autoSwingOpen = true; openCaseGameId = it.id },
+                                onQuickPlay = { onPlay(it, null) },
+                            )
+                            MainTab.Library -> LibraryVaultPage(
+                                games = games,
+                                buckets = buckets,
+                                stats = stats,
+                                initialMode = initialVaultMode,
+                                scanning = scanning,
+                                onAddFolder = onAddFolder,
+                                onOpenCase = { autoSwingOpen = false; openCaseGameId = it.id },
+                                onQuickPlay = { onPlay(it, null) },
+                            )
+                            MainTab.Stats -> StatsDashboardPage(
+                                games = games,
+                                buckets = buckets,
+                                favoriteCount = favoriteIds.size,
+                                stats = stats,
+                                onOpenCase = { autoSwingOpen = false; openCaseGameId = it.id },
+                            )
+                            MainTab.System -> SystemControlDeckPage(
+                                gamesCount = games.size,
+                                foldersCount = foldersCount,
+                                scanning = scanning,
+                                autoSave = autoSave,
+                                haptics = haptics,
+                                fastForwardSpeed = fastForwardSpeed,
+                                coreStates = coreStates,
+                                onSetAutoSave = onSetAutoSave,
+                                onSetHaptics = onSetHaptics,
+                                onSetFastForward = onSetFastForward,
+                                onSelectAccent = onSelectAccent,
+                                onToggleTheme = onToggleTheme,
+                                onAddFolder = onAddFolder,
+                                onRescan = onRescan,
+                                onOpenHomebrew = onOpenHomebrew,
+                                onOpenDownload = onOpenDownload,
+                                onImportBios = onImportBios,
+                                onImportSkin = onImportSkin,
+                                onDownloadCore = onDownloadCore,
+                                onDeleteCore = onDeleteCore,
+                            )
+                        }
+                    }
                 }
             }
 
-            // Bottom 4-Tab Bar with Glowing Warm Ember Top Indicator & Vertical Spotlight
-            EmberBottomTabBar(
-                selected = tab,
-                onSelect = { tab = it },
-            )
-        }
-
-        // Interactive 3D Physical Game Case Overlay
-        val activeCaseGame = openCaseGameId?.let { id -> games.firstOrNull { it.id == id } }
-        var retainedGame by remember { mutableStateOf(activeCaseGame) }
-        if (activeCaseGame != null) retainedGame = activeCaseGame
-
-        AnimatedVisibility(
-            visible = activeCaseGame != null,
-            enter = fadeIn(tween(180)) + scaleIn(tween(220), initialScale = 0.94f),
-            exit = fadeOut(tween(160)) + scaleOut(tween(180), targetScale = 0.95f),
-        ) {
-            val g = retainedGame
-            if (g != null) {
-                val gIdx = games.indexOfFirst { it.id == g.id }.coerceAtLeast(0)
-                val bucket = resolveShelfBucket(g, gIdx, recentIds, stats[g.id], shelfStatuses)
-                InteractiveGameCaseModal(
-                    game = g,
-                    stat = stats[g.id],
-                    isFavorite = g.id in favoriteIds,
-                    shelfBucket = bucket,
-                    saveSlots = saveSlotsFor(g),
-                    currentCore = currentCoreFor(g),
-                    autoOpenOnMount = autoOpenCaseOnMount,
-                    onSetShelfBucket = { onSetShelfBucket(g, it) },
-                    onToggleFavorite = { onToggleFavorite(g) },
-                    onPlay = { slot -> onPlay(g, slot) },
-                    onSelectCore = { core -> onSelectCore(g, core) },
-                    onDelete = if (g.isLocal && onDeleteGame != null) ({ onDeleteGame(g) }) else null,
-                    onClose = { openCaseGameId = null },
+            // Floating Capsule Navigation Bar suspended over the bottom edge
+            if (!wide) {
+                FloatingNavBar(
+                    items = NavItems,
+                    selected = tab.ordinal,
+                    onSelect = { tab = MainTab.entries[it] },
+                    modifier = Modifier.align(Alignment.BottomCenter),
                 )
+            }
+
+            // Interactive 3D Physical Game Case Overlay
+            val activeCaseGame = openCaseGameId?.let { id -> games.firstOrNull { it.id == id } }
+            var retainedGame by remember { mutableStateOf(activeCaseGame) }
+            if (activeCaseGame != null) retainedGame = activeCaseGame
+
+            AnimatedVisibility(
+                visible = activeCaseGame != null,
+                enter = fadeIn(tween(180)) + scaleIn(tween(220), initialScale = 0.94f),
+                exit = fadeOut(tween(160)) + scaleOut(tween(180), targetScale = 0.95f),
+            ) {
+                val g = retainedGame
+                if (g != null) {
+                    val gIdx = games.indexOfFirst { it.id == g.id }.coerceAtLeast(0)
+                    val bucket = resolveShelfBucket(g, gIdx, recentIds, stats[g.id], shelfStatuses)
+                    InteractiveGameCaseModal(
+                        game = g,
+                        stat = stats[g.id],
+                        isFavorite = g.id in favoriteIds,
+                        shelfBucket = bucket,
+                        saveSlots = saveSlotsFor(g),
+                        currentCore = currentCoreFor(g),
+                        autoOpenOnMount = autoSwingOpen,
+                        onSetShelfBucket = { onSetShelfBucket(g, it) },
+                        onToggleFavorite = { onToggleFavorite(g) },
+                        onPlay = { slot -> onPlay(g, slot) },
+                        onSelectCore = { core -> onSelectCore(g, core) },
+                        onDelete = if (g.isLocal && onDeleteGame != null) ({ onDeleteGame(g) }) else null,
+                        onClose = { openCaseGameId = null },
+                    )
+                }
             }
         }
     }
 }
 
+// =================================================================================================
+// PAGE 1: SHELVES — "On Your Desk" 3D Case Spotlight + Curated Horizontal Pure-Cover Shelves
+// =================================================================================================
+
 @Composable
-private fun ShelvesScreenContent(
+private fun ShelvesPage(
     games: List<Game>,
+    recents: List<Game>,
     buckets: Map<ShelfBucket, List<Game>>,
     favoriteGames: List<Game>,
+    stats: Map<String, PlayStat>,
     scanning: Boolean,
     hasFolders: Boolean,
     addMenuOpen: Boolean,
@@ -296,28 +379,53 @@ private fun ShelvesScreenContent(
     onOpenHomebrew: () -> Unit,
     onOpenDownload: () -> Unit,
     onOpenCase: (Game) -> Unit,
+    onOpenCaseOpened: (Game) -> Unit,
     onQuickPlay: (Game) -> Unit,
 ) {
+    val navSpace = LocalNavSpace.current
+    val spotlightGame = remember(recents, buckets, games) {
+        recents.firstOrNull() ?: buckets[ShelfBucket.Playing]?.firstOrNull() ?: games.firstOrNull()
+    }
+
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        // Exactly 4 crisp covers fit across standard phone width (18dp outer padding, 9.5dp gaps)
         val coverWidth = ((maxWidth - 36.dp - 28.5.dp) / 4f).coerceIn(74.dp, 118.dp)
 
         LazyColumn(
-            contentPadding = PaddingValues(top = 18.dp, bottom = 28.dp),
+            contentPadding = PaddingValues(top = 16.dp, bottom = navSpace + 18.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
             item(key = "shelves_header") {
-                TopTitleRow(
-                    title = "Shelves",
-                    addMenuOpen = addMenuOpen,
-                    scanning = scanning,
-                    hasFolders = hasFolders,
-                    onAddMenuToggle = onAddMenuToggle,
-                    onAddFolder = onAddFolder,
-                    onRescan = onRescan,
-                    onOpenHomebrew = onOpenHomebrew,
-                    onOpenDownload = onOpenDownload,
-                )
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 18.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            text = "COLLECTION · ${games.size} TITLES",
+                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 10.5.sp, letterSpacing = 0.14.em),
+                            color = Ascend.accent,
+                        )
+                        Text(
+                            text = "Shelves",
+                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 28.sp, letterSpacing = (-0.03).em),
+                            color = Tone.Ink,
+                        )
+                    }
+
+                    AddGamesMenuButton(
+                        expanded = addMenuOpen,
+                        scanning = scanning,
+                        hasFolders = hasFolders,
+                        onToggle = onAddMenuToggle,
+                        onAddFolder = onAddFolder,
+                        onRescan = onRescan,
+                        onOpenHomebrew = onOpenHomebrew,
+                        onOpenDownload = onOpenDownload,
+                    )
+                }
             }
 
             if (games.isEmpty()) {
@@ -325,6 +433,19 @@ private fun ShelvesScreenContent(
                     MinimalEmptyState(scanning = scanning, onAddFolder = onAddFolder)
                 }
             } else {
+                // Featured "On Your Desk" 3D Case Spotlight Card
+                if (spotlightGame != null) {
+                    item(key = "shelves_spotlight") {
+                        DeskSpotlightCard(
+                            game = spotlightGame,
+                            stat = stats[spotlightGame.id],
+                            onResume = { onQuickPlay(spotlightGame) },
+                            onOpenCase = { onOpenCaseOpened(spotlightGame) },
+                            modifier = Modifier.padding(start = 18.dp, end = 18.dp, top = 16.dp, bottom = 4.dp),
+                        )
+                    }
+                }
+
                 ShelfBucket.entries.forEach { bucket ->
                     val list = buckets[bucket].orEmpty()
                     if (list.isNotEmpty()) {
@@ -349,6 +470,133 @@ private fun ShelvesScreenContent(
                             onOpenCase = onOpenCase,
                             onQuickPlay = onQuickPlay,
                         )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeskSpotlightCard(
+    game: Game,
+    stat: PlayStat?,
+    onResume: () -> Unit,
+    onOpenCase: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val glow = remember(game.id) { posterAccentColor(game) }
+    val density = LocalDensity.current
+    val shape = RoundedCornerShape(20.dp)
+
+    Box(
+        modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(Tone.Surface)
+            .border(1.dp, Tone.Line, shape)
+            .clickable(onClick = onOpenCase),
+    ) {
+        Canvas(Modifier.matchParentSize()) {
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(glow.copy(alpha = 0.24f), Color.Transparent),
+                    center = Offset(size.width * 0.18f, size.height * 0.5f),
+                    radius = size.width * 0.55f,
+                ),
+                radius = size.width * 0.55f,
+                center = Offset(size.width * 0.18f, size.height * 0.5f),
+            )
+        }
+
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            // Mini angled 3D physical game box with plastic spine crease
+            Box(
+                Modifier
+                    .width(82.dp)
+                    .height(116.dp)
+                    .graphicsLayer {
+                        cameraDistance = 16f * density.density
+                        rotationY = -16f
+                        rotationX = 4f
+                    }
+                    .shadow(14.dp, RoundedCornerShape(8.dp))
+                    .clip(RoundedCornerShape(8.dp))
+                    .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(8.dp)),
+            ) {
+                CoverArt(game, Modifier.fillMaxSize())
+                Box(
+                    Modifier
+                        .align(Alignment.CenterStart)
+                        .width(6.dp)
+                        .fillMaxHeight()
+                        .background(
+                            Brush.horizontalGradient(
+                                listOf(Color.Black.copy(alpha = 0.55f), Color.White.copy(alpha = 0.16f)),
+                            ),
+                        ),
+                )
+            }
+
+            Column(
+                Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(
+                        text = "ON YOUR DESK",
+                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 9.5.sp, letterSpacing = 0.14.em),
+                        color = Ascend.accent,
+                    )
+                    Text(
+                        text = game.title,
+                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 19.sp, lineHeight = 22.sp, letterSpacing = (-0.02).em),
+                        color = Tone.Ink,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    val meta = buildString {
+                        append(game.system?.shortName ?: game.systemId.uppercase())
+                        if (stat != null && stat.seconds > 0) {
+                            append(" · ")
+                            append(PlayTime.format(stat.seconds))
+                        }
+                    }
+                    Text(meta, style = TextStyle(fontFamily = Inter, fontSize = 12.sp), color = Tone.Muted)
+                }
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        Modifier
+                            .height(36.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Ascend.accent)
+                            .clickable(onClick = onResume)
+                            .padding(horizontal = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Icon(Icons.Rounded.PlayArrow, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                        Text("Resume", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp), color = Color.White)
+                    }
+
+                    Box(
+                        Modifier
+                            .height(36.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Tone.Raised)
+                            .border(1.dp, Tone.Line, RoundedCornerShape(10.dp))
+                            .clickable(onClick = onOpenCase)
+                            .padding(horizontal = 12.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text("Open case", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 12.5.sp), color = Tone.Ink)
                     }
                 }
             }
@@ -456,26 +704,34 @@ private fun TactileCoverTile(
     }
 }
 
+// =================================================================================================
+// PAGE 2: VAULT — Console Hardware Deck + 3-Mode Switcher (Boxes · 3D Spine Bookshelf · Index)
+// =================================================================================================
+
 @Composable
-private fun LibraryGridContent(
+private fun LibraryVaultPage(
     games: List<Game>,
+    buckets: Map<ShelfBucket, List<Game>>,
+    stats: Map<String, PlayStat>,
+    initialMode: VaultViewMode,
     scanning: Boolean,
-    hasFolders: Boolean,
-    addMenuOpen: Boolean,
-    onAddMenuToggle: (Boolean) -> Unit,
     onAddFolder: () -> Unit,
-    onRescan: () -> Unit,
-    onOpenHomebrew: () -> Unit,
-    onOpenDownload: () -> Unit,
     onOpenCase: (Game) -> Unit,
     onQuickPlay: (Game) -> Unit,
 ) {
+    val navSpace = LocalNavSpace.current
+    var mode by rememberSaveable { mutableStateOf(initialMode) }
     var query by rememberSaveable { mutableStateOf("") }
     var selectedSystem by rememberSaveable { mutableStateOf<String?>(null) }
 
-    val systems = remember(games) {
-        val ids = games.mapTo(HashSet()) { it.systemId }
-        Systems.all.filter { it.id in ids }
+    val counts = remember(games) { games.groupingBy { it.systemId }.eachCount() }
+    val systems = remember(counts) {
+        Systems.all.filter { (counts[it.id] ?: 0) > 0 }.sortedByDescending { counts[it.id] ?: 0 }
+    }
+    val bucketOf = remember(buckets) {
+        buildMap {
+            buckets.forEach { (b, list) -> list.forEach { put(it.id, b) } }
+        }
     }
     val filtered = remember(games, query, selectedSystem) {
         val q = query.trim().lowercase(Locale.getDefault())
@@ -486,203 +742,181 @@ private fun LibraryGridContent(
     }
 
     LazyVerticalGrid(
-        columns = GridCells.Fixed(4),
-        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 18.dp, bottom = 28.dp),
-        horizontalArrangement = Arrangement.spacedBy(9.5.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        columns = GridCells.Fixed(3),
+        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 16.dp, bottom = navSpace + 20.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
-        item(key = "lib_header", span = { GridItemSpan(maxLineSpan) }) {
-            TopTitleRow(
-                title = "Library",
-                addMenuOpen = addMenuOpen,
-                scanning = scanning,
-                hasFolders = hasFolders,
-                onAddMenuToggle = onAddMenuToggle,
-                onAddFolder = onAddFolder,
-                onRescan = onRescan,
-                onOpenHomebrew = onOpenHomebrew,
-                onOpenDownload = onOpenDownload,
-                horizontalPadding = 0.dp,
-            )
-        }
+        // Vault Header + 3-Mode Layout Switcher Pill
+        item(key = "vault_header", span = { GridItemSpan(maxLineSpan) }) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = "ARCHIVE · ${systems.size} CONSOLES",
+                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 10.5.sp, letterSpacing = 0.14.em),
+                        color = Ascend.accent,
+                    )
+                    Text(
+                        text = "Vault",
+                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 28.sp, letterSpacing = (-0.03).em),
+                        color = Tone.Ink,
+                    )
+                }
 
-        if (games.isNotEmpty()) {
-            item(key = "lib_search", span = { GridItemSpan(maxLineSpan) }) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .height(40.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(Tone.Surface)
-                            .border(1.dp, Tone.Line, RoundedCornerShape(10.dp))
-                            .padding(horizontal = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(Icons.Outlined.Search, null, tint = Tone.Muted, modifier = Modifier.size(17.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Box(Modifier.weight(1f)) {
-                            if (query.isEmpty()) {
+                // Segmented 3-Mode Switcher (Boxes · Spines · Index)
+                Row(
+                    Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Tone.Surface)
+                        .border(1.dp, Tone.Line, RoundedCornerShape(12.dp))
+                        .padding(3.dp),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
+                    VaultViewMode.entries.forEach { m ->
+                        val active = m == mode
+                        Row(
+                            Modifier
+                                .clip(RoundedCornerShape(9.dp))
+                                .background(if (active) Tone.Raised else Color.Transparent)
+                                .clickable { mode = m }
+                                .padding(horizontal = 9.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Icon(
+                                m.icon,
+                                contentDescription = m.label,
+                                tint = if (active) Ascend.accent else Tone.Muted,
+                                modifier = Modifier.size(15.dp),
+                            )
+                            if (active) {
                                 Text(
-                                    "Search ${games.size} games…",
-                                    style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
-                                    color = Tone.Muted,
+                                    m.label,
+                                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp),
+                                    color = Tone.Ink,
                                 )
                             }
-                            BasicTextField(
-                                value = query,
-                                onValueChange = { query = it },
-                                singleLine = true,
-                                textStyle = TextStyle(fontFamily = Inter, fontSize = 13.5.sp, color = Tone.Ink),
-                                cursorBrush = SolidColor(Ascend.accent),
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                        }
-                        if (query.isNotEmpty()) {
-                            Icon(
-                                Icons.Rounded.Close,
-                                contentDescription = "Clear",
-                                tint = Tone.Muted,
-                                modifier = Modifier.size(16.dp).clickable { query = "" },
-                            )
                         }
                     }
+                }
+            }
+        }
 
-                    if (systems.size > 1) {
-                        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            item {
-                                SystemFilterPill("All", selectedSystem == null) { selectedSystem = null }
-                            }
-                            items(systems, key = { it.id }) { sys ->
-                                SystemFilterPill(sys.shortName, selectedSystem == sys.id) {
-                                    selectedSystem = if (selectedSystem == sys.id) null else sys.id
-                                }
-                            }
+        // Tactile Console Hardware Cards Carousel
+        if (systems.isNotEmpty()) {
+            item(key = "vault_consoles", span = { GridItemSpan(maxLineSpan) }) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    item(key = "console_all") {
+                        ConsoleDeckCard(
+                            shortName = "ALL",
+                            fullName = "All Systems",
+                            count = games.size,
+                            selected = selectedSystem == null,
+                            onClick = { selectedSystem = null },
+                        )
+                    }
+                    items(systems, key = { "console_${it.id}" }) { sys ->
+                        ConsoleDeckCard(
+                            shortName = sys.shortName,
+                            fullName = sys.name,
+                            count = counts[sys.id] ?: 0,
+                            selected = selectedSystem == sys.id,
+                            onClick = { selectedSystem = if (selectedSystem == sys.id) null else sys.id },
+                        )
+                    }
+                }
+            }
+        }
+
+        // Search Capsule
+        if (games.isNotEmpty()) {
+            item(key = "vault_search", span = { GridItemSpan(maxLineSpan) }) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(42.dp)
+                        .clip(CircleShape)
+                        .background(Tone.Surface)
+                        .border(1.dp, Tone.Line, CircleShape)
+                        .padding(horizontal = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(Icons.Outlined.Search, null, tint = Ascend.accent, modifier = Modifier.size(17.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Box(Modifier.weight(1f)) {
+                        if (query.isEmpty()) {
+                            Text(
+                                "Filter ${filtered.size} cases…",
+                                style = TextStyle(fontFamily = Inter, fontSize = 13.5.sp),
+                                color = Tone.Muted,
+                            )
                         }
+                        BasicTextField(
+                            value = query,
+                            onValueChange = { query = it },
+                            singleLine = true,
+                            textStyle = TextStyle(fontFamily = Inter, fontSize = 13.5.sp, color = Tone.Ink),
+                            cursorBrush = SolidColor(Ascend.accent),
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                    if (query.isNotEmpty()) {
+                        Icon(
+                            Icons.Rounded.Close,
+                            contentDescription = "Clear",
+                            tint = Tone.Muted,
+                            modifier = Modifier.size(16.dp).clickable { query = "" },
+                        )
                     }
                 }
             }
         }
 
         if (games.isEmpty()) {
-            item(key = "lib_empty", span = { GridItemSpan(maxLineSpan) }) {
+            item(key = "vault_empty", span = { GridItemSpan(maxLineSpan) }) {
                 MinimalEmptyState(scanning = scanning, onAddFolder = onAddFolder)
             }
         } else {
-            items(filtered, key = { "grid_${it.id}" }) { game ->
-                TactileCoverTile(
-                    game = game,
-                    width = null,
-                    onClick = { onOpenCase(game) },
-                    onLongClick = { onQuickPlay(game) },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SystemFilterPill(label: String, selected: Boolean, onClick: () -> Unit) {
-    Box(
-        Modifier
-            .height(28.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(if (selected) Ascend.accent.copy(alpha = 0.18f) else Tone.Surface)
-            .border(1.dp, if (selected) Ascend.accent else Tone.Line, RoundedCornerShape(8.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = label,
-            style = TextStyle(fontFamily = Inter, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, fontSize = 12.sp),
-            color = if (selected) Ascend.accent else Tone.Muted,
-        )
-    }
-}
-
-@Composable
-private fun StatsScreenContent(
-    games: List<Game>,
-    buckets: Map<ShelfBucket, List<Game>>,
-    stats: Map<String, PlayStat>,
-    onOpenCase: (Game) -> Unit,
-) {
-    val totalSeconds = remember(stats) { stats.values.sumOf { it.seconds } }
-    val totalSessions = remember(stats) { stats.values.sumOf { it.sessions } }
-    val playingCount = buckets[ShelfBucket.Playing]?.size ?: 0
-    val completedCount = buckets[ShelfBucket.Completed]?.size ?: 0
-    val backlogCount = buckets[ShelfBucket.Backlog]?.size ?: 0
-    val mostPlayed = remember(games, stats) {
-        games.sortedByDescending { stats[it.id]?.seconds ?: 0 }.take(4)
-    }
-
-    LazyColumn(
-        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 18.dp, bottom = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        modifier = Modifier.fillMaxSize(),
-    ) {
-        item {
-            Text(
-                text = "Stats",
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 30.sp, letterSpacing = (-0.03).em),
-                color = Tone.Ink,
-            )
-        }
-
-        item {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                StatMetricCard("Play Time", if (totalSeconds > 0) PlayTime.format(totalSeconds) else "0m", Modifier.weight(1f))
-                StatMetricCard("Sessions", totalSessions.toString(), Modifier.weight(1f))
-                StatMetricCard("Library", games.size.toString(), Modifier.weight(1f))
-            }
-        }
-
-        item {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Tone.Surface)
-                    .border(1.dp, Tone.Line, RoundedCornerShape(12.dp))
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                Text("Shelf Breakdown", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 15.sp), color = Tone.Ink)
-                val total = (playingCount + completedCount + backlogCount).coerceAtLeast(1)
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(8.dp)
-                        .clip(CircleShape)
-                        .background(Tone.Raised),
-                ) {
-                    if (playingCount > 0) Box(Modifier.weight(playingCount.toFloat() / total).fillMaxHeight().background(Ascend.accent))
-                    if (completedCount > 0) Box(Modifier.weight(completedCount.toFloat() / total).fillMaxHeight().background(Color(0xFF3FD8A4)))
-                    if (backlogCount > 0) Box(Modifier.weight(backlogCount.toFloat() / total).fillMaxHeight().background(Color(0xFF4C5566)))
+            when (mode) {
+                // Mode A: 3-Column Physical Box-Cases with Spine Edge & System Tag
+                VaultViewMode.Boxes -> {
+                    items(filtered, key = { "box_${it.id}" }) { game ->
+                        VaultPhysicalBoxCard(
+                            game = game,
+                            onClick = { onOpenCase(game) },
+                            onLongClick = { onQuickPlay(game) },
+                        )
+                    }
                 }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text("Playing · $playingCount", style = TextStyle(fontFamily = Inter, fontSize = 12.sp), color = Ascend.accent)
-                    Text("Completed · $completedCount", style = TextStyle(fontFamily = Inter, fontSize = 12.sp), color = Color(0xFF3FD8A4))
-                    Text("Backlog · $backlogCount", style = TextStyle(fontFamily = Inter, fontSize = 12.sp), color = Tone.Muted)
-                }
-            }
-        }
 
-        if (mostPlayed.isNotEmpty()) {
-            item {
-                Text("Top Covers", style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 16.5.sp), color = Tone.Ink)
-            }
-            item {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(9.5.dp)) {
-                    mostPlayed.forEach { game ->
-                        Box(Modifier.weight(1f)) {
-                            TactileCoverTile(game = game, width = null, onClick = { onOpenCase(game) }, onLongClick = {})
+                // Mode B: Physical Collector's Spine Bookshelf Ledges!
+                VaultViewMode.Spines -> {
+                    val shelves = filtered.chunked(8)
+                    shelves.forEachIndexed { shelfIdx, rowGames ->
+                        item(key = "spine_row_$shelfIdx", span = { GridItemSpan(maxLineSpan) }) {
+                            SpineBookshelfRow(
+                                games = rowGames,
+                                onSelectSpine = onOpenCase,
+                            )
                         }
                     }
-                    repeat((4 - mostPlayed.size).coerceAtLeast(0)) {
-                        Spacer(Modifier.weight(1f))
+                }
+
+                // Mode C: Detailed Cartridge / Disc Collector Index Cards
+                VaultViewMode.Index -> {
+                    items(filtered, key = { "idx_${it.id}" }, span = { GridItemSpan(maxLineSpan) }) { game ->
+                        VaultIndexRow(
+                            game = game,
+                            bucket = bucketOf[game.id] ?: ShelfBucket.Backlog,
+                            stat = stats[game.id],
+                            onOpenCase = { onOpenCase(game) },
+                            onPlay = { onQuickPlay(game) },
+                        )
                     }
                 }
             }
@@ -691,211 +925,308 @@ private fun StatsScreenContent(
 }
 
 @Composable
-private fun StatMetricCard(label: String, value: String, modifier: Modifier = Modifier) {
-    Column(
-        modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(Tone.Surface)
-            .border(1.dp, Tone.Line, RoundedCornerShape(12.dp))
-            .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-    ) {
-        Text(value, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 19.sp), color = Tone.Ink, maxLines = 1)
-        Text(label, style = TextStyle(fontFamily = Inter, fontSize = 11.5.sp), color = Tone.Muted, maxLines = 1)
-    }
-}
-
-@Composable
-private fun SettingsScreenContent(
-    gamesCount: Int,
-    scanning: Boolean,
-    hasFolders: Boolean,
-    onAddFolder: () -> Unit,
-    onRescan: () -> Unit,
-    onOpenHomebrew: () -> Unit,
-    onOpenDownload: () -> Unit,
-    onImportBios: () -> Unit,
-    onImportSkin: () -> Unit,
-    onToggleTheme: (() -> Unit)?,
-) {
-    LazyColumn(
-        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 18.dp, bottom = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier.fillMaxSize(),
-    ) {
-        item {
-            Text(
-                text = "Settings",
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 30.sp, letterSpacing = (-0.03).em),
-                color = Tone.Ink,
-                modifier = Modifier.padding(bottom = 4.dp),
-            )
-        }
-
-        item {
-            SettingsActionCard(
-                icon = Icons.Outlined.CreateNewFolder,
-                title = "Add game folder",
-                subtitle = "$gamesCount games indexed across 46 supported consoles",
-                onClick = onAddFolder,
-            )
-        }
-        if (hasFolders) {
-            item {
-                SettingsActionCard(
-                    icon = Icons.Outlined.Refresh,
-                    title = if (scanning) "Scanning library…" else "Rescan folders",
-                    subtitle = "Refresh ROMs from your selected folders",
-                    onClick = { if (!scanning) onRescan() },
-                )
-            }
-        }
-        item {
-            SettingsActionCard(
-                icon = Icons.Rounded.CardGiftcard,
-                title = "Free homebrew games",
-                subtitle = "Install openly licensed retro games in one tap",
-                onClick = onOpenHomebrew,
-            )
-        }
-        item {
-            SettingsActionCard(
-                icon = Icons.Outlined.Download,
-                title = "Download from link",
-                subtitle = "Fetch a ROM or folder from your cloud or server",
-                onClick = onOpenDownload,
-            )
-        }
-        item {
-            SettingsActionCard(
-                icon = Icons.Outlined.Memory,
-                title = "Import BIOS files",
-                subtitle = "PlayStation, Sega CD, PC Engine CD & Lynx firmware",
-                onClick = onImportBios,
-            )
-        }
-        item {
-            SettingsActionCard(
-                icon = Icons.Outlined.SportsEsports,
-                title = "Import controller skin (.deltaskin)",
-                subtitle = "Custom portrait & landscape console shells",
-                onClick = onImportSkin,
-            )
-        }
-        if (onToggleTheme != null) {
-            item {
-                SettingsActionCard(
-                    icon = Icons.Outlined.Tune,
-                    title = if (Tone.isDark) "Appearance: Pitch Dark" else "Appearance: Light",
-                    subtitle = "Tap to switch theme mode",
-                    onClick = onToggleTheme,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SettingsActionCard(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
+private fun ConsoleDeckCard(
+    shortName: String,
+    fullName: String,
+    count: Int,
+    selected: Boolean,
     onClick: () -> Unit,
 ) {
-    Row(
+    val shape = RoundedCornerShape(14.dp)
+    Column(
         Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(Tone.Surface)
-            .border(1.dp, Tone.Line, RoundedCornerShape(12.dp))
+            .width(108.dp)
+            .clip(shape)
+            .background(if (selected) Ascend.accent.copy(alpha = 0.16f) else Tone.Surface)
+            .border(1.dp, if (selected) Ascend.accent else Tone.Line, shape)
             .clickable(onClick = onClick)
-            .padding(14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(13.dp),
+            .padding(horizontal = 11.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Icon(icon, null, tint = Ascend.accent, modifier = Modifier.size(20.dp))
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(title, style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp), color = Tone.Ink)
-            Text(subtitle, style = TextStyle(fontFamily = Inter, fontSize = 12.sp), color = Tone.Muted)
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = shortName,
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.ExtraBold, fontSize = 11.sp, letterSpacing = 0.04.em),
+                color = if (selected) Ascend.accent else Tone.Ink,
+                maxLines = 1,
+            )
+            Text(
+                text = count.toString(),
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 10.5.sp),
+                color = Tone.Muted,
+            )
         }
+        Text(
+            text = fullName,
+            style = TextStyle(fontFamily = Inter, fontSize = 11.sp),
+            color = Tone.Muted,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
 @Composable
-private fun TopTitleRow(
-    title: String,
-    addMenuOpen: Boolean,
+private fun VaultPhysicalBoxCard(
+    game: Game,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(9.dp)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(0.70f)
+                .shadow(8.dp, shape)
+                .clip(shape)
+                .background(Tone.Surface)
+                .border(0.8.dp, Color.White.copy(alpha = 0.12f), shape),
+        ) {
+            CoverArt(game, Modifier.fillMaxSize())
+            // Physical left case hinge spine
+            Box(
+                Modifier
+                    .align(Alignment.CenterStart)
+                    .width(6.dp)
+                    .fillMaxHeight()
+                    .background(
+                        Brush.horizontalGradient(
+                            listOf(Color.Black.copy(alpha = 0.60f), Color.White.copy(alpha = 0.14f)),
+                        ),
+                    ),
+            )
+        }
+        Text(
+            text = game.title,
+            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 12.sp),
+            color = Tone.Ink,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun SpineBookshelfRow(
+    games: List<Game>,
+    onSelectSpine: (Game) -> Unit,
+) {
+    Column(Modifier.fillMaxWidth().padding(top = 6.dp)) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .height(168.dp)
+                .padding(horizontal = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.Start),
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            games.forEachIndexed { idx, game ->
+                val accent = remember(game.id) { posterAccentColor(game) }
+                val spineHeight = if (idx % 3 == 0) 164.dp else if (idx % 2 == 0) 156.dp else 160.dp
+                Box(
+                    Modifier
+                        .width(34.dp)
+                        .height(spineHeight)
+                        .shadow(6.dp, RoundedCornerShape(topStart = 5.dp, topEnd = 5.dp))
+                        .clip(RoundedCornerShape(topStart = 5.dp, topEnd = 5.dp))
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    accent.copy(alpha = 0.42f),
+                                    Color(0xFF1A1A22),
+                                    Color(0xFF111116),
+                                ),
+                            ),
+                        )
+                        .border(1.dp, Color.White.copy(alpha = 0.14f), RoundedCornerShape(topStart = 5.dp, topEnd = 5.dp))
+                        .clickable { onSelectSpine(game) },
+                ) {
+                    // Top console band on spine
+                    Box(
+                        Modifier
+                            .align(Alignment.TopCenter)
+                            .fillMaxWidth()
+                            .height(22.dp)
+                            .background(Color.Black.copy(alpha = 0.38f)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = (game.system?.shortName ?: game.systemId).take(4).uppercase(),
+                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.ExtraBold, fontSize = 7.5.sp),
+                            color = Color.White.copy(alpha = 0.85f),
+                            maxLines = 1,
+                        )
+                    }
+
+                    // Vertical rotated spine title
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .padding(top = 24.dp, bottom = 8.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = game.title.uppercase(),
+                            style = TextStyle(
+                                fontFamily = Inter,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 9.5.sp,
+                                letterSpacing = 0.06.em,
+                            ),
+                            color = Color.White,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .requiredWidth(116.dp)
+                                .graphicsLayer { rotationZ = -90f },
+                        )
+                    }
+                }
+            }
+        }
+        // Dark anodized shelf ledge beneath the standing spines
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(10.dp)
+                .clip(RoundedCornerShape(4.dp))
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color(0xFF282833), Color(0xFF14141A)),
+                    ),
+                )
+                .border(0.75.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(4.dp)),
+        )
+    }
+}
+
+@Composable
+private fun VaultIndexRow(
+    game: Game,
+    bucket: ShelfBucket,
+    stat: PlayStat?,
+    onOpenCase: () -> Unit,
+    onPlay: () -> Unit,
+) {
+    val shape = RoundedCornerShape(14.dp)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(Tone.Surface)
+            .border(1.dp, Tone.Line, shape)
+            .clickable(onClick = onOpenCase)
+            .padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        CoverArt(
+            game,
+            Modifier
+                .width(44.dp)
+                .height(60.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .border(0.6.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(6.dp)),
+        )
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(
+                game.title,
+                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.5.sp),
+                color = Tone.Ink,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            val sub = buildString {
+                append(game.system?.shortName ?: game.systemId.uppercase())
+                append(" · ")
+                append(bucket.label)
+                if (stat != null && stat.seconds > 0) {
+                    append(" · ")
+                    append(PlayTime.format(stat.seconds))
+                }
+            }
+            Text(sub, style = TextStyle(fontFamily = Inter, fontSize = 12.sp), color = Tone.Muted, maxLines = 1)
+        }
+        Box(
+            Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(Ascend.accent.copy(alpha = 0.16f))
+                .clickable(onClick = onPlay),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Rounded.PlayArrow, contentDescription = "Play ${game.title}", tint = Ascend.accent, modifier = Modifier.size(18.dp))
+        }
+    }
+}
+
+// =================================================================================================
+// Shared Add Menu, Empty State & Homebrew Catalog
+// =================================================================================================
+
+@Composable
+private fun AddGamesMenuButton(
+    expanded: Boolean,
     scanning: Boolean,
     hasFolders: Boolean,
-    onAddMenuToggle: (Boolean) -> Unit,
+    onToggle: (Boolean) -> Unit,
     onAddFolder: () -> Unit,
     onRescan: () -> Unit,
     onOpenHomebrew: () -> Unit,
     onOpenDownload: () -> Unit,
-    horizontalPadding: Dp = 18.dp,
 ) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(horizontal = horizontalPadding),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = title,
-            style = TextStyle(
-                fontFamily = Inter,
-                fontWeight = FontWeight.Bold,
-                fontSize = 30.sp,
-                lineHeight = 35.sp,
-                letterSpacing = (-0.03).em,
-            ),
-            color = Tone.Ink,
-        )
+    Box {
+        Box(
+            Modifier
+                .size(38.dp)
+                .clip(RoundedCornerShape(11.dp))
+                .background(Ascend.accent)
+                .clickable { onToggle(true) },
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Rounded.Add, contentDescription = "Add games", tint = Color.White, modifier = Modifier.size(20.dp))
+        }
 
-        Box {
-            Box(
-                Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(Tone.Surface)
-                    .border(1.dp, Tone.Line, CircleShape)
-                    .clickable { onAddMenuToggle(true) },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(Icons.Rounded.Add, contentDescription = "Add games", tint = Tone.Ink, modifier = Modifier.size(19.dp))
-            }
-
-            DropdownMenu(
-                expanded = addMenuOpen,
-                onDismissRequest = { onAddMenuToggle(false) },
-                shape = RoundedCornerShape(12.dp),
-                containerColor = Tone.Surface,
-                border = BorderStroke(1.dp, Tone.Line),
-            ) {
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { onToggle(false) },
+            shape = RoundedCornerShape(14.dp),
+            containerColor = Tone.Surface,
+            border = BorderStroke(1.dp, Tone.Line),
+        ) {
+            DropdownMenuItem(
+                text = { Text("Add game folder", color = Tone.Ink) },
+                leadingIcon = { Icon(Icons.Outlined.CreateNewFolder, null, tint = Ascend.accent) },
+                onClick = { onToggle(false); onAddFolder() },
+            )
+            DropdownMenuItem(
+                text = { Text("Free homebrew games", color = Tone.Ink) },
+                leadingIcon = { Icon(Icons.Rounded.CardGiftcard, null, tint = Ascend.accent) },
+                onClick = { onToggle(false); onOpenHomebrew() },
+            )
+            DropdownMenuItem(
+                text = { Text("Download from link", color = Tone.Ink) },
+                leadingIcon = { Icon(Icons.Outlined.Download, null, tint = Ascend.accent) },
+                onClick = { onToggle(false); onOpenDownload() },
+            )
+            if (hasFolders) {
                 DropdownMenuItem(
-                    text = { Text("Add game folder", color = Tone.Ink) },
-                    leadingIcon = { Icon(Icons.Outlined.CreateNewFolder, null, tint = Ascend.accent) },
-                    onClick = { onAddMenuToggle(false); onAddFolder() },
+                    text = { Text(if (scanning) "Scanning…" else "Rescan library", color = Tone.Ink) },
+                    leadingIcon = { Icon(Icons.Outlined.Refresh, null, tint = Ascend.accent) },
+                    enabled = !scanning,
+                    onClick = { onToggle(false); onRescan() },
                 )
-                DropdownMenuItem(
-                    text = { Text("Free homebrew games", color = Tone.Ink) },
-                    leadingIcon = { Icon(Icons.Rounded.CardGiftcard, null, tint = Ascend.accent) },
-                    onClick = { onAddMenuToggle(false); onOpenHomebrew() },
-                )
-                DropdownMenuItem(
-                    text = { Text("Download from link", color = Tone.Ink) },
-                    leadingIcon = { Icon(Icons.Outlined.Download, null, tint = Ascend.accent) },
-                    onClick = { onAddMenuToggle(false); onOpenDownload() },
-                )
-                if (hasFolders) {
-                    DropdownMenuItem(
-                        text = { Text(if (scanning) "Scanning…" else "Rescan library", color = Tone.Ink) },
-                        leadingIcon = { Icon(Icons.Outlined.Refresh, null, tint = Ascend.accent) },
-                        enabled = !scanning,
-                        onClick = { onAddMenuToggle(false); onRescan() },
-                    )
-                }
             }
         }
     }
@@ -919,7 +1250,7 @@ private fun MinimalEmptyState(scanning: Boolean, onAddFolder: () -> Unit) {
             Row(
                 Modifier
                     .height(44.dp)
-                    .clip(RoundedCornerShape(11.dp))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(Ascend.accent)
                     .clickable(onClick = onAddFolder)
                     .padding(horizontal = 20.dp),
@@ -932,91 +1263,6 @@ private fun MinimalEmptyState(scanning: Boolean, onAddFolder: () -> Unit) {
                     style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.sp),
                     color = Color.White,
                 )
-            }
-        }
-    }
-}
-
-/**
- * Exact 4-tab bottom bar matching the reference screenshot:
- * Pitch-dark bar, thin top border, and on the active tab a 2.5dp glowing Warm Ember top bar
- * with a soft vertical warm-amber spotlight column behind the active icon & label.
- */
-@Composable
-private fun EmberBottomTabBar(
-    selected: MainTab,
-    onSelect: (MainTab) -> Unit,
-) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .background(Tone.Surface)
-            .windowInsetsPadding(WindowInsets.navigationBars),
-    ) {
-        HorizontalDivider(thickness = 1.dp, color = Tone.Line)
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .height(64.dp),
-        ) {
-            MainTab.entries.forEach { item ->
-                val active = item == selected
-                Box(
-                    Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .then(
-                            if (active) {
-                                Modifier.background(
-                                    Brush.verticalGradient(
-                                        0f to Ascend.accent.copy(alpha = 0.19f),
-                                        0.65f to Ascend.accent.copy(alpha = 0.06f),
-                                        1f to Color.Transparent,
-                                    ),
-                                )
-                            } else {
-                                Modifier
-                            },
-                        )
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                            role = Role.Tab,
-                            onClick = { onSelect(item) },
-                        ),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    if (active) {
-                        Box(
-                            Modifier
-                                .align(Alignment.TopCenter)
-                                .fillMaxWidth(0.76f)
-                                .height(2.5.dp)
-                                .background(Ascend.accent),
-                        )
-                    }
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        Icon(
-                            imageVector = if (active) item.selectedIcon else item.unselectedIcon,
-                            contentDescription = item.label,
-                            tint = if (active) Ascend.accent else Tone.Muted,
-                            modifier = Modifier.size(21.dp),
-                        )
-                        Text(
-                            text = item.label,
-                            style = TextStyle(
-                                fontFamily = Inter,
-                                fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-                                fontSize = 11.sp,
-                            ),
-                            color = if (active) Ascend.accent else Tone.Muted,
-                            maxLines = 1,
-                        )
-                    }
-                }
             }
         }
     }

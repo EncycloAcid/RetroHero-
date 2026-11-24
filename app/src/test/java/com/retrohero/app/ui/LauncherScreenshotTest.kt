@@ -71,7 +71,7 @@ class LauncherScreenshotTest {
     }
 
     @Test
-    fun shelvesAndInteractiveCase() {
+    fun allFourDistinctPagesAndFloatingNav() {
         val games = sampleGames()
         var shelfStatuses by mutableStateOf(emptyMap<String, String>())
         var played: Game? = null
@@ -81,77 +81,66 @@ class LauncherScreenshotTest {
                 ShelvesAppView(
                     games = games,
                     recents = games.take(3),
-                    favoriteIds = emptySet(),
-                    stats = mapOf(games[0].id to PlayStat(seconds = 5400, sessions = 4, lastPlayed = 1000L)),
+                    favoriteIds = setOf(games[1].id, games[3].id),
+                    stats = mapOf(
+                        games[0].id to PlayStat(seconds = 7_800, sessions = 6, lastPlayed = 2000L),
+                        games[1].id to PlayStat(seconds = 4_200, sessions = 3, lastPlayed = 1500L),
+                        games[2].id to PlayStat(seconds = 2_400, sessions = 2, lastPlayed = 1000L),
+                    ),
                     shelfStatuses = shelfStatuses,
                     hasFolders = true,
+                    foldersCount = 2,
                     onAddFolder = {},
                     onSetShelfBucket = { g, b -> shelfStatuses = shelfStatuses + (g.id to b.id) },
+                    onSelectAccent = { _, col -> setAccent(col) },
                     onPlay = { g, _ -> played = g },
                 )
             }
         }
 
-        compose.onAllNodesWithText("Shelves").onFirst().assertIsDisplayed()
+        // 1. Shelves Page + Desk Spotlight + FloatingNavBar
+        compose.onNodeWithText("ON YOUR DESK").assertIsDisplayed()
         compose.onNodeWithText("Currently Playing").assertIsDisplayed()
-        compose.onNodeWithText("3 games").assertIsDisplayed()
-        compose.onNodeWithText("Completed").assertIsDisplayed()
-        compose.onAllNodesWithText("4 games").onFirst().assertIsDisplayed()
-        compose.onNodeWithText("Backlog").assertIsDisplayed()
-        save("shelves_main")
+        save("page1_shelves")
 
-        // Tap a disc game cover ("Symphony Ring") to open the 3D physical case modal
-        compose.onAllNodesWithText("SYMPHONY RING").onFirst().performClick()
+        // Open 3D Case directly from Desk Spotlight "Open case" button (swings open immediately!)
+        compose.onNodeWithText("Open case").performClick()
         compose.mainClock.advanceTimeBy(600)
         compose.waitForIdle()
-        save("case_closed")
-
-        // Tap "Open case" to swing the 3D front cover open and reveal the booklet + optical disc
-        compose.onNodeWithText("Open case").performClick()
-        compose.mainClock.advanceTimeBy(800)
-        compose.waitForIdle()
         compose.onNodeWithText("INSTRUCTION BOOKLET").assertIsDisplayed()
-        save("case_open_disc")
-
-        // Tap the optical disc inside the open tray to eject & launch gameplay!
         compose.onNodeWithContentDescription("Optical disc for Symphony Ring").performClick()
         compose.mainClock.advanceTimeBy(600)
         compose.waitForIdle()
         assertEquals(games[0].id, played?.id)
-
-        // Close case, switch to Library grid tab
         compose.onNodeWithContentDescription("Close case").performClick()
         compose.waitForIdle()
-        compose.onNodeWithContentDescription("Library").performClick()
-        compose.waitForIdle()
-        save("library_grid")
-    }
 
-    @Test
-    fun openCartridgeCase() {
-        val games = sampleGames()
-        var played: Game? = null
-        compose.setContent {
-            RetroHeroTheme {
-                ShelvesAppView(
-                    games = games,
-                    recents = games.take(3),
-                    favoriteIds = setOf(games[1].id),
-                    stats = emptyMap(),
-                    initialOpenGameId = games[1].id, // GBA cartridge game
-                    autoOpenCaseOnMount = true,
-                    onAddFolder = {},
-                    onPlay = { g, _ -> played = g },
-                )
-            }
-        }
+        // 2. Vault Page: Console Hardware Deck + 3D Boxes + 3D Spine Bookshelf
+        compose.onNodeWithContentDescription("Vault").performClick()
+        compose.mainClock.advanceTimeBy(400)
         compose.waitForIdle()
-        compose.onNodeWithText("INSTRUCTION BOOKLET").assertIsDisplayed()
-        save("case_open_cartridge")
+        compose.onAllNodesWithText("Vault").onFirst().assertIsDisplayed()
+        save("page2_vault_boxes")
 
-        compose.onNodeWithContentDescription("ROM cartridge for Cyber Runner").performClick()
-        compose.mainClock.advanceTimeBy(600)
+        compose.onNodeWithContentDescription("Spines").performClick()
+        compose.mainClock.advanceTimeBy(400)
         compose.waitForIdle()
-        assertEquals(games[1].id, played?.id)
+        save("page2_vault_spines")
+
+        // 3. Stats Dashboard Page: Donut Arc Gauge + Hall of Fame Podium + Bento Grid
+        compose.onNodeWithContentDescription("Stats").performClick()
+        compose.mainClock.advanceTimeBy(400)
+        compose.waitForIdle()
+        compose.onNodeWithText("Stats & Insights").assertIsDisplayed()
+        compose.onNodeWithText("Hall of Fame").assertIsDisplayed()
+        save("page3_stats")
+
+        // 4. System Control Deck Page: Dual Quick-Tiles + Live Switches + Firmware Matrix
+        compose.onNodeWithContentDescription("System").performClick()
+        compose.mainClock.advanceTimeBy(400)
+        compose.waitForIdle()
+        compose.onNodeWithText("System & Engine").assertIsDisplayed()
+        compose.onNodeWithText("Gameplay & Comfort").assertIsDisplayed()
+        save("page4_system")
     }
 }
