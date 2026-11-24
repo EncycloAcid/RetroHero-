@@ -586,6 +586,7 @@ class EmulatorActivity : ComponentActivity() {
                     toast(if (ok) "Quick loaded" else NativeBridge.getLastError().ifEmpty { "Quick load failed" })
                 }
             }
+            DeltaAction.SCREENSHOT -> if (pressed) takeScreenshot()
         }
     }
 
@@ -596,6 +597,7 @@ class EmulatorActivity : ComponentActivity() {
         val config = LocalConfiguration.current
         val landscape = config.orientation == Configuration.ORIENTATION_LANDSCAPE
         val tablet = config.smallestScreenWidthDp >= 600
+        var sustainedCount by remember { mutableIntStateOf(0) }
 
         LaunchedEffect(phase) {
             while (phase is Phase.Running) {
@@ -633,6 +635,19 @@ class EmulatorActivity : ComponentActivity() {
                 skin.representations.pick(landscape = landscape, tablet = tablet, tallPhone = tallPhone)
             } else null
 
+            val shellStyle = remember(padSkin, system.id, system.color, Tone.isDark) {
+                when (padSkin.faces) {
+                    "console" -> ConsoleStyles.forSystem(system.id, system.color)
+                    "instrument" -> ConsoleStyles.instrument(
+                        dark = Tone.isDark,
+                        accent = com.retrohero.app.ui.components.Ascend.accent,
+                        onAccent = com.retrohero.app.ui.components.Ascend.onAccent,
+                        systemName = system.name,
+                    )
+                    else -> null
+                }
+            }
+
             if (skin != null && deltaRep != null) {
                 val deltaLayout = remember(containerW, containerH, deltaRep, landscape) {
                     computeDeltaLayout(containerW, containerH, deltaRep, landscape)
@@ -666,11 +681,41 @@ class EmulatorActivity : ComponentActivity() {
                 }
             } else if (landscape) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { GameView() }
-                if (showPad && phase is Phase.Running) Pad(landscape = true, Modifier.fillMaxSize().safeDrawingPadding())
+                if (showPad && phase is Phase.Running) {
+                    Pad(
+                        landscape = true,
+                        modifier = Modifier.fillMaxSize().safeDrawingPadding(),
+                        onSustainedChanged = { sustainedCount = it.size },
+                    )
+                }
+            } else if (shellStyle != null && showPad) {
+                // Full-device Delta-inspired physical handheld shell wrapping display bezel + control deck
+                HandheldShell(
+                    style = shellStyle,
+                    fastForwardActive = fastForwardToggle || fastForwardHeld,
+                    sustainedCount = sustainedCount,
+                    gameContent = { GameView() },
+                    padContent = {
+                        if (phase is Phase.Running) {
+                            Pad(
+                                landscape = false,
+                                modifier = Modifier.fillMaxSize(),
+                                inShell = true,
+                                onSustainedChanged = { sustainedCount = it.size },
+                            )
+                        }
+                    },
+                )
             } else {
                 Column(Modifier.fillMaxSize().safeDrawingPadding()) {
                     Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) { GameView() }
-                    if (showPad && phase is Phase.Running) Pad(landscape = false, Modifier.fillMaxWidth().fillMaxHeight(0.45f))
+                    if (showPad && phase is Phase.Running) {
+                        Pad(
+                            landscape = false,
+                            modifier = Modifier.fillMaxWidth().fillMaxHeight(0.45f),
+                            onSustainedChanged = { sustainedCount = it.size },
+                        )
+                    }
                 }
             }
 
@@ -736,7 +781,12 @@ class EmulatorActivity : ComponentActivity() {
     }
 
     @Composable
-    private fun Pad(landscape: Boolean, modifier: Modifier) {
+    private fun Pad(
+        landscape: Boolean,
+        modifier: Modifier,
+        inShell: Boolean = false,
+        onSustainedChanged: (Set<Int>) -> Unit = {},
+    ) {
         val view = androidx.compose.ui.platform.LocalView.current
         VirtualGamepad(
             layout = system.layout,
@@ -763,6 +813,8 @@ class EmulatorActivity : ComponentActivity() {
                     onAdjust = { name, a -> padAdjust = padAdjust + (name to a) },
                 )
             } else null,
+            inShell = inShell,
+            onSustainedChanged = onSustainedChanged,
         )
     }
 

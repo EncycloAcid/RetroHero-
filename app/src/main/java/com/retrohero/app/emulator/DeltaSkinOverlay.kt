@@ -194,8 +194,32 @@ fun DeltaSkinOverlay(
         }
     }
 
+    val itemAssetEntries = remember(representation) {
+        representation.items.mapIndexedNotNull { idx, it ->
+            val name = it.asset ?: return@mapIndexedNotNull null
+            Triple(idx, name, it.frame)
+        }
+    }
+    val itemBitmaps by produceState<Map<Int, ImageBitmap>>(emptyMap(), skin.dir, itemAssetEntries, layout.scale) {
+        value = withContext(Dispatchers.IO) {
+            buildMap {
+                for ((idx, name, frame) in itemAssetEntries) {
+                    val iw = (frame.width * layout.scale).roundToInt().coerceAtLeast(1)
+                    val ih = (frame.height * layout.scale).roundToInt().coerceAtLeast(1)
+                    DeltaSkinAssets.loadBitmap(skin.assetFile(name), iw, ih)?.asImageBitmap()?.let {
+                        put(idx, it)
+                    }
+                }
+            }
+        }
+    }
+
     var pressedButtons by remember(skin.identifier, representation) { mutableStateOf(emptySet<Int>()) }
+    var sustainedButtons by remember(skin.identifier, representation) { mutableStateOf(emptySet<Int>()) }
+    var pressedItemIndices by remember(skin.identifier, representation) { mutableStateOf(emptySet<Int>()) }
     var pressedActions by remember(skin.identifier, representation) { mutableStateOf(emptySet<DeltaAction>()) }
+    var menuHeldForSustain by remember(skin.identifier, representation) { mutableStateOf(false) }
+    var sustainConsumedMenu by remember(skin.identifier, representation) { mutableStateOf(false) }
     var thumbOffsets by remember(skin.identifier, representation) { mutableStateOf(emptyMap<Int, Offset>()) }
     var pointerActive by remember(skin.identifier, representation) { mutableStateOf(false) }
 
@@ -216,6 +240,7 @@ fun DeltaSkinOverlay(
                         val event = awaitPointerEvent()
                         val nextButtons = HashSet<Int>()
                         val nextActions = HashSet<DeltaAction>()
+                        val nextItems = HashSet<Int>()
                         val nextThumbs = HashMap<Int, Offset>()
                         var nextAnalog: Offset? = null
                         var nextPointer: Offset? = null
@@ -243,6 +268,7 @@ fun DeltaSkinOverlay(
                                             val off = thumbstickOffsetForPoint(item, mp)
                                             if (off != null) {
                                                 nextThumbs[idx] = off
+                                                nextItems += idx
                                                 val isAnalog = listOf(inp.up, inp.down, inp.left, inp.right)
                                                     .any { it?.startsWith("analogStick", ignoreCase = true) == true }
                                                 if (isAnalog) nextAnalog = off
@@ -255,6 +281,7 @@ fun DeltaSkinOverlay(
                                         } else {
                                             val hit = item.hitRect
                                             if (mp.x >= hit.x && mp.x <= hit.right && mp.y >= hit.y && mp.y <= hit.bottom) {
+                                                nextItems += idx
                                                 for (name in dpadInputsForPoint(item, mp)) {
                                                     addMapped(name, systemId, nextButtons, nextActions)
                                                 }
@@ -265,6 +292,7 @@ fun DeltaSkinOverlay(
                                     is DeltaInputs.Buttons -> {
                                         val hit = item.hitRect
                                         if (mp.x >= hit.x && mp.x <= hit.right && mp.y >= hit.y && mp.y <= hit.bottom) {
+                                            nextItems += idx
                                             for (name in inp.ids) {
                                                 addMapped(name, systemId, nextButtons, nextActions)
                                             }
@@ -276,23 +304,56 @@ fun DeltaSkinOverlay(
                             if (consumed) change.consume()
                         }
 
-                        // Dispatch button diffs
-                        if (nextButtons != pressedButtons) {
-                            val newlyPressed = nextButtons - pressedButtons
-                            for (id in newlyPressed) onButton(id, true)
-                            for (id in pressedButtons - nextButtons) onButton(id, false)
-                            if (newlyPressed.isNotEmpty()) onPress()
-                            pressedButtons = nextButtons
+                        pressedItemIndices = nextItems
+
+                        // Delta's Hold-Menu Button Sustain combo (reverse-engineered from Delta/GameViewController.swift):
+                        // Hold MENU + tap any button to latch/unlatch it held down; release MENU alone to open pause menu.
+                        val menuDownNow = DeltaAction.MENU in nextActions
+                        val menuWasDown = DeltaAction.MENU in pressedActions
+                        if (menuDownNow && !menuWasDown) {
+                            menuHeldForSustain = true
+                            sustainConsumedMenu = false
+                        }
+                        val newlyTouchedButtons = nextButtons - pressedButtons
+                        if (menuHeldForSustain && newlyTouchedButtons.isNotEmpty()) {
+                            sustainConsumedMenu = true
+                            val nextSustained = sustainedButtons.toMutableSet()
+                            for (id in newlyTouchedButtons) {
+                                if (id in nextSustained) nextSustained.remove(id) else nextSustained.add(id)
+                            }
+                            sustainedButtons = nextSustained
+                            onPress()
+                        }
+                        if (!menuDownNow && menuWasDown) {
+                            if (!sustainConsumedMenu) {
+                                onAction(DeltaAction.MENU, true)
+                                onPress()
+                            }
+                            menuHeldForSustain = false
+                            sustainConsumedMenu = false
                         }
 
-                        // Dispatch special action diffs
-                        if (nextActions != pressedActions) {
-                            val newlyPressed = nextActions - pressedActions
-                            for (act in newlyPressed) onAction(act, true)
-                            for (act in pressedActions - nextActions) onAction(act, false)
-                            if (newlyPressed.isNotEmpty()) onPress()
-                            pressedActions = nextActions
+                        // Effective pressed buttons = physically held OR sustained via Delta Hold-Button
+                        val prevEffective = pressedButtons + sustainedButtons
+                        val nextEffective = nextButtons + sustainedButtons
+                        if (nextEffective != prevEffective) {
+                            val newlyActive = nextEffective - prevEffective
+                            for (id in newlyActive) onButton(id, true)
+                            for (id in prevEffective - nextEffective) onButton(id, false)
+                            if (newlyActive.isNotEmpty() && !menuHeldForSustain) onPress()
                         }
+                        pressedButtons = nextButtons
+
+                        // Dispatch non-MENU special action diffs
+                        val nonMenuNext = nextActions - DeltaAction.MENU
+                        val nonMenuPrev = pressedActions - DeltaAction.MENU
+                        if (nonMenuNext != nonMenuPrev) {
+                            val newlyPressed = nonMenuNext - nonMenuPrev
+                            for (act in newlyPressed) onAction(act, true)
+                            for (act in nonMenuPrev - nonMenuNext) onAction(act, false)
+                            if (newlyPressed.isNotEmpty()) onPress()
+                        }
+                        pressedActions = nextActions
 
                         // Dispatch thumbstick analog
                         if (nextThumbs != thumbOffsets) {
@@ -320,7 +381,7 @@ fun DeltaSkinOverlay(
     ) {
         val drawAlpha = if (representation.translucent) opacity else 1f
 
-        // Skin artwork layer
+        // Skin background artwork layer
         skinBitmap?.let { bmp ->
             with(density) {
                 Image(
@@ -331,6 +392,25 @@ fun DeltaSkinOverlay(
                         .offset { IntOffset(layout.skinRect.left.roundToInt(), layout.skinRect.top.roundToInt()) }
                         .size(layout.skinRect.width.toDp(), layout.skinRect.height.toDp())
                         .alpha(drawAlpha),
+                )
+            }
+        }
+
+        // Per-item button asset layers (e.g., Delta's Standard GBA individual button PDFs)
+        itemBitmaps.forEach { (idx, bmp) ->
+            val item = representation.items.getOrNull(idx) ?: return@forEach
+            val rect = layout.toScreenRect(item.frame)
+            val isDown = idx in pressedItemIndices
+            val shiftY = if (isDown) 2.5f else 0f
+            with(density) {
+                Image(
+                    bitmap = bmp,
+                    contentDescription = null,
+                    contentScale = ContentScale.FillBounds,
+                    modifier = Modifier
+                        .offset { IntOffset(rect.left.roundToInt(), (rect.top + shiftY).roundToInt()) }
+                        .size(rect.width.toDp(), rect.height.toDp())
+                        .alpha(if (isDown) (drawAlpha * 0.82f) else drawAlpha),
                 )
             }
         }
@@ -356,6 +436,45 @@ fun DeltaSkinOverlay(
                         .size(tw.toDp(), th.toDp())
                         .alpha(drawAlpha),
                 )
+            }
+        }
+
+        // Tactile press feedback + Delta sustained/held button amber indicator rings
+        if (pressedItemIndices.isNotEmpty() || sustainedButtons.isNotEmpty()) {
+            Canvas(Modifier.fillMaxSize()) {
+                representation.items.forEachIndexed { idx, item ->
+                    if (item.inputs is DeltaInputs.TouchScreen) return@forEachIndexed
+                    val fr = layout.toScreenRect(item.frame)
+                    val radius = minOf(fr.width, fr.height) * 0.48f
+                    val isPressed = idx in pressedItemIndices
+                    val itemBtnIds = (item.inputs as? DeltaInputs.Buttons)?.ids
+                        ?.mapNotNull { (DeltaSkins.mapInput(it, systemId) as? DeltaMappedInput.Button)?.retroPadId }
+                        .orEmpty()
+                    val isSustained = itemBtnIds.any { it in sustainedButtons }
+                    if (isPressed) {
+                        drawRoundRect(
+                            color = Color.Black.copy(alpha = 0.22f),
+                            topLeft = fr.topLeft,
+                            size = Size(fr.width, fr.height),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(radius, radius),
+                        )
+                    }
+                    if (isSustained) {
+                        drawRoundRect(
+                            color = Color(0xFFFF5416).copy(alpha = 0.24f),
+                            topLeft = fr.topLeft,
+                            size = Size(fr.width, fr.height),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(radius, radius),
+                        )
+                        drawRoundRect(
+                            color = Color(0xFFFF5416),
+                            topLeft = fr.topLeft,
+                            size = Size(fr.width, fr.height),
+                            cornerRadius = androidx.compose.ui.geometry.CornerRadius(radius, radius),
+                            style = Stroke(width = 4f),
+                        )
+                    }
+                }
             }
         }
 
