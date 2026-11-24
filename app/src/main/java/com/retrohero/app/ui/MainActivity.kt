@@ -188,7 +188,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch(Dispatchers.IO) {
             com.retrohero.app.data.DeltaSkins.installBundledDefaults(this@MainActivity, vm.paths.deltaSkins, vm.settings)
         }
-        handleIncomingDeltaSkin(intent)
+        if (savedInstanceState == null) handleIncomingDeltaSkin(intent)
         setContent {
             RetroHeroTheme {
                 val view = androidx.compose.ui.platform.LocalView.current
