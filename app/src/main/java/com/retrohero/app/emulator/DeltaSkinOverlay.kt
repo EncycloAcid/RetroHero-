@@ -7,10 +7,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -222,6 +224,20 @@ fun DeltaSkinOverlay(
     var sustainConsumedMenu by remember(skin.identifier, representation) { mutableStateOf(false) }
     var thumbOffsets by remember(skin.identifier, representation) { mutableStateOf(emptyMap<Int, Offset>()) }
     var pointerActive by remember(skin.identifier, representation) { mutableStateOf(false) }
+
+    val currentPressedButtons by rememberUpdatedState(pressedButtons)
+    val currentSustainedButtons by rememberUpdatedState(sustainedButtons)
+    val currentPressedActions by rememberUpdatedState(pressedActions)
+    val currentOnButton by rememberUpdatedState(onButton)
+    val currentOnAction by rememberUpdatedState(onAction)
+    DisposableEffect(Unit) {
+        onDispose {
+            (currentPressedButtons + currentSustainedButtons).forEach { currentOnButton(it, false) }
+            currentPressedActions
+                .filter { it == DeltaAction.FAST_FORWARD_HOLD || it == DeltaAction.REWIND_HOLD }
+                .forEach { currentOnAction(it, false) }
+        }
+    }
 
     // Detect if this is a DS skin with a split bottom touch screen so pointer Y maps to [0..1].
     val dsBottomOnly = remember(systemId, representation) {
