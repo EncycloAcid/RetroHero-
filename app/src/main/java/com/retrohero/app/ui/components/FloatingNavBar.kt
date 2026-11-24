@@ -9,10 +9,12 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -74,33 +76,49 @@ fun ConsoleTopBar(items: List<NavItem>, selected: Int, onSelect: (Int) -> Unit, 
             .background(Tone.Bg)
             .windowInsetsPadding(WindowInsets.statusBars),
     ) {
-        Row(
+        BoxWithConstraints(
             Modifier
                 .fillMaxWidth()
                 .height(FloatingNavHeight)
                 .padding(start = 8.dp, end = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                Modifier.fillMaxHeight().selectableGroup(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                items.forEachIndexed { index, item ->
-                    ConsoleTab(item, active = index == selected, onClick = { onSelect(index) })
+            val compact = maxWidth < 360.dp
+            Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    Modifier.weight(1f).fillMaxHeight().selectableGroup(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    items.forEachIndexed { index, item ->
+                        ConsoleTab(
+                            item,
+                            active = index == selected,
+                            compact = compact,
+                            modifier = Modifier.weight(1f),
+                            onClick = { onSelect(index) },
+                        )
+                    }
+                }
+                if (!compact) {
+                    Box(Modifier.width(72.dp).fillMaxHeight(), contentAlignment = Alignment.CenterEnd) { ConsoleStatus() }
                 }
             }
-            Box(Modifier.weight(1f).clip(RoundedCornerShape(0.dp)), contentAlignment = Alignment.CenterEnd) { ConsoleStatus() }
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(Tone.Line))
     }
 }
 
 @Composable
-private fun ConsoleTab(item: NavItem, active: Boolean, onClick: () -> Unit) {
+private fun ConsoleTab(
+    item: NavItem,
+    active: Boolean,
+    compact: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
     val tint by animateColorAsState(if (active) Tone.Ink else Tone.Muted, tween(160), label = "tabTint")
     val bar by animateDpAsState(if (active) 18.dp else 0.dp, spring(dampingRatio = 0.7f, stiffness = 600f), label = "tabBar")
     Box(
-        Modifier
+        modifier
             .fillMaxHeight()
             .selectable(
                 selected = active,
@@ -109,11 +127,11 @@ private fun ConsoleTab(item: NavItem, active: Boolean, onClick: () -> Unit) {
                 role = Role.Tab,
                 onClick = onClick,
             )
-            .padding(horizontal = 8.dp),
+            .padding(horizontal = if (compact) 4.dp else 8.dp),
         contentAlignment = Alignment.Center,
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            if (active) {
+            if (active && !compact) {
                 Icon(item.selectedIcon, null, tint = com.retrohero.app.ui.components.Ascend.accent, modifier = Modifier.size(16.dp))
             }
             Text(
@@ -121,7 +139,7 @@ private fun ConsoleTab(item: NavItem, active: Boolean, onClick: () -> Unit) {
                 color = tint,
                 maxLines = 1,
                 softWrap = false,
-                overflow = TextOverflow.Clip,
+                overflow = TextOverflow.Ellipsis,
                 style = TextStyle(
                     fontFamily = Inter,
                     fontWeight = if (active) FontWeight.Bold else FontWeight.SemiBold,

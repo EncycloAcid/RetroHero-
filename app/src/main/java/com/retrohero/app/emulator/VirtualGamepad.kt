@@ -28,6 +28,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -291,12 +292,17 @@ private val LocalShowRewind = staticCompositionLocalOf { false }
 
 /** Fast-forward, plus rewind beside it when rewind is on. */
 @Composable
-private fun SpeedControls(regions: Regions, pressed: Set<Int>, modifier: Modifier = Modifier) {
+private fun SpeedControls(
+    regions: Regions,
+    pressed: Set<Int>,
+    modifier: Modifier = Modifier,
+    controlSize: Dp = 40.dp,
+) {
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         if (LocalShowRewind.current) {
-            IconControl("rw", ID_REWIND, regions, pressed, Icons.Rounded.FastRewind, "Rewind")
+            IconControl("rw", ID_REWIND, regions, pressed, Icons.Rounded.FastRewind, "Rewind", controlSize)
         }
-        IconControl("ff", ID_FAST_FORWARD, regions, pressed, Icons.Rounded.FastForward, "Fast forward")
+        IconControl("ff", ID_FAST_FORWARD, regions, pressed, Icons.Rounded.FastForward, "Fast forward", controlSize)
     }
 }
 
@@ -372,26 +378,34 @@ private fun pressScale(pressed: Boolean): Float {
 @Composable
 private fun PortraitControls(layout: PadLayout, regions: Regions, pressed: Set<Int>) {
     LocalConsole.current?.let { ControllerPlate(it) }
-    Column(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 8.dp)) {
-        Row(Modifier.fillMaxWidth().height(42.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.padGroup("l")) { Shoulders(layout.leftShoulders, regions, pressed, "l") }
-            Box(Modifier.padGroup("r")) { Shoulders(layout.rightShoulders, regions, pressed, "r") }
-        }
-        Row(
-            Modifier.fillMaxWidth().weight(1f),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(Modifier.padGroup("dpad")) { Dpad(regions, pressed, 156.dp) }
-            Box(Modifier.padGroup("face")) { FaceButtons(layout, regions, pressed) }
-        }
-        // Utility row: speed controls and Hold/Menu flank SELECT / START.
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            SpeedControls(regions, pressed, Modifier.padGroup("speed"))
-            SelectStart(layout, regions, pressed, Modifier.padGroup("selstart"))
-            Row(Modifier.padGroup("menu"), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                IconControl("hold", ID_HOLD, regions, pressed, Icons.Rounded.PushPin, "Hold button")
-                IconControl("menu", ID_MENU, regions, pressed, Icons.Rounded.Pause, "Menu")
+    BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 8.dp)) {
+        val compact = maxWidth < 320.dp
+        Column(Modifier.fillMaxSize()) {
+            Row(Modifier.fillMaxWidth().height(42.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.padGroup("l")) { Shoulders(layout.leftShoulders, regions, pressed, "l") }
+                Box(Modifier.padGroup("r")) { Shoulders(layout.rightShoulders, regions, pressed, "r") }
+            }
+            Row(
+                Modifier.fillMaxWidth().weight(1f),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.padGroup("dpad")) { Dpad(regions, pressed, 156.dp) }
+                Box(Modifier.padGroup("face")) { FaceButtons(layout, regions, pressed) }
+            }
+            // Utility row: speed controls and Hold/Menu flank SELECT / START.
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                SpeedControls(
+                    regions,
+                    pressed,
+                    Modifier.padGroup("speed"),
+                    controlSize = if (compact) 32.dp else 40.dp,
+                )
+                SelectStart(layout, regions, pressed, Modifier.padGroup("selstart"), compact)
+                Row(Modifier.padGroup("menu"), horizontalArrangement = Arrangement.spacedBy(if (compact) 6.dp else 8.dp)) {
+                    IconControl("hold", ID_HOLD, regions, pressed, Icons.Rounded.PushPin, "Hold button", if (compact) 32.dp else 40.dp)
+                    IconControl("menu", ID_MENU, regions, pressed, Icons.Rounded.Pause, "Menu", if (compact) 32.dp else 40.dp)
+                }
             }
         }
     }
@@ -693,15 +707,15 @@ private fun Shoulders(buttons: List<PadButton>, regions: Regions, pressed: Set<I
 }
 
 @Composable
-private fun SelectStart(layout: PadLayout, regions: Regions, pressed: Set<Int>, modifier: Modifier) {
-    Row(modifier.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        layout.select?.let { Pill(it, RetroPad.SELECT, regions, pressed) }
-        layout.start?.let { Pill(it, RetroPad.START, regions, pressed) }
+private fun SelectStart(layout: PadLayout, regions: Regions, pressed: Set<Int>, modifier: Modifier, compact: Boolean = false) {
+    Row(modifier.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 16.dp)) {
+        layout.select?.let { Pill(it, RetroPad.SELECT, regions, pressed, compact) }
+        layout.start?.let { Pill(it, RetroPad.START, regions, pressed, compact) }
     }
 }
 
 @Composable
-private fun Pill(label: String, id: Int, regions: Regions, pressed: Set<Int>) {
+private fun Pill(label: String, id: Int, regions: Regions, pressed: Set<Int>, compact: Boolean = false) {
     val console = LocalConsole.current
     if (console != null) {
         // A rubber pill with its name printed on the body beside it.
@@ -712,7 +726,7 @@ private fun Pill(label: String, id: Int, regions: Regions, pressed: Set<Int>) {
                 regions = regions,
                 isPressed = id in pressed,
                 shape = CircleShape,
-                modifier = Modifier.graphicsLayer { rotationZ = console.pillTilt }.width(64.dp).height(20.dp),
+                modifier = Modifier.graphicsLayer { rotationZ = console.pillTilt }.width(if (compact) 56.dp else 64.dp).height(20.dp),
                 kind = "pill",
             ) {}
             Text(
@@ -730,7 +744,7 @@ private fun Pill(label: String, id: Int, regions: Regions, pressed: Set<Int>) {
         regions = regions,
         isPressed = id in pressed,
         shape = CircleShape,
-        modifier = Modifier.width(88.dp).height(32.dp),
+        modifier = Modifier.width(if (compact) 64.dp else 88.dp).height(32.dp),
     ) {
         Text(
             label,
@@ -741,7 +755,15 @@ private fun Pill(label: String, id: Int, regions: Regions, pressed: Set<Int>) {
 }
 
 @Composable
-private fun IconControl(key: String, id: Int, regions: Regions, pressed: Set<Int>, icon: ImageVector, description: String) {
+private fun IconControl(
+    key: String,
+    id: Int,
+    regions: Regions,
+    pressed: Set<Int>,
+    icon: ImageVector,
+    description: String,
+    controlSize: Dp = 40.dp,
+) {
     val holdActive = id == ID_HOLD && (LocalHoldArmed.current || LocalSustained.current.isNotEmpty())
     GlassControl(
         key = key,
@@ -749,7 +771,7 @@ private fun IconControl(key: String, id: Int, regions: Regions, pressed: Set<Int
         regions = regions,
         isPressed = (id in pressed) || holdActive,
         shape = CircleShape,
-        modifier = Modifier.size(40.dp),
+        modifier = Modifier.size(controlSize),
         kind = "icon",
     ) {
         Icon(

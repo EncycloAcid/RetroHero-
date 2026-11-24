@@ -359,6 +359,8 @@ fun HomeScreen(
                             style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 28.sp, letterSpacing = (-0.03).em),
                             color = Tone.Ink,
                             modifier = Modifier.launchMarkTarget(),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -383,6 +385,8 @@ fun HomeScreen(
                                 "Shuffle",
                                 style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 12.5.sp),
                                 color = Tone.Ink,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
                         topActions()

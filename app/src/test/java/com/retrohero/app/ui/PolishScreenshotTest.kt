@@ -3,6 +3,8 @@ package com.retrohero.app.ui
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,14 +12,29 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.outlined.CloudDownload
+import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.CompositionLocalProvider
 import com.retrohero.app.ui.theme.polygon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -34,12 +51,18 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.swipe
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import com.retrohero.app.R
+import com.retrohero.app.data.Looks
 import com.retrohero.app.data.Systems
 import com.retrohero.app.emulator.VirtualGamepad
+import com.retrohero.app.ui.components.BentoItemRow
+import com.retrohero.app.ui.components.ConsoleTopBar
+import com.retrohero.app.ui.components.NavItem
 import com.retrohero.app.ui.screens.GamesScreen
+import com.retrohero.app.ui.screens.HomeScreen
 import com.retrohero.app.ui.theme.RetroHeroTheme
 import com.retrohero.app.ui.theme.Tone
 import org.junit.Rule
@@ -904,5 +927,113 @@ class PolishScreenshotTest {
         compose.onRoot().performTouchInput { swipeUp() }
         compose.mainClock.advanceTimeBy(800)
         save("store_grid")
+    }
+}
+
+@RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [36], qualifiers = "w320dp-h640dp")
+class NarrowLayoutTest {
+    @get:Rule
+    val compose = createComposeRule()
+
+    private fun setLargeFontContent(content: @Composable () -> Unit) {
+        compose.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, 2f)) {
+                content()
+            }
+        }
+    }
+
+    @Test
+    fun narrowLargeFontKeepsSystemDownloadAndPauseVisible() {
+        setLargeFontContent {
+            RetroHeroTheme(dynamicColor = false) {
+                Column(Modifier.fillMaxSize()) {
+                    ConsoleTopBar(
+                        items = listOf(
+                            NavItem("Home", Icons.Filled.Home, Icons.Filled.Home),
+                            NavItem("Consoles", Icons.Filled.GridView, Icons.Filled.GridView),
+                            NavItem("Search", Icons.Filled.Search, Icons.Filled.Search),
+                            NavItem("System", Icons.Filled.Tune, Icons.Filled.Tune),
+                        ),
+                        selected = 3,
+                        onSelect = {},
+                    )
+                    BentoItemRow(
+                        title = "A long engine name that should truncate",
+                        subtitle = "A very long list of supported systems",
+                        leading = { Icon(Icons.Filled.GridView, null, modifier = Modifier.size(20.dp)) },
+                        modifier = Modifier.padding(horizontal = 20.dp),
+                        rightText = "LONG STATUS LABEL",
+                        trailing = {
+                            IconButton(onClick = {}, modifier = Modifier.size(34.dp)) {
+                                Icon(Icons.Outlined.CloudDownload, "Download engine", modifier = Modifier.size(16.dp))
+                            }
+                        },
+                    )
+                    Box(Modifier.weight(1f).fillMaxWidth()) {
+                        val system = Systems.get("snes")!!
+                        VirtualGamepad(
+                            layout = system.layout,
+                            landscape = false,
+                            opacity = 1f,
+                            onButton = { _, _ -> },
+                            onMenu = {},
+                            onFastForward = {},
+                            onPress = {},
+                            modifier = Modifier.fillMaxSize(),
+                            accent = system.color,
+                            skin = Looks.Glass,
+                            systemId = "snes",
+                            onRewind = {},
+                        )
+                    }
+                }
+            }
+        }
+
+        compose.onNodeWithText("System").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Download engine").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Menu").assertIsDisplayed()
+    }
+
+    @Test
+    @Config(sdk = [36], qualifiers = "w360dp-h640dp")
+    fun homeHeaderKeepsAddGamesVisibleAt360dp() {
+        setLargeFontContent {
+            RetroHeroTheme(dynamicColor = false) {
+                HomeScreen(
+                    games = emptyList(),
+                    recents = emptyList(),
+                    onPlay = {},
+                    onOpen = {},
+                    onOptions = {},
+                    onOpenSystem = {},
+                    onSeeAllGames = {},
+                    topActions = {
+                        Box(
+                            Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(com.retrohero.app.ui.components.Ascend.accent)
+                                .clickable {},
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                Icons.Rounded.Add,
+                                "Add games",
+                                tint = com.retrohero.app.ui.components.Ascend.onAccent,
+                                modifier = Modifier.size(22.dp),
+                            )
+                        }
+                    },
+                    bottomPadding = 0.dp,
+                )
+            }
+        }
+
+        compose.onNodeWithContentDescription("Add games").assertIsDisplayed()
     }
 }
