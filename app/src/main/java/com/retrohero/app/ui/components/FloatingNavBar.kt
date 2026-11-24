@@ -59,21 +59,21 @@ val LocalNavSpace = compositionLocalOf { 0.dp }
 
 class NavItem(val label: String, val selectedIcon: ImageVector, val icon: ImageVector)
 
-val FloatingNavHeight = 68.dp
+val FloatingNavHeight = 72.dp
 
 @Composable
 fun FloatingNavBar(items: List<NavItem>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
-    val dockShape = RoundedCornerShape(18.dp)
+    val dockShape = RoundedCornerShape(22.dp)
     Box(
         modifier
             .fillMaxWidth()
             .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(horizontal = 10.dp, vertical = 6.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
             .shadow(
-                elevation = if (Tone.isDark) 10.dp else 6.dp,
+                elevation = if (Tone.isDark) 14.dp else 8.dp,
                 shape = dockShape,
-                ambientColor = Color.Black.copy(alpha = if (Tone.isDark) 0.45f else 0.10f),
-                spotColor = Color.Black.copy(alpha = if (Tone.isDark) 0.55f else 0.16f),
+                ambientColor = Color.Black.copy(alpha = if (Tone.isDark) 0.50f else 0.12f),
+                spotColor = Color.Black.copy(alpha = if (Tone.isDark) 0.60f else 0.18f),
             )
             .clip(dockShape)
             .background(Tone.Surface)
@@ -82,10 +82,10 @@ fun FloatingNavBar(items: List<NavItem>, selected: Int, onSelect: (Int) -> Unit,
         Row(
             Modifier
                 .fillMaxWidth()
-                .height(62.dp)
-                .padding(horizontal = 5.dp, vertical = 5.dp)
+                .height(60.dp)
+                .padding(horizontal = 6.dp, vertical = 6.dp)
                 .selectableGroup(),
-            horizontalArrangement = Arrangement.spacedBy(3.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             items.forEachIndexed { index, item ->
                 val active = index == selected
@@ -106,10 +106,10 @@ fun FloatingNavBar(items: List<NavItem>, selected: Int, onSelect: (Int) -> Unit,
                     tween(160),
                     label = "navPill",
                 )
-                val keyShape = RoundedCornerShape(13.dp)
+                val keyShape = RoundedCornerShape(16.dp)
                 Box(
                     Modifier
-                        .weight(1f)
+                        .weight(if (active) 1.48f else 0.92f)
                         .fillMaxHeight()
                         .graphicsLayer { scaleX = scale; scaleY = scale }
                         .clip(keyShape)
@@ -124,30 +124,48 @@ fun FloatingNavBar(items: List<NavItem>, selected: Int, onSelect: (Int) -> Unit,
                     contentAlignment = Alignment.Center,
                 ) {
                     if (active) {
-                        Box(
-                            Modifier
-                                .align(Alignment.TopCenter)
-                                .padding(top = 4.dp)
-                                .size(width = 12.dp, height = 2.dp)
-                                .background(Ascend.accent, CircleShape),
-                        )
-                    }
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(2.dp),
-                    ) {
-                        Icon(if (active) item.selectedIcon else item.icon, null, tint = tint, modifier = Modifier.size(20.dp))
-                        Text(
-                            item.label,
-                            color = tint,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            style = TextStyle(
-                                fontFamily = com.retrohero.app.ui.theme.Inter,
-                                fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
-                                fontSize = 10.sp,
-                            ),
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                        ) {
+                            Box(
+                                Modifier
+                                    .size(5.dp)
+                                    .clip(CircleShape)
+                                    .background(Ascend.accent),
+                            )
+                            Icon(item.selectedIcon, null, tint = tint, modifier = Modifier.size(18.dp))
+                            Text(
+                                item.label,
+                                color = tint,
+                                maxLines = 1,
+                                softWrap = false,
+                                style = TextStyle(
+                                    fontFamily = com.retrohero.app.ui.theme.Inter,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 11.5.sp,
+                                ),
+                            )
+                        }
+                    } else {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(1.dp),
+                        ) {
+                            Icon(item.icon, null, tint = tint, modifier = Modifier.size(19.dp))
+                            Text(
+                                item.label,
+                                color = tint,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                style = TextStyle(
+                                    fontFamily = com.retrohero.app.ui.theme.Inter,
+                                    fontWeight = FontWeight.Medium,
+                                    fontSize = 10.sp,
+                                ),
+                            )
+                        }
                     }
                 }
             }
