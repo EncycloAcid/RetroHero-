@@ -50,7 +50,7 @@ import com.retrohero.app.data.CoreManager.CoreState
 import com.retrohero.app.data.DeltaSkins
 import com.retrohero.app.ui.components.LocalArtPaths
 import com.retrohero.app.ui.components.LocalArtVersion
-import com.retrohero.app.ui.theme.ElectricLimeColor
+import com.retrohero.app.ui.theme.EmberOrangeColor
 import com.retrohero.app.ui.theme.RetroHeroTheme
 import com.retrohero.app.ui.theme.Tone
 import com.retrohero.app.ui.theme.setAccent
@@ -64,7 +64,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setAccent(ElectricLimeColor)
+        setAccent(EmberOrangeColor)
         Tone.setDarkMode(vm.settings.darkMode)
         lifecycleScope.launch(Dispatchers.IO) {
             DeltaSkins.installBundledDefaults(this@MainActivity, vm.paths.deltaSkins, vm.settings)
@@ -85,7 +85,7 @@ class MainActivity : ComponentActivity() {
                     LocalArtPaths provides vm.paths,
                     LocalArtVersion provides artVersion,
                 ) {
-                    LibraryHost(vm)
+                    ShelvesHost(vm)
                 }
             }
         }
@@ -113,20 +113,20 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun LibraryHost(vm: AppViewModel) {
+private fun ShelvesHost(vm: AppViewModel) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val games by vm.games.collectAsStateWithLifecycle()
     val recents by vm.recents.collectAsStateWithLifecycle()
     val favoriteIds by vm.favoriteIds.collectAsStateWithLifecycle()
     val stats by vm.stats.collectAsStateWithLifecycle()
+    val shelfStatuses by vm.shelfStatuses.collectAsStateWithLifecycle()
     val folders by vm.folders.collectAsStateWithLifecycle()
     val scanning by vm.scanning.collectAsStateWithLifecycle()
     val launchState by vm.launchState.collectAsStateWithLifecycle()
     val coreStates by vm.coreStates.collectAsStateWithLifecycle()
     val download by vm.download.collectAsStateWithLifecycle()
 
-    var inspectingGameId by rememberSaveable { mutableStateOf<String?>(null) }
     var homebrewOpen by rememberSaveable { mutableStateOf(false) }
 
     LifecycleResumeEffect(Unit) {
@@ -168,37 +168,33 @@ private fun LibraryHost(vm: AppViewModel) {
         }
     }
 
-    GameLibraryView(
+    ShelvesAppView(
         games = games,
         recents = recents,
         favoriteIds = favoriteIds,
         stats = stats,
+        shelfStatuses = shelfStatuses,
         scanning = scanning,
         hasFolders = folders.isNotEmpty(),
+        saveSlotsFor = { g -> vm.saveSlots(g) },
+        currentCoreFor = { g -> g.system?.let { vm.settings.coreFor(it) } },
         onAddFolder = { folderPicker.launch(null) },
         onRescan = vm::rescan,
         onOpenHomebrew = { homebrewOpen = true },
         onOpenDownload = { vm.openDownload(AppViewModel.DownloadKind.Game) },
         onImportBios = { biosPicker.launch(arrayOf("*/*")) },
         onImportSkin = { skinPicker.launch(arrayOf("*/*")) },
-        onPlay = vm::play,
+        onSetShelfBucket = { g, bucket -> vm.setShelfStatus(g, bucket.id) },
         onToggleFavorite = { vm.toggleFavorite(it) },
-        onInspectGame = { inspectingGameId = it.id },
+        onPlay = { g, slot -> vm.play(g, slot) },
+        onSelectCore = { g, core -> g.system?.let { vm.setCore(it, core) } },
+        onDeleteGame = { g -> vm.deleteGame(g) },
+        onToggleTheme = {
+            val next = !Tone.isDark
+            vm.settings.darkMode = next
+            Tone.setDarkMode(next)
+        },
     )
-
-    val inspected = inspectingGameId?.let { id -> games.firstOrNull { it.id == id } }
-    if (inspected != null) {
-        GameOptionsSheet(
-            game = inspected,
-            stat = stats[inspected.id],
-            saveSlots = remember(inspected.id, launchState) { vm.saveSlots(inspected) },
-            currentCore = inspected.system?.let { vm.settings.coreFor(it) },
-            onPlay = { slot -> vm.play(inspected, slot) },
-            onSelectCore = { core -> inspected.system?.let { vm.setCore(it, core) } },
-            onDelete = if (inspected.isLocal) ({ vm.deleteGame(inspected) }) else null,
-            onDismiss = { inspectingGameId = null },
-        )
-    }
 
     if (homebrewOpen) {
         HomebrewCatalogSheet(

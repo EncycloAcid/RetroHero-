@@ -51,6 +51,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val favoriteIds = settings.favorites
+    val shelfStatuses = settings.shelfStatuses
+    fun setShelfStatus(game: Game, status: String) = settings.setShelfStatus(game.id, status)
 
     val favorites: StateFlow<List<Game>> = combine(games, settings.favorites) { all, ids ->
         all.filter { it.id in ids }

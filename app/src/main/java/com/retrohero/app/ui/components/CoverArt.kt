@@ -2,13 +2,10 @@ package com.retrohero.app.ui.components
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -19,9 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -38,18 +33,31 @@ import com.retrohero.app.data.Game
 import com.retrohero.app.ui.theme.Inter
 import kotlin.math.abs
 
-private val PosterPalettes = listOf(
-    listOf(Color(0xFF566B37), Color(0xFF2B381E), Color(0xFF12180D)), // mossy colossus green
-    listOf(Color(0xFFC29E59), Color(0xFF7D6230), Color(0xFF2C210F)), // warm wind-waker parchment gold
-    listOf(Color(0xFF355C7D), Color(0xFF1F354D), Color(0xFF0E1824)), // twilight ocean slate
-    listOf(Color(0xFF7A3E3E), Color(0xFF432022), Color(0xFF190C0D)), // crimson dusk
-    listOf(Color(0xFF5C4B7D), Color(0xFF312647), Color(0xFF130F1D)), // midnight violet
-    listOf(Color(0xFF3E6B63), Color(0xFF1F3B36), Color(0xFF0C1816)), // deep emerald
+private data class PosterTheme(
+    val top: Color,
+    val mid: Color,
+    val bottom: Color,
+    val glow: Color,
+    val ink: Color = Color.White,
 )
 
+private val PosterThemes = listOf(
+    PosterTheme(Color(0xFF192428), Color(0xFF0E171B), Color(0xFF070A0D), Color(0xFFE5A93B)), // dark golden-ring fantasy
+    PosterTheme(Color(0xFFF6DC24), Color(0xFFD9B211), Color(0xFF282008), Color(0xFFFFF394), Color(0xFF141104)), // cyber yellow
+    PosterTheme(Color(0xFF1A6FA8), Color(0xFF123F6E), Color(0xFF0A1729), Color(0xFF56C2FF)), // cobalt adventure sky
+    PosterTheme(Color(0xFFD1281E), Color(0xFF7D1410), Color(0xFF180707), Color(0xFFFF8C38)), // western crimson sunset
+    PosterTheme(Color(0xFF8C3B2B), Color(0xFF451A14), Color(0xFF140908), Color(0xFFFF6E40)), // underworld ember
+    PosterTheme(Color(0xFF4E3D7A), Color(0xFF29214A), Color(0xFF111022), Color(0xFF7BE0D6)), // celestial mountain
+    PosterTheme(Color(0xFF293845), Color(0xFF161F29), Color(0xFF090D12), Color(0xFFB5D2E8)), // hollow twilight
+    PosterTheme(Color(0xFF23473B), Color(0xFF132922), Color(0xFF07110E), Color(0xFFFF9E3D)), // campfire cosmos
+)
+
+fun posterAccentColor(game: Game): Color =
+    PosterThemes[abs(game.id.hashCode()) % PosterThemes.size].glow
+
 /**
- * Loads real box art / custom cover / snapshot from [rememberArtSources], falling back smoothly
- * through candidate URLs and rendering a moody editorial poster backdrop until artwork arrives.
+ * Renders a game's cover art from Libretro thumbnails or custom covers, with a vibrant
+ * illustrated box-art poster fallback so shelves look rich and authentic even offline.
  */
 @Composable
 fun CoverArt(game: Game, modifier: Modifier = Modifier) {
@@ -59,7 +67,7 @@ fun CoverArt(game: Game, modifier: Modifier = Modifier) {
 
     Box(modifier) {
         if (!loaded) {
-            EditorialPosterFallback(game, Modifier.fillMaxSize())
+            VibrantBoxArtFallback(game, Modifier.fillMaxSize())
         }
         val model = sources.getOrNull(index)
         if (model != null) {
@@ -78,228 +86,84 @@ fun CoverArt(game: Game, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun EditorialPosterFallback(game: Game, modifier: Modifier = Modifier) {
-    val palette = remember(game.id) {
-        PosterPalettes[abs(game.id.hashCode()) % PosterPalettes.size]
+private fun VibrantBoxArtFallback(game: Game, modifier: Modifier = Modifier) {
+    val theme = remember(game.id) {
+        PosterThemes[abs(game.id.hashCode()) % PosterThemes.size]
     }
     Box(
         modifier.background(
             Brush.verticalGradient(
-                0f to palette[0],
-                0.58f to palette[1],
-                1f to palette[2],
+                0f to theme.top,
+                0.56f to theme.mid,
+                1f to theme.bottom,
             ),
         ),
     ) {
         Canvas(Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+            // Atmospheric central emblem / sun flare
             drawCircle(
                 brush = Brush.radialGradient(
-                    colors = listOf(Color.White.copy(alpha = 0.22f), Color.Transparent),
-                    center = Offset(size.width * 0.50f, size.height * 0.28f),
-                    radius = size.width * 0.72f,
+                    colors = listOf(theme.glow.copy(alpha = 0.45f), Color.Transparent),
+                    center = Offset(w * 0.50f, h * 0.40f),
+                    radius = w * 0.62f,
                 ),
-                radius = size.width * 0.72f,
-                center = Offset(size.width * 0.50f, size.height * 0.28f),
+                radius = w * 0.62f,
+                center = Offset(w * 0.50f, h * 0.40f),
             )
+            // Subtle emblem ring
             drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(Color.Black.copy(alpha = 0.32f), Color.Transparent),
-                    center = Offset(size.width * 0.50f, size.height * 0.88f),
-                    radius = size.width * 0.75f,
+                color = theme.glow.copy(alpha = 0.28f),
+                radius = w * 0.26f,
+                center = Offset(w * 0.50f, h * 0.38f),
+                style = Stroke(width = 2.2f),
+            )
+            // Subtle glossy top-left light catch
+            drawRect(
+                brush = Brush.linearGradient(
+                    colors = listOf(Color.White.copy(alpha = 0.14f), Color.Transparent),
+                    start = Offset.Zero,
+                    end = Offset(w * 0.7f, h * 0.5f),
                 ),
-                radius = size.width * 0.75f,
-                center = Offset(size.width * 0.50f, size.height * 0.88f),
             )
         }
+
         Column(
             Modifier
-                .align(Alignment.Center)
-                .padding(horizontal = 14.dp),
+                .fillMaxSize()
+                .padding(horizontal = 8.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.SpaceBetween,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
                 text = (game.system?.shortName ?: game.systemId).uppercase(),
                 style = TextStyle(
                     fontFamily = Inter,
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = 9.5.sp,
-                    letterSpacing = 0.16.em,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 7.5.sp,
+                    letterSpacing = 0.14.em,
                 ),
-                color = Color.White.copy(alpha = 0.62f),
+                color = theme.ink.copy(alpha = 0.68f),
+                maxLines = 1,
             )
-            Spacer(Modifier.height(6.dp))
+
             Text(
                 text = game.title.uppercase(),
                 style = TextStyle(
                     fontFamily = Inter,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                    lineHeight = 18.sp,
-                    letterSpacing = 0.04.em,
+                    fontWeight = FontWeight.ExtraBold,
+                    fontSize = 10.sp,
+                    lineHeight = 12.5.sp,
+                    letterSpacing = 0.01.em,
                     textAlign = TextAlign.Center,
                 ),
-                color = Color.White.copy(alpha = 0.90f),
+                color = theme.ink,
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
             )
+
+            Box(Modifier.padding(bottom = 1.dp))
         }
-    }
-}
-
-/**
- * Moody night-desk retro CRT + handheld scene for the right side of the Continue Playing hero card,
- * softly blending any loaded game art into the warm desk / phosphor blue CRT glow.
- */
-@Composable
-fun HeroCrtBackdrop(game: Game, modifier: Modifier = Modifier) {
-    val sources = rememberArtSources(game)
-    var index by remember(game.id, sources) { mutableIntStateOf(0) }
-    val bgBase = Color(0xFF0D0F0D)
-
-    Box(modifier.background(bgBase)) {
-        // Subtle real game art reflection on the right if available
-        val model = sources.getOrNull(index)
-        if (model != null) {
-            AsyncImage(
-                model = model,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                onError = { if (index < sources.lastIndex) index++ },
-                alpha = 0.28f,
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .fillMaxWidth(0.58f)
-                    .align(Alignment.CenterEnd),
-            )
-        }
-
-        // Illustrated low-key CRT monitor + handheld silhouette + warm wooden desk reflection
-        Canvas(Modifier.fillMaxSize()) {
-            val w = size.width
-            val h = size.height
-
-            // Warm amber desk reflection at bottom-right
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(Color(0xFF8A4B16).copy(alpha = 0.42f), Color.Transparent),
-                    center = Offset(w * 0.86f, h * 0.92f),
-                    radius = w * 0.42f,
-                ),
-                radius = w * 0.42f,
-                center = Offset(w * 0.86f, h * 0.92f),
-            )
-
-            // Cool phosphor-blue CRT ambient bloom on upper-right
-            drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(Color(0xFF3E8BFF).copy(alpha = 0.40f), Color.Transparent),
-                    center = Offset(w * 0.92f, h * 0.42f),
-                    radius = w * 0.46f,
-                ),
-                radius = w * 0.46f,
-                center = Offset(w * 0.92f, h * 0.42f),
-            )
-
-            // CRT monitor bezel on the right edge
-            val crtLeft = w * 0.77f
-            val crtTop = h * 0.11f
-            val crtW = w * 0.28f
-            val crtH = h * 0.62f
-            drawRoundRect(
-                color = Color(0xFF171A1E),
-                topLeft = Offset(crtLeft, crtTop),
-                size = Size(crtW, crtH),
-                cornerRadius = CornerRadius(18f, 18f),
-            )
-            drawRoundRect(
-                color = Color(0xFF2B313A),
-                topLeft = Offset(crtLeft, crtTop),
-                size = Size(crtW, crtH),
-                cornerRadius = CornerRadius(18f, 18f),
-                style = Stroke(width = 2f),
-            )
-
-            // Glowing CRT phosphor glass tube
-            val glassLeft = crtLeft + 14f
-            val glassTop = crtTop + 14f
-            val glassW = crtW - 22f
-            val glassH = crtH - 28f
-            drawRoundRect(
-                brush = Brush.verticalGradient(
-                    0f to Color(0xFF2E63B8),
-                    0.55f to Color(0xFF7CB8FF),
-                    0.72f to Color(0xFF1E355E),
-                    1f to Color(0xFF3B6EA8),
-                    startY = glassTop,
-                    endY = glassTop + glassH,
-                ),
-                topLeft = Offset(glassLeft, glassTop),
-                size = Size(glassW, glassH),
-                cornerRadius = CornerRadius(14f, 14f),
-            )
-
-            // Subtle CRT scanlines
-            var sy = glassTop + 4f
-            while (sy < glassTop + glassH) {
-                drawLine(
-                    color = Color.Black.copy(alpha = 0.22f),
-                    start = Offset(glassLeft, sy),
-                    end = Offset(glassLeft + glassW, sy),
-                    strokeWidth = 1.5f,
-                )
-                sy += 5f
-            }
-
-            // Leaning retro pocket handheld silhouette in front of the CRT
-            val gbLeft = w * 0.62f
-            val gbTop = h * 0.40f
-            val gbW = w * 0.16f
-            val gbH = h * 0.42f
-            drawRoundRect(
-                color = Color(0xFF1B1E24),
-                topLeft = Offset(gbLeft, gbTop),
-                size = Size(gbW, gbH),
-                cornerRadius = CornerRadius(14f, 14f),
-            )
-            drawRoundRect(
-                color = Color(0xFF3B4554).copy(alpha = 0.65f),
-                topLeft = Offset(gbLeft, gbTop),
-                size = Size(gbW, gbH),
-                cornerRadius = CornerRadius(14f, 14f),
-                style = Stroke(width = 1.5f),
-            )
-            // Handheld screen inset
-            drawRoundRect(
-                color = Color(0xFF0E131A),
-                topLeft = Offset(gbLeft + gbW * 0.14f, gbTop + gbH * 0.10f),
-                size = Size(gbW * 0.72f, gbH * 0.38f),
-                cornerRadius = CornerRadius(6f, 6f),
-            )
-        }
-
-        // Smooth left-to-right obsidian fade so typography on the left is 100% legible
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.horizontalGradient(
-                        0f to bgBase,
-                        0.46f to bgBase.copy(alpha = 0.96f),
-                        0.68f to bgBase.copy(alpha = 0.55f),
-                        1f to Color.Transparent,
-                    ),
-                ),
-        )
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        0f to bgBase.copy(alpha = 0.35f),
-                        0.5f to Color.Transparent,
-                        1f to bgBase.copy(alpha = 0.65f),
-                    ),
-                ),
-        )
     }
 }
