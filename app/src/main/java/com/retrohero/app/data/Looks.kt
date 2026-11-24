@@ -48,7 +48,16 @@ object Looks {
         "butter" to ("Gold" to Color(0xFFF6C85F)),
     )
 
-    fun accent(id: String?): Color = accents.firstOrNull { it.first == id }?.second?.second ?: accents.first().second.second
+    fun canonicalAccent(id: String?): String = when (id) {
+        "lavender" -> "aurora"
+        "salmon" -> "ember"
+        "snow" -> "mono"
+        null -> "deck"
+        else -> id
+    }
+
+    fun accent(id: String?): Color =
+        accents.firstOrNull { it.first == canonicalAccent(id) }?.second?.second ?: accents.first().second.second
     fun skin(id: String?): PadSkin = skins.firstOrNull { it.id == id } ?: Console
 
     // ---- Look files you can import ----------------------------------------------------------

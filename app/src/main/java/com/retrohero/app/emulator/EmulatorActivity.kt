@@ -484,12 +484,12 @@ class EmulatorActivity : ComponentActivity() {
             }
             DeltaAction.REWIND_HOLD -> if (rewindOn) NativeBridge.setRewinding(pressed)
             DeltaAction.QUICK_SAVE -> if (pressed) {
-                val file = paths.stateFile(game, AppPaths.AUTO_SLOT)
+                val file = paths.stateFile(game, AppPaths.QUICK_SLOT)
                 val ok = NativeBridge.saveState(file.absolutePath)
                 toast(if (ok) "Quick saved" else NativeBridge.getLastError().ifEmpty { "Quick save failed" })
             }
             DeltaAction.QUICK_LOAD -> if (pressed) {
-                val file = paths.stateFile(game, AppPaths.AUTO_SLOT)
+                val file = paths.stateFile(game, AppPaths.QUICK_SLOT)
                 if (!file.exists()) {
                     toast("No quick save yet")
                 } else {
