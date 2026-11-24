@@ -216,25 +216,25 @@ fun GameDetailScreen(
                         Box(
                             Modifier
                                 .size(38.dp)
-                                .clip(CircleShape)
-                                .background(if (isFavorite) Color.White else Color.Black.copy(alpha = 0.65f))
-                                .border(0.75.dp, Color.White.copy(alpha = 0.22f), CircleShape)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(if (isFavorite) Ascend.accent else Color(0xFF0A0B0A).copy(alpha = 0.72f))
+                                .border(0.75.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(12.dp))
                                 .clickable(onClick = onToggleFavorite),
                             contentAlignment = Alignment.Center,
                         ) {
                             Icon(
                                 Icons.Rounded.Favorite,
                                 if (isFavorite) "Pinned" else "Add to Library",
-                                tint = if (isFavorite) Color(0xFF0A0A0C) else Color.White,
+                                tint = if (isFavorite) Ascend.onAccent else Color.White,
                                 modifier = Modifier.size(18.dp),
                             )
                         }
                         Box(
                             Modifier
                                 .size(38.dp)
-                                .clip(CircleShape)
-                                .background(Color.Black.copy(alpha = 0.65f))
-                                .border(0.75.dp, Color.White.copy(alpha = 0.22f), CircleShape)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF0A0B0A).copy(alpha = 0.72f))
+                                .border(0.75.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(12.dp))
                                 .clickable(onClick = onAddToCollection),
                             contentAlignment = Alignment.Center,
                         ) {
@@ -243,12 +243,12 @@ fun GameDetailScreen(
                     }
                 }
 
-                // Bottom Hero Title + Metadata + Sharp Monochrome Play CTA
+                // Bottom Hero Title + Acid Lime Eyebrow + Sharp Acid Lime Play CTA
                 Column(
                     Modifier
                         .align(Alignment.BottomStart)
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp),
+                        .padding(horizontal = 18.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Row(
@@ -256,9 +256,9 @@ fun GameDetailScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Text(
-                            "${system.shortName} · $region",
-                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 12.sp),
-                            color = Tone.Muted,
+                            "${system.shortName} · $region".uppercase(),
+                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 0.10.em),
+                            color = Ascend.accentText,
                         )
                         if (stat.lastPlayed > 0) {
                             Text(
@@ -268,7 +268,7 @@ fun GameDetailScreen(
                                     DateUtils.MINUTE_IN_MILLIS,
                                 ).toString().lowercase(Locale.getDefault()),
                                 style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 12.sp),
-                                color = Tone.Ink,
+                                color = Tone.Muted,
                             )
                         }
                     }

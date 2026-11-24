@@ -521,12 +521,13 @@ private fun App(vm: AppViewModel) {
                     onOpenStats = { statsOpen = true },
                     onOpenSystem = { openSystemId = it.id },
                     onSeeAllGames = { tab = Tab.Games },
+                    onToggleFavorite = { vm.toggleFavorite(it) },
                     topActions = {
                         Box {
                             Box(
                                 androidx.compose.ui.Modifier
-                                    .size(36.dp)
-                                    .clip(CircleShape)
+                                    .size(40.dp)
+                                    .clip(RoundedCornerShape(12.dp))
                                     .background(com.retrohero.app.ui.components.Ascend.accent)
                                     .clickable { addMenu = true },
                                 contentAlignment = Alignment.Center,
@@ -535,7 +536,7 @@ private fun App(vm: AppViewModel) {
                                     Icons.Rounded.Add,
                                     "Add games",
                                     tint = com.retrohero.app.ui.components.Ascend.onAccent,
-                                    modifier = androidx.compose.ui.Modifier.size(19.dp),
+                                    modifier = androidx.compose.ui.Modifier.size(22.dp),
                                 )
                             }
                             DropdownMenu(
@@ -586,6 +587,7 @@ private fun App(vm: AppViewModel) {
                     onHomebrew = { homebrewOpen = true },
                     stats = stats,
                     favorites = favoriteIds,
+                    onToggleFavorite = { vm.toggleFavorite(it) },
                     pageIndex = tab.ordinal + 1,
                 )
                 key == Tab.Library.name && shelfFlow -> ShelfScreen(

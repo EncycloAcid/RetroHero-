@@ -69,7 +69,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
+import androidx.compose.material.icons.rounded.KeyboardArrowDown
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialShapes
@@ -204,7 +206,12 @@ private fun reelDistance(index: Int, reel: Float, count: Int): Float {
     return d
 }
 
-/** Pure Minimal Monochrome Play screen: flat OLED/white canvas, editorial Hero Landing, live console filter strip, and immediate 3-column box-art wall. */
+/**
+ * Matte Obsidian & Electric Acid Lime Game Library:
+ * "YOUR COLLECTION / Game Library" header with Acid Lime + action, atmospheric split-fade Continue Playing hero card
+ * with Acid Lime Resume CTA and progress pill, "All games" sort header, and 2-column tall box-art posters with
+ * bottom progress bars and tappable Acid Lime favourite hearts.
+ */
 @Composable
 fun HomeScreen(
     games: List<Game>,
@@ -222,7 +229,9 @@ fun HomeScreen(
     onOpenCollection: (GameCollection) -> Unit = {},
     pageIndex: Int = 1,
     onOpenStats: () -> Unit = {},
+    onToggleFavorite: (Game) -> Unit = {},
 ) {
+    val favoriteIds = remember(favorites) { favorites.mapTo(HashSet()) { it.id } }
     val mostPlayed = remember(games, stats) {
         games.filter { (stats[it.id]?.seconds ?: 0) >= 60 }.sortedByDescending { stats[it.id]?.seconds ?: 0 }.take(5)
     }
@@ -235,6 +244,7 @@ fun HomeScreen(
     }
     var shuffleOpen by rememberSaveable { mutableStateOf(false) }
     var activeSystem by rememberSaveable { mutableStateOf<String?>(null) }
+    var sortMode by rememberSaveable { mutableStateOf(0) } // 0 = Recently played, 1 = Name A–Z, 2 = Most played
 
     if (shuffleOpen) Dialog(onDismissRequest = { shuffleOpen = false }) {
         Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))) {
@@ -247,48 +257,63 @@ fun HomeScreen(
         (recents.take(3) + favorites.take(2) + games.take(4)).distinctBy { it.id }.take(4)
     }
     val pager = rememberPagerState { featured.size.coerceAtLeast(1) }
-    val gridGames = remember(games, recents, activeSystem) {
-        val ordered = (recents + games).distinctBy { it.id }
-        val filtered = if (activeSystem == null) ordered else ordered.filter { it.systemId == activeSystem }
-        filtered.take(15)
+
+    val sortLabel = when (sortMode) {
+        1 -> "Name A–Z"
+        2 -> "Most played"
+        else -> "Recently played"
+    }
+    val gridGames = remember(games, recents, activeSystem, sortMode, stats) {
+        val base = if (activeSystem == null) games else games.filter { it.systemId == activeSystem }
+        val ordered = when (sortMode) {
+            1 -> base.sortedBy { it.title.lowercase() }
+            2 -> base.sortedByDescending { stats[it.id]?.seconds ?: 0 }
+            else -> {
+                val recentOrder = recents.mapIndexed { i, g -> g.id to i }.toMap()
+                base.sortedBy { recentOrder[it.id] ?: Int.MAX_VALUE }
+            }
+        }
+        ordered.take(12)
     }
 
     LazyVerticalGrid(
-        columns = GridCells.Fixed(3),
-        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = bottomPadding + 28.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        columns = GridCells.Fixed(2),
+        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, bottom = bottomPadding + 28.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp),
         modifier = Modifier.fillMaxSize().background(Tone.Bg),
     ) {
-        // Minimal Flat Monochrome Top Bar
-        item(key = "mono_header", span = { GridItemSpan(maxLineSpan) }) {
+        // YOUR COLLECTION / Game Library Header + Acid Lime '+' Action
+        item(key = "figma_header", span = { GridItemSpan(maxLineSpan) }) {
             Row(
                 Modifier
                     .fillMaxWidth()
                     .windowInsetsPadding(WindowInsets.statusBars)
-                    .padding(top = 12.dp, bottom = 2.dp),
+                    .padding(top = 14.dp, bottom = 2.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(9.dp),
-                ) {
-                    androidx.compose.foundation.Image(
-                        androidx.compose.ui.res.painterResource(com.retrohero.app.R.drawable.ic_logo_mark),
-                        null,
-                        Modifier.size(20.dp).launchMarkTarget(),
-                        colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Tone.Ink),
-                    )
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
-                        "RetroHero",
+                        "YOUR COLLECTION",
                         style = TextStyle(
                             fontFamily = Inter,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 21.sp,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 10.5.sp,
+                            letterSpacing = 0.12.em,
+                        ),
+                        color = Tone.Muted,
+                    )
+                    Text(
+                        "Game Library",
+                        style = TextStyle(
+                            fontFamily = Inter,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 27.sp,
                             letterSpacing = (-0.03).em,
                         ),
                         color = Tone.Ink,
+                        modifier = Modifier.launchMarkTarget(),
                     )
                 }
                 Row(
@@ -297,10 +322,10 @@ fun HomeScreen(
                 ) {
                     Box(
                         Modifier
-                            .size(36.dp)
-                            .clip(CircleShape)
+                            .size(40.dp)
+                            .clip(RoundedCornerShape(12.dp))
                             .background(Tone.Surface)
-                            .border(1.dp, Tone.Line, CircleShape)
+                            .border(1.dp, Tone.Line, RoundedCornerShape(12.dp))
                             .clickable(onClick = onOpenStats),
                         contentAlignment = Alignment.Center,
                     ) {
@@ -308,21 +333,21 @@ fun HomeScreen(
                     }
                     Row(
                         Modifier
-                            .height(36.dp)
-                            .clip(CircleShape)
+                            .height(40.dp)
+                            .clip(RoundedCornerShape(12.dp))
                             .background(Tone.Surface)
-                            .border(1.dp, Tone.Line, CircleShape)
+                            .border(1.dp, Tone.Line, RoundedCornerShape(12.dp))
                             .clickable {
                                 if (candidates.size > 1) shuffleOpen = true else candidates.firstOrNull()?.let(onPlay)
                             }
-                            .padding(horizontal = 12.dp),
+                            .padding(horizontal = 11.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(5.dp),
                     ) {
                         Icon(Icons.Rounded.Shuffle, null, tint = Tone.Ink, modifier = Modifier.size(15.dp))
                         Text(
                             "Shuffle",
-                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp),
+                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 12.sp),
                             color = Tone.Ink,
                         )
                     }
@@ -331,13 +356,14 @@ fun HomeScreen(
             }
         }
 
-        // Clean Editorial Hero Landing (Box Art First)
+        // Atmospheric Split-Fade Continue Playing Hero Card
         if (featured.isNotEmpty()) {
-            item(key = "mono_hero", span = { GridItemSpan(maxLineSpan) }) {
-                MonoHeroLanding(
+            item(key = "figma_hero", span = { GridItemSpan(maxLineSpan) }) {
+                FigmaContinueHero(
                     pager = pager,
                     featured = featured,
                     recent = recents.firstOrNull(),
+                    stats = stats,
                     onOpen = onOpen,
                     onPlay = onPlay,
                     onOptions = onOptions,
@@ -345,9 +371,52 @@ fun HomeScreen(
             }
         }
 
-        // Flat Monochrome Console Filter Bar + Section Title
-        item(key = "grid_controls", span = { GridItemSpan(maxLineSpan) }) {
+        // "All games  N titles" + Interactive Sort Selector
+        item(key = "all_games_bar", span = { GridItemSpan(maxLineSpan) }) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.Bottom,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            "All games",
+                            style = TextStyle(
+                                fontFamily = Inter,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 20.sp,
+                                letterSpacing = (-0.02).em,
+                            ),
+                            color = Tone.Ink,
+                        )
+                        Text(
+                            "${games.size} titles",
+                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Normal, fontSize = 13.sp),
+                            color = Tone.Muted,
+                            modifier = Modifier.padding(bottom = 2.dp),
+                        )
+                    }
+                    Row(
+                        Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { sortMode = (sortMode + 1) % 3 }
+                            .padding(horizontal = 4.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp),
+                    ) {
+                        Text(
+                            sortLabel,
+                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 12.5.sp),
+                            color = Tone.Muted,
+                        )
+                        Icon(Icons.Rounded.KeyboardArrowDown, null, tint = Tone.Muted, modifier = Modifier.size(16.dp))
+                    }
+                }
+
                 if (systems.size > 1) {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         item(key = "filter_all") {
@@ -368,58 +437,38 @@ fun HomeScreen(
                         }
                     }
                 }
-                Row(
-                    Modifier.fillMaxWidth().padding(top = 2.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    val heading = if (activeSystem == null) {
-                        if (recents.isNotEmpty()) "Library" else "Games"
-                    } else {
-                        systems.firstOrNull { it.id == activeSystem }?.name ?: "Games"
-                    }
-                    Text(
-                        heading,
-                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 17.sp, letterSpacing = (-0.02).em),
-                        color = Tone.Ink,
-                    )
-                    Text(
-                        "See all (${games.size})",
-                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 13.sp),
-                        color = Tone.Muted,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .clickable(onClick = onSeeAllGames)
-                            .padding(horizontal = 4.dp, vertical = 2.dp),
-                    )
-                }
             }
         }
 
-        // Dense 3-Column Pure Box-Art Wall (9+ covers visible right on Play!)
-        items(gridGames, key = { "wall_${it.id}" }) { game ->
-            val sub = stats[game.id]?.takeIf { it.seconds >= 60 }?.let { PlayTime.format(it.seconds) }
-                ?: game.system?.shortName
+        // 2-Column Tall Box-Art Poster Grid (matching Figma reference: rounded covers + progress bar + Acid Lime hearts)
+        items(gridGames, key = { "poster_${it.id}" }) { game ->
+            val st = stats[game.id]
+            val year = systemReleaseYear(game.systemId)
+            val sub = "${game.system?.shortName ?: game.systemId}   $year"
+            val progress = computeGameProgress(st, game.id == recents.firstOrNull()?.id)
             GameCard(
                 game = game,
                 onClick = { onOpen(game) },
                 subtitle = sub,
                 onLongClick = { onOptions(game) },
                 onPlay = { onPlay(game) },
+                progress = progress,
+                isFavorite = game.id in favoriteIds,
+                onToggleFavorite = { onToggleFavorite(game) },
             )
         }
 
-        // Flat Collections Strip (if present)
+        // Collections Strip (if present)
         if (favorites.isNotEmpty() || collections.isNotEmpty()) {
             item(key = "mono_collections", span = { GridItemSpan(maxLineSpan) }) {
                 Column(
-                    Modifier.padding(top = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    Modifier.padding(top = 6.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Box(Modifier.fillMaxWidth().height(1.dp).background(Tone.Line))
                     Text(
                         "Collections",
-                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 17.sp, letterSpacing = (-0.02).em),
+                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, letterSpacing = (-0.02).em),
                         color = Tone.Ink,
                     )
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -446,20 +495,31 @@ fun HomeScreen(
             }
         }
 
-        // Ultra-Clean Flat Most Played List (hairline dividers, no boxy cards)
+        // Most Played Hairline List (if present)
         if (mostPlayed.isNotEmpty()) {
             item(key = "mono_most_played", span = { GridItemSpan(maxLineSpan) }) {
                 Column(
-                    Modifier.padding(top = 6.dp),
+                    Modifier.padding(top = 4.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
                     Box(Modifier.fillMaxWidth().height(1.dp).background(Tone.Line))
-                    Text(
-                        "Most played",
-                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 17.sp, letterSpacing = (-0.02).em),
-                        color = Tone.Ink,
-                        modifier = Modifier.padding(top = 10.dp, bottom = 4.dp),
-                    )
+                    Row(
+                        Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            "Most played",
+                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, letterSpacing = (-0.02).em),
+                            color = Tone.Ink,
+                        )
+                        Text(
+                            "See all",
+                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 13.sp),
+                            color = Ascend.accentText,
+                            modifier = Modifier.clickable(onClick = onSeeAllGames),
+                        )
+                    }
                     mostPlayed.forEachIndexed { i, game ->
                         MonoFlatGameRow(
                             game = game,
@@ -700,140 +760,248 @@ private fun GachaHero(candidates: List<Game>, onPlay: (Game) -> Unit) {
     }
 }
 
-// ---- Pure Minimal Monochrome (Box Art First) Play Components -----------------------------------
+// ---- Matte Obsidian & Electric Acid Lime (Figma-Inspired) Play Components ----------------------
 
 @Composable
-private fun MonoHeroLanding(
+private fun FigmaContinueHero(
     pager: PagerState,
     featured: List<Game>,
     recent: Game?,
+    stats: Map<String, PlayStat>,
     onOpen: (Game) -> Unit,
     onPlay: (Game) -> Unit,
     onOptions: (Game) -> Unit,
 ) {
-    val heroShape = RoundedCornerShape(12.dp)
+    val heroShape = RoundedCornerShape(22.dp)
     HorizontalPager(
         state = pager,
-        pageSpacing = 10.dp,
-        modifier = Modifier.fillMaxWidth().height(212.dp),
+        pageSpacing = 12.dp,
+        modifier = Modifier.fillMaxWidth().height(254.dp),
     ) { page ->
         val game = featured[page]
         val isRecent = game.id == recent?.id
+        val stat = stats[game.id]
+        val progress = computeGameProgress(stat, isRecent) ?: 0.38f
+        val progressPct = (progress * 100f).roundToInt().coerceIn(5, 100)
+        val lastPlayedText = remember(stat?.lastPlayed, game.systemId, isRecent) {
+            val sys = game.system?.shortName ?: game.systemId
+            if (stat != null && stat.lastPlayed > 0L) {
+                val rel = android.text.format.DateUtils.getRelativeTimeSpanString(
+                    stat.lastPlayed,
+                    System.currentTimeMillis(),
+                    android.text.format.DateUtils.MINUTE_IN_MILLIS,
+                ).toString().lowercase(java.util.Locale.getDefault())
+                "$sys · Last played $rel"
+            } else if (isRecent) {
+                "$sys · Ready to resume"
+            } else {
+                "$sys · ${systemReleaseYear(game.systemId)}"
+            }
+        }
+
         Box(
             Modifier
                 .fillMaxSize()
                 .clip(heroShape)
-                .background(Tone.Surface)
+                .background(Color(0xFF0E100E))
                 .border(1.dp, Tone.Line, heroShape)
                 .combinedClickable(
                     onClick = { onOpen(game) },
                     onLongClick = { onOptions(game) },
                 ),
         ) {
-            GameArt(game, Modifier.fillMaxSize(), showTag = false)
-            // Minimal dark bottom readability scrim so the full box art stays crisp
+            // Artwork anchored to the right, fading smoothly into matte obsidian on the left
+            GameArt(
+                game,
+                Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(0.72f)
+                    .align(Alignment.CenterEnd),
+                showTag = false,
+            )
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.horizontalGradient(
+                            0f to Color(0xFF0E100E),
+                            0.44f to Color(0xFF0E100E).copy(alpha = 0.96f),
+                            0.70f to Color(0xFF0E100E).copy(alpha = 0.52f),
+                            1f to Color(0xFF0E100E).copy(alpha = 0.14f),
+                        ),
+                    ),
+            )
             Box(
                 Modifier
                     .fillMaxSize()
                     .background(
                         Brush.verticalGradient(
-                            0f to Color.Transparent,
-                            0.42f to Color.Black.copy(alpha = 0.12f),
-                            0.74f to Color.Black.copy(alpha = 0.72f),
-                            1f to Color.Black.copy(alpha = 0.92f),
+                            0f to Color(0xFF0E100E).copy(alpha = 0.25f),
+                            0.65f to Color.Transparent,
+                            1f to Color(0xFF0E100E).copy(alpha = 0.72f),
                         ),
                     ),
             )
 
-            // Top-left minimal label & top-right page index
-            Row(
-                Modifier
-                    .align(Alignment.TopStart)
-                    .fillMaxWidth()
-                    .padding(12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
+            // Subtle top-right pager counter (1 / 4)
+            if (featured.size > 1) {
                 Box(
                     Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(Color.Black.copy(alpha = 0.72f))
+                        .align(Alignment.TopEnd)
+                        .padding(14.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFF0A0B0A).copy(alpha = 0.66f))
+                        .border(0.75.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(8.dp))
                         .padding(horizontal = 8.dp, vertical = 4.dp),
                 ) {
                     Text(
-                        if (isRecent) "CONTINUE" else "FEATURED",
-                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 10.sp, letterSpacing = 0.08.em),
-                        color = Color.White,
+                        "${page + 1} / ${featured.size}",
+                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 10.5.sp),
+                        color = Color.White.copy(alpha = 0.85f),
                     )
-                }
-                if (featured.size > 1) {
-                    Box(
-                        Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(Color.Black.copy(alpha = 0.72f))
-                            .padding(horizontal = 8.dp, vertical = 4.dp),
-                    ) {
-                        Text(
-                            "${page + 1} / ${featured.size}",
-                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 10.5.sp),
-                            color = Color.White.copy(alpha = 0.90f),
-                        )
-                    }
                 }
             }
 
-            // Bottom title + high-contrast flat monochrome Play button
-            Row(
+            // Left editorial block: Acid Lime eyebrow, bold white title, subtitle, Acid Lime CTA + outlined ->
+            Column(
                 Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth()
-                    .padding(14.dp),
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    .align(Alignment.TopStart)
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp, vertical = 18.dp),
+                verticalArrangement = Arrangement.SpaceBetween,
             ) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Column(
+                    Modifier.fillMaxWidth(0.76f),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
                     Text(
-                        game.system?.name.orEmpty(),
-                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 11.5.sp),
-                        color = Color.White.copy(alpha = 0.72f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                        if (isRecent) "CONTINUE PLAYING" else "FEATURED TITLE",
+                        style = TextStyle(
+                            fontFamily = Inter,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.5.sp,
+                            letterSpacing = 0.12.em,
+                        ),
+                        color = Ascend.accent,
                     )
                     Text(
                         game.title,
                         style = TextStyle(
                             fontFamily = Inter,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 21.sp,
-                            lineHeight = 23.sp,
-                            letterSpacing = (-0.025).em,
+                            fontSize = 27.sp,
+                            lineHeight = 30.sp,
+                            letterSpacing = (-0.03).em,
                         ),
                         color = Color.White,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                     )
+                    Text(
+                        lastPlayedText,
+                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Normal, fontSize = 12.5.sp),
+                        color = Color.White.copy(alpha = 0.56f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
 
-                Row(
-                    Modifier
-                        .height(38.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color.White)
-                        .clickable { onPlay(game) }
-                        .padding(horizontal = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Icon(Icons.Rounded.PlayArrow, "Play ${game.title}", tint = Color(0xFF0A0A0C), modifier = Modifier.size(18.dp))
-                    Text(
-                        if (isRecent) "Resume" else "Play",
-                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 13.sp),
-                        color = Color(0xFF0A0A0C),
-                    )
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Row(
+                            Modifier
+                                .height(44.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Ascend.accent)
+                                .clickable { onPlay(game) }
+                                .padding(horizontal = 18.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Icon(
+                                Icons.Rounded.PlayArrow,
+                                "Play ${game.title}",
+                                tint = Ascend.onAccent,
+                                modifier = Modifier.size(19.dp),
+                            )
+                            Text(
+                                if (isRecent) "Resume game" else "Play game",
+                                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 14.sp),
+                                color = Ascend.onAccent,
+                            )
+                        }
+                        Box(
+                            Modifier
+                                .size(44.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(Color(0xFF171917).copy(alpha = 0.88f))
+                                .border(1.dp, Color.White.copy(alpha = 0.16f), RoundedCornerShape(12.dp))
+                                .clickable { onOpen(game) },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Rounded.ArrowForward,
+                                "Game details",
+                                tint = Color.White,
+                                modifier = Modifier.size(19.dp),
+                            )
+                        }
+                    }
+
+                    // Bottom-right translucent progress pill matching Figma reference
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        Box(
+                            Modifier
+                                .width(136.dp)
+                                .height(22.dp)
+                                .clip(RoundedCornerShape(7.dp))
+                                .background(Color(0xFF151812).copy(alpha = 0.82f))
+                                .border(0.75.dp, Color.White.copy(alpha = 0.10f), RoundedCornerShape(7.dp)),
+                        ) {
+                            Box(
+                                Modifier
+                                    .fillMaxHeight()
+                                    .fillMaxWidth(progress)
+                                    .background(Ascend.accent.copy(alpha = 0.24f)),
+                            )
+                            Text(
+                                "$progressPct%",
+                                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 10.5.sp),
+                                color = Color.White.copy(alpha = 0.88f),
+                                modifier = Modifier.align(Alignment.CenterEnd).padding(end = 8.dp),
+                            )
+                        }
+                    }
                 }
             }
         }
     }
+}
+
+internal fun systemReleaseYear(systemId: String): String = when (systemId) {
+    "nes", "fds" -> "1985"
+    "sms", "gb" -> "1989"
+    "genesis", "pce", "pcecd", "lynx", "gg" -> "1990"
+    "snes", "neogeo" -> "1991"
+    "segacd", "32x", "3do", "jaguar" -> "1993"
+    "psx", "saturn", "vb" -> "1995"
+    "n64", "gbc", "ngp" -> "1998"
+    "dc", "ws" -> "1999"
+    "gba", "gc" -> "2001"
+    "nds", "psp" -> "2004"
+    "3ds" -> "2011"
+    "atari2600", "atari5200", "atari7800", "coleco", "intv", "vectrex" -> "1982"
+    else -> "Retro"
+}
+
+internal fun computeGameProgress(stat: PlayStat?, isRecent: Boolean): Float? {
+    if (stat != null && stat.seconds > 0) {
+        return (0.18f + (stat.seconds.toFloat() / 7200f) * 0.78f).coerceIn(0.18f, 0.96f)
+    }
+    return if (isRecent) 0.42f else 0.14f
 }
 
 @Composable
