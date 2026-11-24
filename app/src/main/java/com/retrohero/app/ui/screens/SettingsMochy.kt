@@ -651,9 +651,7 @@ fun LooksSettings(
         Spacer(Modifier.height(10.dp))
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             deltaSkins.forEach { skin ->
-                val active = remember(deltaRevision, skin.identifier, skin.systemIds) {
-                    skin.systemIds.any { settings.deltaSkinFor(it) == skin.identifier }
-                }
+                val active = skin.systemIds.any { settings.deltaSkinFor(it) == skin.identifier }
                 val sysLabel = skin.systemIds
                     .mapNotNull { id -> Systems.all.firstOrNull { it.id == id }?.shortName }
                     .distinct()
@@ -670,8 +668,15 @@ fun LooksSettings(
                             cardShape,
                         )
                         .clickable {
-                            val next = if (active) null else skin.identifier
-                            skin.systemIds.forEach { settings.setDeltaSkinFor(it, next) }
+                            skin.systemIds.forEach { systemId ->
+                                if (active) {
+                                    if (settings.deltaSkinFor(systemId) == skin.identifier) {
+                                        settings.setDeltaSkinFor(systemId, null)
+                                    }
+                                } else {
+                                    settings.setDeltaSkinFor(systemId, skin.identifier)
+                                }
+                            }
                             deltaRevision++
                             onChanged()
                         }
