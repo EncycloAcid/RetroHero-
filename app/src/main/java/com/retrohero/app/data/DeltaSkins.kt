@@ -425,33 +425,38 @@ object DeltaSkins {
      * and sets each as the default skin for its compatible system(s) if no skin is selected yet.
      */
     fun installBundledDefaults(context: android.content.Context, rootDir: File, settings: Settings) {
-        val marker = File(rootDir, ".defaults_v1")
-        if (marker.isFile) return
+        val marker = File(rootDir, ".defaults")
+        val legacyMarker = File(rootDir, ".defaults_v1")
+        val installed = linkedSetOf<String>().apply {
+            addAll(runCatching { marker.readLines() }.getOrDefault(emptyList()).filter { it.isNotBlank() })
+            addAll(runCatching { legacyMarker.readLines() }.getOrDefault(emptyList()).filter { it.isNotBlank() })
+        }
         val names = runCatching { context.assets.list("default_skins") }.getOrNull().orEmpty()
             .filter { it.endsWith(".deltaskin", ignoreCase = true) || it.endsWith(".zip", ignoreCase = true) }
             .sorted()
-        if (names.isEmpty()) return
+        if (names.isEmpty() && installed.isEmpty()) return
         rootDir.mkdirs()
-        for (name in names) {
-            runCatching {
+        for (name in names.filterNot { it in installed }) {
+            val succeeded = runCatching {
                 context.assets.open("default_skins/$name").use { stream ->
-                    val skin = import(rootDir, stream)
+                    val skin = import(rootDir, stream, replaceExisting = false)
                     for (sysId in skin.systemIds) {
                         if (settings.deltaSkinFor(sysId) == null) {
                             settings.setDeltaSkinFor(sysId, skin.identifier)
                         }
                     }
                 }
-            }
+            }.isSuccess
+            if (succeeded) installed += name
         }
-        runCatching { marker.writeText(names.joinToString("\n")) }
+        runCatching { marker.writeText(installed.joinToString("\n")) }
     }
 
     /**
      * Imports a `.deltaskin` (ZIP) stream into [rootDir].
      * Re-importing a skin with the same `identifier` replaces the previous copy.
      */
-    fun import(rootDir: File, stream: InputStream): DeltaSkin {
+    fun import(rootDir: File, stream: InputStream, replaceExisting: Boolean = true): DeltaSkin {
         rootDir.mkdirs()
         val tmp = File(rootDir, ".import-${System.nanoTime()}").apply { mkdirs() }
         try {
@@ -472,14 +477,17 @@ object DeltaSkins {
                 "Invalid skin import directory"
             }
             val tmpCanonical = tmp.canonicalFile
-            val existingDir = list(rootDir)
+            val existingSkin = list(rootDir)
                 .firstOrNull { it.identifier == parsed.identifier && it.dir.canonicalFile != tmpCanonical }
-                ?.dir
-            if (existingDir != null) {
-                require(existingDir.canonicalFile.parentFile == rootCanonical) {
+            if (existingSkin != null) {
+                require(existingSkin.dir.canonicalFile.parentFile == rootCanonical) {
                     "Existing skin directory is outside the skin folder"
                 }
-                existingDir.deleteRecursively()
+                if (!replaceExisting) {
+                    tmp.deleteRecursively()
+                    return existingSkin
+                }
+                existingSkin.dir.deleteRecursively()
             }
             if (target.exists()) {
                 throw IllegalArgumentException("Skin import directory already exists")

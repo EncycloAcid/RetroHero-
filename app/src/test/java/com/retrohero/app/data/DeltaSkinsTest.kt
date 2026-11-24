@@ -157,6 +157,27 @@ class DeltaSkinsTest {
     }
 
     @Test
+    fun importWithoutReplacementPreservesExistingSkin() {
+        val storeDir = tmp.newFolder("delta_skins_no_replace")
+        fun archive(name: String, asset: String) = buildZip(
+            "info.json" to sampleGbaInfo.replace("Instrument GBA", name).toByteArray(),
+            "portrait.pdf" to asset.toByteArray(),
+        )
+        val original = DeltaSkins.import(storeDir, ByteArrayInputStream(archive("Original", "original asset")))
+
+        val imported = DeltaSkins.import(
+            storeDir,
+            ByteArrayInputStream(archive("Bundled", "bundled asset")),
+            replaceExisting = false,
+        )
+
+        assertEquals(original.dir, imported.dir)
+        assertEquals("Original", imported.name)
+        assertEquals("original asset", imported.assetFile("portrait.pdf").readText())
+        assertEquals(1, DeltaSkins.list(storeDir).size)
+    }
+
+    @Test
     fun importsDotDotIdentifierInsideSkinRootWithoutDeletingSiblingFiles() {
         val storeDir = tmp.newFolder("delta_skins_dotdot")
         val outside = File(tmp.root, "unrelated-save.state").apply { writeText("keep") }
