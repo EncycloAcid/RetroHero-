@@ -113,9 +113,19 @@ fun LibraryScreen(
     ) {
         span {
             com.retrohero.app.ui.components.PageHeader(if (tab == LibraryTab.All) "Library" else tab.label,
-                "${games.size} games · ${systems.size} active / ${com.retrohero.app.data.Systems.all.size} systems", index = pageIndex) {
+                "${games.size} games · ${systems.size}/${com.retrohero.app.data.Systems.all.size} systems", index = pageIndex) {
                 if (tab != LibraryTab.All) com.retrohero.app.ui.components.Key("All library", { tab = LibraryTab.All })
             }
+        }
+        span {
+            com.retrohero.app.ui.components.BentoTelemetryStrip(
+                metrics = listOf(
+                    com.retrohero.app.ui.components.BentoMetric("${systems.size}/${com.retrohero.app.data.Systems.all.size}", "SYSTEMS", Icons.Rounded.Insights),
+                    com.retrohero.app.ui.components.BentoMetric(games.size.toString(), "GAMES", Icons.Rounded.Insights),
+                    com.retrohero.app.ui.components.BentoMetric(favorites.size.toString(), "FAVOURITES", Icons.Rounded.Insights),
+                    com.retrohero.app.ui.components.BentoMetric(shots.size.toString(), "CAPTURES", Icons.Rounded.Image),
+                ),
+            )
         }
         span {
             androidx.compose.foundation.lazy.LazyRow(
@@ -136,28 +146,32 @@ fun LibraryScreen(
             LibraryTab.All -> {
                 span { StatsCard(history, onOpenStats) }
                 span {
-                    val cardShape = RoundedCornerShape(Ascend.Radius.Card)
-                    Column {
-                        ArchiveLabel("Browse the archive", Modifier.padding(bottom = 10.dp, top = 4.dp))
-                        Column(
-                            Modifier
-                                .fillMaxWidth()
-                                .clip(cardShape)
-                                .background(com.retrohero.app.ui.theme.Tone.Surface)
-                                .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, cardShape)
-                                .padding(horizontal = 14.dp, vertical = 4.dp),
-                        ) {
-                            val entries = LibraryTab.entries.filter { it != LibraryTab.All }
-                            entries.forEachIndexed { idx, destination ->
-                                val (count, art) = when (destination) {
-                                    LibraryTab.Systems -> com.retrohero.app.data.Systems.all.size to games.firstOrNull()
-                                    LibraryTab.Favourites -> favorites.size to favorites.firstOrNull()
-                                    LibraryTab.Collections -> collections.size to collections.firstNotNullOfOrNull { it.second.firstOrNull() }
-                                    LibraryTab.Screenshots -> shots.size to shots.firstOrNull()?.game
-                                    else -> history.size to history.firstOrNull()?.game
-                                }
-                                IndexRow(destination, count, art, showDivider = idx < entries.lastIndex) { tab = destination }
+                    com.retrohero.app.ui.components.BentoPanel(
+                        header = "ARCHIVE DIRECTORY",
+                        badge = "05 SECTIONS",
+                    ) {
+                        val entries = LibraryTab.entries.filter { it != LibraryTab.All }
+                        entries.forEach { destination ->
+                            val (count, subtitleText) = when (destination) {
+                                LibraryTab.Systems -> com.retrohero.app.data.Systems.all.size to "${systems.size} active consoles · ${com.retrohero.app.data.Systems.all.size} supported"
+                                LibraryTab.Favourites -> favorites.size to "Pinned games for instant access"
+                                LibraryTab.Collections -> collections.size to "Custom shelves & curated lists"
+                                LibraryTab.Screenshots -> shots.size to "In-game captures & custom covers"
+                                else -> history.size to "Chronological play session log"
                             }
+                            com.retrohero.app.ui.components.BentoItemRow(
+                                title = destination.label,
+                                subtitle = subtitleText,
+                                rightText = count.toString().padStart(2, '0'),
+                                highlighted = destination == LibraryTab.Systems,
+                                onClick = { tab = destination },
+                                leading = {
+                                    ArchiveLabel(
+                                        destination.label.take(3).uppercase(),
+                                        color = if (destination == LibraryTab.Systems) Ascend.onAccent else com.retrohero.app.ui.theme.Tone.Ink,
+                                    )
+                                },
+                            )
                         }
                     }
                 }
@@ -165,7 +179,7 @@ fun LibraryScreen(
                     span {
                         com.retrohero.app.ui.components.SectionTitle(
                             "Pinned",
-                            Modifier.padding(top = 12.dp),
+                            Modifier.padding(top = 8.dp),
                             count = favorites.size,
                             index = 1,
                             verticalPadding = 0.dp,
@@ -179,7 +193,7 @@ fun LibraryScreen(
                     span {
                         com.retrohero.app.ui.components.SectionTitle(
                             "Your Consoles",
-                            Modifier.padding(top = 12.dp),
+                            Modifier.padding(top = 8.dp),
                             count = systems.size,
                             index = 2,
                             onClick = { tab = LibraryTab.Systems },
@@ -200,7 +214,7 @@ fun LibraryScreen(
                     span {
                         com.retrohero.app.ui.components.SectionTitle(
                             "Supported Systems",
-                            Modifier.padding(top = 12.dp),
+                            Modifier.padding(top = 8.dp),
                             count = com.retrohero.app.data.Systems.all.size,
                             index = 3,
                             onClick = { tab = LibraryTab.Systems },

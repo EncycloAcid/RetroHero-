@@ -197,7 +197,7 @@ private fun reelDistance(index: Int, reel: Float, count: Int): Float {
     return d
 }
 
-/** Featured games and shelves from the local library. */
+/** Featured games and shelves from the local library, in the Game Record Bento & Stage aesthetic. */
 @Composable
 fun HomeScreen(
     games: List<Game>,
@@ -224,6 +224,8 @@ fun HomeScreen(
     val candidates = remember(games, recents) {
         (recents + games.shuffled()).distinctBy { it.id }.take(MaxCandidates)
     }
+    val totalSeconds = remember(stats) { stats.values.sumOf { it.seconds } }
+    val totalSessions = remember(stats) { stats.values.sumOf { it.sessions } }
 
     var shuffleOpen by rememberSaveable { mutableStateOf(false) }
     if (shuffleOpen) Dialog(onDismissRequest = { shuffleOpen = false }) {
@@ -233,12 +235,12 @@ fun HomeScreen(
         }
     }
     val featured = remember(games, recents, favorites) {
-        (recents.take(2) + favorites.take(2) + games.take(5)).distinctBy { it.id }.take(4)
+        (recents.take(3) + favorites.take(2) + games.take(4)).distinctBy { it.id }.take(4)
     }
 
     androidx.compose.foundation.lazy.LazyColumn(
         contentPadding = PaddingValues(bottom = bottomPadding + 28.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
         modifier = Modifier.fillMaxSize().emberBackground(),
     ) {
         item(key = "header") {
@@ -250,65 +252,80 @@ fun HomeScreen(
                 trailing = topActions,
             )
         }
+
+        // 4-Cell Bento Telemetry Strip (exact match to Game Record)
+        item(key = "telemetry") {
+            com.retrohero.app.ui.components.BentoTelemetryStrip(
+                metrics = listOf(
+                    com.retrohero.app.ui.components.BentoMetric(
+                        value = if (totalSeconds >= 60) PlayTime.format(totalSeconds) else "${games.size * 4}hs",
+                        label = if (totalSeconds >= 60) "PLAY TIME" else "EST. ARCHIVE",
+                        icon = androidx.compose.material.icons.Icons.Rounded.Insights,
+                    ),
+                    com.retrohero.app.ui.components.BentoMetric(
+                        value = games.size.toString(),
+                        label = "GAMES",
+                        icon = androidx.compose.material.icons.Icons.Rounded.PlayArrow,
+                    ),
+                    com.retrohero.app.ui.components.BentoMetric(
+                        value = "${systems.size}/${Systems.all.size}",
+                        label = "CONSOLES",
+                        icon = androidx.compose.material.icons.Icons.Rounded.Shuffle,
+                    ),
+                    com.retrohero.app.ui.components.BentoMetric(
+                        value = totalSessions.toString(),
+                        label = "SESSIONS",
+                        icon = androidx.compose.material.icons.Icons.Rounded.Insights,
+                    ),
+                ),
+                modifier = Modifier.padding(horizontal = ContentInset),
+            )
+        }
+
+        // Widescreen 16:9 Stage Showcase + Thumbnail Selector + Boxed Action Buttons
         if (featured.isNotEmpty()) {
             item(key = "hero") {
                 FeaturedGames(featured, recents.firstOrNull(), onOpen, onPlay)
             }
         }
+
+        // Boxed Quick Actions (Shuffle & Play Stats)
         item(key = "actions") {
             Row(
                 Modifier.fillMaxWidth().padding(horizontal = ContentInset),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                ArchiveShortcut("Shuffle", "RND", Icons.Rounded.Shuffle, Modifier.weight(1f)) {
-                    if (candidates.size > 1) shuffleOpen = true else candidates.firstOrNull()?.let(onPlay)
-                }
-                ArchiveShortcut("Play stats", "LOG", Icons.Rounded.Insights, Modifier.weight(1f), onOpenStats)
+                com.retrohero.app.ui.components.BoxedButton(
+                    text = "Shuffle",
+                    icon = Icons.Rounded.Shuffle,
+                    onClick = {
+                        if (candidates.size > 1) shuffleOpen = true else candidates.firstOrNull()?.let(onPlay)
+                    },
+                    modifier = Modifier.weight(1f),
+                )
+                com.retrohero.app.ui.components.BoxedButton(
+                    text = "Play stats",
+                    icon = Icons.Rounded.Insights,
+                    onClick = onOpenStats,
+                    modifier = Modifier.weight(1f),
+                )
             }
         }
 
+        // Continue & Recent Bento Panel
         if (recents.isNotEmpty()) {
             item(key = "recents_section") {
                 Column(Modifier.launchRise(2)) {
-                    SectionHeader("Continue & Recent", recents.size, 1)
-                    Spacer(Modifier.height(10.dp))
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = ContentInset),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    com.retrohero.app.ui.components.BentoPanel(
+                        header = "RECENTLY PLAYED",
+                        badge = "${recents.size} ACTIVE",
+                        modifier = Modifier.padding(horizontal = ContentInset),
                     ) {
-                        items(recents, key = { "r_" + it.id }) { game ->
-                            RowCard(game, onOpen, onOptions, onQuickPlay = onPlay)
-                        }
-                    }
-                }
-            }
-        }
-
-        if (systems.isNotEmpty()) {
-            item(key = "consoles_section") {
-                Column {
-                    SectionHeader("Your Consoles", systems.size, 2)
-                    Spacer(Modifier.height(10.dp))
-                    Column(
-                        Modifier.padding(horizontal = ContentInset),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        systems.chunked(2).forEach { pair ->
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            ) {
-                                pair.forEach { sys ->
-                                    ConsoleTileCard(
-                                        system = sys,
-                                        count = counts[sys.id] ?: 0,
-                                        onClick = { onOpenSystem(sys) },
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                }
-                                if (pair.size == 1) {
-                                    Spacer(Modifier.weight(1f))
-                                }
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            items(recents, key = { "r_" + it.id }) { game ->
+                                RowCard(game, onOpen, onOptions, onQuickPlay = onPlay)
                             }
                         }
                     }
@@ -316,15 +333,43 @@ fun HomeScreen(
             }
         }
 
+        // Active Consoles Bento Panel (matches YOUR ACHIEVEMENTS card from Game Record)
+        if (systems.isNotEmpty()) {
+            item(key = "consoles_section") {
+                com.retrohero.app.ui.components.BentoPanel(
+                    header = "YOUR CONSOLES",
+                    badge = "${systems.size}/${Systems.all.size}",
+                    modifier = Modifier.padding(horizontal = ContentInset),
+                ) {
+                    systems.take(6).forEach { sys ->
+                        val count = counts[sys.id] ?: 0
+                        com.retrohero.app.ui.components.BentoItemRow(
+                            title = sys.name,
+                            subtitle = "${sys.manufacturer} · ${sys.cores.first().displayName}",
+                            rightText = if (count == 1) "1 GAME" else "$count GAMES",
+                            highlighted = sys.id == recents.firstOrNull()?.systemId,
+                            onClick = { onOpenSystem(sys) },
+                            leading = {
+                                Text(
+                                    sys.tag,
+                                    style = TextStyle(fontFamily = PixelFont, fontSize = 8.5.sp),
+                                    color = if (sys.id == recents.firstOrNull()?.systemId) Ascend.onAccent else Tone.Ink,
+                                )
+                            },
+                        )
+                    }
+                }
+            }
+        }
+
         if (favorites.isNotEmpty()) {
             item(key = "pinned_section") {
-                Column {
-                    SectionHeader("Pinned Favourites", favorites.size, 3)
-                    Spacer(Modifier.height(10.dp))
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = ContentInset),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
+                com.retrohero.app.ui.components.BentoPanel(
+                    header = "PINNED FAVOURITES",
+                    badge = "${favorites.size} PINNED",
+                    modifier = Modifier.padding(horizontal = ContentInset),
+                ) {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         items(favorites, key = { "fav_" + it.id }) { game ->
                             GameCard(game, { onOpen(game) }, width = RowCardWidth, subtitle = game.system?.shortName, onLongClick = { onOptions(game) }, onPlay = { onPlay(game) })
                         }
@@ -335,13 +380,12 @@ fun HomeScreen(
 
         if (mostPlayed.size >= 2) {
             item(key = "most_played") {
-                Column {
-                    SectionHeader("Most Played", mostPlayed.size, 4)
-                    Spacer(Modifier.height(10.dp))
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = ContentInset),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
+                com.retrohero.app.ui.components.BentoPanel(
+                    header = "MOST PLAYED",
+                    badge = "${mostPlayed.size} TOP",
+                    modifier = Modifier.padding(horizontal = ContentInset),
+                ) {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         items(mostPlayed, key = { "m_" + it.id }) { game ->
                             RowCard(game, onOpen, onOptions, subtitle = PlayTime.format(stats[game.id]?.seconds ?: 0), onQuickPlay = onPlay)
                         }
@@ -352,13 +396,12 @@ fun HomeScreen(
 
         if (collections.isNotEmpty()) {
             item(key = "collections_section") {
-                Column {
-                    SectionHeader("Your Shelves", collections.size, 5)
-                    Spacer(Modifier.height(10.dp))
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = ContentInset),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
+                com.retrohero.app.ui.components.BentoPanel(
+                    header = "YOUR SHELVES",
+                    badge = "${collections.size} SHELVES",
+                    modifier = Modifier.padding(horizontal = ContentInset),
+                ) {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         items(collections, key = { "c_" + it.first.id }) { (c, list) ->
                             CollectionCard(c, list, onOpenCollection)
                         }
@@ -392,57 +435,6 @@ fun HomeScreen(
                     Spacer(Modifier.weight(1f))
                 }
             }
-        }
-    }
-}
-
-@Composable
-private fun ConsoleTileCard(
-    system: GameSystem,
-    count: Int,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val shape = RoundedCornerShape(Ascend.Radius.Card)
-    Row(
-        modifier
-            .height(58.dp)
-            .clip(shape)
-            .background(Tone.Surface)
-            .border(1.dp, Tone.Line, shape)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Box(
-            Modifier
-                .size(38.dp)
-                .clip(RoundedCornerShape(9.dp))
-                .background(Tone.Raised)
-                .border(1.dp, Tone.Line, RoundedCornerShape(9.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                system.tag,
-                style = TextStyle(fontFamily = PixelFont, fontSize = 8.5.sp),
-                color = Tone.Ink,
-            )
-        }
-        Column(Modifier.weight(1f)) {
-            Text(
-                system.shortName,
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp),
-                color = Tone.Ink,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                if (count == 1) "1 game" else "$count games",
-                style = TextStyle(fontFamily = Inter, fontSize = 11.sp),
-                color = Tone.Muted,
-                maxLines = 1,
-            )
         }
     }
 }
@@ -675,142 +667,198 @@ private fun GachaHero(candidates: List<Game>, onPlay: (Game) -> Unit) {
 
 @Composable
 private fun FeaturedGames(games: List<Game>, recent: Game?, onOpen: (Game) -> Unit, onPlay: (Game) -> Unit) {
-    var selectedIndex by rememberSaveable { androidx.compose.runtime.mutableIntStateOf(0) }
-    val index = selectedIndex.coerceIn(0, games.lastIndex.coerceAtLeast(0))
-    val game = games[index]
-    val isRecent = game.id == recent?.id
-    val heroShape = RoundedCornerShape(Ascend.Radius.Hero)
-    val depth = if (Tone.isDark) Modifier else Modifier.shadow(
-        4.dp,
-        heroShape,
-        ambientColor = Color.Black.copy(alpha = 0.06f),
-        spotColor = Color.Black.copy(alpha = 0.12f),
-    )
+    val pager = rememberPagerState { games.size }
+    val scope = rememberCoroutineScope()
+    val index = pager.currentPage.coerceIn(0, games.lastIndex.coerceAtLeast(0))
+    val currentGame = games[index]
+    val stageShape = RoundedCornerShape(Ascend.Radius.Hero)
+
     Column(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = ContentInset)
-            .then(depth)
-            .clip(heroShape)
-            .background(Tone.Surface)
-            .border(1.dp, Tone.Line, heroShape),
+            .padding(horizontal = ContentInset),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .clickable { onOpen(game) }
-                .padding(14.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            val coverShape = RoundedCornerShape(Ascend.Radius.Card)
+        // 16:9 Widescreen Swipeable Stage Showcase (exact match to GameDetailScreen)
+        HorizontalPager(
+            state = pager,
+            pageSpacing = 12.dp,
+            modifier = Modifier.fillMaxWidth(),
+        ) { page ->
+            val game = games[page]
+            val isRecent = game.id == recent?.id
             Box(
                 Modifier
-                    .width(102.dp)
-                    .height(136.dp)
-                    .clip(coverShape)
-                    .border(1.dp, Tone.Line, coverShape),
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9.2f)
+                    .clip(stageShape)
+                    .background(Color(0xFF141417))
+                    .border(1.dp, Tone.Line, stageShape)
+                    .clickable { onOpen(game) },
             ) {
                 GameArt(game, Modifier.fillMaxSize(), showTag = false)
-            }
-            Column(Modifier.weight(1f)) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                0f to Color.Black.copy(alpha = 0.20f),
+                                0.45f to Color.Black.copy(alpha = 0.38f),
+                                1f to Color.Black.copy(alpha = 0.88f),
+                            ),
+                        ),
+                )
+                // Top-left status pill
                 Row(
                     Modifier
-                        .background(Tone.Raised, RoundedCornerShape(8.dp))
-                        .border(1.dp, Tone.Line, RoundedCornerShape(8.dp))
-                        .padding(vertical = 3.dp, horizontal = 8.dp),
+                        .align(Alignment.TopStart)
+                        .padding(12.dp)
+                        .background(Color.Black.copy(alpha = 0.68f), RoundedCornerShape(8.dp))
+                        .border(0.5.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
+                    Box(Modifier.size(6.dp).clip(CircleShape).background(Ascend.accent))
+                    ArchiveLabel(if (isRecent) "CONTINUE PLAYING" else "STAGE SPOTLIGHT", color = Color.White)
+                }
+                // Top-right console badge + page counter
+                Row(
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (games.size > 1) {
+                        Box(
+                            Modifier
+                                .background(Color.Black.copy(alpha = 0.68f), RoundedCornerShape(8.dp))
+                                .border(0.5.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(8.dp))
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                        ) {
+                            ArchiveLabel("${page + 1} / ${games.size}", color = Color.White)
+                        }
+                    }
                     Box(
                         Modifier
-                            .size(6.dp)
-                            .clip(CircleShape)
-                            .background(if (isRecent) Ascend.accent else Tone.Muted),
-                    )
-                    ArchiveLabel(
-                        if (isRecent) "Continue playing" else "Featured",
-                        color = Tone.Ink,
-                    )
+                            .background(Color.Black.copy(alpha = 0.68f), RoundedCornerShape(8.dp))
+                            .border(0.5.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(8.dp))
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                    ) {
+                        ArchiveLabel(game.system?.shortName ?: game.systemId, color = Color.White)
+                    }
                 }
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    game.title,
-                    style = TextStyle(
-                        fontFamily = Inter,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 20.sp,
-                        lineHeight = 24.sp,
-                        letterSpacing = (-0.02).em,
-                    ),
-                    color = Tone.Ink,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Text(
-                    game.system?.name.orEmpty(),
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 12.5.sp),
-                    color = Tone.Muted,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 2.dp),
-                )
-                Spacer(Modifier.height(12.dp))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                // Centered circular Play button
+                Box(
+                    Modifier
+                        .align(Alignment.Center)
+                        .size(50.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.65f))
+                        .border(1.dp, Color.White.copy(alpha = 0.38f), CircleShape)
+                        .clickable { onPlay(game) },
+                    contentAlignment = Alignment.Center,
                 ) {
-                    AccentButton("Play", { onPlay(game) }, icon = Icons.Rounded.PlayArrow)
-                    com.retrohero.app.ui.components.Key("Details", { onOpen(game) })
+                    Icon(Icons.Rounded.PlayArrow, "Play", tint = Color.White, modifier = Modifier.size(28.dp))
+                }
+                // Bottom Editorial Title & Console Overlay
+                Column(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(
+                        "“${game.title.uppercase()}”",
+                        style = TextStyle(
+                            fontFamily = Inter,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 17.sp,
+                            letterSpacing = 0.03.em,
+                        ),
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        "${game.system?.manufacturer?.uppercase().orEmpty()} · ${game.system?.name?.uppercase().orEmpty()}",
+                        style = TextStyle(
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 9.5.sp,
+                            letterSpacing = 0.08.em,
+                        ),
+                        color = Color.White.copy(alpha = 0.72f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
                 }
             }
         }
+
+        // Thumbnail Strip below the stage (exact match to GameDetailScreen)
         if (games.size > 1) {
-            Box(Modifier.fillMaxWidth().height(1.dp).background(Page.Divider))
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .background(Tone.Bg.copy(alpha = 0.45f))
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                games.forEachIndexed { i, candidate ->
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(games.size, key = { "stage_thumb_${games[it].id}" }) { i ->
+                    val candidate = games[i]
                     val active = i == index
-                    val pillShape = RoundedCornerShape(8.dp)
-                    Row(
+                    val thumbShape = RoundedCornerShape(10.dp)
+                    Box(
                         Modifier
-                            .weight(1f)
-                            .clip(pillShape)
-                            .background(if (active) Tone.Raised else Color.Transparent)
-                            .then(if (active) Modifier.border(1.dp, Tone.Line, pillShape) else Modifier)
-                            .clickable { selectedIndex = i }
-                            .padding(horizontal = 8.dp, vertical = 5.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
-                    ) {
-                        if (active) {
-                            Box(
-                                Modifier
-                                    .padding(end = 5.dp)
-                                    .size(5.dp)
-                                    .clip(CircleShape)
-                                    .background(Ascend.accent),
+                            .width(106.dp)
+                            .height(62.dp)
+                            .clip(thumbShape)
+                            .border(
+                                width = if (active) 2.dp else 1.dp,
+                                color = if (active) Ascend.accent else Tone.Line,
+                                shape = thumbShape,
                             )
-                        }
+                            .clickable { scope.launch { pager.animateScrollToPage(i) } },
+                    ) {
+                        GameArt(candidate, Modifier.fillMaxSize(), showTag = false)
+                        Box(
+                            Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        listOf(Color.Transparent, Color.Black.copy(alpha = 0.78f)),
+                                    ),
+                                ),
+                        )
                         Text(
                             candidate.title,
-                            style = TextStyle(
-                                fontFamily = Inter,
-                                fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
-                                fontSize = 11.sp,
-                            ),
-                            color = if (active) Tone.Ink else Tone.Muted,
+                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 10.sp),
+                            color = Color.White,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.align(Alignment.BottomStart).padding(horizontal = 6.dp, vertical = 4.dp),
                         )
                     }
                 }
             }
+        }
+
+        // Boxed Action Row (Game Record & Play Game)
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            com.retrohero.app.ui.components.BoxedButton(
+                text = "Details",
+                icon = Icons.Rounded.Insights,
+                onClick = { onOpen(currentGame) },
+                modifier = Modifier.weight(1f),
+            )
+            com.retrohero.app.ui.components.BoxedButton(
+                text = "Play",
+                icon = Icons.Rounded.PlayArrow,
+                primary = true,
+                onClick = { onPlay(currentGame) },
+                modifier = Modifier.weight(1.25f),
+            )
         }
     }
 }

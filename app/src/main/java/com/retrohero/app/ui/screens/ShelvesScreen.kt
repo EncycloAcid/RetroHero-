@@ -80,9 +80,13 @@ fun ShelvesScreen(
         }.filter { it.count > 0 || it.key.startsWith("col:") }
     }
 
+    val playedCount = remember(games, stats) { games.count { (stats[it.id]?.seconds ?: 0) > 0 } }
+    val backlogCount = remember(games, stats) { games.count { (stats[it.id]?.sessions ?: 0) == 0 && (stats[it.id]?.seconds ?: 0) == 0L } }
+
     LazyColumn(
         Modifier.fillMaxSize().emberBackground(),
         contentPadding = PaddingValues(bottom = 24.dp + LocalNavSpace.current),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         item(key = "header") {
             PageHeader(
@@ -94,6 +98,17 @@ fun ShelvesScreen(
                 com.retrohero.app.ui.components.Key("3D Boxes", onCoverFlow, icon = Icons.Rounded.ViewCarousel)
                 com.retrohero.app.ui.components.AccentButton("New", onNewShelf, Modifier.padding(start = 8.dp), icon = Icons.Rounded.Add)
             }
+        }
+        item(key = "telemetry") {
+            com.retrohero.app.ui.components.BentoTelemetryStrip(
+                metrics = listOf(
+                    com.retrohero.app.ui.components.BentoMetric(rows.size.toString(), "SHELVES", Icons.Rounded.ViewCarousel),
+                    com.retrohero.app.ui.components.BentoMetric(favorites.size.toString(), "FAVOURITES", Icons.Rounded.Add),
+                    com.retrohero.app.ui.components.BentoMetric(playedCount.toString(), "PLAYED", Icons.Rounded.ViewCarousel),
+                    com.retrohero.app.ui.components.BentoMetric(backlogCount.toString(), "BACKLOG", Icons.Rounded.Add),
+                ),
+                modifier = Modifier.padding(horizontal = Page.Gutter),
+            )
         }
         if (rows.isEmpty()) {
             item(key = "empty") {
@@ -117,42 +132,27 @@ fun ShelvesScreen(
 
 @Composable
 private fun Shelf(row: ShelfRow, index: Int, onOpenGame: (Game) -> Unit, onPlay: (Game) -> Unit, onOptions: (Game) -> Unit, subtitle: (Game) -> String?) {
-    val panelShape = RoundedCornerShape(Ascend.Radius.Hero)
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .padding(start = Page.Gutter, end = Page.Gutter, top = 16.dp)
-            .clip(panelShape)
-            .background(com.retrohero.app.ui.theme.Tone.Surface)
-            .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, panelShape)
-            .padding(vertical = 14.dp),
+    com.retrohero.app.ui.components.BentoPanel(
+        header = "${index.toString().padStart(2, '0')} · ${row.title.uppercase()}",
+        badge = "${row.count} GAMES",
+        modifier = Modifier.padding(horizontal = Page.Gutter),
+        onHeaderClick = row.onOpen,
     ) {
-        SectionTitle(
-            row.title,
-            Modifier.padding(horizontal = 14.dp),
-            count = row.count,
-            index = index,
-            onClick = row.onOpen,
-            verticalPadding = 0.dp,
-        )
         if (row.games.isEmpty()) {
             Box(
                 Modifier
-                    .padding(start = 14.dp, end = 14.dp, top = 12.dp)
                     .fillMaxWidth()
                     .height(64.dp)
-                    .clip(RoundedCornerShape(Ascend.Radius.Card))
-                    .background(com.retrohero.app.ui.theme.Tone.Bg)
-                    .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, RoundedCornerShape(Ascend.Radius.Card)),
+                    .clip(RoundedCornerShape(11.dp))
+                    .background(com.retrohero.app.ui.theme.Tone.Bg.copy(alpha = 0.55f))
+                    .border(1.dp, com.retrohero.app.ui.theme.Tone.Line, RoundedCornerShape(11.dp)),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("Long-press a game and choose Add to put it here", style = TextStyle(fontFamily = Inter, fontSize = 13.sp), color = Ascend.Muted)
+                Text("Long-press a game and choose Add to put it here", style = TextStyle(fontFamily = Inter, fontSize = 12.5.sp), color = Ascend.Muted)
             }
         } else {
             LazyRow(
-                contentPadding = PaddingValues(horizontal = 14.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.padding(top = 12.dp),
             ) {
                 items(row.games, key = { it.id }) { game ->
                     GameCard(

@@ -141,7 +141,7 @@ fun SectionTitle(
     }
 }
 
-/** Framed Instrument Game Card: bordered Tone.Surface container, cover art with console tag & Play button, and clean title/subtitle. */
+/** Framed Game Record Cartridge Card: bordered Tone.Surface container, cover art with console tag & Play button, hairline divider, and clean title/subtitle. */
 @Composable
 fun GameCard(
     game: Game,
@@ -172,12 +172,12 @@ fun GameCard(
         Column(
             Modifier
                 .fillMaxWidth()
-                .combinedClickable(interactionSource = interaction, indication = null, onClick = onClick, onLongClick = onLongClick)
-                .padding(6.dp),
+                .combinedClickable(interactionSource = interaction, indication = null, onClick = onClick, onLongClick = onLongClick),
         ) {
             Box(
                 Modifier
                     .fillMaxWidth()
+                    .padding(6.dp)
                     .aspectRatio(0.78f)
                     .clip(coverShape)
                     .border(0.5.dp, Tone.Line, coverShape),
@@ -189,7 +189,7 @@ fun GameCard(
                         Modifier
                             .align(Alignment.TopStart)
                             .padding(6.dp)
-                            .background(Color.Black.copy(alpha = 0.75f), RoundedCornerShape(6.dp))
+                            .background(Color.Black.copy(alpha = 0.76f), RoundedCornerShape(6.dp))
                             .border(0.5.dp, Color.White.copy(alpha = 0.22f), RoundedCornerShape(6.dp))
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                     ) {
@@ -197,24 +197,35 @@ fun GameCard(
                     }
                 }
             }
-            Spacer(Modifier.height(7.dp))
-            Text(
-                game.title,
-                style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, lineHeight = 16.sp),
-                color = Tone.Ink,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.padding(horizontal = 2.dp),
-            )
-            if (!subtitle.isNullOrBlank()) {
+            Box(Modifier.fillMaxWidth().height(1.dp).background(Page.Divider))
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .background(Tone.Bg.copy(alpha = 0.38f))
+                    .padding(horizontal = 8.dp, vertical = 7.dp),
+            ) {
                 Text(
-                    subtitle,
-                    style = TextStyle(fontFamily = Inter, fontSize = 11.sp),
-                    color = Ascend.Muted,
+                    game.title,
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp, lineHeight = 15.sp),
+                    color = Tone.Ink,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 1.dp, start = 2.dp, end = 2.dp, bottom = 2.dp),
                 )
+                if (!subtitle.isNullOrBlank()) {
+                    Text(
+                        subtitle.uppercase(),
+                        style = TextStyle(
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 9.sp,
+                            letterSpacing = 0.05.em,
+                        ),
+                        color = Ascend.Muted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
             }
         }
         if (onPlay != null) {
@@ -223,13 +234,13 @@ fun GameCard(
                     Modifier
                         .align(Alignment.BottomEnd)
                         .padding(6.dp)
-                        .size(32.dp)
-                        .clip(CircleShape)
+                        .size(30.dp)
+                        .clip(RoundedCornerShape(8.dp))
                         .background(Ascend.accent)
-                        .border(1.dp, Color.White.copy(alpha = 0.25f), CircleShape)
+                        .border(1.dp, Color.White.copy(alpha = 0.25f), RoundedCornerShape(8.dp))
                         .clickable(onClick = onPlay),
                     contentAlignment = Alignment.Center,
-                ) { Icon(Icons.Rounded.PlayArrow, "Play ${game.title}", tint = Ascend.onAccent, modifier = Modifier.size(18.dp)) }
+                ) { Icon(Icons.Rounded.PlayArrow, "Play ${game.title}", tint = Ascend.onAccent, modifier = Modifier.size(17.dp)) }
             }
         }
     }
@@ -261,41 +272,45 @@ fun Key(
         spring(dampingRatio = 0.7f, stiffness = 600f),
         label = "keyTranslation",
     )
-    val shape = RoundedCornerShape(Ascend.Radius.Control)
+    val shape = RoundedCornerShape(11.dp)
     val view = LocalView.current
-    val depth = when {
-        Tone.isDark || !enabled -> Modifier
-        primary -> Modifier.shadow(4.dp, shape, spotColor = Ascend.accent.copy(alpha = 0.35f))
-        else -> Modifier.shadow(
-            2.dp,
-            shape,
-            ambientColor = Color.Black.copy(alpha = 0.06f),
-            spotColor = Color.Black.copy(alpha = 0.10f),
-        )
-    }
     val contentAlpha = if (enabled) 1f else 0.4f
+    val fg = if (primary) Ascend.onAccent else Tone.Ink
     Row(
         modifier
-            .then(depth)
             .graphicsLayer { scaleX = scale; scaleY = scale; translationY = translation.toPx(); alpha = contentAlpha }
-            .height(48.dp)
+            .height(44.dp)
             .clip(shape)
-            .background(if (primary) Ascend.accent else Tone.Raised)
-            .border(1.dp, if (primary && !Tone.isDark) Color.Transparent else Tone.Line, shape)
+            .background(if (primary) Ascend.accent else Tone.Surface)
+            .border(1.dp, if (primary) Color.Transparent else Tone.Line, shape)
             .clickable(interactionSource = interaction, indication = null, enabled = enabled) {
                 view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                 onClick()
             }
-            .padding(horizontal = 16.dp),
-        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+            .padding(start = 13.dp, end = if (icon != null) 6.dp else 13.dp),
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        if (icon != null) Icon(icon, null, tint = if (primary) Ascend.onAccent else Tone.Ink, modifier = Modifier.padding(end = 6.dp).size(18.dp))
         Text(
             text,
-            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Medium, fontSize = 14.sp),
-            color = if (primary) Ascend.onAccent else Tone.Ink,
+            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 13.sp),
+            color = fg,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
+        if (icon != null) {
+            Spacer(Modifier.width(8.dp))
+            Box(
+                Modifier
+                    .size(30.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (primary) Color.Black.copy(alpha = 0.18f) else Tone.Raised)
+                    .border(1.dp, if (primary) Color.White.copy(alpha = 0.22f) else Tone.Line, RoundedCornerShape(8.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(icon, null, tint = fg, modifier = Modifier.size(16.dp))
+            }
+        }
     }
 }
 
