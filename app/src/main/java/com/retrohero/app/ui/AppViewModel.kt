@@ -31,6 +31,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
+data class Shot(val game: Game, val file: File)
+
 class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as RetroHeroApp
     val settings = app.settings
@@ -148,9 +150,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     /** Play time per game id (only games that have been played). */
     val stats: StateFlow<Map<String, PlayStat>> = _stats
 
-    private val _shots = MutableStateFlow<List<com.retrohero.app.ui.screens.Shot>>(emptyList())
+    private val _shots = MutableStateFlow<List<Shot>>(emptyList())
     /** Every screenshot you've taken, newest first. */
-    val shots: StateFlow<List<com.retrohero.app.ui.screens.Shot>> = _shots
+    val shots: StateFlow<List<Shot>> = _shots
 
     private val _history = MutableStateFlow<List<com.retrohero.app.data.HistoryEntry>>(emptyList())
     /** Every play session, newest first. */
@@ -164,7 +166,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 if (f.exists()) g.id to PlayTime.read(f) else null
             }.toMap()
             _history.value = com.retrohero.app.data.PlayHistory.entries(games.value, app.paths)
-            _shots.value = games.value.flatMap { g -> app.paths.screenshotsOf(g).map { com.retrohero.app.ui.screens.Shot(g, it) } }
+            _shots.value = games.value.flatMap { g -> app.paths.screenshotsOf(g).map { Shot(g, it) } }
                 .sortedByDescending { it.file.lastModified() }
             _artVersion.value++  // new screenshots may have arrived too
         }

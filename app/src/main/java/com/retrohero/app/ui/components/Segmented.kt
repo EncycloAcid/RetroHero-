@@ -31,7 +31,12 @@ fun SegmentedGroup(
 ) {
     Column(modifier) {
         if (title != null) {
-            ArchiveLabel(title, Modifier.padding(start = 16.dp, bottom = 8.dp, top = 8.dp))
+            androidx.compose.material3.Text(
+                title,
+                style = MaterialTheme.typography.labelMedium,
+                color = Tone.Muted,
+                modifier = Modifier.padding(start = 16.dp, bottom = 8.dp, top = 8.dp),
+            )
         }
         val depth = if (Tone.isDark) Modifier else Modifier.shadow(
             2.dp,
