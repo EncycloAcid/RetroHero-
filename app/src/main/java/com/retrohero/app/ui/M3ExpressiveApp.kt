@@ -104,6 +104,7 @@ fun M3ExpressiveAppView(
 ) {
     val cs = MaterialTheme.colorScheme
     var selectedTab by rememberSaveable { mutableIntStateOf(initialTab) }
+    var librarySystemFilter by rememberSaveable { mutableStateOf<String?>(null) }
     var detailGameId by rememberSaveable { mutableStateOf<String?>(null) }
     var quickAddOpen by rememberSaveable { mutableStateOf(false) }
 
@@ -170,6 +171,10 @@ fun M3ExpressiveAppView(
                                 scanning = scanning,
                                 onPlay = { g -> onPlay(g, null) },
                                 onOpenDetail = { g -> detailGameId = g.id },
+                                onSelectConsole = { sysId ->
+                                    librarySystemFilter = sysId
+                                    selectedTab = 1
+                                },
                                 onShufflePlay = onShufflePlay,
                                 onToggleTheme = { onSetDarkMode(!Tone.isDark) },
                                 onAddFolder = onAddFolder,
@@ -180,6 +185,8 @@ fun M3ExpressiveAppView(
                                 favoriteIds = favoriteIds,
                                 stats = stats,
                                 shelfStatuses = shelfStatuses,
+                                selectedSystem = librarySystemFilter,
+                                onSelectSystem = { librarySystemFilter = it },
                                 onOpenDetail = { g -> detailGameId = g.id },
                                 onQuickPlay = { g -> onPlay(g, null) },
                             )

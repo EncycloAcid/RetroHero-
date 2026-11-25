@@ -2,14 +2,17 @@ package com.retrohero.app.ui
 
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -20,23 +23,29 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Apps
+import androidx.compose.material.icons.rounded.Casino
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Search
@@ -45,6 +54,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -66,6 +76,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.graphics.shapes.RoundedPolygon
 import com.retrohero.app.data.Game
+import com.retrohero.app.data.GameSystem
 import com.retrohero.app.data.PlayStat
 import com.retrohero.app.data.PlayTime
 import com.retrohero.app.data.Systems
@@ -87,13 +98,14 @@ internal fun M3LibraryPage(
     favoriteIds: Set<String>,
     stats: Map<String, PlayStat>,
     shelfStatuses: Map<String, String>,
+    selectedSystem: String?,
+    onSelectSystem: (String?) -> Unit,
     onOpenDetail: (Game) -> Unit,
     onQuickPlay: (Game) -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
     val inset = LocalToolbarInset.current
     var query by rememberSaveable { mutableStateOf("") }
-    var selectedSystem by rememberSaveable { mutableStateOf<String?>(null) }
     var filterIdx by rememberSaveable { mutableIntStateOf(0) }
     var listMode by rememberSaveable { mutableStateOf(false) }
 
@@ -101,6 +113,7 @@ internal fun M3LibraryPage(
     val systems = remember(counts) {
         Systems.all.filter { (counts[it.id] ?: 0) > 0 }.sortedByDescending { counts[it.id] ?: 0 }
     }
+    val activeSystemObj = remember(selectedSystem) { selectedSystem?.let { Systems.get(it) } }
 
     val filtered = remember(games, query, selectedSystem, filterIdx, favoriteIds, shelfStatuses) {
         games.filter { g ->
@@ -121,7 +134,7 @@ internal fun M3LibraryPage(
 
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
-        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 16.dp, bottom = inset + 24.dp),
+        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 14.dp, bottom = inset + 26.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
         modifier = Modifier.fillMaxSize(),
@@ -129,7 +142,7 @@ internal fun M3LibraryPage(
         // 1. M3 Expressive Display Header
         item(key = "m3_lib_header", span = { GridItemSpan(maxLineSpan) }) {
             Row(
-                Modifier.fillMaxWidth(),
+                Modifier.fillMaxWidth().m3StaggeredEntrance(0, slideDp = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -155,7 +168,7 @@ internal fun M3LibraryPage(
             }
         }
 
-        // 2. Official M3 Pill SearchBar (56dp surfaceContainerHighest + integrated layout switcher)
+        // 2. Official M3 Pill SearchBar (54dp surfaceContainerHighest + animated layout switcher)
         item(key = "m3_lib_search", span = { GridItemSpan(maxLineSpan) }) {
             Row(
                 Modifier
@@ -239,7 +252,7 @@ internal fun M3LibraryPage(
                             badgeText = "${games.size}",
                             polygon = MaterialShapes.Cookie6Sided,
                             selected = selectedSystem == null,
-                            onClick = { selectedSystem = null },
+                            onClick = { onSelectSystem(null) },
                         )
                     }
                     items(systems, key = { "m3_sys_${it.id}" }) { sys ->
@@ -248,14 +261,31 @@ internal fun M3LibraryPage(
                             badgeText = sys.tag,
                             polygon = sys.polygon,
                             selected = selectedSystem == sys.id,
-                            onClick = { selectedSystem = if (selectedSystem == sys.id) null else sys.id },
+                            onClick = { onSelectSystem(if (selectedSystem == sys.id) null else sys.id) },
                         )
                     }
                 }
             }
         }
 
-        // 4. M3 Expressive Connected Button Group
+        // 4. Dynamic Console Spotlight Banner when filtering a specific hardware platform!
+        item(key = "m3_lib_sys_banner", span = { GridItemSpan(maxLineSpan) }) {
+            AnimatedVisibility(
+                visible = activeSystemObj != null,
+                enter = expandVertically(spring(dampingRatio = 0.72f, stiffness = 360f)) + fadeIn(tween(200)),
+                exit = shrinkVertically(tween(180)) + fadeOut(tween(120)),
+            ) {
+                val sys = activeSystemObj ?: return@AnimatedVisibility
+                M3ConsoleSpotlightBanner(
+                    system = sys,
+                    count = filtered.size,
+                    onShuffle = { filtered.randomOrNull()?.let(onQuickPlay) },
+                    onClear = { onSelectSystem(null) },
+                )
+            }
+        }
+
+        // 5. M3 Expressive Connected Button Group
         item(key = "m3_lib_filters", span = { GridItemSpan(maxLineSpan) }) {
             M3ConnectedButtonGroup(
                 options = M3LibraryFilters,
@@ -266,7 +296,7 @@ internal fun M3LibraryPage(
             )
         }
 
-        // 5. Games Grid or Android 16 Segmented List
+        // 6. Feature-First Asymmetric Magazine Grid or Android 16 Segmented List
         if (filtered.isEmpty()) {
             item(key = "m3_lib_empty", span = { GridItemSpan(maxLineSpan) }) {
                 Column(
@@ -305,7 +335,21 @@ internal fun M3LibraryPage(
                 }
             }
         } else {
-            items(filtered, key = { "m3_grid_${it.id}" }) { game ->
+            // Lead editorial full-width spotlight card for #1 filtered title!
+            val lead = filtered.first()
+            item(key = "m3_lead_${lead.id}", span = { GridItemSpan(maxLineSpan) }) {
+                M3LeadEditorialRowCard(
+                    game = lead,
+                    stat = stats[lead.id],
+                    isFavorite = lead.id in favoriteIds,
+                    onOpen = { onOpenDetail(lead) },
+                    onPlay = { onQuickPlay(lead) },
+                )
+            }
+
+            // Remaining titles flow in alternating sculptural 2-column magazine grid with smooth animateItem()
+            val rest = filtered.drop(1)
+            itemsIndexed(rest, key = { _, it -> "m3_grid_${it.id}" }) { idx, game ->
                 val sec = stats[game.id]?.seconds ?: 0
                 Box(Modifier.animateItem(placementSpec = spring(dampingRatio = 0.72f, stiffness = 360f))) {
                     M3ExpressiveGameCard(
@@ -313,10 +357,196 @@ internal fun M3LibraryPage(
                         width = null,
                         isFavorite = game.id in favoriteIds,
                         playTimeLabel = if (sec > 0) PlayTime.format(sec) else null,
+                        silhouetteVariant = (idx + 1) % 3,
                         onOpen = { onOpenDetail(game) },
                         onPlay = { onQuickPlay(game) },
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun M3ConsoleSpotlightBanner(
+    system: GameSystem,
+    count: Int,
+    onShuffle: () -> Unit,
+    onClear: () -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    val shape = RoundedCornerShape(28.dp)
+    val polyShape = system.polygon.toShape()
+
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(cs.primaryContainer)
+            .padding(16.dp),
+    ) {
+        // Oversized sculptural console watermark peeking from right side
+        Box(
+            Modifier
+                .align(Alignment.CenterEnd)
+                .offset(x = 24.dp)
+                .size(104.dp)
+                .clip(polyShape)
+                .background(cs.onPrimaryContainer.copy(alpha = 0.10f)),
+        )
+
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            M3ShapeBadge(polygon = system.polygon, containerColor = cs.primary, size = 48.dp) {
+                Text(
+                    text = system.tag,
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black),
+                    color = cs.onPrimary,
+                )
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = system.name,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black),
+                    color = cs.onPrimaryContainer,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = "$count ${if (count == 1) "game" else "games"} in library",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = cs.onPrimaryContainer.copy(alpha = 0.78f),
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (count > 0) {
+                    Box(
+                        Modifier
+                            .size(38.dp)
+                            .clip(CircleShape)
+                            .background(cs.primary)
+                            .clickable(onClick = onShuffle),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(Icons.Rounded.Casino, contentDescription = "Shuffle ${system.shortName}", tint = cs.onPrimary, modifier = Modifier.size(19.dp))
+                    }
+                }
+                Box(
+                    Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(cs.onPrimaryContainer.copy(alpha = 0.14f))
+                        .clickable(onClick = onClear),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Rounded.Close, contentDescription = "Clear console filter", tint = cs.onPrimaryContainer, modifier = Modifier.size(18.dp))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun M3LeadEditorialRowCard(
+    game: Game,
+    stat: PlayStat?,
+    isFavorite: Boolean,
+    onOpen: () -> Unit,
+    onPlay: () -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    val view = LocalView.current
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.96f else 1f, M3ExpressiveSpring, label = "leadScale")
+    val cardShape = RoundedCornerShape(30.dp)
+    val artShape = RoundedCornerShape(topStart = 22.dp, topEnd = 42.dp, bottomStart = 22.dp, bottomEnd = 22.dp)
+
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(cardShape)
+            .background(cs.surfaceContainerHigh)
+            .clickable(interactionSource = interaction, indication = null) {
+                view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                onOpen()
+            }
+            .padding(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .width(114.dp)
+                .aspectRatio(0.92f)
+                .clip(artShape),
+        ) {
+            M3GameCover(game = game, showTitle = false, modifier = Modifier.fillMaxSize())
+            if (isFavorite) {
+                M3ShapeBadge(
+                    polygon = MaterialShapes.Heart,
+                    containerColor = cs.tertiaryContainer,
+                    size = 28.dp,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(6.dp),
+                ) {
+                    Icon(Icons.Rounded.Favorite, null, tint = cs.onTertiaryContainer, modifier = Modifier.size(13.dp))
+                }
+            }
+        }
+
+        Column(
+            Modifier.weight(1f).padding(end = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Box(
+                    Modifier
+                        .clip(CircleShape)
+                        .background(cs.secondaryContainer)
+                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                ) {
+                    Text(
+                        text = (game.system?.shortName ?: game.systemId).uppercase(),
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                        color = cs.onSecondaryContainer,
+                    )
+                }
+                if (stat != null && stat.seconds > 0) {
+                    Text(
+                        text = PlayTime.format(stat.seconds),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = cs.onSurfaceVariant,
+                    )
+                }
+            }
+
+            Text(
+                text = game.title,
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Black),
+                color = cs.onSurface,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+
+            Row(
+                Modifier
+                    .height(38.dp)
+                    .clip(CircleShape)
+                    .background(cs.primary)
+                    .clickable(onClick = onPlay)
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
+            ) {
+                Icon(Icons.Rounded.PlayArrow, null, tint = cs.onPrimary, modifier = Modifier.size(18.dp))
+                Text("Play", style = MaterialTheme.typography.labelLarge, color = cs.onPrimary)
             }
         }
     }
