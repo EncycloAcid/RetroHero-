@@ -53,6 +53,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -205,6 +206,7 @@ fun M3ConnectedButtonGroup(
     modifier: Modifier = Modifier,
     height: Dp = 44.dp,
     useSecondaryTone: Boolean = false,
+    unselectedContainerColor: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
 ) {
     val view = LocalView.current
     val cs = MaterialTheme.colorScheme
@@ -236,7 +238,7 @@ fun M3ConnectedButtonGroup(
                 label = "m3ConnEnd",
             )
             val bg by animateColorAsState(
-                if (selected) activeBg else cs.surfaceContainerHigh,
+                if (selected) activeBg else unselectedContainerColor,
                 tween(170),
                 label = "m3ConnBg",
             )
@@ -386,6 +388,13 @@ fun M3FloatingToolbarDock(
     Box(
         modifier
             .fillMaxWidth()
+            .background(
+                Brush.verticalGradient(
+                    0f to Color.Transparent,
+                    0.48f to cs.background.copy(alpha = 0.84f),
+                    1f to cs.background.copy(alpha = 0.98f),
+                ),
+            )
             .windowInsetsPadding(WindowInsets.navigationBars)
             .padding(horizontal = 18.dp, vertical = 14.dp),
         contentAlignment = Alignment.Center,
@@ -400,7 +409,7 @@ fun M3FloatingToolbarDock(
                 shape = CircleShape,
                 color = cs.surfaceContainerHighest,
                 tonalElevation = 6.dp,
-                shadowElevation = 6.dp,
+                shadowElevation = 8.dp,
                 modifier = Modifier
                     .weight(1f)
                     .height(64.dp),
@@ -471,11 +480,14 @@ fun M3FloatingToolbarDock(
                 }
             }
 
-            // Detached M3 Expressive Cookie7Sided FAB in vibrant tertiaryContainer
+            // Detached M3 Expressive Cookie7Sided FAB in vibrant tertiaryContainer with clean backdrop halo
             Box(
                 Modifier
-                    .size(62.dp)
+                    .size(66.dp)
                     .graphicsLayer { scaleX = fabScale; scaleY = fabScale }
+                    .clip(fabShape)
+                    .background(cs.background)
+                    .padding(3.dp)
                     .clip(fabShape)
                     .background(cs.tertiaryContainer)
                     .semantics { contentDescription = "Quick add menu" }
@@ -614,9 +626,18 @@ private fun M3ExpressivePosterFallback(
     val sw = M3PosterSwatches[hash % M3PosterSwatches.size]
     val sysPoly = game.system?.polygon ?: MaterialShapes.Cookie6Sided
     val polyShape = sysPoly.toShape()
+    val monogram = remember(game.title) {
+        val words = game.title.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+        when {
+            words.size >= 2 -> "${words[0].first()}${words[1].first()}".uppercase()
+            words.size == 1 -> words[0].take(2).uppercase()
+            else -> "RH"
+        }
+    }
 
     BoxWithConstraints(modifier.background(sw.bg)) {
         val compact = maxWidth < 120.dp
+        val isWide = maxWidth > maxHeight * 1.15f
         val longestWord = remember(game.title) {
             game.title.split(" ", "-", ":").maxOfOrNull { it.length } ?: 6
         }
@@ -627,21 +648,74 @@ private fun M3ExpressivePosterFallback(
             else -> if (longestWord >= 9) 19f else 22f
         }
 
-        // Bold flat Material 3 Expressive color-blocked organic polygon background motif
+        // Graphic M3 Expressive geometric canvas: subtle corner dot grid + bold duotone arcs
+        Canvas(Modifier.fillMaxSize()) {
+            val w = size.width
+            val h = size.height
+            drawCircle(
+                color = sw.shapeFill.copy(alpha = 0.72f),
+                radius = w * 0.44f,
+                center = Offset(w * 0.10f, h * 0.94f),
+            )
+            drawCircle(
+                color = sw.accent.copy(alpha = 0.22f),
+                radius = w * 0.26f,
+                center = Offset(w * 0.14f, h * 0.88f),
+                style = Stroke(width = 2.4f),
+            )
+            // Subtle tactile Material dot matrix in bottom-right / top-left
+            val step = (w * 0.085f).coerceIn(9f, 18f)
+            val dotR = (w * 0.011f).coerceIn(1.5f, 2.8f)
+            for (row in 0..3) {
+                for (col in 0..4) {
+                    drawCircle(
+                        color = sw.accent.copy(alpha = 0.18f),
+                        radius = dotR,
+                        center = Offset(w * 0.10f + col * step, h * 0.16f + row * step),
+                    )
+                }
+            }
+        }
+
+        // Sculpted console polygon centerpiece with expressive monogram when footer already shows title
+        val emblemSize = when {
+            isWide -> 112.dp
+            compact -> 64.dp
+            else -> 92.dp
+        }
         Box(
             Modifier
-                .align(Alignment.TopEnd)
-                .padding(top = if (compact) 8.dp else 14.dp, end = if (compact) 8.dp else 14.dp)
-                .size(if (compact) 68.dp else 124.dp)
+                .align(if (showTitle) Alignment.TopEnd else Alignment.Center)
+                .padding(
+                    top = if (showTitle) (if (compact) 8.dp else 14.dp) else 0.dp,
+                    end = if (showTitle) (if (compact) 8.dp else 14.dp) else 0.dp,
+                )
+                .size(emblemSize)
                 .clip(polyShape)
                 .background(sw.shapeFill),
-        )
-        Canvas(Modifier.fillMaxSize()) {
-            drawCircle(
-                color = sw.accent.copy(alpha = 0.16f),
-                radius = size.width * 0.36f,
-                center = Offset(size.width * 0.14f, size.height * 0.88f),
-            )
+            contentAlignment = Alignment.Center,
+        ) {
+            if (!showTitle) {
+                Box(
+                    Modifier
+                        .size(emblemSize * 0.72f)
+                        .clip(polyShape)
+                        .background(sw.accent.copy(alpha = 0.18f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = monogram,
+                        style = TextStyle(
+                            fontFamily = Inter,
+                            fontWeight = FontWeight.Black,
+                            fontSize = if (isWide) 32.sp else if (compact) 18.sp else 26.sp,
+                            letterSpacing = (-0.04).em,
+                        ),
+                        color = sw.ink,
+                        maxLines = 1,
+                    )
+                }
+            }
         }
 
         if (showTitle) {

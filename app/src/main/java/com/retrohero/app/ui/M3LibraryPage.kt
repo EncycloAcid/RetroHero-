@@ -279,10 +279,12 @@ internal fun M3LibraryPage(
             }
         } else {
             items(filtered, key = { "m3_grid_${it.id}" }) { game ->
+                val sec = stats[game.id]?.seconds ?: 0
                 M3ExpressiveGameCard(
                     game = game,
                     width = null,
                     isFavorite = game.id in favoriteIds,
+                    playTimeLabel = if (sec > 0) PlayTime.format(sec) else null,
                     onOpen = { onOpenDetail(game) },
                     onPlay = { onQuickPlay(game) },
                 )
