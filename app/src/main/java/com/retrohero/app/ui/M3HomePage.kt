@@ -1,6 +1,8 @@
 package com.retrohero.app.ui
 
 import android.view.HapticFeedbackConstants
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -9,6 +11,11 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -50,8 +57,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -71,12 +81,18 @@ import androidx.graphics.shapes.RoundedPolygon
 import com.retrohero.app.data.Game
 import com.retrohero.app.data.PlayStat
 import com.retrohero.app.data.PlayTime
+import com.retrohero.app.ui.components.LocalReducedMotion
 import com.retrohero.app.ui.components.LocalToolbarInset
+import com.retrohero.app.ui.components.M3ExpressiveSpring
 import com.retrohero.app.ui.components.M3GameCover
 import com.retrohero.app.ui.components.M3ShapeBadge
 import com.retrohero.app.ui.components.M3SplitButton
 import com.retrohero.app.ui.components.M3WavyBar
+import com.retrohero.app.ui.components.MorphShape
+import com.retrohero.app.ui.components.m3StaggeredEntrance
+import com.retrohero.app.ui.components.rememberMorph
 import com.retrohero.app.ui.theme.Tone
+import kotlinx.coroutines.delay
 
 @Composable
 internal fun M3HomePage(
@@ -110,11 +126,26 @@ internal fun M3HomePage(
         verticalArrangement = Arrangement.spacedBy(20.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
-        // 1. Pure M3 Expressive Display Top Header
+        // 1. Pure M3 Expressive Display Top Header with Morphing Sun/Moon Toggle
         item(key = "m3_home_header") {
+            val view = LocalView.current
+            val themeMorph = rememberMorph(MaterialShapes.Sunny, MaterialShapes.Cookie4Sided)
+            val themeProgress by animateFloatAsState(
+                if (Tone.isDark) 0f else 1f,
+                spring(dampingRatio = 0.54f, stiffness = 360f),
+                label = "themeMorph",
+            )
+            val themeSpin by animateFloatAsState(
+                if (Tone.isDark) 0f else 180f,
+                spring(dampingRatio = 0.58f, stiffness = 320f),
+                label = "themeSpin",
+            )
+            val themeShape = MorphShape(themeMorph, themeProgress.coerceIn(0f, 1f))
+
             Row(
                 Modifier
                     .fillMaxWidth()
+                    .m3StaggeredEntrance(0, slideDp = 12.dp)
                     .padding(horizontal = 20.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
@@ -139,20 +170,36 @@ internal fun M3HomePage(
                     )
                 }
 
-                M3ShapeBadge(
-                    polygon = MaterialShapes.Sunny,
-                    containerColor = cs.secondaryContainer,
-                    size = 48.dp,
-                    modifier = Modifier
+                Box(
+                    Modifier
+                        .size(48.dp)
+                        .graphicsLayer { rotationZ = themeSpin }
+                        .clip(themeShape)
+                        .background(cs.secondaryContainer)
                         .semantics { contentDescription = "Toggle theme" }
-                        .clickable(onClick = onToggleTheme),
+                        .clickable {
+                            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                            onToggleTheme()
+                        },
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Icon(
-                        imageVector = if (Tone.isDark) Icons.Outlined.LightMode else Icons.Outlined.DarkMode,
-                        contentDescription = null,
-                        tint = cs.onSecondaryContainer,
-                        modifier = Modifier.size(22.dp),
-                    )
+                    AnimatedContent(
+                        targetState = Tone.isDark,
+                        transitionSpec = {
+                            (scaleIn(spring(dampingRatio = 0.55f, stiffness = 460f), 0.5f) + fadeIn(tween(150))) togetherWith
+                                (scaleOut(tween(120), 0.5f) + fadeOut(tween(100)))
+                        },
+                        label = "themeIconSwap",
+                    ) { dark ->
+                        Icon(
+                            imageVector = if (dark) Icons.Outlined.LightMode else Icons.Outlined.DarkMode,
+                            contentDescription = null,
+                            tint = cs.onSecondaryContainer,
+                            modifier = Modifier
+                                .size(22.dp)
+                                .graphicsLayer { rotationZ = -themeSpin },
+                        )
+                    }
                 }
             }
         }
@@ -163,7 +210,7 @@ internal fun M3HomePage(
                     scanning = scanning,
                     onAddFolder = onAddFolder,
                     onOpenHomebrew = onOpenHomebrew,
-                    modifier = Modifier.padding(horizontal = 20.dp),
+                    modifier = Modifier.m3StaggeredEntrance(1).padding(horizontal = 20.dp),
                 )
             }
         } else {
@@ -177,11 +224,11 @@ internal fun M3HomePage(
                     completionProgress = clearedFrac.coerceIn(0.24f, 1f),
                     onPlay = { onPlay(heroGame) },
                     onDetails = { onOpenDetail(heroGame) },
-                    modifier = Modifier.padding(horizontal = 20.dp),
+                    modifier = Modifier.m3StaggeredEntrance(1).padding(horizontal = 20.dp),
                 )
             }
 
-            // 3. Playful Organic Shape Stat Trio (Pixel Weather / M3 Expressive Widgets!)
+            // 3. Playful Organic Shape Stat Trio (each blooms with staggered spring spin!)
             item(key = "m3_home_shapes") {
                 Row(
                     Modifier
@@ -196,6 +243,7 @@ internal fun M3HomePage(
                         icon = Icons.Rounded.Schedule,
                         value = if (totalSeconds > 0) PlayTime.format(totalSeconds) else "0m",
                         label = "Played",
+                        entranceDelayMs = 80L,
                         modifier = Modifier.weight(1f),
                     )
                     M3SculptedStatTile(
@@ -205,6 +253,7 @@ internal fun M3HomePage(
                         icon = Icons.Rounded.EmojiEvents,
                         value = "$clearedCount/${games.size}",
                         label = "Cleared",
+                        entranceDelayMs = 140L,
                         modifier = Modifier.weight(1f),
                     )
                     M3SculptedActionTile(
@@ -212,6 +261,7 @@ internal fun M3HomePage(
                         containerColor = cs.primaryContainer,
                         contentColor = cs.onPrimaryContainer,
                         label = "Shuffle",
+                        entranceDelayMs = 200L,
                         onClick = onShufflePlay,
                         modifier = Modifier.weight(1f),
                     )
@@ -225,33 +275,35 @@ internal fun M3HomePage(
                     amplitude = 2.5.dp,
                     wavelength = 24.dp,
                     strokeWidth = 2.dp,
-                    modifier = Modifier.padding(horizontal = 20.dp),
+                    modifier = Modifier.m3StaggeredEntrance(3).padding(horizontal = 20.dp),
                 )
             }
 
             // 5. Continue Playing Expressive Carousel
             if (jumpBack.isNotEmpty()) {
                 item(key = "m3_home_continue") {
-                    M3ShelfHeader(
-                        title = "Jump back in",
-                        badgeText = "${jumpBack.size}",
-                        modifier = Modifier.padding(horizontal = 20.dp),
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 20.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        items(jumpBack, key = { "m3_jump_${it.id}" }) { game ->
-                            val sec = stats[game.id]?.seconds ?: 0
-                            M3ExpressiveGameCard(
-                                game = game,
-                                width = 148.dp,
-                                isFavorite = game.id in favoriteIds,
-                                playTimeLabel = if (sec > 0) PlayTime.format(sec) else null,
-                                onOpen = { onOpenDetail(game) },
-                                onPlay = { onPlay(game) },
-                            )
+                    Column(Modifier.m3StaggeredEntrance(4)) {
+                        M3ShelfHeader(
+                            title = "Jump back in",
+                            badgeText = "${jumpBack.size}",
+                            modifier = Modifier.padding(horizontal = 20.dp),
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        LazyRow(
+                            contentPadding = PaddingValues(horizontal = 20.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            items(jumpBack, key = { "m3_jump_${it.id}" }) { game ->
+                                val sec = stats[game.id]?.seconds ?: 0
+                                M3ExpressiveGameCard(
+                                    game = game,
+                                    width = 148.dp,
+                                    isFavorite = game.id in favoriteIds,
+                                    playTimeLabel = if (sec > 0) PlayTime.format(sec) else null,
+                                    onOpen = { onOpenDetail(game) },
+                                    onPlay = { onPlay(game) },
+                                )
+                            }
                         }
                     }
                 }
@@ -260,26 +312,28 @@ internal fun M3HomePage(
             // 6. Favorites Expressive Shelf
             if (favorites.isNotEmpty()) {
                 item(key = "m3_home_favs") {
-                    M3ShelfHeader(
-                        title = "Favorites",
-                        badgeText = "${favorites.size}",
-                        modifier = Modifier.padding(horizontal = 20.dp),
-                    )
-                    Spacer(Modifier.height(12.dp))
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 20.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        items(favorites, key = { "m3_fav_${it.id}" }) { game ->
-                            val sec = stats[game.id]?.seconds ?: 0
-                            M3ExpressiveGameCard(
-                                game = game,
-                                width = 132.dp,
-                                isFavorite = true,
-                                playTimeLabel = if (sec > 0) PlayTime.format(sec) else null,
-                                onOpen = { onOpenDetail(game) },
-                                onPlay = { onPlay(game) },
-                            )
+                    Column(Modifier.m3StaggeredEntrance(5)) {
+                        M3ShelfHeader(
+                            title = "Favorites",
+                            badgeText = "${favorites.size}",
+                            modifier = Modifier.padding(horizontal = 20.dp),
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        LazyRow(
+                            contentPadding = PaddingValues(horizontal = 20.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            items(favorites, key = { "m3_fav_${it.id}" }) { game ->
+                                val sec = stats[game.id]?.seconds ?: 0
+                                M3ExpressiveGameCard(
+                                    game = game,
+                                    width = 132.dp,
+                                    isFavorite = true,
+                                    playTimeLabel = if (sec > 0) PlayTime.format(sec) else null,
+                                    onOpen = { onOpenDetail(game) },
+                                    onPlay = { onPlay(game) },
+                                )
+                            }
                         }
                     }
                 }
@@ -424,18 +478,41 @@ private fun M3SculptedStatTile(
     icon: ImageVector,
     value: String,
     label: String,
+    entranceDelayMs: Long = 0L,
     modifier: Modifier = Modifier,
 ) {
+    val reduced = LocalReducedMotion.current
     val shape = polygon.toShape()
+    val bloom = remember { Animatable(if (reduced) 1f else 0f) }
+    LaunchedEffect(Unit) {
+        if (!reduced) {
+            if (entranceDelayMs > 0L) delay(entranceDelayMs)
+            bloom.animateTo(1f, spring(dampingRatio = 0.56f, stiffness = 320f))
+        }
+    }
+    val b = bloom.value
+    val scale = 0.78f + 0.22f * b
+    val rot = -18f * (1f - b)
+
     Box(
         modifier
             .aspectRatio(1f)
+            .graphicsLayer {
+                alpha = b.coerceIn(0f, 1f)
+                scaleX = scale
+                scaleY = scale
+                rotationZ = rot
+            }
             .clip(shape)
             .background(containerColor)
             .padding(10.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+            modifier = Modifier.graphicsLayer { rotationZ = -rot },
+        ) {
             Icon(icon, null, tint = contentColor.copy(alpha = 0.88f), modifier = Modifier.size(16.dp))
             Text(
                 text = value,
@@ -460,30 +537,59 @@ private fun M3SculptedActionTile(
     containerColor: Color,
     contentColor: Color,
     label: String,
+    entranceDelayMs: Long = 0L,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val reduced = LocalReducedMotion.current
     val view = LocalView.current
     val shape = polygon.toShape()
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) 0.91f else 1f, spring(dampingRatio = 0.52f, stiffness = 480f), label = "shuffleScale")
+    var tapSpins by remember { mutableFloatStateOf(0f) }
+
+    val bloom = remember { Animatable(if (reduced) 1f else 0f) }
+    LaunchedEffect(Unit) {
+        if (!reduced) {
+            if (entranceDelayMs > 0L) delay(entranceDelayMs)
+            bloom.animateTo(1f, spring(dampingRatio = 0.56f, stiffness = 320f))
+        }
+    }
+    val pressScale by animateFloatAsState(if (pressed) 0.88f else 1f, M3ExpressiveSpring, label = "shuffleScale")
+    val spinDeg by animateFloatAsState(
+        targetValue = tapSpins,
+        animationSpec = spring(dampingRatio = 0.54f, stiffness = 280f),
+        label = "shuffleSpin",
+    )
+    val b = bloom.value
+    val scale = (0.78f + 0.22f * b) * pressScale
+    val rot = -18f * (1f - b) + spinDeg
 
     Box(
         modifier
             .aspectRatio(1f)
-            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .graphicsLayer {
+                alpha = b.coerceIn(0f, 1f)
+                scaleX = scale
+                scaleY = scale
+                rotationZ = rot
+            }
             .clip(shape)
             .background(containerColor)
             .semantics { contentDescription = "Surprise me" }
             .clickable(interactionSource = interaction, indication = null) {
                 view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                tapSpins += 180f
                 onClick()
             }
             .padding(10.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+            modifier = Modifier.graphicsLayer { rotationZ = -rot },
+        ) {
             Icon(Icons.Rounded.Casino, null, tint = contentColor, modifier = Modifier.size(22.dp))
             Text(
                 text = label,

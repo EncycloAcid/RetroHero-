@@ -1,6 +1,8 @@
 package com.retrohero.app.ui.theme
 
 import android.os.Build
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MotionScheme
@@ -432,6 +434,43 @@ private val ExpressiveTypography = Typography(
 )
 
 @Composable
+private fun animateColor(target: Color, label: String): Color =
+    animateColorAsState(
+        targetValue = target,
+        animationSpec = tween(durationMillis = 280),
+        label = label,
+    ).value
+
+@Composable
+private fun ColorScheme.animated(): ColorScheme = copy(
+    primary = animateColor(primary, "cs_p"),
+    onPrimary = animateColor(onPrimary, "cs_op"),
+    primaryContainer = animateColor(primaryContainer, "cs_pc"),
+    onPrimaryContainer = animateColor(onPrimaryContainer, "cs_opc"),
+    secondary = animateColor(secondary, "cs_s"),
+    onSecondary = animateColor(onSecondary, "cs_os"),
+    secondaryContainer = animateColor(secondaryContainer, "cs_sc"),
+    onSecondaryContainer = animateColor(onSecondaryContainer, "cs_osc"),
+    tertiary = animateColor(tertiary, "cs_t"),
+    onTertiary = animateColor(onTertiary, "cs_ot"),
+    tertiaryContainer = animateColor(tertiaryContainer, "cs_tc"),
+    onTertiaryContainer = animateColor(onTertiaryContainer, "cs_otc"),
+    background = animateColor(background, "cs_bg"),
+    onBackground = animateColor(onBackground, "cs_obg"),
+    surface = animateColor(surface, "cs_sf"),
+    onSurface = animateColor(onSurface, "cs_osf"),
+    surfaceVariant = animateColor(surfaceVariant, "cs_sv"),
+    onSurfaceVariant = animateColor(onSurfaceVariant, "cs_osv"),
+    surfaceContainerLowest = animateColor(surfaceContainerLowest, "cs_scl0"),
+    surfaceContainerLow = animateColor(surfaceContainerLow, "cs_scl1"),
+    surfaceContainer = animateColor(surfaceContainer, "cs_sc2"),
+    surfaceContainerHigh = animateColor(surfaceContainerHigh, "cs_sch"),
+    surfaceContainerHighest = animateColor(surfaceContainerHighest, "cs_sch2"),
+    outline = animateColor(outline, "cs_out"),
+    outlineVariant = animateColor(outlineVariant, "cs_outv"),
+)
+
+@Composable
 fun RetroHeroTheme(
     dynamicColor: Boolean = dynamicColorState.value,
     content: @Composable () -> Unit,
@@ -443,14 +482,14 @@ fun RetroHeroTheme(
         if (Tone.isDark) paletteState.value.dark else paletteState.value.light
     }
     val override = accentOverrideState.value
-    val scheme = if (override != null) {
+    val targetScheme = if (override != null) {
         val onP = if (override.luminance() > 0.56f) Color(0xFF141218) else Color.White
         base.copy(primary = override, onPrimary = onP)
     } else {
         base
     }
     MaterialExpressiveTheme(
-        colorScheme = scheme,
+        colorScheme = targetScheme.animated(),
         motionScheme = MotionScheme.expressive(),
         typography = ExpressiveTypography,
         content = content,

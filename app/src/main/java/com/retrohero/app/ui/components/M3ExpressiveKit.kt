@@ -1,11 +1,17 @@
 package com.retrohero.app.ui.components
 
 import android.view.HapticFeedbackConstants
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -43,6 +49,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -51,6 +58,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -61,6 +69,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -78,13 +87,15 @@ import coil.compose.AsyncImage
 import com.retrohero.app.data.Game
 import com.retrohero.app.ui.theme.Inter
 import com.retrohero.app.ui.theme.polygon
+import kotlinx.coroutines.delay
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.sin
 
 val LocalToolbarInset = compositionLocalOf { 104.dp }
 
-private val ExpressiveBouncySpring = spring<Float>(dampingRatio = 0.52f, stiffness = 480f)
+val M3ExpressiveSpring = spring<Float>(dampingRatio = 0.56f, stiffness = 460f)
+val M3SpatialSpring = spring<Float>(dampingRatio = 0.72f, stiffness = 320f)
 
 data class M3ToolbarDestination(
     val id: String,
@@ -92,6 +103,36 @@ data class M3ToolbarDestination(
     val selectedIcon: ImageVector,
     val unselectedIcon: ImageVector,
 )
+
+/**
+ * Choreographed Material 3 Expressive staggered entrance:
+ * silky upward float + gentle scale settle + fade-in with natural spring physics.
+ */
+fun Modifier.m3StaggeredEntrance(
+    order: Int,
+    slideDp: Dp = 22.dp,
+): Modifier = composed {
+    val reduced = LocalReducedMotion.current
+    val density = LocalDensity.current
+    val progress = remember { Animatable(if (reduced) 1f else 0f) }
+
+    LaunchedEffect(Unit) {
+        if (!reduced) {
+            if (order > 0) delay((order * 38L).coerceAtMost(220L))
+            progress.animateTo(1f, spring(dampingRatio = 0.74f, stiffness = 310f))
+        }
+    }
+
+    val p = progress.value
+    val yPx = with(density) { slideDp.toPx() } * (1f - p)
+    val s = 0.955f + 0.045f * p
+    this.graphicsLayer {
+        alpha = p.coerceIn(0f, 1f)
+        translationY = yPx
+        scaleX = s
+        scaleY = s
+    }
+}
 
 /**
  * Android 16 Material 3 Expressive Segmented List corner geometry:
@@ -128,7 +169,10 @@ fun M3ShapeBadge(
     )
 }
 
-/** Iconic Material 3 Expressive sine-wave squiggly divider / accent track. */
+/**
+ * Iconic Material 3 Expressive sine-wave squiggly divider / progress track.
+ * Smoothly unfurls with a gentle traveling wave phase on mount and whenever [progress] updates.
+ */
 @Composable
 fun M3WavyBar(
     color: Color = MaterialTheme.colorScheme.outlineVariant,
@@ -139,19 +183,30 @@ fun M3WavyBar(
     strokeWidth: Dp = 3.dp,
     modifier: Modifier = Modifier,
 ) {
+    val animatedProgress = remember { Animatable(0f) }
+    LaunchedEffect(progress) {
+        animatedProgress.animateTo(
+            targetValue = progress.coerceIn(0f, 1f),
+            animationSpec = spring(dampingRatio = 0.72f, stiffness = 180f),
+        )
+    }
+
+    val p = animatedProgress.value
+    val phase = p * (2.0 * PI) * 1.4
+
     Canvas(modifier.fillMaxWidth().height(amplitude * 2 + strokeWidth + 2.dp)) {
         val midY = size.height / 2f
         val amp = amplitude.toPx()
         val wl = wavelength.toPx().coerceAtLeast(8f)
         val stroke = strokeWidth.toPx()
 
-        fun buildWave(startX: Float, endX: Float): Path {
+        fun buildWave(startX: Float, endX: Float, wavePhase: Double): Path {
             val path = Path()
             val step = 3f
             var x = startX
             var first = true
             while (x <= endX) {
-                val y = midY + sin((x / wl) * 2.0 * PI).toFloat() * amp
+                val y = midY + sin((x / wl) * 2.0 * PI - wavePhase).toFloat() * amp
                 if (first) {
                     path.moveTo(x, y)
                     first = false
@@ -160,16 +215,16 @@ fun M3WavyBar(
                 }
                 x += step
             }
-            val endY = midY + sin((endX / wl) * 2.0 * PI).toFloat() * amp
+            val endY = midY + sin((endX / wl) * 2.0 * PI - wavePhase).toFloat() * amp
             if (first) path.moveTo(endX, endY) else path.lineTo(endX, endY)
             return path
         }
 
-        if (progressColor != null && progress > 0f) {
-            val splitX = size.width * progress.coerceIn(0f, 1f)
+        if (progressColor != null && p > 0f) {
+            val splitX = size.width * p
             if (splitX > 2f) {
                 drawPath(
-                    path = buildWave(0f, splitX),
+                    path = buildWave(0f, splitX, phase),
                     color = progressColor,
                     style = Stroke(width = stroke, cap = StrokeCap.Round),
                 )
@@ -185,7 +240,7 @@ fun M3WavyBar(
             }
         } else {
             drawPath(
-                path = buildWave(0f, size.width),
+                path = buildWave(0f, size.width, 0.0),
                 color = color,
                 style = Stroke(width = stroke, cap = StrokeCap.Round),
             )
@@ -196,7 +251,7 @@ fun M3WavyBar(
 /**
  * Pure Material 3 Expressive Connected Button Group:
  * Outer ends are full pill caps (24dp), adjacent seams stay snug (8dp),
- * and the selected item morphs smoothly into a full pill (CircleShape) in `primary` / `onPrimary`.
+ * and the selected item morphs smoothly into a full pill (CircleShape) with bouncy spring press!
  */
 @Composable
 fun M3ConnectedButtonGroup(
@@ -219,13 +274,20 @@ fun M3ConnectedButtonGroup(
     ) {
         options.forEachIndexed { idx, label ->
             val selected = idx == selectedIndex
+            val interaction = remember { MutableInteractionSource() }
+            val pressed by interaction.collectIsPressedAsState()
+            val scale by animateFloatAsState(
+                if (pressed) 0.95f else 1f,
+                M3ExpressiveSpring,
+                label = "m3ConnPress",
+            )
             val startR by animateDpAsState(
                 when {
                     selected -> 24.dp
                     idx == 0 -> 24.dp
                     else -> 8.dp
                 },
-                spring(dampingRatio = 0.60f, stiffness = 500f),
+                spring(dampingRatio = 0.58f, stiffness = 460f),
                 label = "m3ConnStart",
             )
             val endR by animateDpAsState(
@@ -234,29 +296,37 @@ fun M3ConnectedButtonGroup(
                     idx == options.lastIndex -> 24.dp
                     else -> 8.dp
                 },
-                spring(dampingRatio = 0.60f, stiffness = 500f),
+                spring(dampingRatio = 0.58f, stiffness = 460f),
                 label = "m3ConnEnd",
             )
             val bg by animateColorAsState(
                 if (selected) activeBg else unselectedContainerColor,
-                tween(170),
+                tween(200),
                 label = "m3ConnBg",
             )
             val fg by animateColorAsState(
                 if (selected) activeFg else cs.onSurfaceVariant,
-                tween(150),
+                tween(180),
                 label = "m3ConnFg",
             )
-            val shape = RoundedCornerShape(topStart = startR, bottomStart = startR, topEnd = endR, bottomEnd = endR)
+            val shape = RoundedCornerShape(
+                topStart = startR.coerceAtLeast(0.dp),
+                bottomStart = startR.coerceAtLeast(0.dp),
+                topEnd = endR.coerceAtLeast(0.dp),
+                bottomEnd = endR.coerceAtLeast(0.dp),
+            )
 
             Box(
                 Modifier
                     .weight(1f)
                     .height(height)
+                    .graphicsLayer { scaleX = scale; scaleY = scale }
                     .clip(shape)
                     .background(bg)
                     .selectable(
                         selected = selected,
+                        interactionSource = interaction,
+                        indication = null,
                         role = Role.Tab,
                         onClick = {
                             if (!selected) view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
@@ -282,7 +352,8 @@ fun M3ConnectedButtonGroup(
 
 /**
  * Pure Material 3 Expressive Split Button:
- * Bold pill primary action paired tightly across a 3dp seam with a trailing tonal icon button.
+ * Bold pill primary action paired tightly across a 3dp seam with a trailing morphing icon button
+ * that pops with a joyful heartbeat spring when toggled!
  */
 @Composable
 fun M3SplitButton(
@@ -301,16 +372,44 @@ fun M3SplitButton(
 
     val pInt = remember { MutableInteractionSource() }
     val pDown by pInt.collectIsPressedAsState()
-    val pScale by animateFloatAsState(if (pDown) 0.96f else 1f, ExpressiveBouncySpring, label = "m3SplitP")
+    val pScale by animateFloatAsState(if (pDown) 0.96f else 1f, M3ExpressiveSpring, label = "m3SplitP")
 
     val tInt = remember { MutableInteractionSource() }
     val tDown by tInt.collectIsPressedAsState()
-    val tScale by animateFloatAsState(if (tDown) 0.91f else 1f, ExpressiveBouncySpring, label = "m3SplitT")
+    val tScale by animateFloatAsState(if (tDown) 0.88f else 1f, M3ExpressiveSpring, label = "m3SplitT")
+
+    // Joyful heartbeat pop on the trailing icon when favorite/active state flips
+    val heartPop = remember { Animatable(1f) }
+    var initialized by remember { mutableStateOf(false) }
+    LaunchedEffect(trailingActive) {
+        if (initialized) {
+            heartPop.animateTo(1.26f, spring(dampingRatio = 0.38f, stiffness = 700f))
+            heartPop.animateTo(1f, spring(dampingRatio = 0.55f, stiffness = 420f))
+        }
+        initialized = true
+    }
+
+    val trailingStartCorner by animateDpAsState(
+        if (trailingActive) 28.dp else 8.dp,
+        spring(dampingRatio = 0.54f, stiffness = 420f),
+        label = "splitTrailCorner",
+    )
+    val trailingBg by animateColorAsState(
+        if (trailingActive) cs.tertiaryContainer else cs.primaryContainer,
+        tween(220),
+        label = "splitTrailBg",
+    )
+    val trailingFg by animateColorAsState(
+        if (trailingActive) cs.onTertiaryContainer else cs.onPrimaryContainer,
+        tween(200),
+        label = "splitTrailFg",
+    )
 
     val leadingShape = RoundedCornerShape(topStart = 28.dp, bottomStart = 28.dp, topEnd = 8.dp, bottomEnd = 8.dp)
+    val clampedTrail = trailingStartCorner.coerceAtLeast(0.dp)
     val trailingShape = RoundedCornerShape(
-        topStart = if (trailingActive) 28.dp else 8.dp,
-        bottomStart = if (trailingActive) 28.dp else 8.dp,
+        topStart = clampedTrail,
+        bottomStart = clampedTrail,
         topEnd = 28.dp,
         bottomEnd = 28.dp,
     )
@@ -349,7 +448,7 @@ fun M3SplitButton(
                 .size(width = 56.dp, height = height)
                 .graphicsLayer { scaleX = tScale; scaleY = tScale }
                 .clip(trailingShape)
-                .background(if (trailingActive) cs.tertiaryContainer else cs.primaryContainer)
+                .background(trailingBg)
                 .clickable(interactionSource = tInt, indication = null) {
                     view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                     onTrailingClick()
@@ -359,16 +458,23 @@ fun M3SplitButton(
             Icon(
                 imageVector = trailingIcon,
                 contentDescription = trailingDescription,
-                tint = if (trailingActive) cs.onTertiaryContainer else cs.onPrimaryContainer,
-                modifier = Modifier.size(22.dp),
+                tint = trailingFg,
+                modifier = Modifier
+                    .size(22.dp)
+                    .graphicsLayer {
+                        scaleX = heartPop.value
+                        scaleY = heartPop.value
+                    },
             )
         }
     }
 }
 
 /**
- * Pure Material 3 Expressive Floating Toolbar + Detached Expressive FAB:
- * Matte tonal `surfaceContainerHighest` pill bar paired with a `tertiaryContainer` Cookie7Sided `+` FAB.
+ * Pure Material 3 Expressive Floating Toolbar + Morphing Detached Expressive FAB:
+ * - Tab widths smoothly spring-expand/compress with `animateFloatAsState`
+ * - Active tab label expands smoothly via `AnimatedVisibility`
+ * - Detached FAB smoothly morphs `Cookie7Sided ↔ Circle` and rotates `+` → `×` (45°) when Quick Add opens!
  */
 @Composable
 fun M3FloatingToolbarDock(
@@ -376,14 +482,38 @@ fun M3FloatingToolbarDock(
     selected: Int,
     onSelect: (Int) -> Unit,
     onFabClick: () -> Unit,
+    isFabOpen: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val view = LocalView.current
     val cs = MaterialTheme.colorScheme
     val fabInt = remember { MutableInteractionSource() }
     val fabDown by fabInt.collectIsPressedAsState()
-    val fabScale by animateFloatAsState(if (fabDown) 0.89f else 1f, ExpressiveBouncySpring, label = "m3Fab")
-    val fabShape = MaterialShapes.Cookie7Sided.toShape()
+    val fabScale by animateFloatAsState(if (fabDown) 0.88f else 1f, M3ExpressiveSpring, label = "m3FabScale")
+
+    // Morph Cookie7Sided -> Circle and rotate 45° (+ becomes ×) when Quick Add is open!
+    val fabMorph = rememberMorph(MaterialShapes.Cookie7Sided, MaterialShapes.Circle)
+    val fabMorphProgress by animateFloatAsState(
+        if (isFabOpen) 1f else 0f,
+        spring(dampingRatio = 0.56f, stiffness = 380f),
+        label = "m3FabMorph",
+    )
+    val fabRotation by animateFloatAsState(
+        if (isFabOpen) 45f else 0f,
+        spring(dampingRatio = 0.52f, stiffness = 360f),
+        label = "m3FabRot",
+    )
+    val fabBg by animateColorAsState(
+        if (isFabOpen) cs.primary else cs.tertiaryContainer,
+        tween(220),
+        label = "m3FabBg",
+    )
+    val fabFg by animateColorAsState(
+        if (isFabOpen) cs.onPrimary else cs.onTertiaryContainer,
+        tween(200),
+        label = "m3FabFg",
+    )
+    val fabShape = MorphShape(fabMorph, fabMorphProgress.coerceIn(0f, 1f))
 
     Box(
         modifier
@@ -426,23 +556,33 @@ fun M3FloatingToolbarDock(
                         val active = idx == selected
                         val interaction = remember { MutableInteractionSource() }
                         val pressed by interaction.collectIsPressedAsState()
-                        val scale by animateFloatAsState(if (pressed) 0.92f else 1f, ExpressiveBouncySpring, label = "m3TabScale")
+                        val pressScale by animateFloatAsState(if (pressed) 0.92f else 1f, M3ExpressiveSpring, label = "m3TabScale")
+                        val tabWeight by animateFloatAsState(
+                            if (active) 1.54f else 0.92f,
+                            spring(dampingRatio = 0.64f, stiffness = 400f),
+                            label = "m3TabWeight",
+                        )
+                        val iconPop by animateFloatAsState(
+                            if (active) 1.06f else 1f,
+                            spring(dampingRatio = 0.45f, stiffness = 500f),
+                            label = "m3TabIconPop",
+                        )
                         val pillBg by animateColorAsState(
                             if (active) cs.primaryContainer else Color.Transparent,
-                            tween(180),
+                            tween(220),
                             label = "m3TabBg",
                         )
                         val fg by animateColorAsState(
                             if (active) cs.onPrimaryContainer else cs.onSurfaceVariant,
-                            tween(160),
+                            tween(180),
                             label = "m3TabFg",
                         )
 
                         Box(
                             Modifier
-                                .weight(if (active) 1.48f else 0.94f)
+                                .weight(tabWeight)
                                 .fillMaxHeight()
-                                .graphicsLayer { scaleX = scale; scaleY = scale }
+                                .graphicsLayer { scaleX = pressScale; scaleY = pressScale }
                                 .clip(CircleShape)
                                 .background(pillBg)
                                 .selectable(
@@ -457,30 +597,40 @@ fun M3FloatingToolbarDock(
                                 ),
                             contentAlignment = Alignment.Center,
                         ) {
-                            if (active) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                    modifier = Modifier.padding(horizontal = 12.dp),
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center,
+                                modifier = Modifier.padding(horizontal = 10.dp),
+                            ) {
+                                Icon(
+                                    imageVector = if (active) dest.selectedIcon else dest.unselectedIcon,
+                                    contentDescription = dest.label,
+                                    tint = fg,
+                                    modifier = Modifier
+                                        .size(if (active) 20.dp else 22.dp)
+                                        .graphicsLayer { scaleX = iconPop; scaleY = iconPop },
+                                )
+                                AnimatedVisibility(
+                                    visible = active,
+                                    enter = expandHorizontally(spring(dampingRatio = 0.70f, stiffness = 420f)) + fadeIn(tween(160)),
+                                    exit = shrinkHorizontally(tween(140)) + fadeOut(tween(100)),
                                 ) {
-                                    Icon(dest.selectedIcon, contentDescription = dest.label, tint = fg, modifier = Modifier.size(20.dp))
                                     Text(
                                         text = dest.label,
                                         style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.5.sp),
                                         color = fg,
                                         maxLines = 1,
                                         softWrap = false,
+                                        modifier = Modifier.padding(start = 6.dp),
                                     )
                                 }
-                            } else {
-                                Icon(dest.unselectedIcon, contentDescription = dest.label, tint = fg, modifier = Modifier.size(22.dp))
                             }
                         }
                     }
                 }
             }
 
-            // Detached M3 Expressive Cookie7Sided FAB in vibrant tertiaryContainer with clean backdrop halo
+            // Detached M3 Expressive Morphing Cookie7Sided <-> Circle FAB!
             Box(
                 Modifier
                     .size(66.dp)
@@ -489,15 +639,22 @@ fun M3FloatingToolbarDock(
                     .background(cs.background)
                     .padding(3.dp)
                     .clip(fabShape)
-                    .background(cs.tertiaryContainer)
-                    .semantics { contentDescription = "Quick add menu" }
+                    .background(fabBg)
+                    .semantics { contentDescription = if (isFabOpen) "Close quick add menu" else "Quick add menu" }
                     .clickable(interactionSource = fabInt, indication = null) {
                         view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                         onFabClick()
                     },
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Rounded.Add, contentDescription = "Add", tint = cs.onTertiaryContainer, modifier = Modifier.size(28.dp))
+                Icon(
+                    Icons.Rounded.Add,
+                    contentDescription = "Add",
+                    tint = fabFg,
+                    modifier = Modifier
+                        .size(28.dp)
+                        .graphicsLayer { rotationZ = fabRotation },
+                )
             }
         }
     }
@@ -505,7 +662,7 @@ fun M3FloatingToolbarDock(
 
 /**
  * Pure Android 16 Material 3 Expressive Segmented List Tile:
- * Individual solid `surfaceContainerHigh` card with morphing outer/inner radii and organic badge.
+ * Individual solid `surfaceContainerHigh` card with morphing outer/inner radii, organic badge, and tactile bounce.
  */
 @Composable
 fun M3SegmentedItem(
@@ -522,17 +679,42 @@ fun M3SegmentedItem(
 ) {
     val cs = MaterialTheme.colorScheme
     val shape = m3SegmentedShape(index, count)
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        if (pressed && onClick != null) 0.978f else 1f,
+        M3ExpressiveSpring,
+        label = "m3SegScale",
+    )
+    val badgeTilt by animateFloatAsState(
+        if (pressed && onClick != null) -10f else 0f,
+        M3ExpressiveSpring,
+        label = "m3SegTilt",
+    )
+
     Row(
         Modifier
             .fillMaxWidth()
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(shape)
             .background(cs.surfaceContainerHigh)
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(interactionSource = interaction, indication = null, onClick = onClick)
+                } else {
+                    Modifier
+                },
+            )
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        M3ShapeBadge(polygon = badgePolygon, containerColor = badgeContainer, size = 42.dp) {
+        M3ShapeBadge(
+            polygon = badgePolygon,
+            containerColor = badgeContainer,
+            size = 42.dp,
+            modifier = Modifier.graphicsLayer { rotationZ = badgeTilt },
+        ) {
             Icon(icon, null, tint = badgeContent, modifier = Modifier.size(20.dp))
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -663,7 +845,6 @@ private fun M3ExpressivePosterFallback(
                 center = Offset(w * 0.14f, h * 0.88f),
                 style = Stroke(width = 2.4f),
             )
-            // Subtle tactile Material dot matrix in bottom-right / top-left
             val step = (w * 0.085f).coerceIn(9f, 18f)
             val dotR = (w * 0.011f).coerceIn(1.5f, 2.8f)
             for (row in 0..3) {
@@ -677,7 +858,6 @@ private fun M3ExpressivePosterFallback(
             }
         }
 
-        // Sculpted console polygon centerpiece with expressive monogram when footer already shows title
         val emblemSize = when {
             isWide -> 112.dp
             compact -> 64.dp

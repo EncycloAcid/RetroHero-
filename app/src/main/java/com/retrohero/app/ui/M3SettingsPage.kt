@@ -2,9 +2,24 @@ package com.retrohero.app.ui
 
 import android.os.Build
 import android.view.HapticFeedbackConstants
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,7 +57,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,10 +69,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.graphics.shapes.RoundedPolygon
@@ -68,10 +84,14 @@ import com.retrohero.app.data.CoreManager.CoreState
 import com.retrohero.app.data.Systems
 import com.retrohero.app.ui.components.LocalToolbarInset
 import com.retrohero.app.ui.components.M3ConnectedButtonGroup
+import com.retrohero.app.ui.components.M3ExpressiveSpring
 import com.retrohero.app.ui.components.M3SegmentedItem
 import com.retrohero.app.ui.components.M3ShapeBadge
 import com.retrohero.app.ui.components.M3WavyBar
+import com.retrohero.app.ui.components.MorphShape
 import com.retrohero.app.ui.components.m3SegmentedShape
+import com.retrohero.app.ui.components.m3StaggeredEntrance
+import com.retrohero.app.ui.components.rememberMorph
 import com.retrohero.app.ui.theme.M3ExpressivePalette
 import com.retrohero.app.ui.theme.M3ExpressivePalettes
 import com.retrohero.app.ui.theme.Tone
@@ -105,50 +125,65 @@ internal fun M3SettingsPage(
     onDeleteCore: (CoreInfo) -> Unit,
 ) {
     var coresOpen by rememberSaveable { mutableStateOf(false) }
-    if (coresOpen) {
-        M3CoreManagerPage(
-            coreStates = coreStates,
-            onDownloadCore = onDownloadCore,
-            onDeleteCore = onDeleteCore,
-            onBack = { coresOpen = false },
-        )
-        return
-    }
 
-    val cs = MaterialTheme.colorScheme
-    val inset = LocalToolbarInset.current
-    val activePaletteId = currentPaletteId()
-    val allCores = remember { Systems.allCores() }
-    val installedCores = remember(coreStates, allCores) {
-        allCores.count { coreStates[it.first.id] is CoreState.Installed }
-    }
-    val abi = remember {
-        when (val raw = CoreManager.abi().lowercase()) {
-            "arm64-v8a" -> "ARM64"
-            "armeabi-v7a" -> "ARM32"
-            else -> raw.uppercase()
+    AnimatedContent(
+        targetState = coresOpen,
+        transitionSpec = {
+            val slideSpec = spring<IntOffset>(dampingRatio = 0.80f, stiffness = 360f)
+            if (targetState) {
+                (slideInHorizontally(slideSpec) { it / 3 } + fadeIn(tween(200))) togetherWith
+                    (slideOutHorizontally(tween(180)) { -it / 6 } + fadeOut(tween(140)))
+            } else {
+                (slideInHorizontally(slideSpec) { -it / 6 } + fadeIn(tween(200))) togetherWith
+                    (slideOutHorizontally(tween(180)) { it / 3 } + fadeOut(tween(140)))
+            }
+        },
+        label = "m3CoreManagerPush",
+    ) { showCores ->
+        if (showCores) {
+            M3CoreManagerPage(
+                coreStates = coreStates,
+                onDownloadCore = onDownloadCore,
+                onDeleteCore = onDeleteCore,
+                onBack = { coresOpen = false },
+            )
+            return@AnimatedContent
         }
-    }
 
-    LazyColumn(
-        contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 16.dp, bottom = inset + 24.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp),
-        modifier = Modifier.fillMaxSize(),
-    ) {
-        // 1. M3 Expressive Display Header
-        item(key = "m3_set_header") {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Box(
-                    Modifier
-                        .clip(CircleShape)
-                        .background(cs.secondaryContainer)
-                        .padding(horizontal = 10.dp, vertical = 4.dp),
-                ) {
-                    Text(text = "Engine · $abi", style = MaterialTheme.typography.labelSmall, color = cs.onSecondaryContainer)
-                }
-                Text(text = "Settings", style = MaterialTheme.typography.displayMedium, color = cs.onBackground)
+        val cs = MaterialTheme.colorScheme
+        val inset = LocalToolbarInset.current
+        val activePaletteId = currentPaletteId()
+        val allCores = remember { Systems.allCores() }
+        val installedCores = remember(coreStates, allCores) {
+            allCores.count { coreStates[it.first.id] is CoreState.Installed }
+        }
+        val abi = remember {
+            when (val raw = CoreManager.abi().lowercase()) {
+                "arm64-v8a" -> "ARM64"
+                "armeabi-v7a" -> "ARM32"
+                else -> raw.uppercase()
             }
         }
+
+        LazyColumn(
+            contentPadding = PaddingValues(start = 18.dp, end = 18.dp, top = 16.dp, bottom = inset + 24.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            // 1. M3 Expressive Display Header
+            item(key = "m3_set_header") {
+                Column(Modifier.m3StaggeredEntrance(0, slideDp = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Box(
+                        Modifier
+                            .clip(CircleShape)
+                            .background(cs.secondaryContainer)
+                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                    ) {
+                        Text(text = "Engine · $abi", style = MaterialTheme.typography.labelSmall, color = cs.onSecondaryContainer)
+                    }
+                    Text(text = "Settings", style = MaterialTheme.typography.displayMedium, color = cs.onBackground)
+                }
+            }
 
         // 2. Material You Expressive Theme Studio
         item(key = "m3_set_theme") {
@@ -389,6 +424,7 @@ internal fun M3SettingsPage(
             }
         }
     }
+    }
 }
 
 @Composable
@@ -399,34 +435,73 @@ private fun MaterialYouTriSwatch(
 ) {
     val view = LocalView.current
     val cs = MaterialTheme.colorScheme
-    val shape = if (selected) MaterialShapes.Cookie9Sided.toShape() else CircleShape
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val pressScale by animateFloatAsState(if (pressed) 0.88f else 1f, M3ExpressiveSpring, label = "swatchPress")
+
+    // Signature M3 Expressive real polygon morph: Circle <-> Cookie9Sided with bouncy overshoot!
+    val morph = rememberMorph(MaterialShapes.Circle, MaterialShapes.Cookie9Sided)
+    val morphProgress by animateFloatAsState(
+        targetValue = if (selected) 1f else 0f,
+        animationSpec = spring(dampingRatio = 0.48f, stiffness = 360f),
+        label = "swatchMorph",
+    )
+    val swatchSize by animateDpAsState(
+        targetValue = if (selected) 54.dp else 46.dp,
+        animationSpec = spring(dampingRatio = 0.52f, stiffness = 400f),
+        label = "swatchSize",
+    )
+    val swatchRot by animateFloatAsState(
+        targetValue = if (selected) 36f else 0f,
+        animationSpec = spring(dampingRatio = 0.54f, stiffness = 320f),
+        label = "swatchRot",
+    )
+    val shape = MorphShape(morph, morphProgress.coerceIn(0f, 1f))
     val scheme = if (Tone.isDark) palette.dark else palette.light
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(5.dp),
-        modifier = Modifier.clickable {
-            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-            onClick()
-        },
+        modifier = Modifier
+            .graphicsLayer { scaleX = pressScale; scaleY = pressScale }
+            .clickable(interactionSource = interaction, indication = null) {
+                view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                onClick()
+            },
     ) {
         Box(
-            Modifier
-                .size(if (selected) 52.dp else 46.dp)
-                .clip(shape),
+            Modifier.size(54.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Canvas(Modifier.fillMaxSize()) {
-                val w = size.width
-                val h = size.height
-                drawRect(color = scheme.primary, topLeft = Offset.Zero, size = Size(w, h * 0.52f))
-                drawRect(color = scheme.secondaryContainer, topLeft = Offset(0f, h * 0.52f), size = Size(w * 0.5f, h * 0.48f))
-                drawRect(color = scheme.tertiaryContainer, topLeft = Offset(w * 0.5f, h * 0.52f), size = Size(w * 0.5f, h * 0.48f))
+            Box(
+                Modifier
+                    .size(swatchSize)
+                    .graphicsLayer { rotationZ = swatchRot }
+                    .clip(shape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Canvas(Modifier.fillMaxSize()) {
+                    val w = size.width
+                    val h = size.height
+                    drawRect(color = scheme.primary, topLeft = Offset.Zero, size = Size(w, h * 0.52f))
+                    drawRect(color = scheme.secondaryContainer, topLeft = Offset(0f, h * 0.52f), size = Size(w * 0.5f, h * 0.48f))
+                    drawRect(color = scheme.tertiaryContainer, topLeft = Offset(w * 0.5f, h * 0.52f), size = Size(w * 0.5f, h * 0.48f))
+                }
             }
-            if (selected) {
+            val checkScale by animateFloatAsState(
+                targetValue = if (selected) 1f else 0f,
+                animationSpec = spring(dampingRatio = 0.46f, stiffness = 500f),
+                label = "swatchCheckScale",
+            )
+            if (checkScale > 0.02f) {
                 Box(
                     Modifier
                         .size(24.dp)
+                        .graphicsLayer {
+                            scaleX = checkScale
+                            scaleY = checkScale
+                            alpha = checkScale.coerceIn(0f, 1f)
+                        }
                         .clip(CircleShape)
                         .background(scheme.surface),
                     contentAlignment = Alignment.Center,
@@ -454,13 +529,23 @@ private fun M3TonalHubCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val view = LocalView.current
     val shape = RoundedCornerShape(26.dp)
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.94f else 1f, M3ExpressiveSpring, label = "hubScale")
+    val badgeSpin by animateFloatAsState(if (pressed) -14f else 0f, M3ExpressiveSpring, label = "hubSpin")
+
     Column(
         modifier
             .height(122.dp)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(shape)
             .background(containerColor)
-            .clickable(onClick = onClick)
+            .clickable(interactionSource = interaction, indication = null) {
+                view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                onClick()
+            }
             .padding(16.dp),
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
@@ -468,6 +553,7 @@ private fun M3TonalHubCard(
             polygon = polygon,
             containerColor = contentColor.copy(alpha = 0.14f),
             size = 42.dp,
+            modifier = Modifier.graphicsLayer { rotationZ = badgeSpin },
         ) {
             Icon(icon, null, tint = contentColor, modifier = Modifier.size(21.dp))
         }
