@@ -8,22 +8,20 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.GridView
-import androidx.compose.material.icons.outlined.PlayCircle
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.SportsEsports
 import androidx.compose.material.icons.outlined.Tune
-import androidx.compose.material.icons.rounded.GridView
-import androidx.compose.material.icons.rounded.PlayCircle
+import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.SportsEsports
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -34,32 +32,27 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.retrohero.app.data.CoreInfo
 import com.retrohero.app.data.CoreManager.CoreState
 import com.retrohero.app.data.Game
 import com.retrohero.app.data.PlayStat
-import com.retrohero.app.ui.components.Ascend
-import com.retrohero.app.ui.components.DockTab
-import com.retrohero.app.ui.components.ExpressiveIosDock
-import com.retrohero.app.ui.components.LocalDockInset
+import com.retrohero.app.ui.components.LocalToolbarInset
+import com.retrohero.app.ui.components.M3FloatingToolbarDock
+import com.retrohero.app.ui.components.M3ToolbarDestination
 import com.retrohero.app.ui.theme.Tone
 
-private val MainDockTabs = listOf(
-    DockTab("play", "Play", Icons.Rounded.PlayCircle, Icons.Outlined.PlayCircle),
-    DockTab("library", "Library", Icons.Rounded.GridView, Icons.Outlined.GridView),
-    DockTab("settings", "Settings", Icons.Rounded.Tune, Icons.Outlined.Tune),
+private val M3Destinations = listOf(
+    M3ToolbarDestination("home", "Home", Icons.Rounded.Home, Icons.Outlined.Home),
+    M3ToolbarDestination("games", "Games", Icons.Rounded.SportsEsports, Icons.Outlined.SportsEsports),
+    M3ToolbarDestination("settings", "Settings", Icons.Rounded.Tune, Icons.Outlined.Tune),
 )
 
 /**
- * Pure stateless shell for the M3 Expressive × Little iOS launcher UI,
- * powering both [MainActivity] and deterministic Compose screenshot tests.
+ * Pure Material 3 Expressive application shell powering [MainActivity] and screenshot tests.
  */
 @Composable
-fun ExpressiveAppView(
+fun M3ExpressiveAppView(
     games: List<Game>,
     recents: List<Game>,
     favoriteIds: Set<String>,
@@ -70,6 +63,7 @@ fun ExpressiveAppView(
     autoSave: Boolean = true,
     haptics: Boolean = true,
     fastForwardSpeed: Float = 3f,
+    dynamicColor: Boolean = false,
     coreStates: Map<String, CoreState> = emptyMap(),
     saveSlotsFor: (Game) -> List<Pair<Int, Long>> = { emptyList() },
     currentCoreFor: (Game) -> CoreInfo? = { it.system?.cores?.firstOrNull() },
@@ -82,7 +76,8 @@ fun ExpressiveAppView(
     onSetAutoSave: (Boolean) -> Unit = {},
     onSetHaptics: (Boolean) -> Unit = {},
     onSetFastForward: (Float) -> Unit = {},
-    onSelectAccent: (String, Color) -> Unit = { _, _ -> },
+    onSetDynamicColor: (Boolean) -> Unit = {},
+    onSelectPalette: (String) -> Unit = {},
     onSetDarkMode: (Boolean) -> Unit = { Tone.setDarkMode(it) },
     onAddFolder: () -> Unit = {},
     onRescan: () -> Unit = {},
@@ -94,6 +89,7 @@ fun ExpressiveAppView(
     onDeleteCore: (CoreInfo) -> Unit = {},
     initialTab: Int = 0,
 ) {
+    val cs = MaterialTheme.colorScheme
     var selectedTab by rememberSaveable { mutableIntStateOf(initialTab) }
     var detailGameId by rememberSaveable { mutableStateOf<String?>(null) }
     var quickAddOpen by rememberSaveable { mutableStateOf(false) }
@@ -102,38 +98,12 @@ fun ExpressiveAppView(
         detailGameId?.let { id -> games.firstOrNull { it.id == id } }
     }
 
-    CompositionLocalProvider(LocalDockInset provides 104.dp) {
+    CompositionLocalProvider(LocalToolbarInset provides 104.dp) {
         Box(
             Modifier
                 .fillMaxSize()
-                .background(Tone.Bg),
+                .background(cs.background),
         ) {
-            // Soft M3 Expressive atmospheric mesh glow hanging from top edge
-            val glowColor = Ascend.accent
-            Canvas(Modifier.fillMaxWidth().height(260.dp)) {
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        listOf(
-                            glowColor.copy(alpha = if (Tone.isDark) 0.16f else 0.10f),
-                            Color.Transparent,
-                        ),
-                    ),
-                    radius = size.width * 0.78f,
-                    center = Offset(size.width * 0.18f, -size.height * 0.12f),
-                )
-                drawCircle(
-                    brush = Brush.radialGradient(
-                        listOf(
-                            Color(0xFF0A84FF).copy(alpha = if (Tone.isDark) 0.10f else 0.07f),
-                            Color.Transparent,
-                        ),
-                    ),
-                    radius = size.width * 0.62f,
-                    center = Offset(size.width * 0.90f, size.height * 0.05f),
-                )
-            }
-
-            // Main active tab content
             Box(
                 Modifier
                     .fillMaxSize()
@@ -142,10 +112,10 @@ fun ExpressiveAppView(
                 AnimatedContent(
                     targetState = selectedTab,
                     transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(140)) },
-                    label = "expressiveTabSwitch",
+                    label = "m3TabSwitch",
                 ) { tab ->
                     when (tab) {
-                        0 -> PlayHomePage(
+                        0 -> M3HomePage(
                             games = games,
                             recents = recents,
                             favoriteIds = favoriteIds,
@@ -159,7 +129,7 @@ fun ExpressiveAppView(
                             onAddFolder = onAddFolder,
                             onOpenHomebrew = onOpenHomebrew,
                         )
-                        1 -> LibraryGridPage(
+                        1 -> M3LibraryPage(
                             games = games,
                             favoriteIds = favoriteIds,
                             stats = stats,
@@ -167,18 +137,20 @@ fun ExpressiveAppView(
                             onOpenDetail = { g -> detailGameId = g.id },
                             onQuickPlay = { g -> onPlay(g, null) },
                         )
-                        else -> SettingsDeckPage(
+                        else -> M3SettingsPage(
                             gamesCount = games.size,
                             foldersCount = foldersCount,
                             scanning = scanning,
                             autoSave = autoSave,
                             haptics = haptics,
                             fastForwardSpeed = fastForwardSpeed,
+                            dynamicColor = dynamicColor,
                             coreStates = coreStates,
                             onSetAutoSave = onSetAutoSave,
                             onSetHaptics = onSetHaptics,
                             onSetFastForward = onSetFastForward,
-                            onSelectAccent = onSelectAccent,
+                            onSetDynamicColor = onSetDynamicColor,
+                            onSelectPalette = onSelectPalette,
                             onSetDarkMode = onSetDarkMode,
                             onAddFolder = onAddFolder,
                             onRescan = onRescan,
@@ -193,23 +165,22 @@ fun ExpressiveAppView(
                 }
             }
 
-            // Signature M3 Expressive Floating Toolbar × iOS Liquid Glass Dock + Detached Cookie FAB
-            ExpressiveIosDock(
-                tabs = MainDockTabs,
+            // Pure Material 3 Expressive Floating Toolbar + Detached Cookie7Sided FAB
+            M3FloatingToolbarDock(
+                destinations = M3Destinations,
                 selected = selectedTab,
                 onSelect = { selectedTab = it },
                 onFabClick = { quickAddOpen = true },
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
 
-            // Frosted iOS Game Detail Sheet
             AnimatedVisibility(
                 visible = detailGame != null,
                 enter = fadeIn(tween(180)) + slideInVertically(tween(240)) { it / 3 },
                 exit = fadeOut(tween(150)) + slideOutVertically(tween(180)) { it / 3 },
             ) {
                 val game = detailGame ?: return@AnimatedVisibility
-                GameDetailSheet(
+                M3GameDetailSheet(
                     game = game,
                     stat = stats[game.id],
                     isFavorite = game.id in favoriteIds,
@@ -233,13 +204,12 @@ fun ExpressiveAppView(
                 )
             }
 
-            // Frosted iOS Quick Add Action Sheet (triggered by detached Cookie + FAB)
             AnimatedVisibility(
                 visible = quickAddOpen,
                 enter = fadeIn(tween(180)) + slideInVertically(tween(220)) { it / 3 },
                 exit = fadeOut(tween(140)) + slideOutVertically(tween(180)) { it / 3 },
             ) {
-                QuickAddSheet(
+                M3QuickAddSheet(
                     hasGames = games.isNotEmpty(),
                     onAddFolder = onAddFolder,
                     onOpenHomebrew = onOpenHomebrew,
