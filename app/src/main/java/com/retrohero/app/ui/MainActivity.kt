@@ -33,8 +33,8 @@ import com.retrohero.app.ui.components.LocalArtPaths
 import com.retrohero.app.ui.components.LocalArtVersion
 import com.retrohero.app.ui.theme.RetroHeroTheme
 import com.retrohero.app.ui.theme.Tone
-import com.retrohero.app.ui.theme.resolveExpressiveAccent
-import com.retrohero.app.ui.theme.setAccent
+import com.retrohero.app.ui.theme.setDynamicColorEnabled
+import com.retrohero.app.ui.theme.setExpressivePalette
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -45,14 +45,16 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        setAccent(resolveExpressiveAccent(vm.settings.accent))
+        setExpressivePalette(vm.settings.accent)
+        setDynamicColorEnabled(vm.settings.dynamicColor.value)
         Tone.setDarkMode(vm.settings.darkMode)
         lifecycleScope.launch(Dispatchers.IO) {
             DeltaSkins.installBundledDefaults(this@MainActivity, vm.paths.deltaSkins, vm.settings)
         }
         if (savedInstanceState == null) handleIncomingDeltaSkin(intent)
         setContent {
-            RetroHeroTheme {
+            val dynamicColor by vm.dynamicColor.collectAsStateWithLifecycle()
+            RetroHeroTheme(dynamicColor = dynamicColor) {
                 val view = LocalView.current
                 val lightBars = !Tone.isDark
                 SideEffect {
@@ -66,7 +68,7 @@ class MainActivity : ComponentActivity() {
                     LocalArtPaths provides vm.paths,
                     LocalArtVersion provides artVersion,
                 ) {
-                    ExpressiveHost(vm)
+                    M3ExpressiveHost(vm)
                 }
             }
         }
@@ -94,7 +96,7 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-private fun ExpressiveHost(vm: AppViewModel) {
+private fun M3ExpressiveHost(vm: AppViewModel) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val games by vm.games.collectAsStateWithLifecycle()
@@ -107,6 +109,7 @@ private fun ExpressiveHost(vm: AppViewModel) {
     val launchState by vm.launchState.collectAsStateWithLifecycle()
     val coreStates by vm.coreStates.collectAsStateWithLifecycle()
     val download by vm.download.collectAsStateWithLifecycle()
+    val dynamicColor by vm.dynamicColor.collectAsStateWithLifecycle()
 
     var autoSave by remember { mutableStateOf(vm.settings.autoSave) }
     var haptics by remember { mutableStateOf(vm.settings.haptics) }
@@ -152,7 +155,7 @@ private fun ExpressiveHost(vm: AppViewModel) {
         }
     }
 
-    ExpressiveAppView(
+    M3ExpressiveAppView(
         games = games,
         recents = recents,
         favoriteIds = favoriteIds,
@@ -163,6 +166,7 @@ private fun ExpressiveHost(vm: AppViewModel) {
         autoSave = autoSave,
         haptics = haptics,
         fastForwardSpeed = fastForward,
+        dynamicColor = dynamicColor,
         coreStates = coreStates,
         saveSlotsFor = { g -> vm.saveSlots(g) },
         currentCoreFor = { g -> g.system?.let { vm.settings.coreFor(it) } },
@@ -175,7 +179,8 @@ private fun ExpressiveHost(vm: AppViewModel) {
         onSetAutoSave = { v -> autoSave = v; vm.settings.autoSave = v },
         onSetHaptics = { v -> haptics = v; vm.settings.haptics = v },
         onSetFastForward = { v -> fastForward = v; vm.settings.fastForwardSpeed = v },
-        onSelectAccent = { id, col -> vm.settings.accent = id; setAccent(col) },
+        onSetDynamicColor = { enabled -> vm.settings.setDynamicColor(enabled); setDynamicColorEnabled(enabled) },
+        onSelectPalette = { id -> vm.settings.accent = id; setExpressivePalette(id) },
         onSetDarkMode = { dark -> vm.settings.darkMode = dark; Tone.setDarkMode(dark) },
         onAddFolder = { folderPicker.launch(null) },
         onRescan = vm::rescan,
@@ -188,7 +193,7 @@ private fun ExpressiveHost(vm: AppViewModel) {
     )
 
     if (homebrewOpen) {
-        HomebrewCatalogSheet(
+        M3HomebrewSheet(
             installedUrls = vm.installedHomebrew(games),
             onInstall = { item ->
                 homebrewOpen = false
@@ -199,7 +204,7 @@ private fun ExpressiveHost(vm: AppViewModel) {
     }
 
     launchState?.let { state ->
-        LaunchStateDialog(
+        M3LaunchDialog(
             state = state,
             onConfirmDownload = vm::confirmCoreDownload,
             onDismiss = vm::dismissLaunch,
@@ -207,7 +212,7 @@ private fun ExpressiveHost(vm: AppViewModel) {
     }
 
     download?.let { state ->
-        DownloadStateDialog(
+        M3DownloadDialog(
             state = state,
             onStart = vm::startDownload,
             onDownloadFolder = vm::downloadFolderEntries,

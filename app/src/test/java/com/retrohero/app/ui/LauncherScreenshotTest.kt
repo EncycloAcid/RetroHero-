@@ -17,10 +17,10 @@ import androidx.compose.ui.test.performClick
 import com.retrohero.app.data.AppPaths
 import com.retrohero.app.data.Game
 import com.retrohero.app.data.PlayStat
-import com.retrohero.app.ui.theme.ExpressiveIrisColor
 import com.retrohero.app.ui.theme.RetroHeroTheme
 import com.retrohero.app.ui.theme.Tone
-import com.retrohero.app.ui.theme.setAccent
+import com.retrohero.app.ui.theme.setDynamicColorEnabled
+import com.retrohero.app.ui.theme.setExpressivePalette
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
@@ -42,7 +42,8 @@ class LauncherScreenshotTest {
 
     @Before
     fun setupTheme() {
-        setAccent(ExpressiveIrisColor)
+        setDynamicColorEnabled(false)
+        setExpressivePalette("berry")
         Tone.setDarkMode(true)
     }
 
@@ -71,7 +72,7 @@ class LauncherScreenshotTest {
     }
 
     @Test
-    fun expressiveIosFlowAndScreenshots() {
+    fun pureM3ExpressiveScreensAndFlow() {
         val games = sampleGames()
         var shelfStatuses by mutableStateOf(
             mapOf(
@@ -85,8 +86,8 @@ class LauncherScreenshotTest {
         var played: Game? = null
 
         compose.setContent {
-            RetroHeroTheme {
-                ExpressiveAppView(
+            RetroHeroTheme(dynamicColor = false) {
+                M3ExpressiveAppView(
                     games = games,
                     recents = games.take(5),
                     favoriteIds = favs,
@@ -103,50 +104,51 @@ class LauncherScreenshotTest {
                     onPlay = { g, _ -> played = g },
                     onToggleFavorite = { g -> favs = if (g.id in favs) favs - g.id else favs + g.id },
                     onSetShelfStatus = { g, st -> shelfStatuses = shelfStatuses + (g.id to st) },
-                    onSelectAccent = { _, col -> setAccent(col) },
+                    onSelectPalette = { id -> setExpressivePalette(id) },
                     onSetDarkMode = { Tone.setDarkMode(it) },
                 )
             }
         }
 
-        // 1. Play Home (Dark Mode)
+        // 1. Pure M3 Expressive Home (Berry Violet Dark)
         compose.onNodeWithText("CONTINUE PLAYING").assertIsDisplayed()
-        compose.onNodeWithText("Jump Back In").assertIsDisplayed()
-        save("m3ios_play_dark")
+        compose.onNodeWithText("Jump back in").assertIsDisplayed()
+        save("m3e_home_dark")
 
-        // 2. Open frosted iOS Game Detail Sheet via Split Button Info icon
+        // 2. Open Pure M3E Game Detail Sheet
         compose.onNodeWithContentDescription("Details for Chrono Symphony").performClick()
         compose.mainClock.advanceTimeBy(400)
         compose.waitForIdle()
-        compose.onNodeWithText("SHELF STATUS").assertIsDisplayed()
-        save("m3ios_detail_sheet")
+        compose.onNodeWithText("Shelf status").assertIsDisplayed()
+        save("m3e_detail_sheet")
 
-        compose.onNodeWithText("Resume Game").performClick()
+        compose.onNodeWithText("Resume game").performClick()
         compose.mainClock.advanceTimeBy(300)
         compose.waitForIdle()
         assertEquals(games[0].id, played?.id)
 
-        // 3. Library Tab (Console Scallop Strip + M3 Connected Filters + Squircle Grid)
-        compose.onNodeWithContentDescription("Library").performClick()
+        // 3. Games Tab (56dp M3 SearchBar + Console Polygons + Connected Group + Tonal Cards)
+        compose.onNodeWithContentDescription("Games").performClick()
         compose.mainClock.advanceTimeBy(400)
         compose.waitForIdle()
-        compose.onAllNodesWithText("Library").onFirst().assertIsDisplayed()
-        save("m3ios_library_dark")
+        compose.onAllNodesWithText("Games").onFirst().assertIsDisplayed()
+        save("m3e_games_dark")
 
-        // 4. Settings Tab (iOS Grouped Inset + M3 Expressive Swatches & Bento)
+        // 4. Settings Tab (Tri-tone Material You Swatches + 2x2 Tonal Hub + Android 16 Segmented Cards)
         compose.onNodeWithContentDescription("Settings").performClick()
         compose.mainClock.advanceTimeBy(400)
         compose.waitForIdle()
         compose.onAllNodesWithText("Settings").onFirst().assertIsDisplayed()
-        compose.onNodeWithText("Appearance").assertIsDisplayed()
-        save("m3ios_settings_dark")
+        compose.onNodeWithText("Theme & color").assertIsDisplayed()
+        save("m3e_settings_dark")
 
-        // 5. Switch to Light Mode & capture crisp iOS Light Mode Home
+        // 5. Switch to Pixel Sage + Light Mode & capture pure M3E Light Home
+        compose.onNodeWithText("Sage").performClick()
         compose.onNodeWithText("Light").performClick()
         compose.mainClock.advanceTimeBy(300)
-        compose.onNodeWithContentDescription("Play").performClick()
+        compose.onNodeWithContentDescription("Home").performClick()
         compose.mainClock.advanceTimeBy(400)
         compose.waitForIdle()
-        save("m3ios_play_light")
+        save("m3e_home_light_sage")
     }
 }
