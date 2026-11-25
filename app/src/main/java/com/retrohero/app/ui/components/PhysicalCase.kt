@@ -216,15 +216,21 @@ private fun JewelCaseExterior(
                                     .background(if (isDreamcast) Color(0xFFFF5A1F) else Color(0xFFE60012)),
                             )
                             Text(
-                                text = if (isDreamcast) "DREAMCAST" else (game.system?.name ?: "PLAYSTATION").uppercase(),
+                                text = when {
+                                    isDreamcast -> "DREAMCAST"
+                                    compact && game.systemId == "psx" -> "PLAYSTATION"
+                                    else -> (game.system?.name ?: "PLAYSTATION").uppercase()
+                                },
                                 style = TextStyle(
                                     fontFamily = Inter,
                                     fontWeight = FontWeight.ExtraBold,
-                                    fontSize = if (compact) 6.sp else 8.5.sp,
-                                    letterSpacing = 0.12.em,
+                                    fontSize = if (compact) 5.5.sp else 8.5.sp,
+                                    letterSpacing = if (compact) 0.08.em else 0.12.em,
                                 ),
                                 color = if (isDreamcast) Color(0xFF151518) else Color.White,
                                 maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Clip,
                             )
                         }
                         if (!compact) {
@@ -294,14 +300,14 @@ private fun KeepCaseExterior(
                     Text(
                         text = when (game.systemId) {
                             "ps2" -> "PlayStation 2"
-                            "gc" -> "NINTENDO GAMECUBE"
+                            "gc" -> if (compact) "GAMECUBE" else "NINTENDO GAMECUBE"
                             "wii" -> "Wii"
                             else -> (game.system?.shortName ?: game.systemId).uppercase()
                         },
                         style = TextStyle(
                             fontFamily = Inter,
                             fontWeight = FontWeight.Bold,
-                            fontSize = if (compact) 6.5.sp else 8.5.sp,
+                            fontSize = if (compact) 6.sp else 8.5.sp,
                             letterSpacing = if (game.systemId == "ps2") 0.03.em else 0.09.em,
                         ),
                         color = if (lightShell) Color(0xFF6B6E75) else Color.White,

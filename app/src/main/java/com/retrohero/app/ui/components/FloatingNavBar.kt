@@ -38,6 +38,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -74,26 +75,45 @@ fun FloatingNavBar(
 ) {
     val view = LocalView.current
     val dark = Tone.isDark
-    val dockShape = RoundedCornerShape(24.dp)
-    val dockBg = if (dark) Color(0xFF141419).copy(alpha = 0.95f) else Color(0xFFFFFFFF).copy(alpha = 0.96f)
-    val dockBorder = if (dark) Color(0xFF272732) else Color(0xFFE2E2EA)
+    val dockShape = RoundedCornerShape(26.dp)
+    val dockBg = if (dark) Color(0xFF14141A).copy(alpha = 0.96f) else Color(0xFFFFFFFF).copy(alpha = 0.97f)
+    val dockBorderBrush = Brush.verticalGradient(
+        if (dark) {
+            listOf(Color.White.copy(alpha = 0.16f), Color.White.copy(alpha = 0.05f))
+        } else {
+            listOf(Color(0xFFDADAE4), Color(0xFFE8E8F0))
+        },
+    )
 
+    // Soft bottom fade scrim so scrolling content dissolves cleanly under the floating dock
     Box(
         modifier
-            .windowInsetsPadding(WindowInsets.navigationBars)
-            .padding(horizontal = 20.dp, vertical = 12.dp)
-            .widthIn(max = 420.dp)
             .fillMaxWidth()
-            .shadow(
-                elevation = if (dark) 20.dp else 10.dp,
-                shape = dockShape,
-                ambientColor = Color.Black.copy(alpha = if (dark) 0.75f else 0.14f),
-                spotColor = Color.Black.copy(alpha = if (dark) 0.85f else 0.18f),
+            .background(
+                Brush.verticalGradient(
+                    0f to Color.Transparent,
+                    0.42f to Tone.Bg.copy(alpha = 0.78f),
+                    1f to Tone.Bg.copy(alpha = 0.96f),
+                ),
             )
-            .clip(dockShape)
-            .background(dockBg)
-            .border(1.dp, dockBorder, dockShape),
+            .windowInsetsPadding(WindowInsets.navigationBars)
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        contentAlignment = Alignment.Center,
     ) {
+        Box(
+            Modifier
+                .widthIn(max = 420.dp)
+                .fillMaxWidth()
+                .shadow(
+                    elevation = if (dark) 24.dp else 12.dp,
+                    shape = dockShape,
+                    ambientColor = Color.Black.copy(alpha = if (dark) 0.85f else 0.16f),
+                    spotColor = Color.Black.copy(alpha = if (dark) 0.92f else 0.20f),
+                )
+                .clip(dockShape)
+                .background(dockBg)
+                .border(1.dp, dockBorderBrush, dockShape),
+        ) {
         Row(
             Modifier
                 .fillMaxWidth()
@@ -185,6 +205,7 @@ fun FloatingNavBar(
                     }
                 }
             }
+        }
         }
     }
 }

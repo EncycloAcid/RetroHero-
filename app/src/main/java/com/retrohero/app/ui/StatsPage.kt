@@ -49,10 +49,14 @@ import com.retrohero.app.data.Game
 import com.retrohero.app.data.PlayStat
 import com.retrohero.app.data.PlayTime
 import com.retrohero.app.data.Systems
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.ui.draw.shadow
 import com.retrohero.app.ui.components.Ascend
-import com.retrohero.app.ui.components.CoverArt
 import com.retrohero.app.ui.components.LocalNavSpace
+import com.retrohero.app.ui.components.RealisticCaseFront
 import com.retrohero.app.ui.components.ShelfBucket
+import com.retrohero.app.ui.components.packagingFor
+import com.retrohero.app.ui.components.posterAccentColor
 import com.retrohero.app.ui.theme.Inter
 import com.retrohero.app.ui.theme.Tone
 import kotlin.math.roundToInt
@@ -118,16 +122,19 @@ internal fun StatsDashboardPage(
         // 1. Segmented Circular Donut Ring + Playtime Readout Hero
         item(key = "stats_ring_hero") {
             val heroShape = RoundedCornerShape(20.dp)
+            val heroBorder = Brush.verticalGradient(
+                listOf(Color.White.copy(alpha = 0.14f), Tone.Line, Color.White.copy(alpha = 0.04f)),
+            )
             Row(
                 Modifier
                     .fillMaxWidth()
                     .clip(heroShape)
                     .background(
                         Brush.linearGradient(
-                            listOf(Tone.Surface, Tone.Raised.copy(alpha = 0.65f)),
+                            listOf(Tone.Raised.copy(alpha = 0.85f), Tone.Surface),
                         ),
                     )
-                    .border(1.dp, Tone.Line, heroShape)
+                    .border(1.dp, heroBorder, heroShape)
                     .padding(20.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(20.dp),
@@ -228,63 +235,106 @@ internal fun StatsDashboardPage(
                     }
 
                     val ordered = listOfNotNull(
-                        podium.getOrNull(1)?.let { Triple(it, 2, 16.dp) },
-                        podium.getOrNull(0)?.let { Triple(it, 1, 0.dp) },
-                        podium.getOrNull(2)?.let { Triple(it, 3, 26.dp) },
+                        podium.getOrNull(1)?.let { Triple(it, 2, 18.dp) },
+                        podium.getOrNull(0)?.let { Triple(it, 1, 28.dp) },
+                        podium.getOrNull(2)?.let { Triple(it, 3, 12.dp) },
                     )
                     Row(
                         Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalAlignment = Alignment.Bottom,
                     ) {
-                        ordered.forEach { (game, rank, topOffset) ->
+                        ordered.forEach { (game, rank, plinthH) ->
                             val sec = stats[game.id]?.seconds ?: 0
+                            val kind = packagingFor(game.systemId)
+                            val caseRatio = (kind.closedWidth.value / kind.closedHeight.value).coerceIn(0.66f, 1.32f)
+                            val medalColor = when (rank) {
+                                1 -> Ascend.accent
+                                2 -> Color(0xFFB8C0CC)
+                                else -> Color(0xFFD08C58)
+                            }
+                            val caseGlow = remember(game.id) { posterAccentColor(game) }
                             Column(
                                 Modifier
                                     .weight(1f)
-                                    .padding(top = topOffset)
                                     .clickable { onOpenCase(game) },
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
+                                // Real physical case standing on top of its podium pedestal
                                 Box(
                                     Modifier
-                                        .width(if (rank == 1) 88.dp else 74.dp)
-                                        .height(if (rank == 1) 124.dp else 104.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .border(
-                                            width = if (rank == 1) 1.5.dp else 1.dp,
-                                            color = if (rank == 1) Ascend.accent else Color.White.copy(alpha = 0.12f),
-                                            shape = RoundedCornerShape(8.dp),
-                                        ),
+                                        .width(if (rank == 1) 92.dp else 78.dp)
+                                        .height(if (rank == 1) 114.dp else 98.dp),
+                                    contentAlignment = Alignment.BottomCenter,
                                 ) {
-                                    CoverArt(game, Modifier.fillMaxSize())
-                                    Box(
-                                        Modifier
-                                            .align(Alignment.BottomEnd)
-                                            .padding(5.dp)
-                                            .size(21.dp)
-                                            .clip(CircleShape)
-                                            .background(if (rank == 1) Ascend.accent else Color.Black.copy(alpha = 0.78f)),
-                                        contentAlignment = Alignment.Center,
-                                    ) {
-                                        Text(
-                                            "#$rank",
-                                            style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 9.5.sp),
-                                            color = Color.White,
-                                        )
+                                    if (rank == 1) {
+                                        Canvas(Modifier.fillMaxSize()) {
+                                            drawCircle(
+                                                brush = Brush.radialGradient(
+                                                    listOf(caseGlow.copy(alpha = 0.28f), Color.Transparent),
+                                                ),
+                                                radius = size.width * 0.65f,
+                                            )
+                                        }
                                     }
+                                    val boxMod = if (caseRatio >= 0.80f) {
+                                        Modifier.fillMaxWidth().aspectRatio(caseRatio)
+                                    } else {
+                                        Modifier.fillMaxHeight().aspectRatio(caseRatio)
+                                    }
+                                    RealisticCaseFront(
+                                        game = game,
+                                        compact = true,
+                                        modifier = boxMod.shadow(
+                                            elevation = if (rank == 1) 14.dp else 8.dp,
+                                            shape = RoundedCornerShape(6.dp),
+                                            ambientColor = Color.Black,
+                                            spotColor = if (rank == 1) medalColor.copy(alpha = 0.5f) else Color.Black,
+                                        ),
+                                    )
                                 }
+
+                                // Stepped dark anodized podium plinth with rank badge
+                                Box(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .height(plinthH)
+                                        .clip(RoundedCornerShape(topStart = 7.dp, topEnd = 7.dp, bottomStart = 4.dp, bottomEnd = 4.dp))
+                                        .background(
+                                            Brush.verticalGradient(
+                                                listOf(
+                                                    medalColor.copy(alpha = if (rank == 1) 0.22f else 0.12f),
+                                                    Color(0xFF14141B),
+                                                ),
+                                            ),
+                                        )
+                                        .border(
+                                            width = 0.9.dp,
+                                            brush = Brush.verticalGradient(
+                                                listOf(medalColor.copy(alpha = if (rank == 1) 0.65f else 0.32f), Color.Transparent),
+                                            ),
+                                            shape = RoundedCornerShape(topStart = 7.dp, topEnd = 7.dp, bottomStart = 4.dp, bottomEnd = 4.dp),
+                                        ),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(
+                                        "#$rank",
+                                        style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.ExtraBold, fontSize = 10.sp, letterSpacing = 0.04.em),
+                                        color = medalColor,
+                                    )
+                                }
+
                                 Text(
                                     text = game.title,
-                                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 12.sp),
+                                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 11.5.sp),
                                     color = Tone.Ink,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )
                                 Text(
                                     text = if (sec > 0) PlayTime.format(sec) else (game.system?.shortName ?: game.systemId.uppercase()),
-                                    style = TextStyle(fontFamily = Inter, fontSize = 11.sp),
+                                    style = TextStyle(fontFamily = Inter, fontSize = 10.5.sp),
                                     color = if (rank == 1) Ascend.accent else Tone.Muted,
                                     maxLines = 1,
                                 )

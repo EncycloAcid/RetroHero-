@@ -493,12 +493,21 @@ private fun DeskSpotlightCard(
     val density = LocalDensity.current
     val shape = RoundedCornerShape(20.dp)
 
+    val cardBorder = Brush.verticalGradient(
+        listOf(Color.White.copy(alpha = 0.15f), Tone.Line, Color.White.copy(alpha = 0.04f)),
+    )
+
     Box(
         modifier
             .fillMaxWidth()
+            .shadow(16.dp, shape, ambientColor = Color.Black.copy(alpha = 0.7f), spotColor = glow.copy(alpha = 0.22f))
             .clip(shape)
-            .background(Tone.Surface)
-            .border(1.dp, Tone.Line, shape)
+            .background(
+                Brush.linearGradient(
+                    listOf(Tone.Raised.copy(alpha = 0.92f), Tone.Surface),
+                ),
+            )
+            .border(1.dp, cardBorder, shape)
             .clickable(onClick = onOpenCase),
     ) {
         Canvas(Modifier.matchParentSize()) {
@@ -652,12 +661,28 @@ private fun ShelfCoverSection(
             }
         }
 
-        Spacer(Modifier.height(18.dp))
-        HorizontalDivider(
-            thickness = 1.dp,
-            color = Tone.Line,
-            modifier = Modifier.padding(horizontal = 18.dp),
+        // Sleek anodized collector's shelf ledge right underneath the resting cases
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp)
+                .height(9.dp)
+                .shadow(10.dp, RoundedCornerShape(4.dp), ambientColor = Color.Black, spotColor = Color.Black)
+                .clip(RoundedCornerShape(4.dp))
+                .background(
+                    Brush.verticalGradient(
+                        listOf(Color(0xFF2B2B36), Color(0xFF17171E), Color(0xFF101015)),
+                    ),
+                )
+                .border(
+                    width = 0.75.dp,
+                    brush = Brush.verticalGradient(
+                        listOf(Color.White.copy(alpha = 0.16f), Color.Transparent),
+                    ),
+                    shape = RoundedCornerShape(4.dp),
+                ),
         )
+        Spacer(Modifier.height(6.dp))
     }
 }
 
