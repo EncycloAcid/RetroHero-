@@ -70,6 +70,7 @@ import com.retrohero.app.ui.components.LocalToolbarInset
 import com.retrohero.app.ui.components.M3ConnectedButtonGroup
 import com.retrohero.app.ui.components.M3SegmentedItem
 import com.retrohero.app.ui.components.M3ShapeBadge
+import com.retrohero.app.ui.components.M3WavyBar
 import com.retrohero.app.ui.components.m3SegmentedShape
 import com.retrohero.app.ui.theme.M3ExpressivePalette
 import com.retrohero.app.ui.theme.M3ExpressivePalettes
@@ -178,7 +179,8 @@ internal fun M3SettingsPage(
                     selectedIndex = if (Tone.isDark) 0 else 1,
                     onSelect = { onSetDarkMode(it == 0) },
                     height = 42.dp,
-                    useSecondaryTone = true,
+                    useSecondaryTone = false,
+                    unselectedContainerColor = cs.surfaceContainer,
                 )
 
                 // Tri-tone Material You Palette Swatches (selected morphs to Cookie9Sided!)
@@ -272,6 +274,10 @@ internal fun M3SettingsPage(
             }
         }
 
+        item(key = "m3_set_wave") {
+            M3WavyBar(color = cs.outlineVariant.copy(alpha = 0.6f), amplitude = 2.dp, wavelength = 24.dp, strokeWidth = 2.dp)
+        }
+
         // 4. Android 16 Segmented Settings Group — Gameplay (separate stacked cards, 3dp gaps!)
         item(key = "m3_set_gameplay") {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -329,6 +335,7 @@ internal fun M3SettingsPage(
                             selectedIndex = selIdx,
                             onSelect = { onSetFastForward(M3SpeedOptions[it].first) },
                             height = 40.dp,
+                            unselectedContainerColor = cs.surfaceContainer,
                         )
                     }
                 }

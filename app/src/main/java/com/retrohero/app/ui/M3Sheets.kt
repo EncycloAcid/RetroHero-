@@ -159,9 +159,10 @@ internal fun M3GameDetailSheet(
             ) {
                 M3GameCover(
                     game = game,
+                    showTitle = false,
                     modifier = Modifier
                         .width(104.dp)
-                        .aspectRatio(0.82f)
+                        .aspectRatio(0.84f)
                         .clip(RoundedCornerShape(24.dp)),
                 )
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {

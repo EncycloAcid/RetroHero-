@@ -38,9 +38,11 @@ import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Casino
 import androidx.compose.material.icons.rounded.CreateNewFolder
+import androidx.compose.material.icons.rounded.EmojiEvents
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.SportsEsports
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialShapes
@@ -55,6 +57,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -170,6 +173,7 @@ internal fun M3HomePage(
                     game = heroGame,
                     stat = stats[heroGame.id],
                     isRecent = recents.firstOrNull()?.id == heroGame.id,
+                    isFavorite = heroGame.id in favoriteIds,
                     completionProgress = clearedFrac.coerceIn(0.24f, 1f),
                     onPlay = { onPlay(heroGame) },
                     onDetails = { onOpenDetail(heroGame) },
@@ -189,6 +193,7 @@ internal fun M3HomePage(
                         polygon = MaterialShapes.Cookie9Sided,
                         containerColor = cs.secondaryContainer,
                         contentColor = cs.onSecondaryContainer,
+                        icon = Icons.Rounded.Schedule,
                         value = if (totalSeconds > 0) PlayTime.format(totalSeconds) else "0m",
                         label = "Played",
                         modifier = Modifier.weight(1f),
@@ -197,6 +202,7 @@ internal fun M3HomePage(
                         polygon = MaterialShapes.Clover4Leaf,
                         containerColor = cs.tertiaryContainer,
                         contentColor = cs.onTertiaryContainer,
+                        icon = Icons.Rounded.EmojiEvents,
                         value = "$clearedCount/${games.size}",
                         label = "Cleared",
                         modifier = Modifier.weight(1f),
@@ -237,10 +243,12 @@ internal fun M3HomePage(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         items(jumpBack, key = { "m3_jump_${it.id}" }) { game ->
+                            val sec = stats[game.id]?.seconds ?: 0
                             M3ExpressiveGameCard(
                                 game = game,
                                 width = 148.dp,
                                 isFavorite = game.id in favoriteIds,
+                                playTimeLabel = if (sec > 0) PlayTime.format(sec) else null,
                                 onOpen = { onOpenDetail(game) },
                                 onPlay = { onPlay(game) },
                             )
@@ -263,10 +271,12 @@ internal fun M3HomePage(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         items(favorites, key = { "m3_fav_${it.id}" }) { game ->
+                            val sec = stats[game.id]?.seconds ?: 0
                             M3ExpressiveGameCard(
                                 game = game,
                                 width = 132.dp,
                                 isFavorite = true,
+                                playTimeLabel = if (sec > 0) PlayTime.format(sec) else null,
                                 onOpen = { onOpenDetail(game) },
                                 onPlay = { onPlay(game) },
                             )
@@ -283,6 +293,7 @@ private fun M3HeroGameCard(
     game: Game,
     stat: PlayStat?,
     isRecent: Boolean,
+    isFavorite: Boolean,
     completionProgress: Float,
     onPlay: () -> Unit,
     onDetails: () -> Unit,
@@ -326,6 +337,17 @@ private fun M3HeroGameCard(
                     style = MaterialTheme.typography.labelSmall,
                     color = cs.onTertiaryContainer,
                 )
+            }
+
+            if (isFavorite) {
+                M3ShapeBadge(
+                    polygon = MaterialShapes.Heart,
+                    containerColor = cs.tertiaryContainer,
+                    size = 34.dp,
+                    modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
+                ) {
+                    Icon(Icons.Rounded.Favorite, null, tint = cs.onTertiaryContainer, modifier = Modifier.size(16.dp))
+                }
             }
 
             Box(
@@ -399,6 +421,7 @@ private fun M3SculptedStatTile(
     polygon: RoundedPolygon,
     containerColor: Color,
     contentColor: Color,
+    icon: ImageVector,
     value: String,
     label: String,
     modifier: Modifier = Modifier,
@@ -413,6 +436,7 @@ private fun M3SculptedStatTile(
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Icon(icon, null, tint = contentColor.copy(alpha = 0.88f), modifier = Modifier.size(16.dp))
             Text(
                 text = value,
                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black, fontSize = 15.5.sp),
@@ -506,6 +530,7 @@ internal fun M3ExpressiveGameCard(
     isFavorite: Boolean,
     onOpen: () -> Unit,
     onPlay: () -> Unit,
+    playTimeLabel: String? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     val view = LocalView.current
@@ -536,16 +561,36 @@ internal fun M3ExpressiveGameCard(
         Box(
             Modifier
                 .fillMaxWidth()
-                .aspectRatio(0.86f)
+                .aspectRatio(0.88f)
                 .clip(artShape),
         ) {
-            M3GameCover(game = game, modifier = Modifier.fillMaxSize())
+            // Graphic sculpted monogram/art (no redundant text duplicating the footer below!)
+            M3GameCover(game = game, showTitle = false, modifier = Modifier.fillMaxSize())
+
+            if (playTimeLabel != null) {
+                Box(
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(8.dp)
+                        .clip(CircleShape)
+                        .background(cs.surfaceContainerHighest.copy(alpha = 0.92f))
+                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                ) {
+                    Text(
+                        text = playTimeLabel,
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                        color = cs.onSurface,
+                        maxLines = 1,
+                    )
+                }
+            }
+
             if (isFavorite) {
                 M3ShapeBadge(
                     polygon = MaterialShapes.Heart,
                     containerColor = cs.tertiaryContainer,
                     size = 28.dp,
-                    modifier = Modifier.align(Alignment.TopEnd).padding(6.dp),
+                    modifier = Modifier.align(Alignment.TopEnd).padding(7.dp),
                 ) {
                     Icon(Icons.Rounded.Favorite, null, tint = cs.onTertiaryContainer, modifier = Modifier.size(13.dp))
                 }
@@ -576,13 +621,13 @@ internal fun M3ExpressiveGameCard(
             }
             Box(
                 Modifier
-                    .size(30.dp)
+                    .size(32.dp)
                     .clip(CircleShape)
                     .background(cs.primaryContainer)
                     .clickable(onClick = onPlay),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(Icons.Rounded.PlayArrow, contentDescription = "Play ${game.title}", tint = cs.onPrimaryContainer, modifier = Modifier.size(17.dp))
+                Icon(Icons.Rounded.PlayArrow, contentDescription = "Play ${game.title}", tint = cs.onPrimaryContainer, modifier = Modifier.size(18.dp))
             }
         }
     }
