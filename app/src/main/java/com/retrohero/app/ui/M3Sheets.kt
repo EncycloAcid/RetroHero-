@@ -108,25 +108,18 @@ internal fun M3GameDetailSheet(
     val hasAutoSave = saveSlots.any { it.first == AppPaths.AUTO_SLOT }
     val sysPoly = game.system?.polygon ?: MaterialShapes.Cookie6Sided
 
-    Box(
+    Column(
         Modifier
-            .fillMaxSize()
-            .background(cs.scrim.copy(alpha = 0.56f))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
-        contentAlignment = Alignment.BottomCenter,
+            .fillMaxWidth()
+            .heightIn(max = 680.dp)
+            .clip(sheetShape)
+            .background(cs.surfaceContainerLow)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = {})
+            .verticalScroll(rememberScrollState())
+            .windowInsetsPadding(WindowInsets.navigationBars)
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .heightIn(max = 680.dp)
-                .clip(sheetShape)
-                .background(cs.surfaceContainerLow)
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = {})
-                .verticalScroll(rememberScrollState())
-                .windowInsetsPadding(WindowInsets.navigationBars)
-                .padding(horizontal = 20.dp, vertical = 14.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
-        ) {
             // M3 Modal Bottom Sheet drag handle + close tonal circle
             Box(Modifier.fillMaxWidth()) {
                 Box(
@@ -299,7 +292,6 @@ internal fun M3GameDetailSheet(
             }
 
             Spacer(Modifier.height(4.dp))
-        }
     }
 }
 
@@ -318,23 +310,16 @@ internal fun M3QuickAddSheet(
     val sheetShape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
     val total = if (hasGames) 6 else 5
 
-    Box(
+    Column(
         Modifier
-            .fillMaxSize()
-            .background(cs.scrim.copy(alpha = 0.56f))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
-        contentAlignment = Alignment.BottomCenter,
+            .fillMaxWidth()
+            .clip(sheetShape)
+            .background(cs.surfaceContainerLow)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = {})
+            .windowInsetsPadding(WindowInsets.navigationBars)
+            .padding(horizontal = 20.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .clip(sheetShape)
-                .background(cs.surfaceContainerLow)
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = {})
-                .windowInsetsPadding(WindowInsets.navigationBars)
-                .padding(horizontal = 20.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
             Box(
                 Modifier
                     .align(Alignment.CenterHorizontally)
@@ -398,7 +383,6 @@ internal fun M3QuickAddSheet(
                 }
             }
             Spacer(Modifier.height(4.dp))
-        }
     }
 }
 

@@ -48,6 +48,7 @@ class LauncherScreenshotTest {
     }
 
     private fun save(name: String) {
+        compose.mainClock.advanceTimeBy(950)
         compose.waitForIdle()
         val bmp = compose.onRoot().captureToImage().asAndroidBitmap()
         File(outDir, "$name.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
@@ -111,32 +112,33 @@ class LauncherScreenshotTest {
         }
 
         // 1. Pure M3 Expressive Home (Berry Violet Dark)
+        compose.mainClock.advanceTimeBy(950)
         compose.onNodeWithText("CONTINUE PLAYING").assertIsDisplayed()
         compose.onNodeWithText("Jump back in").assertIsDisplayed()
         save("m3e_home_dark")
 
-        // 2. Open Pure M3E Game Detail Sheet
+        // 2. Open Pure M3E Game Detail Sheet (with spatial depth pullback behind sheet!)
         compose.onNodeWithContentDescription("Details for Chrono Symphony").performClick()
-        compose.mainClock.advanceTimeBy(400)
+        compose.mainClock.advanceTimeBy(950)
         compose.waitForIdle()
         compose.onNodeWithText("Shelf status").assertIsDisplayed()
         save("m3e_detail_sheet")
 
         compose.onNodeWithText("Resume game").performClick()
-        compose.mainClock.advanceTimeBy(300)
+        compose.mainClock.advanceTimeBy(600)
         compose.waitForIdle()
         assertEquals(games[0].id, played?.id)
 
         // 3. Games Tab (56dp M3 SearchBar + Console Polygons + Connected Group + Tonal Cards)
         compose.onNodeWithContentDescription("Games").performClick()
-        compose.mainClock.advanceTimeBy(400)
+        compose.mainClock.advanceTimeBy(950)
         compose.waitForIdle()
         compose.onAllNodesWithText("Games").onFirst().assertIsDisplayed()
         save("m3e_games_dark")
 
-        // 4. Settings Tab (Tri-tone Material You Swatches + 2x2 Tonal Hub + Android 16 Segmented Cards)
+        // 4. Settings Tab (Morphing Tri-tone Material You Swatches + 2x2 Tonal Hub + Android 16 Segmented Cards)
         compose.onNodeWithContentDescription("Settings").performClick()
-        compose.mainClock.advanceTimeBy(400)
+        compose.mainClock.advanceTimeBy(950)
         compose.waitForIdle()
         compose.onAllNodesWithText("Settings").onFirst().assertIsDisplayed()
         compose.onNodeWithText("Theme & color").assertIsDisplayed()
@@ -145,9 +147,9 @@ class LauncherScreenshotTest {
         // 5. Switch to Pixel Sage + Light Mode & capture pure M3E Light Home
         compose.onNodeWithText("Sage").performClick()
         compose.onNodeWithText("Light").performClick()
-        compose.mainClock.advanceTimeBy(300)
+        compose.mainClock.advanceTimeBy(600)
         compose.onNodeWithContentDescription("Home").performClick()
-        compose.mainClock.advanceTimeBy(400)
+        compose.mainClock.advanceTimeBy(950)
         compose.waitForIdle()
         save("m3e_home_light_sage")
     }

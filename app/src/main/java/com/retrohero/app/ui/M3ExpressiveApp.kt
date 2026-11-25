@@ -2,18 +2,27 @@ package com.retrohero.app.ui
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.SportsEsports
@@ -32,6 +41,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.retrohero.app.data.CoreInfo
 import com.retrohero.app.data.CoreManager.CoreState
@@ -49,7 +61,8 @@ private val M3Destinations = listOf(
 )
 
 /**
- * Pure Material 3 Expressive application shell powering [MainActivity] and screenshot tests.
+ * Pure Material 3 Expressive application shell with directional spatial tab choreography,
+ * physical background depth pullback when modal sheets open, and morphing toolbar FAB.
  */
 @Composable
 fun M3ExpressiveAppView(
@@ -97,87 +110,144 @@ fun M3ExpressiveAppView(
     val detailGame = remember(detailGameId, games) {
         detailGameId?.let { id -> games.firstOrNull { it.id == id } }
     }
+    val anySheetOpen = detailGame != null || quickAddOpen
+
+    // Signature spatial depth pullback: main canvas smoothly recedes & rounds corners behind sheets
+    val backdropScale by animateFloatAsState(
+        targetValue = if (anySheetOpen) 0.945f else 1f,
+        animationSpec = spring(dampingRatio = 0.76f, stiffness = 360f),
+        label = "sheetBackdropScale",
+    )
+    val backdropCorner by animateDpAsState(
+        targetValue = if (anySheetOpen) 28.dp else 0.dp,
+        animationSpec = spring(dampingRatio = 0.80f, stiffness = 360f),
+        label = "sheetBackdropCorner",
+    )
 
     CompositionLocalProvider(LocalToolbarInset provides 104.dp) {
         Box(
             Modifier
                 .fillMaxSize()
-                .background(cs.background),
+                .background(cs.surfaceContainerLowest),
         ) {
+            // Main interactive app stage that physically recedes when a modal sheet opens
             Box(
                 Modifier
                     .fillMaxSize()
-                    .windowInsetsPadding(WindowInsets.statusBars),
+                    .graphicsLayer {
+                        scaleX = backdropScale
+                        scaleY = backdropScale
+                    }
+                    .clip(RoundedCornerShape(backdropCorner.coerceAtLeast(0.dp)))
+                    .background(cs.background),
             ) {
-                AnimatedContent(
-                    targetState = selectedTab,
-                    transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(140)) },
-                    label = "m3TabSwitch",
-                ) { tab ->
-                    when (tab) {
-                        0 -> M3HomePage(
-                            games = games,
-                            recents = recents,
-                            favoriteIds = favoriteIds,
-                            stats = stats,
-                            shelfStatuses = shelfStatuses,
-                            scanning = scanning,
-                            onPlay = { g -> onPlay(g, null) },
-                            onOpenDetail = { g -> detailGameId = g.id },
-                            onShufflePlay = onShufflePlay,
-                            onToggleTheme = { onSetDarkMode(!Tone.isDark) },
-                            onAddFolder = onAddFolder,
-                            onOpenHomebrew = onOpenHomebrew,
-                        )
-                        1 -> M3LibraryPage(
-                            games = games,
-                            favoriteIds = favoriteIds,
-                            stats = stats,
-                            shelfStatuses = shelfStatuses,
-                            onOpenDetail = { g -> detailGameId = g.id },
-                            onQuickPlay = { g -> onPlay(g, null) },
-                        )
-                        else -> M3SettingsPage(
-                            gamesCount = games.size,
-                            foldersCount = foldersCount,
-                            scanning = scanning,
-                            autoSave = autoSave,
-                            haptics = haptics,
-                            fastForwardSpeed = fastForwardSpeed,
-                            dynamicColor = dynamicColor,
-                            coreStates = coreStates,
-                            onSetAutoSave = onSetAutoSave,
-                            onSetHaptics = onSetHaptics,
-                            onSetFastForward = onSetFastForward,
-                            onSetDynamicColor = onSetDynamicColor,
-                            onSelectPalette = onSelectPalette,
-                            onSetDarkMode = onSetDarkMode,
-                            onAddFolder = onAddFolder,
-                            onRescan = onRescan,
-                            onOpenHomebrew = onOpenHomebrew,
-                            onOpenDownload = onOpenDownload,
-                            onImportBios = onImportBios,
-                            onImportSkin = onImportSkin,
-                            onDownloadCore = onDownloadCore,
-                            onDeleteCore = onDeleteCore,
-                        )
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .windowInsetsPadding(WindowInsets.statusBars),
+                ) {
+                    AnimatedContent(
+                        targetState = selectedTab,
+                        transitionSpec = {
+                            val forward = targetState > initialState
+                            val slideSpring = spring<IntOffset>(dampingRatio = 0.80f, stiffness = 360f)
+                            val enter = slideInHorizontally(slideSpring) { w -> if (forward) w / 7 else -w / 7 } +
+                                fadeIn(tween(220)) +
+                                scaleIn(spring(dampingRatio = 0.82f, stiffness = 380f), initialScale = 0.97f)
+                            val exit = slideOutHorizontally(tween(180)) { w -> if (forward) -w / 10 else w / 10 } +
+                                fadeOut(tween(140))
+                            enter togetherWith exit
+                        },
+                        label = "m3SpatialTabSwitch",
+                    ) { tab ->
+                        when (tab) {
+                            0 -> M3HomePage(
+                                games = games,
+                                recents = recents,
+                                favoriteIds = favoriteIds,
+                                stats = stats,
+                                shelfStatuses = shelfStatuses,
+                                scanning = scanning,
+                                onPlay = { g -> onPlay(g, null) },
+                                onOpenDetail = { g -> detailGameId = g.id },
+                                onShufflePlay = onShufflePlay,
+                                onToggleTheme = { onSetDarkMode(!Tone.isDark) },
+                                onAddFolder = onAddFolder,
+                                onOpenHomebrew = onOpenHomebrew,
+                            )
+                            1 -> M3LibraryPage(
+                                games = games,
+                                favoriteIds = favoriteIds,
+                                stats = stats,
+                                shelfStatuses = shelfStatuses,
+                                onOpenDetail = { g -> detailGameId = g.id },
+                                onQuickPlay = { g -> onPlay(g, null) },
+                            )
+                            else -> M3SettingsPage(
+                                gamesCount = games.size,
+                                foldersCount = foldersCount,
+                                scanning = scanning,
+                                autoSave = autoSave,
+                                haptics = haptics,
+                                fastForwardSpeed = fastForwardSpeed,
+                                dynamicColor = dynamicColor,
+                                coreStates = coreStates,
+                                onSetAutoSave = onSetAutoSave,
+                                onSetHaptics = onSetHaptics,
+                                onSetFastForward = onSetFastForward,
+                                onSetDynamicColor = onSetDynamicColor,
+                                onSelectPalette = onSelectPalette,
+                                onSetDarkMode = onSetDarkMode,
+                                onAddFolder = onAddFolder,
+                                onRescan = onRescan,
+                                onOpenHomebrew = onOpenHomebrew,
+                                onOpenDownload = onOpenDownload,
+                                onImportBios = onImportBios,
+                                onImportSkin = onImportSkin,
+                                onDownloadCore = onDownloadCore,
+                                onDeleteCore = onDeleteCore,
+                            )
+                        }
                     }
                 }
+
+                // Pure Material 3 Expressive Floating Toolbar + Morphing Cookie7Sided FAB
+                M3FloatingToolbarDock(
+                    destinations = M3Destinations,
+                    selected = selectedTab,
+                    onSelect = { selectedTab = it },
+                    onFabClick = { quickAddOpen = !quickAddOpen },
+                    isFabOpen = quickAddOpen,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
             }
 
-            // Pure Material 3 Expressive Floating Toolbar + Detached Cookie7Sided FAB
-            M3FloatingToolbarDock(
-                destinations = M3Destinations,
-                selected = selectedTab,
-                onSelect = { selectedTab = it },
-                onFabClick = { quickAddOpen = true },
-                modifier = Modifier.align(Alignment.BottomCenter),
-            )
+            // Independent fading backdrop scrim (never slides vertically with the sheet!)
+            AnimatedVisibility(
+                visible = anySheetOpen,
+                enter = fadeIn(tween(220)),
+                exit = fadeOut(tween(180)),
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(cs.scrim.copy(alpha = 0.56f))
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) {
+                            detailGameId = null
+                            quickAddOpen = false
+                        },
+                )
+            }
 
+            // Expressive Spring Modal Game Detail Sheet
             AnimatedVisibility(
                 visible = detailGame != null,
-                enter = fadeIn(tween(180)) + slideInVertically(tween(240)) { it / 3 },
-                exit = fadeOut(tween(150)) + slideOutVertically(tween(180)) { it / 3 },
+                enter = slideInVertically(spring(dampingRatio = 0.74f, stiffness = 340f)) { it } + fadeIn(tween(160)),
+                exit = slideOutVertically(tween(200)) { it } + fadeOut(tween(140)),
+                modifier = Modifier.align(Alignment.BottomCenter),
             ) {
                 val game = detailGame ?: return@AnimatedVisibility
                 M3GameDetailSheet(
@@ -204,10 +274,12 @@ fun M3ExpressiveAppView(
                 )
             }
 
+            // Expressive Spring Quick Add Sheet
             AnimatedVisibility(
                 visible = quickAddOpen,
-                enter = fadeIn(tween(180)) + slideInVertically(tween(220)) { it / 3 },
-                exit = fadeOut(tween(140)) + slideOutVertically(tween(180)) { it / 3 },
+                enter = slideInVertically(spring(dampingRatio = 0.74f, stiffness = 340f)) { it } + fadeIn(tween(160)),
+                exit = slideOutVertically(tween(200)) { it } + fadeOut(tween(140)),
+                modifier = Modifier.align(Alignment.BottomCenter),
             ) {
                 M3QuickAddSheet(
                     hasGames = games.isNotEmpty(),

@@ -1,7 +1,20 @@
 package com.retrohero.app.ui
 
+import android.view.HapticFeedbackConstants
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -43,6 +56,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -56,9 +71,11 @@ import com.retrohero.app.data.PlayTime
 import com.retrohero.app.data.Systems
 import com.retrohero.app.ui.components.LocalToolbarInset
 import com.retrohero.app.ui.components.M3ConnectedButtonGroup
+import com.retrohero.app.ui.components.M3ExpressiveSpring
 import com.retrohero.app.ui.components.M3GameCover
 import com.retrohero.app.ui.components.M3ShapeBadge
 import com.retrohero.app.ui.components.m3SegmentedShape
+import com.retrohero.app.ui.components.m3StaggeredEntrance
 import com.retrohero.app.ui.theme.polygon
 import com.retrohero.app.ui.theme.tag
 
@@ -190,12 +207,21 @@ internal fun M3LibraryPage(
                         .clickable { listMode = !listMode },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(
-                        imageVector = if (listMode) Icons.Rounded.GridView else Icons.Rounded.ViewAgenda,
-                        contentDescription = null,
-                        tint = cs.onSecondaryContainer,
-                        modifier = Modifier.size(20.dp),
-                    )
+                    AnimatedContent(
+                        targetState = listMode,
+                        transitionSpec = {
+                            (scaleIn(spring(dampingRatio = 0.56f, stiffness = 460f), 0.55f) + fadeIn(tween(140))) togetherWith
+                                (scaleOut(tween(110), 0.55f) + fadeOut(tween(100)))
+                        },
+                        label = "libViewModeIcon",
+                    ) { isList ->
+                        Icon(
+                            imageVector = if (isList) Icons.Rounded.GridView else Icons.Rounded.ViewAgenda,
+                            contentDescription = null,
+                            tint = cs.onSecondaryContainer,
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
                 }
             }
         }
@@ -205,7 +231,7 @@ internal fun M3LibraryPage(
             item(key = "m3_lib_consoles", span = { GridItemSpan(maxLineSpan) }) {
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().m3StaggeredEntrance(1, slideDp = 14.dp),
                 ) {
                     item(key = "m3_sys_all") {
                         M3ConsoleChip(
@@ -236,6 +262,7 @@ internal fun M3LibraryPage(
                 selectedIndex = filterIdx,
                 onSelect = { filterIdx = it },
                 height = 42.dp,
+                modifier = Modifier.m3StaggeredEntrance(2, slideDp = 14.dp),
             )
         }
 
@@ -280,14 +307,16 @@ internal fun M3LibraryPage(
         } else {
             items(filtered, key = { "m3_grid_${it.id}" }) { game ->
                 val sec = stats[game.id]?.seconds ?: 0
-                M3ExpressiveGameCard(
-                    game = game,
-                    width = null,
-                    isFavorite = game.id in favoriteIds,
-                    playTimeLabel = if (sec > 0) PlayTime.format(sec) else null,
-                    onOpen = { onOpenDetail(game) },
-                    onPlay = { onQuickPlay(game) },
-                )
+                Box(Modifier.animateItem(placementSpec = spring(dampingRatio = 0.72f, stiffness = 360f))) {
+                    M3ExpressiveGameCard(
+                        game = game,
+                        width = null,
+                        isFavorite = game.id in favoriteIds,
+                        playTimeLabel = if (sec > 0) PlayTime.format(sec) else null,
+                        onOpen = { onOpenDetail(game) },
+                        onPlay = { onQuickPlay(game) },
+                    )
+                }
             }
         }
     }
@@ -302,20 +331,39 @@ private fun M3ConsoleChip(
     onClick: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
+    val view = LocalView.current
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.92f else 1f, M3ExpressiveSpring, label = "chipScale")
+    val badgeRot by animateFloatAsState(
+        if (selected) 16f else 0f,
+        spring(dampingRatio = 0.48f, stiffness = 420f),
+        label = "chipRot",
+    )
+    val chipBg by animateColorAsState(if (selected) cs.primaryContainer else cs.surfaceContainerHigh, tween(200), label = "chipBg")
+    val badgeBg by animateColorAsState(if (selected) cs.primary else cs.secondaryContainer, tween(200), label = "chipBadgeBg")
+    val badgeFg by animateColorAsState(if (selected) cs.onPrimary else cs.onSecondaryContainer, tween(180), label = "chipBadgeFg")
+    val textFg by animateColorAsState(if (selected) cs.onPrimaryContainer else cs.onSurfaceVariant, tween(180), label = "chipTextFg")
+
     Row(
         Modifier
             .height(44.dp)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(CircleShape)
-            .background(if (selected) cs.primaryContainer else cs.surfaceContainerHigh)
-            .clickable(onClick = onClick)
+            .background(chipBg)
+            .clickable(interactionSource = interaction, indication = null) {
+                view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                onClick()
+            }
             .padding(start = 6.dp, end = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         M3ShapeBadge(
             polygon = polygon,
-            containerColor = if (selected) cs.primary else cs.secondaryContainer,
+            containerColor = badgeBg,
             size = 32.dp,
+            modifier = Modifier.graphicsLayer { rotationZ = badgeRot },
         ) {
             Text(
                 text = badgeText.take(4),
@@ -323,15 +371,16 @@ private fun M3ConsoleChip(
                     fontWeight = FontWeight.Black,
                     fontSize = if (badgeText.length >= 4) 7.sp else 8.5.sp,
                 ),
-                color = if (selected) cs.onPrimary else cs.onSecondaryContainer,
+                color = badgeFg,
                 maxLines = 1,
                 softWrap = false,
+                modifier = Modifier.graphicsLayer { rotationZ = -badgeRot },
             )
         }
         Text(
             text = label,
             style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp),
-            color = if (selected) cs.onPrimaryContainer else cs.onSurfaceVariant,
+            color = textFg,
             maxLines = 1,
             softWrap = false,
         )
