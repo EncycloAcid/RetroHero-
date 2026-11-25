@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -57,6 +58,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -536,42 +538,60 @@ private fun M3TonalHubCard(
     val scale by animateFloatAsState(if (pressed) 0.94f else 1f, M3ExpressiveSpring, label = "hubScale")
     val badgeSpin by animateFloatAsState(if (pressed) -14f else 0f, M3ExpressiveSpring, label = "hubSpin")
 
-    Column(
+    val polyShape = polygon.toShape()
+
+    Box(
         modifier
-            .height(122.dp)
+            .height(126.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clip(shape)
             .background(containerColor)
             .clickable(interactionSource = interaction, indication = null) {
                 view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                 onClick()
-            }
-            .padding(16.dp),
-        verticalArrangement = Arrangement.SpaceBetween,
+            },
     ) {
-        M3ShapeBadge(
-            polygon = polygon,
-            containerColor = contentColor.copy(alpha = 0.14f),
-            size = 42.dp,
-            modifier = Modifier.graphicsLayer { rotationZ = badgeSpin },
+        // Oversized sculptural MaterialShapes watermark peeking from lower-right corner
+        Box(
+            Modifier
+                .align(Alignment.BottomEnd)
+                .offset(x = 22.dp, y = 22.dp)
+                .size(86.dp)
+                .graphicsLayer { rotationZ = badgeSpin * -0.8f }
+                .clip(polyShape)
+                .background(contentColor.copy(alpha = 0.08f)),
+        )
+
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.SpaceBetween,
         ) {
-            Icon(icon, null, tint = contentColor, modifier = Modifier.size(21.dp))
-        }
-        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                color = contentColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = contentColor.copy(alpha = 0.78f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            M3ShapeBadge(
+                polygon = polygon,
+                containerColor = contentColor.copy(alpha = 0.16f),
+                size = 42.dp,
+                modifier = Modifier.graphicsLayer { rotationZ = badgeSpin },
+            ) {
+                Icon(icon, null, tint = contentColor, modifier = Modifier.size(21.dp))
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                    color = contentColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = contentColor.copy(alpha = 0.80f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }

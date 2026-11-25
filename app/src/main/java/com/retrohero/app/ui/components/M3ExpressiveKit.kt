@@ -90,6 +90,7 @@ import com.retrohero.app.ui.theme.polygon
 import kotlinx.coroutines.delay
 import kotlin.math.PI
 import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.sin
 
 val LocalToolbarInset = compositionLocalOf { 104.dp }
@@ -245,6 +246,68 @@ fun M3WavyBar(
                 style = Stroke(width = stroke, cap = StrokeCap.Round),
             )
         }
+    }
+}
+
+/**
+ * Avant-garde Material 3 Expressive Circular Wavy Progress Ring:
+ * Draws a sculpted sinusoidal orbital wave arc that smoothly sweeps from 0 to [progress].
+ */
+@Composable
+fun M3CircularWavyGauge(
+    progress: Float,
+    activeColor: Color,
+    trackColor: Color,
+    modifier: Modifier = Modifier,
+    strokeWidth: Dp = 4.dp,
+    waveAmplitude: Dp = 2.dp,
+    lobes: Int = 10,
+    content: @Composable BoxScope.() -> Unit = {},
+) {
+    val anim = remember { Animatable(0f) }
+    LaunchedEffect(progress) {
+        anim.animateTo(
+            targetValue = progress.coerceIn(0f, 1f),
+            animationSpec = spring(dampingRatio = 0.70f, stiffness = 170f),
+        )
+    }
+    val p = anim.value
+
+    Box(modifier, contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) {
+            val stroke = strokeWidth.toPx()
+            val amp = waveAmplitude.toPx()
+            val cx = size.width / 2f
+            val cy = size.height / 2f
+            val baseR = (minOf(size.width, size.height) / 2f) - stroke - amp - 1f
+
+            // Quiet matte circular track
+            drawCircle(
+                color = trackColor,
+                radius = baseR,
+                center = Offset(cx, cy),
+                style = Stroke(width = stroke),
+            )
+
+            // Sculpted wavy orbital arc
+            val sweepRad = (p.coerceAtLeast(0.06f)) * 2.0 * PI
+            val steps = (sweepRad * 34.0).toInt().coerceAtLeast(16)
+            val path = Path()
+            for (i in 0..steps) {
+                val frac = i.toDouble() / steps
+                val angle = -PI / 2.0 + frac * sweepRad
+                val r = baseR + sin(angle * lobes + p * PI * 2.0).toFloat() * amp
+                val x = cx + (cos(angle) * r).toFloat()
+                val y = cy + (sin(angle) * r).toFloat()
+                if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            }
+            drawPath(
+                path = path,
+                color = activeColor,
+                style = Stroke(width = stroke, cap = StrokeCap.Round),
+            )
+        }
+        content()
     }
 }
 
@@ -830,30 +893,50 @@ private fun M3ExpressivePosterFallback(
             else -> if (longestWord >= 9) 19f else 22f
         }
 
-        // Graphic M3 Expressive geometric canvas: subtle corner dot grid + bold duotone arcs
+        val motif = hash % 4
+
+        // 4 distinct Bauhaus × Material 3 Expressive Collector Art Print compositions
         Canvas(Modifier.fillMaxSize()) {
             val w = size.width
             val h = size.height
-            drawCircle(
-                color = sw.shapeFill.copy(alpha = 0.72f),
-                radius = w * 0.44f,
-                center = Offset(w * 0.10f, h * 0.94f),
-            )
-            drawCircle(
-                color = sw.accent.copy(alpha = 0.22f),
-                radius = w * 0.26f,
-                center = Offset(w * 0.14f, h * 0.88f),
-                style = Stroke(width = 2.4f),
-            )
-            val step = (w * 0.085f).coerceIn(9f, 18f)
-            val dotR = (w * 0.011f).coerceIn(1.5f, 2.8f)
-            for (row in 0..3) {
-                for (col in 0..4) {
-                    drawCircle(
-                        color = sw.accent.copy(alpha = 0.18f),
-                        radius = dotR,
-                        center = Offset(w * 0.10f + col * step, h * 0.16f + row * step),
-                    )
+            when (motif) {
+                0 -> {
+                    // Bauhaus bold diagonal color block + orbital hairline
+                    val diag = Path().apply {
+                        moveTo(0f, h * 0.62f)
+                        lineTo(w, h * 0.24f)
+                        lineTo(w, h)
+                        lineTo(0f, h)
+                        close()
+                    }
+                    drawPath(diag, color = sw.shapeFill.copy(alpha = 0.52f))
+                    drawCircle(sw.accent.copy(alpha = 0.26f), w * 0.34f, Offset(w * 0.16f, h * 0.86f), style = Stroke(2.4f))
+                    val step = (w * 0.085f).coerceIn(9f, 18f)
+                    for (r in 0..3) for (c in 0..3) {
+                        drawCircle(sw.accent.copy(alpha = 0.20f), 2f, Offset(w * 0.10f + c * step, h * 0.14f + r * step))
+                    }
+                }
+                1 -> {
+                    // Concentric editorial radar rings + floating pill orb
+                    val center = Offset(w * 0.50f, h * 0.50f)
+                    for (i in 1..3) {
+                        drawCircle(sw.accent.copy(alpha = 0.22f - i * 0.04f), w * (0.20f + i * 0.13f), center, style = Stroke(2f))
+                    }
+                    drawCircle(sw.shapeFill.copy(alpha = 0.65f), w * 0.24f, Offset(w * 0.88f, h * 0.14f))
+                }
+                2 -> {
+                    // Sculptural architectural arch backdrop + geometric stripes
+                    drawCircle(sw.shapeFill.copy(alpha = 0.72f), w * 0.46f, Offset(w * 0.50f, h * 0.96f))
+                    for (i in 0..2) {
+                        val y = h * (0.14f + i * 0.09f)
+                        drawLine(sw.accent.copy(alpha = 0.20f), Offset(w * 0.08f, y), Offset(w * 0.34f, y), 3f, cap = StrokeCap.Round)
+                    }
+                }
+                else -> {
+                    // Kinetic corner burst + dual duotone circles
+                    drawCircle(sw.shapeFill.copy(alpha = 0.68f), w * 0.42f, Offset(w * 0.12f, h * 0.92f))
+                    drawCircle(sw.accent.copy(alpha = 0.18f), w * 0.32f, Offset(w * 0.88f, h * 0.18f))
+                    drawCircle(sw.accent.copy(alpha = 0.28f), w * 0.16f, Offset(w * 0.88f, h * 0.18f), style = Stroke(2.2f))
                 }
             }
         }
