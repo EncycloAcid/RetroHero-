@@ -186,7 +186,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             val cover = app.paths.coverFile(game)
             cover.parentFile?.mkdirs()
             shot.copyTo(cover, overwrite = true)
-            com.retrohero.app.ui.components.forgetArtColor(game.id)
             _artVersion.value++
         }
     }
@@ -194,7 +193,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun clearCover(game: Game) {
         viewModelScope.launch(Dispatchers.IO) {
             app.paths.coverFile(game).delete()
-            com.retrohero.app.ui.components.forgetArtColor(game.id)
             _artVersion.value++
         }
     }
