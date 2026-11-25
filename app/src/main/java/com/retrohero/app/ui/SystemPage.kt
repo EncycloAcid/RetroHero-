@@ -52,6 +52,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
@@ -154,16 +155,22 @@ internal fun SystemControlDeckPage(
 
         // 1. Top Dual Quick-Deck Tiles (Live Appearance Swatches + Core Engine Status)
         item(key = "sys_dual_tiles") {
+            val tileShape = RoundedCornerShape(18.dp)
+            val deckBorder = Brush.verticalGradient(
+                listOf(Color.White.copy(alpha = 0.14f), Tone.Line, Color.White.copy(alpha = 0.04f)),
+            )
+            val deckBg = Brush.linearGradient(
+                listOf(Tone.Raised.copy(alpha = 0.78f), Tone.Surface),
+            )
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 // Tile A: Theme & Accent Swatches
-                val tileShape = RoundedCornerShape(18.dp)
                 Column(
                     Modifier
                         .weight(1f)
                         .height(138.dp)
                         .clip(tileShape)
-                        .background(Tone.Surface)
-                        .border(1.dp, Tone.Line, tileShape)
+                        .background(deckBg)
+                        .border(1.dp, deckBorder, tileShape)
                         .padding(14.dp),
                     verticalArrangement = Arrangement.SpaceBetween,
                 ) {
@@ -226,8 +233,8 @@ internal fun SystemControlDeckPage(
                         .weight(1f)
                         .height(138.dp)
                         .clip(tileShape)
-                        .background(Tone.Surface)
-                        .border(1.dp, Tone.Line, tileShape)
+                        .background(deckBg)
+                        .border(1.dp, deckBorder, tileShape)
                         .clickable { coresOpen = true }
                         .padding(14.dp),
                     verticalArrangement = Arrangement.SpaceBetween,

@@ -293,16 +293,24 @@ fun InteractiveGameCaseModal(
                     },
                 contentAlignment = Alignment.Center,
             ) {
-                // Ground contact shadow
+                // Wide elliptical ground contact shadow that expands smoothly as the case opens
+                val shadowW = caseW + 30.dp + (120.dp * lid.value)
                 Canvas(
                     Modifier
                         .align(Alignment.BottomCenter)
-                        .width(if (lid.value > 0.3f) 290.dp else (caseW + 18.dp))
-                        .height(22.dp),
+                        .width(shadowW)
+                        .height(26.dp),
                 ) {
+                    val rx = size.width * 0.50f
                     drawOval(
                         brush = Brush.radialGradient(
-                            colors = listOf(Color.Black.copy(alpha = 0.78f), Color.Transparent),
+                            colorStops = arrayOf(
+                                0f to Color.Black.copy(alpha = 0.72f),
+                                0.52f to Color.Black.copy(alpha = 0.36f),
+                                1f to Color.Transparent,
+                            ),
+                            center = Offset(size.width * 0.5f, size.height * 0.5f),
+                            radius = rx,
                         ),
                     )
                 }
@@ -448,13 +456,31 @@ fun InteractiveGameCaseModal(
                 modifier = Modifier.padding(top = 4.dp, bottom = 18.dp),
             )
 
-            // Primary Play / Resume CTA
+            // Primary Play / Resume CTA with warm glow & subtle top highlight
+            val ctaShape = RoundedCornerShape(14.dp)
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .height(48.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Ascend.accent)
+                    .height(50.dp)
+                    .shadow(
+                        elevation = 16.dp,
+                        shape = ctaShape,
+                        ambientColor = Ascend.accent.copy(alpha = 0.55f),
+                        spotColor = Ascend.accent.copy(alpha = 0.65f),
+                    )
+                    .clip(ctaShape)
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Ascend.accent, Ascend.accent.copy(alpha = 0.88f)),
+                        ),
+                    )
+                    .border(
+                        width = 1.dp,
+                        brush = Brush.verticalGradient(
+                            listOf(Color.White.copy(alpha = 0.32f), Color.Transparent),
+                        ),
+                        shape = ctaShape,
+                    )
                     .clickable { ejectAndLaunch(null) },
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.Center,
@@ -463,7 +489,7 @@ fun InteractiveGameCaseModal(
                 Spacer(Modifier.width(6.dp))
                 Text(
                     text = if (saveSlots.any { it.first == AppPaths.AUTO_SLOT }) "Resume game" else "Play game",
-                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.SemiBold, fontSize = 15.sp),
+                    style = TextStyle(fontFamily = Inter, fontWeight = FontWeight.Bold, fontSize = 15.sp),
                     color = Ascend.onAccent,
                 )
             }
