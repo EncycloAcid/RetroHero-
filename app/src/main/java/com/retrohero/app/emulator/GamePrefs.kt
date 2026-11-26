@@ -145,6 +145,14 @@ class GamePrefs(context: Context, sharpDefault: Boolean) {
         if (note.isNullOrBlank()) remove(key) else putString(key, note.trim())
     }
 
+    fun practiceBestMs(gameId: String): Long? =
+        prefs.getLong("practice_pb_${gameId.hashCode()}", -1L).takeIf { it > 0L }
+
+    fun setPracticeBestMs(gameId: String, ms: Long?) = prefs.edit {
+        val key = "practice_pb_${gameId.hashCode()}"
+        if (ms == null || ms <= 0L) remove(key) else putLong(key, ms)
+    }
+
     companion object {
         const val FILE = "game_prefs"
     }

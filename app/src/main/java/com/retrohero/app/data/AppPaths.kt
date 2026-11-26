@@ -64,6 +64,10 @@ class AppPaths(context: Context) {
         return File(File(states, game.systemId).apply { mkdirs() }, name)
     }
 
+    /** Dedicated Practice Loop Anchor save-state file (never overwrites user slots 1–6). */
+    fun practiceAnchorFile(game: Game): File =
+        File(File(states, game.systemId).apply { mkdirs() }, "${game.baseName}.practice.state")
+
     fun screenshotsDir(game: Game): File = File(File(screenshots, game.systemId), game.baseName)
 
     /** Your screenshots for [game], newest first. */

@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.EmojiEvents
+import androidx.compose.material.icons.rounded.Loop
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.SwapVert
@@ -305,6 +306,11 @@ class EmulatorActivity : ComponentActivity() {
     private var pocketGuideOpen by mutableStateOf(false)
     private var pocketNotes by mutableStateOf("")
     private var pinnedGuideNote by mutableStateOf<String?>(null)
+    private var practiceState by mutableStateOf(PracticeLoopState())
+    private var practiceSheetOpen by mutableStateOf(false)
+    private var practiceGhostMask by mutableIntStateOf(0)
+    private var practiceRunStartedAtMs: Long = 0L
+    private val practiceCurrentGhost = mutableListOf<GhostSample>()
     private var browserOpen by mutableStateOf(false)
     private var browserLastUrl by mutableStateOf<String?>(null)
     private var browserBookmarkedUrl by mutableStateOf<String?>(null)
@@ -1355,6 +1361,77 @@ class EmulatorActivity : ComponentActivity() {
         if (clean != null) toast("Pinned to screen")
     }
 
+    private fun dropPracticeAnchor() {
+        val anchorFile = paths.practiceAnchorFile(game)
+        val ok = NativeBridge.saveState(anchorFile.absolutePath)
+        if (!ok) {
+            toast("Couldn't drop Loop Anchor")
+            return
+        }
+        val savedPb = practiceState.bestSplitMs ?: gamePrefs.practiceBestMs(game.id)
+        practiceCurrentGhost.clear()
+        practiceGhostMask = 0
+        practiceRunStartedAtMs = System.currentTimeMillis()
+        practiceState = practiceState.copy(
+            active = true,
+            attempts = 1,
+            elapsedMs = 0L,
+            bestSplitMs = savedPb,
+            justHitPb = false,
+        )
+        setMenu(false)
+        toast("Loop Anchor dropped · tap Retry anytime!")
+    }
+
+    private fun retryPracticeLoop() {
+        val anchorFile = paths.practiceAnchorFile(game)
+        if (!anchorFile.exists()) {
+            toast("Drop a Loop Anchor first")
+            return
+        }
+        if (NativeBridge.loadState(anchorFile.absolutePath)) {
+            practiceCurrentGhost.clear()
+            practiceGhostMask = 0
+            practiceRunStartedAtMs = System.currentTimeMillis()
+            practiceState = PracticeLoopMath.startRetry(practiceState)
+        }
+    }
+
+    private fun recordPracticeClear() {
+        if (!practiceState.active) return
+        val updated = PracticeLoopMath.recordClear(practiceState, practiceCurrentGhost.toList())
+        practiceState = updated
+        if (updated.justHitPb && updated.bestSplitMs != null) {
+            gamePrefs.setPracticeBestMs(game.id, updated.bestSplitMs)
+            val deltaStr = updated.lastDeltaMs?.let { " (${PracticeLoopMath.formatDelta(it)})" }.orEmpty()
+            toast("New PB! ${PracticeLoopMath.formatSplit(updated.bestSplitMs)}$deltaStr")
+        } else {
+            val split = updated.lastClearMs ?: updated.elapsedMs
+            toast("Cleared in ${PracticeLoopMath.formatSplit(split)}")
+        }
+    }
+
+    private fun stopPracticeLoop() {
+        practiceState = practiceState.copy(active = false, elapsedMs = 0L, justHitPb = false)
+        practiceGhostMask = 0
+        practiceCurrentGhost.clear()
+    }
+
+    private fun resetPracticeStats() {
+        gamePrefs.setPracticeBestMs(game.id, null)
+        practiceState = practiceState.copy(
+            attempts = 1,
+            clears = 0,
+            bestSplitMs = null,
+            lastClearMs = null,
+            lastDeltaMs = null,
+            justHitPb = false,
+            pbGhostFrames = emptyList(),
+        )
+        practiceGhostMask = 0
+        toast("Practice stats & PB reset")
+    }
+
     private fun toggleLiveTranslate(enable: Boolean) {
         liveTranslateOn = enable
         liveTranslateJob?.cancel()
@@ -1893,6 +1970,16 @@ class EmulatorActivity : ComponentActivity() {
                             onUnpin = { updatePinnedGuideNote(null) },
                         )
                     }
+                    if (practiceState.active) {
+                        PracticeLoopHud(
+                            state = practiceState,
+                            ghostMask = practiceGhostMask,
+                            onRetry = ::retryPracticeLoop,
+                            onClearSplit = ::recordPracticeClear,
+                            onOpenSettings = { practiceSheetOpen = true },
+                            onStop = ::stopPracticeLoop,
+                        )
+                    }
                     if (liveTranslateOn) {
                         Surface(
                             shape = RoundedCornerShape(999.dp),
@@ -1917,6 +2004,41 @@ class EmulatorActivity : ComponentActivity() {
                         .safeDrawingPadding()
                         .padding(top = if (isDs || discCount > 1) 54.dp else 18.dp),
                 )
+            }
+            if (practiceSheetOpen && !menuOpen) {
+                PracticeLoopSheet(
+                    state = practiceState,
+                    onDropAnchor = ::dropPracticeAnchor,
+                    onSetAutoReset = { sec -> practiceState = practiceState.copy(autoResetSeconds = sec) },
+                    onToggleGhost = { on -> practiceState = practiceState.copy(ghostEnabled = on) },
+                    onResetStats = ::resetPracticeStats,
+                    onStopLoop = ::stopPracticeLoop,
+                    onDismiss = { practiceSheetOpen = false },
+                )
+            }
+            LaunchedEffect(phase, practiceState.active, menuOpen, pocketGuideOpen, practiceSheetOpen, browserOpen) {
+                if (phase !is Phase.Running || !practiceState.active || menuOpen || pocketGuideOpen || practiceSheetOpen || browserOpen) {
+                    return@LaunchedEffect
+                }
+                // Resume wall-clock anchor seamlessly across pauses
+                practiceRunStartedAtMs = System.currentTimeMillis() - practiceState.elapsedMs
+                while (practiceState.active) {
+                    val elapsed = (System.currentTimeMillis() - practiceRunStartedAtMs).coerceAtLeast(0L)
+                    practiceState = practiceState.copy(elapsedMs = elapsed)
+                    val mask = NativeBridge.getButtonsMask(0)
+                    if (practiceCurrentGhost.size < 3600 &&
+                        (practiceCurrentGhost.isEmpty() || practiceCurrentGhost.last().buttonsMask != mask)
+                    ) {
+                        practiceCurrentGhost.add(GhostSample(elapsed, mask))
+                    }
+                    practiceGhostMask = if (practiceState.ghostEnabled) {
+                        PracticeLoopMath.sampleGhostMask(practiceState.pbGhostFrames, elapsed)
+                    } else 0
+                    if (PracticeLoopMath.shouldAutoReset(elapsed, practiceState.autoResetSeconds)) {
+                        retryPracticeLoop()
+                    }
+                    delay(50)
+                }
             }
             if (menuOpen) PauseMenu()
             val manual = remember(game.id) { PocketGuides.forGame(game) }
@@ -2830,6 +2952,61 @@ class EmulatorActivity : ComponentActivity() {
                     CompactMenuTile(Icons.Default.OpenWith, "Edit pad", Modifier.weight(1f)) { startPadEdit() }
                     CompactMenuTile(Icons.Rounded.TouchApp, "Smart Touch", Modifier.weight(1f)) { navigate("smart_touch") }
                     CompactMenuTile(Icons.Default.Tune, "Options", Modifier.weight(1f)) { navigate("options") }
+                }
+            }
+
+            // Boss-Fight / Hard-Spot Practice Loop Mode
+            Surface(
+                onClick = {
+                    if (practiceState.active) {
+                        setMenu(false)
+                        practiceSheetOpen = true
+                    } else {
+                        dropPracticeAnchor()
+                    }
+                },
+                shape = RoundedCornerShape(18.dp),
+                color = if (practiceState.active) cs.primaryContainer else cs.secondaryContainer,
+                contentColor = if (practiceState.active) cs.onPrimaryContainer else cs.onSecondaryContainer,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Icon(Icons.Rounded.Loop, null, Modifier.size(20.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = if (practiceState.active) "Practice Loop Active · Attempt #${practiceState.attempts}" else "Boss / Hard-Spot Practice Loop",
+                            style = MaterialTheme.typography.titleSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        val pbLabel = practiceState.bestSplitMs?.let { "PB ${PracticeLoopMath.formatSplit(it)} · " }.orEmpty()
+                        Text(
+                            text = if (practiceState.active) {
+                                "${pbLabel}Tap to configure timer, ghost & anchor"
+                            } else {
+                                "Drop a Loop Anchor here for instant 1-tap retries & PB splits"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = (if (practiceState.active) cs.onPrimaryContainer else cs.onSecondaryContainer).copy(alpha = 0.82f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    if (practiceState.active) {
+                        Text(
+                            text = "Stop",
+                            style = MaterialTheme.typography.labelMedium,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50))
+                                .background(cs.surface.copy(alpha = 0.22f))
+                                .clickable { stopPracticeLoop() }
+                                .padding(horizontal = 10.dp, vertical = 5.dp),
+                        )
+                    }
                 }
             }
 
