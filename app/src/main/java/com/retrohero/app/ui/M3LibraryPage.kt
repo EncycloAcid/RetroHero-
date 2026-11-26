@@ -49,6 +49,7 @@ import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.SwapVert
 import androidx.compose.material.icons.rounded.ViewAgenda
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialShapes
@@ -91,6 +92,7 @@ import com.retrohero.app.ui.theme.polygon
 import com.retrohero.app.ui.theme.tag
 
 private val M3LibraryFilters = listOf("All", "Playing", "Favorites", "Cleared")
+private val M3LibrarySorts = listOf("A–Z", "Most played", "Console")
 
 @Composable
 internal fun M3LibraryPage(
@@ -105,8 +107,10 @@ internal fun M3LibraryPage(
 ) {
     val cs = MaterialTheme.colorScheme
     val inset = LocalToolbarInset.current
+    val view = LocalView.current
     var query by rememberSaveable { mutableStateOf("") }
     var filterIdx by rememberSaveable { mutableIntStateOf(0) }
+    var sortIdx by rememberSaveable { mutableIntStateOf(0) }
     var listMode by rememberSaveable { mutableStateOf(false) }
 
     val counts = remember(games) { games.groupingBy { it.systemId }.eachCount() }
@@ -115,8 +119,8 @@ internal fun M3LibraryPage(
     }
     val activeSystemObj = remember(selectedSystem) { selectedSystem?.let { Systems.get(it) } }
 
-    val filtered = remember(games, query, selectedSystem, filterIdx, favoriteIds, shelfStatuses) {
-        games.filter { g ->
+    val filtered = remember(games, query, selectedSystem, filterIdx, sortIdx, favoriteIds, shelfStatuses, stats) {
+        val base = games.filter { g ->
             val matchSys = selectedSystem == null || g.systemId == selectedSystem
             val matchFilter = when (filterIdx) {
                 1 -> shelfStatuses[g.id] == "playing"
@@ -130,6 +134,11 @@ internal fun M3LibraryPage(
                 (g.system?.shortName?.contains(query, ignoreCase = true) == true)
             matchSys && matchFilter && matchQuery
         }
+        when (sortIdx) {
+            1 -> base.sortedByDescending { stats[it.id]?.seconds ?: 0L }
+            2 -> base.sortedWith(compareBy({ it.system?.shortName ?: it.systemId }, { it.title.lowercase() }))
+            else -> base.sortedBy { it.title.lowercase() }
+        }
     }
 
     LazyVerticalGrid(
@@ -139,12 +148,12 @@ internal fun M3LibraryPage(
         verticalArrangement = Arrangement.spacedBy(14.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
-        // 1. M3 Expressive Display Header
+        // 1. M3 Expressive Display Header + 1-Tap Sort Pill
         item(key = "m3_lib_header", span = { GridItemSpan(maxLineSpan) }) {
             Row(
                 Modifier.fillMaxWidth().m3StaggeredEntrance(0, slideDp = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+                verticalAlignment = Alignment.Bottom,
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Box(
@@ -163,6 +172,29 @@ internal fun M3LibraryPage(
                         text = "Games",
                         style = MaterialTheme.typography.displayMedium,
                         color = cs.onBackground,
+                    )
+                }
+
+                Row(
+                    Modifier
+                        .height(38.dp)
+                        .clip(CircleShape)
+                        .background(cs.secondaryContainer)
+                        .semantics { contentDescription = "Sort games: ${M3LibrarySorts[sortIdx]}" }
+                        .clickable {
+                            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                            sortIdx = (sortIdx + 1) % M3LibrarySorts.size
+                        }
+                        .padding(horizontal = 13.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                ) {
+                    Icon(Icons.Rounded.SwapVert, null, tint = cs.onSecondaryContainer, modifier = Modifier.size(17.dp))
+                    Text(
+                        text = M3LibrarySorts[sortIdx],
+                        style = MaterialTheme.typography.labelMedium,
+                        color = cs.onSecondaryContainer,
+                        maxLines = 1,
                     )
                 }
             }

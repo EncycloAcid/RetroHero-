@@ -187,6 +187,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             cover.parentFile?.mkdirs()
             shot.copyTo(cover, overwrite = true)
             _artVersion.value++
+            say("Cover updated for ${game.title}")
         }
     }
 
@@ -194,6 +195,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             app.paths.coverFile(game).delete()
             _artVersion.value++
+            say("Cover reset for ${game.title}")
         }
     }
 
@@ -487,6 +489,22 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun downloadCore(core: CoreInfo) {
         viewModelScope.launch { app.cores.download(core.id) }
+    }
+
+    /** Downloads a batch of missing cores sequentially (e.g. every core needed by the user's library). */
+    fun downloadCores(cores: List<CoreInfo>) {
+        val missing = cores.distinctBy { it.id }.filter { !app.cores.isInstalled(it.id) }
+        if (missing.isEmpty()) return
+        viewModelScope.launch {
+            var ok = 0
+            for (core in missing) {
+                if (app.cores.download(core.id) == null) ok++
+            }
+            say(
+                if (ok == missing.size) "Installed $ok emulator ${if (ok == 1) "core" else "cores"}"
+                else "Installed $ok of ${missing.size} cores",
+            )
+        }
     }
 
     fun deleteCore(core: CoreInfo) = app.cores.delete(core.id)

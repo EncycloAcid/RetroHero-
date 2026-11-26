@@ -36,8 +36,12 @@ import com.retrohero.app.ui.theme.Tone
 import com.retrohero.app.ui.theme.setDynamicColorEnabled
 import com.retrohero.app.ui.theme.setExpressivePalette
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     private val vm: AppViewModel by viewModels()
@@ -106,15 +110,25 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
     val shelfStatuses by vm.shelfStatuses.collectAsStateWithLifecycle()
     val folders by vm.folders.collectAsStateWithLifecycle()
     val scanning by vm.scanning.collectAsStateWithLifecycle()
+    val scanProgress by vm.scanProgress.collectAsStateWithLifecycle()
     val launchState by vm.launchState.collectAsStateWithLifecycle()
     val coreStates by vm.coreStates.collectAsStateWithLifecycle()
     val download by vm.download.collectAsStateWithLifecycle()
+    val backupState by vm.backupState.collectAsStateWithLifecycle()
     val dynamicColor by vm.dynamicColor.collectAsStateWithLifecycle()
+    val reducedMotion by vm.settings.reducedMotion.collectAsStateWithLifecycle()
+    val biosVersion by vm.biosVersion.collectAsStateWithLifecycle()
+    val artVersion by vm.artVersion.collectAsStateWithLifecycle()
 
     var autoSave by remember { mutableStateOf(vm.settings.autoSave) }
     var haptics by remember { mutableStateOf(vm.settings.haptics) }
+    var sharpPixels by remember { mutableStateOf(vm.settings.sharpPixels) }
+    var overlayOpacity by remember { mutableFloatStateOf(vm.settings.overlayOpacity) }
+    var stickAsDpad by remember { mutableStateOf(vm.settings.stickAsDpad) }
+    var screenshotsToGallery by remember { mutableStateOf(vm.settings.screenshotsToGallery) }
     var fastForward by remember { mutableFloatStateOf(vm.settings.fastForwardSpeed) }
     var homebrewOpen by rememberSaveable { mutableStateOf(false) }
+    var toastMessage by remember { mutableStateOf<AppViewModel.Message?>(null) }
 
     LifecycleResumeEffect(Unit) {
         vm.refreshStats()
@@ -122,11 +136,29 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
     }
     LaunchedEffect(games.size) { vm.refreshStats() }
 
+    LaunchedEffect(Unit) {
+        vm.messages.collect { msg ->
+            toastMessage = msg
+        }
+    }
+    LaunchedEffect(toastMessage) {
+        if (toastMessage != null) {
+            delay(3600)
+            toastMessage = null
+        }
+    }
+
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) vm.addFolder(uri)
     }
     val biosPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) vm.importBios(uris)
+    }
+    val backupCreator = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        if (uri != null) vm.backUp(uri, includeBios = true)
+    }
+    val restorePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) vm.restore(uri)
     }
     val skinPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) scope.launch {
@@ -144,7 +176,7 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
                 }
             }
             val msg = if (count > 0) "Imported $count controller skin${if (count == 1) "" else "s"}" else "Couldn't import .deltaskin"
-            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+            vm.say(msg)
         }
     }
 
@@ -161,34 +193,75 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
         favoriteIds = favoriteIds,
         stats = stats,
         shelfStatuses = shelfStatuses,
+        folders = folders,
         scanning = scanning,
-        foldersCount = folders.size,
+        scanProgress = scanProgress,
         autoSave = autoSave,
         haptics = haptics,
+        sharpPixels = sharpPixels,
+        overlayOpacity = overlayOpacity,
+        stickAsDpad = stickAsDpad,
+        screenshotsToGallery = screenshotsToGallery,
+        reducedMotion = reducedMotion,
         fastForwardSpeed = fastForward,
         dynamicColor = dynamicColor,
         coreStates = coreStates,
+        biosStatusOf = { file ->
+            // Read biosVersion so BIOS status pills refresh live on import/delete
+            @Suppress("UNUSED_EXPRESSION")
+            biosVersion
+            vm.bios.status(file)
+        },
         saveSlotsFor = { g -> vm.saveSlots(g) },
+        screenshotsFor = { g ->
+            @Suppress("UNUSED_EXPRESSION")
+            artVersion
+            vm.screenshots(g)
+        },
         currentCoreFor = { g -> g.system?.let { vm.settings.coreFor(it) } },
+        toastMessage = toastMessage,
+        onDismissToast = { toastMessage = null },
         onPlay = { g, slot -> vm.play(g, slot) },
         onShufflePlay = { vm.playRandom() },
         onToggleFavorite = { g -> vm.toggleFavorite(g) },
         onSetShelfStatus = { g, status -> vm.setShelfStatus(g, status) },
         onSelectCore = { g, core -> g.system?.let { vm.setCore(it, core) } },
+        onUseScreenshotAsCover = { g, shot -> vm.useAsCover(g, shot) },
+        onClearCover = { g -> vm.clearCover(g) },
         onDeleteGame = { g -> vm.deleteGame(g) },
         onSetAutoSave = { v -> autoSave = v; vm.settings.autoSave = v },
         onSetHaptics = { v -> haptics = v; vm.settings.haptics = v },
+        onSetSharpPixels = { v -> sharpPixels = v; vm.settings.sharpPixels = v },
+        onSetOverlayOpacity = { v -> overlayOpacity = v; vm.settings.overlayOpacity = v },
+        onSetStickAsDpad = { v -> stickAsDpad = v; vm.settings.stickAsDpad = v },
+        onSetScreenshotsToGallery = { v -> screenshotsToGallery = v; vm.settings.screenshotsToGallery = v },
+        onSetReducedMotion = { v -> vm.settings.setReducedMotion(v) },
         onSetFastForward = { v -> fastForward = v; vm.settings.fastForwardSpeed = v },
         onSetDynamicColor = { enabled -> vm.settings.setDynamicColor(enabled); setDynamicColorEnabled(enabled) },
         onSelectPalette = { id -> vm.settings.accent = id; setExpressivePalette(id) },
         onSetDarkMode = { dark -> vm.settings.darkMode = dark; Tone.setDarkMode(dark) },
         onAddFolder = { folderPicker.launch(null) },
+        onRemoveFolder = { uri ->
+            vm.removeFolder(uri)
+            vm.say("Folder removed")
+        },
         onRescan = vm::rescan,
         onOpenHomebrew = { homebrewOpen = true },
         onOpenDownload = { vm.openDownload(AppViewModel.DownloadKind.Game) },
+        onOpenDownloadBios = { vm.openDownload(AppViewModel.DownloadKind.Bios) },
         onImportBios = { biosPicker.launch(arrayOf("*/*")) },
+        onDeleteBios = { name ->
+            vm.deleteBios(name)
+            vm.say("Removed $name")
+        },
         onImportSkin = { skinPicker.launch(arrayOf("*/*")) },
+        onBackup = {
+            val stamp = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
+            backupCreator.launch("retrohero-backup-$stamp.zip")
+        },
+        onRestore = { restorePicker.launch(arrayOf("application/zip", "*/*")) },
         onDownloadCore = vm::downloadCore,
+        onDownloadAllNeededCores = vm::downloadCores,
         onDeleteCore = vm::deleteCore,
     )
 
@@ -218,6 +291,13 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
             onDownloadFolder = vm::downloadFolderEntries,
             onPlayGame = vm::playDownloaded,
             onCancel = vm::cancelDownload,
+        )
+    }
+
+    backupState?.let { state ->
+        M3BackupDialog(
+            state = state,
+            onDismiss = vm::dismissBackup,
         )
     }
 }

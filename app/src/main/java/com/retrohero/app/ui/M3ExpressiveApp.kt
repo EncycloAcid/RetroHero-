@@ -17,11 +17,17 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Home
@@ -31,6 +37,7 @@ import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.SportsEsports
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
@@ -43,16 +50,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import com.retrohero.app.data.BiosFile
+import com.retrohero.app.data.BiosManager
 import com.retrohero.app.data.CoreInfo
 import com.retrohero.app.data.CoreManager.CoreState
 import com.retrohero.app.data.Game
 import com.retrohero.app.data.PlayStat
+import com.retrohero.app.ui.components.LocalReducedMotion
 import com.retrohero.app.ui.components.LocalToolbarInset
 import com.retrohero.app.ui.components.M3FloatingToolbarDock
 import com.retrohero.app.ui.components.M3ToolbarDestination
 import com.retrohero.app.ui.theme.Tone
+import java.io.File
 
 private val M3Destinations = listOf(
     M3ToolbarDestination("home", "Home", Icons.Rounded.Home, Icons.Outlined.Home),
@@ -62,7 +75,8 @@ private val M3Destinations = listOf(
 
 /**
  * Pure Material 3 Expressive application shell with directional spatial tab choreography,
- * physical background depth pullback when modal sheets open, and morphing toolbar FAB.
+ * physical background depth pullback when modal sheets open, floating snackbar feedback,
+ * and morphing toolbar FAB.
  */
 @Composable
 fun M3ExpressiveAppView(
@@ -71,34 +85,57 @@ fun M3ExpressiveAppView(
     favoriteIds: Set<String>,
     stats: Map<String, PlayStat>,
     shelfStatuses: Map<String, String>,
+    folders: Set<String> = emptySet(),
     scanning: Boolean = false,
-    foldersCount: Int = 0,
+    scanProgress: String = "",
     autoSave: Boolean = true,
     haptics: Boolean = true,
+    sharpPixels: Boolean = false,
+    overlayOpacity: Float = 0.72f,
+    stickAsDpad: Boolean = true,
+    screenshotsToGallery: Boolean = true,
+    reducedMotion: Boolean = false,
     fastForwardSpeed: Float = 3f,
     dynamicColor: Boolean = false,
     coreStates: Map<String, CoreState> = emptyMap(),
+    biosStatusOf: (BiosFile) -> BiosManager.Status = { BiosManager.Status.Missing },
     saveSlotsFor: (Game) -> List<Pair<Int, Long>> = { emptyList() },
+    screenshotsFor: (Game) -> List<File> = { emptyList() },
     currentCoreFor: (Game) -> CoreInfo? = { it.system?.cores?.firstOrNull() },
+    toastMessage: AppViewModel.Message? = null,
+    onDismissToast: () -> Unit = {},
     onPlay: (Game, Int?) -> Unit = { _, _ -> },
     onShufflePlay: () -> Unit = {},
     onToggleFavorite: (Game) -> Unit = {},
     onSetShelfStatus: (Game, String) -> Unit = { _, _ -> },
     onSelectCore: (Game, CoreInfo) -> Unit = { _, _ -> },
+    onUseScreenshotAsCover: (Game, File) -> Unit = { _, _ -> },
+    onClearCover: (Game) -> Unit = {},
     onDeleteGame: ((Game) -> Unit)? = null,
     onSetAutoSave: (Boolean) -> Unit = {},
     onSetHaptics: (Boolean) -> Unit = {},
+    onSetSharpPixels: (Boolean) -> Unit = {},
+    onSetOverlayOpacity: (Float) -> Unit = {},
+    onSetStickAsDpad: (Boolean) -> Unit = {},
+    onSetScreenshotsToGallery: (Boolean) -> Unit = {},
+    onSetReducedMotion: (Boolean) -> Unit = {},
     onSetFastForward: (Float) -> Unit = {},
     onSetDynamicColor: (Boolean) -> Unit = {},
     onSelectPalette: (String) -> Unit = {},
     onSetDarkMode: (Boolean) -> Unit = { Tone.setDarkMode(it) },
     onAddFolder: () -> Unit = {},
+    onRemoveFolder: (String) -> Unit = {},
     onRescan: () -> Unit = {},
     onOpenHomebrew: () -> Unit = {},
     onOpenDownload: () -> Unit = {},
+    onOpenDownloadBios: () -> Unit = {},
     onImportBios: () -> Unit = {},
+    onDeleteBios: (String) -> Unit = {},
     onImportSkin: () -> Unit = {},
+    onBackup: () -> Unit = {},
+    onRestore: () -> Unit = {},
     onDownloadCore: (CoreInfo) -> Unit = {},
+    onDownloadAllNeededCores: (List<CoreInfo>) -> Unit = {},
     onDeleteCore: (CoreInfo) -> Unit = {},
     initialTab: Int = 0,
 ) {
@@ -113,19 +150,33 @@ fun M3ExpressiveAppView(
     }
     val anySheetOpen = detailGame != null || quickAddOpen
 
+    // Cores actively needed by the user's current library
+    val neededCores = remember(games) {
+        games.mapNotNull { g -> currentCoreFor(g) }.distinctBy { it.id }
+    }
+    val missingCores = remember(neededCores, coreStates) {
+        neededCores.filter { c -> coreStates[c.id] !is CoreState.Installed }
+    }
+    val installingCores = remember(neededCores, coreStates) {
+        neededCores.any { c -> coreStates[c.id] is CoreState.Downloading }
+    }
+
     // Signature spatial depth pullback: main canvas smoothly recedes & rounds corners behind sheets
     val backdropScale by animateFloatAsState(
-        targetValue = if (anySheetOpen) 0.945f else 1f,
+        targetValue = if (anySheetOpen && !reducedMotion) 0.945f else 1f,
         animationSpec = spring(dampingRatio = 0.76f, stiffness = 360f),
         label = "sheetBackdropScale",
     )
     val backdropCorner by animateDpAsState(
-        targetValue = if (anySheetOpen) 28.dp else 0.dp,
+        targetValue = if (anySheetOpen && !reducedMotion) 28.dp else 0.dp,
         animationSpec = spring(dampingRatio = 0.80f, stiffness = 360f),
         label = "sheetBackdropCorner",
     )
 
-    CompositionLocalProvider(LocalToolbarInset provides 104.dp) {
+    CompositionLocalProvider(
+        LocalToolbarInset provides 104.dp,
+        LocalReducedMotion provides reducedMotion,
+    ) {
         Box(
             Modifier
                 .fillMaxSize()
@@ -150,14 +201,18 @@ fun M3ExpressiveAppView(
                     AnimatedContent(
                         targetState = selectedTab,
                         transitionSpec = {
-                            val forward = targetState > initialState
-                            val slideSpring = spring<IntOffset>(dampingRatio = 0.80f, stiffness = 360f)
-                            val enter = slideInHorizontally(slideSpring) { w -> if (forward) w / 7 else -w / 7 } +
-                                fadeIn(tween(220)) +
-                                scaleIn(spring(dampingRatio = 0.82f, stiffness = 380f), initialScale = 0.97f)
-                            val exit = slideOutHorizontally(tween(180)) { w -> if (forward) -w / 10 else w / 10 } +
-                                fadeOut(tween(140))
-                            enter togetherWith exit
+                            if (reducedMotion) {
+                                fadeIn(tween(120)) togetherWith fadeOut(tween(100))
+                            } else {
+                                val forward = targetState > initialState
+                                val slideSpring = spring<IntOffset>(dampingRatio = 0.80f, stiffness = 360f)
+                                val enter = slideInHorizontally(slideSpring) { w -> if (forward) w / 7 else -w / 7 } +
+                                    fadeIn(tween(220)) +
+                                    scaleIn(spring(dampingRatio = 0.82f, stiffness = 380f), initialScale = 0.97f)
+                                val exit = slideOutHorizontally(tween(180)) { w -> if (forward) -w / 10 else w / 10 } +
+                                    fadeOut(tween(140))
+                                enter togetherWith exit
+                            }
                         },
                         label = "m3SpatialTabSwitch",
                     ) { tab ->
@@ -169,6 +224,10 @@ fun M3ExpressiveAppView(
                                 stats = stats,
                                 shelfStatuses = shelfStatuses,
                                 scanning = scanning,
+                                scanProgress = scanProgress,
+                                missingCoresCount = missingCores.size,
+                                installingCores = installingCores,
+                                onInstallMissingCores = { onDownloadAllNeededCores(missingCores) },
                                 onPlay = { g -> onPlay(g, null) },
                                 onOpenDetail = { g -> detailGameId = g.id },
                                 onSelectConsole = { sysId ->
@@ -191,29 +250,99 @@ fun M3ExpressiveAppView(
                                 onQuickPlay = { g -> onPlay(g, null) },
                             )
                             else -> M3SettingsPage(
-                                gamesCount = games.size,
-                                foldersCount = foldersCount,
+                                games = games,
+                                folders = folders,
                                 scanning = scanning,
+                                scanProgress = scanProgress,
                                 autoSave = autoSave,
                                 haptics = haptics,
+                                sharpPixels = sharpPixels,
+                                overlayOpacity = overlayOpacity,
+                                stickAsDpad = stickAsDpad,
+                                screenshotsToGallery = screenshotsToGallery,
+                                reducedMotion = reducedMotion,
                                 fastForwardSpeed = fastForwardSpeed,
                                 dynamicColor = dynamicColor,
                                 coreStates = coreStates,
+                                neededCores = neededCores,
+                                biosStatusOf = biosStatusOf,
                                 onSetAutoSave = onSetAutoSave,
                                 onSetHaptics = onSetHaptics,
+                                onSetSharpPixels = onSetSharpPixels,
+                                onSetOverlayOpacity = onSetOverlayOpacity,
+                                onSetStickAsDpad = onSetStickAsDpad,
+                                onSetScreenshotsToGallery = onSetScreenshotsToGallery,
+                                onSetReducedMotion = onSetReducedMotion,
                                 onSetFastForward = onSetFastForward,
                                 onSetDynamicColor = onSetDynamicColor,
                                 onSelectPalette = onSelectPalette,
                                 onSetDarkMode = onSetDarkMode,
                                 onAddFolder = onAddFolder,
+                                onRemoveFolder = onRemoveFolder,
                                 onRescan = onRescan,
                                 onOpenHomebrew = onOpenHomebrew,
-                                onOpenDownload = onOpenDownload,
+                                onOpenDownloadGame = onOpenDownload,
+                                onOpenDownloadBios = onOpenDownloadBios,
                                 onImportBios = onImportBios,
+                                onDeleteBios = onDeleteBios,
                                 onImportSkin = onImportSkin,
+                                onBackup = onBackup,
+                                onRestore = onRestore,
                                 onDownloadCore = onDownloadCore,
+                                onDownloadAllNeededCores = { onDownloadAllNeededCores(missingCores) },
                                 onDeleteCore = onDeleteCore,
                             )
+                        }
+                    }
+                }
+
+                // Pure Material 3 Expressive Floating Pill Snackbar above the toolbar dock
+                AnimatedVisibility(
+                    visible = toastMessage != null && !anySheetOpen,
+                    enter = slideInVertically(spring(dampingRatio = 0.78f, stiffness = 420f)) { it / 2 } + fadeIn(tween(160)),
+                    exit = slideOutVertically(tween(150)) { it / 2 } + fadeOut(tween(120)),
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .windowInsetsPadding(WindowInsets.navigationBars)
+                        .padding(start = 18.dp, end = 18.dp, bottom = 92.dp),
+                ) {
+                    val msg = toastMessage ?: return@AnimatedVisibility
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clip(CircleShape)
+                            .background(cs.inverseSurface)
+                            .clickable(onClick = onDismissToast)
+                            .padding(start = 18.dp, end = if (msg.undo != null) 8.dp else 18.dp, top = 10.dp, bottom = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            text = msg.text,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = cs.inverseOnSurface,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (msg.undo != null) {
+                            Box(
+                                Modifier
+                                    .padding(start = 10.dp)
+                                    .clip(CircleShape)
+                                    .background(cs.inversePrimary)
+                                    .clickable {
+                                        msg.undo.invoke()
+                                        onDismissToast()
+                                    }
+                                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                            ) {
+                                Text(
+                                    text = "Undo",
+                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.ExtraBold),
+                                    color = cs.onPrimaryContainer,
+                                )
+                            }
                         }
                     }
                 }
@@ -257,20 +386,26 @@ fun M3ExpressiveAppView(
                 modifier = Modifier.align(Alignment.BottomCenter),
             ) {
                 val game = detailGame ?: return@AnimatedVisibility
+                val core = currentCoreFor(game)
+                val coreReady = core == null || coreStates[core.id] is CoreState.Installed
                 M3GameDetailSheet(
                     game = game,
                     stat = stats[game.id],
                     isFavorite = game.id in favoriteIds,
                     shelfStatus = shelfStatuses[game.id] ?: "playing",
                     saveSlots = saveSlotsFor(game),
-                    currentCore = currentCoreFor(game),
+                    currentCore = core,
+                    coreInstalled = coreReady,
+                    screenshots = screenshotsFor(game),
                     onSetShelfStatus = { st -> onSetShelfStatus(game, st) },
                     onToggleFavorite = { onToggleFavorite(game) },
                     onPlay = { slot ->
                         detailGameId = null
                         onPlay(game, slot)
                     },
-                    onSelectCore = { core -> onSelectCore(game, core) },
+                    onSelectCore = { c -> onSelectCore(game, c) },
+                    onUseScreenshotAsCover = { shot -> onUseScreenshotAsCover(game, shot) },
+                    onClearCover = { onClearCover(game) },
                     onDelete = onDeleteGame?.let { del ->
                         {
                             detailGameId = null
