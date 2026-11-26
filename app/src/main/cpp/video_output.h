@@ -18,7 +18,10 @@ public:
     void setWindow(ANativeWindow *window);  // takes ownership of one reference
     // 0 sharp, 1 smooth, 2 CRT scanlines, 3 LCD grid.
     enum Filter { Sharp = 0, Smooth = 1, Crt = 2, Lcd = 3 };
+    // 0 none (vivid), 1 GBA AGB-001 LCD matrix, 2 GBC LCD matrix, 3 CRT composite horizontal blend.
+    enum ColorProfile { ColorNone = 0, ColorGbaLcd = 1, ColorGbcLcd = 2, ColorCrtComposite = 3 };
     void setFilter(int filter);
+    void setColorProfile(int profile);
     // Copies the last frame as ARGB_8888 into [out]; false if there is none yet.
     void frameSize(unsigned &width, unsigned &height) {
         std::lock_guard<std::mutex> lk(mutex_);
@@ -31,13 +34,16 @@ public:
     void redraw();
 
 private:
+    void rebuildColorLutLocked();
     void blitLocked(const uint8_t *data, unsigned width, unsigned height, size_t pitch, int fmt);
 
     std::mutex mutex_;
     ANativeWindow *window_ = nullptr;
     int bufW_ = 0, bufH_ = 0, bufFmt_ = 0;
     int filter_ = Sharp;
+    int colorProfile_ = ColorNone;
     int sharpScale_ = 3;
+    std::vector<uint16_t> lut565_;
 
     std::vector<uint8_t> last_;
     unsigned lastW_ = 0, lastH_ = 0;

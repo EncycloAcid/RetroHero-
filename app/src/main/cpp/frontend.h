@@ -105,6 +105,7 @@ public:
 
     void setWindow(ANativeWindow *window);
     void setFilter(int filter);
+    void setColorProfile(int profile);
     void frameSize(unsigned &width, unsigned &height);
     bool grabArgb(std::vector<uint32_t> &out, unsigned &width, unsigned &height);
 

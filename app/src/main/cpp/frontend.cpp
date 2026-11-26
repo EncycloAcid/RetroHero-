@@ -806,6 +806,11 @@ void Frontend::setFilter(int filter) {
     video_.setFilter(filter);
 }
 
+void Frontend::setColorProfile(int profile) {
+    hw_.setColorProfile(profile);
+    video_.setColorProfile(profile);
+}
+
 void Frontend::frameSize(unsigned &width, unsigned &height) {
     if (hwRenderEnabled_.load()) hw_.frameSize(width, height);
     else video_.frameSize(width, height);

@@ -39,6 +39,8 @@ object NativeBridge {
     external fun setSurface(surface: Surface?)
     /** See [ScreenFilter]. */
     external fun setFilter(filter: Int)
+    /** 0 = Vivid/None, 1 = Authentic GBA LCD, 2 = Authentic GBC LCD, 3 = CRT Composite Blend. */
+    external fun setColorProfile(profile: Int)
     /** Width and height of the last frame the core drew (0, 0 before the first). */
     external fun getFrameSize(): IntArray
     /** [width, height, ARGB pixels…] of the last frame, or null before the first. */
