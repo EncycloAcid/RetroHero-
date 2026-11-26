@@ -139,6 +139,7 @@ import com.retrohero.app.ui.components.M3ConnectedButtonGroup
 import com.retrohero.app.ui.components.M3ConsoleImage
 import com.retrohero.app.ui.components.M3ExpressiveSpring
 import com.retrohero.app.ui.components.M3GameCover
+import com.retrohero.app.ui.components.M3PatchLabDialog
 import com.retrohero.app.ui.components.M3PhysicalBoxViewerSection
 import com.retrohero.app.ui.components.M3ShapeBadge
 import com.retrohero.app.ui.components.M3SplitButton
@@ -471,6 +472,7 @@ internal fun M3GameDetailPage(
     var selectedSlideIdx by remember(game.id) { mutableIntStateOf(0) }
     var lightboxSlideIdx by remember(game.id) { mutableStateOf<Int?>(null) }
     var open3dInspectorNonce by remember(game.id) { mutableIntStateOf(0) }
+    var patchLabOpen by remember(game.id) { mutableStateOf(false) }
     val activeSlide = slides.getOrNull(selectedSlideIdx) ?: slides.firstOrNull()
 
     val listState = rememberLazyListState()
@@ -728,7 +730,7 @@ internal fun M3GameDetailPage(
                                     .background(cs.surfaceContainerLow)
                                     .clickable {
                                         view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                                        onAttachPatch()
+                                        patchLabOpen = true
                                     }
                                     .padding(horizontal = 14.dp, vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -750,14 +752,14 @@ internal fun M3GameDetailPage(
                                 }
                                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                                     Text(
-                                        text = "Soft-patch ROM (IPS · BPS · UPS · xDelta)",
+                                        text = "ROM Patch Lab (IPS · BPS · UPS · xDelta)",
                                         style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold),
                                         color = cs.onSurface,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                     )
                                     Text(
-                                        text = "Attach fan translations or ROM hacks in memory — original ROM untouched",
+                                        text = "Verify CRC32, auto-fix SNES/NES headers & soft-patch translations",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = cs.onSurfaceVariant,
                                         maxLines = 2,
@@ -768,6 +770,10 @@ internal fun M3GameDetailPage(
                                     Modifier
                                         .clip(CircleShape)
                                         .background(cs.primaryContainer)
+                                        .clickable {
+                                            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                            onAttachPatch()
+                                        }
                                         .padding(horizontal = 11.dp, vertical = 7.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -820,30 +826,48 @@ internal fun M3GameDetailPage(
                                         color = cs.onSurfaceVariant,
                                     )
                                 }
-                                Spacer(Modifier.width(8.dp))
-                                Row(
-                                    Modifier
-                                        .clip(CircleShape)
-                                        .background(cs.primaryContainer)
-                                        .clickable {
-                                            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                                            onAttachPatch()
-                                        }
-                                        .padding(horizontal = 12.dp, vertical = 7.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                ) {
-                                    Icon(
-                                        Icons.Rounded.Add,
-                                        contentDescription = null,
-                                        tint = cs.onPrimaryContainer,
-                                        modifier = Modifier.size(15.dp),
-                                    )
-                                    Text(
-                                        text = "Attach",
-                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                        color = cs.onPrimaryContainer,
-                                    )
+                                Spacer(Modifier.width(6.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        Modifier
+                                            .clip(CircleShape)
+                                            .background(cs.secondaryContainer)
+                                            .clickable {
+                                                view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                                patchLabOpen = true
+                                            }
+                                            .padding(horizontal = 10.dp, vertical = 7.dp),
+                                    ) {
+                                        Text(
+                                            text = "Patch Lab",
+                                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                            color = cs.onSecondaryContainer,
+                                        )
+                                    }
+                                    Row(
+                                        Modifier
+                                            .clip(CircleShape)
+                                            .background(cs.primaryContainer)
+                                            .clickable {
+                                                view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                                onAttachPatch()
+                                            }
+                                            .padding(horizontal = 11.dp, vertical = 7.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    ) {
+                                        Icon(
+                                            Icons.Rounded.Add,
+                                            contentDescription = null,
+                                            tint = cs.onPrimaryContainer,
+                                            modifier = Modifier.size(15.dp),
+                                        )
+                                        Text(
+                                            text = "Attach",
+                                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                            color = cs.onPrimaryContainer,
+                                        )
+                                    }
                                 }
                             }
 
@@ -2219,6 +2243,19 @@ internal fun M3GameDetailPage(
                 )
             }
         }
+    }
+
+    if (patchLabOpen) {
+        M3PatchLabDialog(
+            game = game,
+            patches = patches,
+            onAttachPatch = onAttachPatch,
+            onPlayOriginal = { onPlay(null) },
+            onPlayWithPatch = onPlayWithPatch,
+            onTogglePatchSeparateSave = onTogglePatchSeparateSave,
+            onDeletePatch = onDeletePatch,
+            onDismiss = { patchLabOpen = false },
+        )
     }
 
     lightboxSlideIdx?.let { startIdx ->
