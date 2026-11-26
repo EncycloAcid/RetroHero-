@@ -1014,9 +1014,9 @@ internal fun M3ExpressiveGameCard(
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                 Text(
                     text = game.title,
-                    style = MaterialTheme.typography.titleSmall.copy(fontSize = 13.5.sp),
+                    style = MaterialTheme.typography.titleSmall.copy(fontSize = 13.5.sp, lineHeight = 16.sp),
                     color = cs.onSurface,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(

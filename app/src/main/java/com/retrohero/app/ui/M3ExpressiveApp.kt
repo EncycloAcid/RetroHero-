@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
@@ -394,6 +395,21 @@ fun M3ExpressiveAppView(
                         }
                     }
                 }
+
+                // Subtle bottom fade scrim so scrolling cards melt cleanly behind the floating dock
+                Box(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(112.dp)
+                        .background(
+                            androidx.compose.ui.graphics.Brush.verticalGradient(
+                                0f to androidx.compose.ui.graphics.Color.Transparent,
+                                0.55f to cs.surface.copy(alpha = 0.78f),
+                                1f to cs.surface.copy(alpha = 0.96f),
+                            ),
+                        ),
+                )
 
                 // Pure Material 3 Expressive Floating Toolbar + Morphing Cookie7Sided FAB
                 M3FloatingToolbarDock(

@@ -42,6 +42,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.ViewInAr
 import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -617,10 +618,10 @@ internal fun M3GameDetailPage(
                         label = if (hasAutoSave) "Resume game" else "Play game",
                         icon = Icons.Rounded.PlayArrow,
                         onPrimaryClick = { onPlay(null) },
-                        trailingIcon = if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                        trailingDescription = if (isFavorite) "Remove favorite" else "Add favorite",
-                        onTrailingClick = onToggleFavorite,
-                        trailingActive = isFavorite,
+                        trailingIcon = androidx.compose.material.icons.Icons.Rounded.ViewInAr,
+                        trailingDescription = "Inspect 3D retail box & cart",
+                        onTrailingClick = { open3dInspectorNonce++ },
+                        trailingActive = false,
                         height = 56.dp,
                     )
 
@@ -728,6 +729,7 @@ internal fun M3GameDetailPage(
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(22.dp))
                                     .background(cs.surfaceContainerLow)
+                                    .border(1.dp, cs.outlineVariant.copy(alpha = 0.24f), RoundedCornerShape(22.dp))
                                     .clickable {
                                         view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                                         patchLabOpen = true
@@ -752,14 +754,14 @@ internal fun M3GameDetailPage(
                                 }
                                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                                     Text(
-                                        text = "ROM Patch Lab (IPS · BPS · UPS · xDelta)",
+                                        text = "ROM Patch Lab",
                                         style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold),
                                         color = cs.onSurface,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                     )
                                     Text(
-                                        text = "Verify CRC32, auto-fix SNES/NES headers & soft-patch translations",
+                                        text = "IPS · BPS · UPS · xDelta · Verify CRC32 & headers",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = cs.onSurfaceVariant,
                                         maxLines = 2,
@@ -1021,6 +1023,7 @@ internal fun M3GameDetailPage(
                         .padding(horizontal = 20.dp)
                         .clip(RoundedCornerShape(22.dp))
                         .background(cs.surfaceContainerLow)
+                        .border(1.dp, cs.outlineVariant.copy(alpha = 0.24f), RoundedCornerShape(22.dp))
                         .clickable {
                             view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                             if (savedCheats.isEmpty() && !findingCheats) {

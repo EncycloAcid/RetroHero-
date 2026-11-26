@@ -3219,159 +3219,45 @@ class EmulatorActivity : ComponentActivity() {
                     CompactMenuTile(Icons.Rounded.TouchApp, "Smart Touch", Modifier.weight(1f)) { navigate("smart_touch") }
                     CompactMenuTile(Icons.Default.Tune, "Options", Modifier.weight(1f)) { navigate("options") }
                 }
-            }
-
-            // Boss-Fight / Hard-Spot Practice Loop Mode
-            Surface(
-                onClick = {
-                    if (practiceState.active) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    CompactMenuTile(
+                        Icons.Rounded.Loop,
+                        if (practiceState.active) "Loop #${practiceState.attempts}" else "Practice",
+                        Modifier.weight(1f),
+                        active = practiceState.active,
+                        accent = true,
+                    ) {
+                        if (practiceState.active) {
+                            setMenu(false)
+                            practiceSheetOpen = true
+                        } else {
+                            dropPracticeAnchor()
+                        }
+                    }
+                    CompactMenuTile(
+                        Icons.Rounded.AutoAwesome,
+                        if (nostalgiaConfig.enabled) "Nostalgia" else "Blow Cart",
+                        Modifier.weight(1f),
+                        active = nostalgiaConfig.enabled,
+                        accent = true,
+                    ) {
                         setMenu(false)
-                        practiceSheetOpen = true
-                    } else {
-                        dropPracticeAnchor()
+                        nostalgiaSheetOpen = true
                     }
-                },
-                shape = RoundedCornerShape(18.dp),
-                color = if (practiceState.active) cs.primaryContainer else cs.secondaryContainer,
-                contentColor = if (practiceState.active) cs.onPrimaryContainer else cs.onSecondaryContainer,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(
-                    Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Icon(Icons.Rounded.Loop, null, Modifier.size(20.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            text = if (practiceState.active) "Practice Loop Active · Attempt #${practiceState.attempts}" else "Boss / Hard-Spot Practice Loop",
-                            style = MaterialTheme.typography.titleSmall,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        val pbLabel = practiceState.bestSplitMs?.let { "PB ${PracticeLoopMath.formatSplit(it)} · " }.orEmpty()
-                        Text(
-                            text = if (practiceState.active) {
-                                "${pbLabel}Tap to configure timer, ghost & anchor"
-                            } else {
-                                "Drop a Loop Anchor here for instant 1-tap retries & PB splits"
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = (if (practiceState.active) cs.onPrimaryContainer else cs.onSecondaryContainer).copy(alpha = 0.82f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                    CompactMenuTile(
+                        Icons.Rounded.Repeat,
+                        when (macroPhase) {
+                            MacroPhase.PLAYING -> "Grind ×$macroLoopCount"
+                            MacroPhase.RECORDING -> "Rec…"
+                            MacroPhase.IDLE -> "Grind Loop"
+                        },
+                        Modifier.weight(1f),
+                        active = macroPhase != MacroPhase.IDLE,
+                        accent = true,
+                    ) {
+                        setMenu(false)
+                        macroSheetOpen = true
                     }
-                    if (practiceState.active) {
-                        Text(
-                            text = "Stop",
-                            style = MaterialTheme.typography.labelMedium,
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(50))
-                                .background(cs.surface.copy(alpha = 0.22f))
-                                .clickable { stopPracticeLoop() }
-                                .padding(horizontal = 10.dp, vertical = 5.dp),
-                        )
-                    }
-                }
-            }
-
-            // Hardware Nostalgia Mode & Blow Cartridge
-            Surface(
-                onClick = {
-                    setMenu(false)
-                    nostalgiaSheetOpen = true
-                },
-                shape = RoundedCornerShape(18.dp),
-                color = if (nostalgiaConfig.enabled) cs.tertiaryContainer else cs.surfaceContainerHigh,
-                contentColor = if (nostalgiaConfig.enabled) cs.onTertiaryContainer else cs.onSurface,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(
-                    Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Icon(Icons.Rounded.AutoAwesome, null, Modifier.size(20.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            text = if (nostalgiaConfig.enabled) "Hardware Nostalgia Mode · ON" else "Hardware Nostalgia & Blow Cart",
-                            style = MaterialTheme.typography.titleSmall,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = "Cartridge boot chimes, CRT/LCD aging & battery LED dimming",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = (if (nostalgiaConfig.enabled) cs.onTertiaryContainer else cs.onSurfaceVariant).copy(alpha = 0.82f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    Text(
-                        text = "Blow",
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(50))
-                            .background(cs.primary.copy(alpha = 0.22f))
-                            .clickable { performCartridgeBlow() }
-                            .padding(horizontal = 10.dp, vertical = 5.dp),
-                    )
-                }
-            }
-
-            // Auto-Play / Grind Helper Macro Recorder
-            Surface(
-                onClick = {
-                    setMenu(false)
-                    macroSheetOpen = true
-                },
-                shape = RoundedCornerShape(18.dp),
-                color = if (macroPhase != MacroPhase.IDLE) cs.primaryContainer else cs.surfaceContainerHigh,
-                contentColor = if (macroPhase != MacroPhase.IDLE) cs.onPrimaryContainer else cs.onSurface,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Row(
-                    Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Icon(Icons.Rounded.Repeat, null, Modifier.size(20.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            text = when (macroPhase) {
-                                MacroPhase.PLAYING -> "Grind Loop Active · ×$macroLoopCount"
-                                MacroPhase.RECORDING -> "Recording Macro…"
-                                MacroPhase.IDLE -> "Auto-Play / Grind Helper"
-                            },
-                            style = MaterialTheme.typography.titleSmall,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = if (savedMacros.isNotEmpty()) {
-                                "${savedMacros.size} saved loop${if (savedMacros.size == 1) "" else "s"} · Fast-Forward grind macros"
-                            } else {
-                                "Record 3–10s RPG grind loops · stops on your tap"
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = (if (macroPhase != MacroPhase.IDLE) cs.onPrimaryContainer else cs.onSurfaceVariant).copy(alpha = 0.82f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    Text(
-                        text = if (macroPhase == MacroPhase.PLAYING) "Stop" else "Rec",
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(50))
-                            .background(cs.primary.copy(alpha = 0.22f))
-                            .clickable {
-                                if (macroPhase == MacroPhase.PLAYING) stopMacroPlayback()
-                                else startMacroRecording()
-                            }
-                            .padding(horizontal = 10.dp, vertical = 5.dp),
-                    )
                 }
             }
 

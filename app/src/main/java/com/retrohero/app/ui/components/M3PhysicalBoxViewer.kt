@@ -297,9 +297,9 @@ fun M3PhysicalBoxViewerSection(
                 )
                 Text(
                     text = if (tiltAvailable && tiltEnabled) {
-                        "Drag to spin 360° · Tilt phone for live glint"
+                        "Drag 360° · Tilt for live glint"
                     } else {
-                        "Drag to spin 360° · Flip over to read back of box"
+                        "Drag 360° · Double-tap to flip"
                     },
                     style = MaterialTheme.typography.labelSmall,
                     color = cs.onSurfaceVariant,
