@@ -431,65 +431,72 @@ fun M3PhysicalBoxViewerSection(
                     .padding(top = 24.dp, bottom = 34.dp, start = 16.dp, end = 16.dp),
             )
 
-            // Top-left provenance pill (shows real LaunchBox faces loaded)
+            // Top bar: Provenance pill (left, ellipsizes cleanly) + Fullscreen Zoom button (right, never overlaps!)
             Row(
                 Modifier
-                    .align(Alignment.TopStart)
-                    .padding(12.dp)
-                    .clip(CircleShape)
-                    .background(cs.surfaceContainerHighest.copy(alpha = 0.86f))
-                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth()
+                    .padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Icon(
-                    imageVector = if (textures.hasRealFront || textures.hasRealBack || textures.hasRealMedia) {
-                        Icons.Rounded.Verified
-                    } else {
-                        Icons.Rounded.AutoAwesome
-                    },
-                    contentDescription = null,
-                    tint = cs.primary,
-                    modifier = Modifier.size(13.dp),
-                )
-                Text(
-                    text = assetProvenance,
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.SemiBold,
-                    ),
-                    color = cs.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
+                Row(
+                    Modifier
+                        .weight(1f, fill = false)
+                        .clip(CircleShape)
+                        .background(cs.surfaceContainerHighest.copy(alpha = 0.86f))
+                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                ) {
+                    Icon(
+                        imageVector = if (textures.hasRealFront || textures.hasRealBack || textures.hasRealMedia) {
+                            Icons.Rounded.Verified
+                        } else {
+                            Icons.Rounded.AutoAwesome
+                        },
+                        contentDescription = null,
+                        tint = cs.primary,
+                        modifier = Modifier.size(13.dp),
+                    )
+                    Text(
+                        text = assetProvenance,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        ),
+                        color = cs.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
 
-            // Top-right Fullscreen Zoom / Read Back button
-            Row(
-                Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(12.dp)
-                    .clip(CircleShape)
-                    .background(cs.primaryContainer.copy(alpha = 0.92f))
-                    .clickable {
-                        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                        showInspector = true
-                    }
-                    .padding(horizontal = 11.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                Icon(
-                    Icons.Rounded.Search,
-                    contentDescription = "Inspect & zoom 3D box",
-                    tint = cs.onPrimaryContainer,
-                    modifier = Modifier.size(14.dp),
-                )
-                Text(
-                    text = "Zoom",
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                    color = cs.onPrimaryContainer,
-                )
+                Spacer(Modifier.width(8.dp))
+
+                Row(
+                    Modifier
+                        .clip(CircleShape)
+                        .background(cs.primaryContainer.copy(alpha = 0.92f))
+                        .clickable {
+                            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                            showInspector = true
+                        }
+                        .padding(horizontal = 11.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Icon(
+                        Icons.Rounded.Search,
+                        contentDescription = "Inspect & zoom 3D box",
+                        tint = cs.onPrimaryContainer,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Text(
+                        text = "Zoom",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = cs.onPrimaryContainer,
+                    )
+                }
             }
 
             // Bottom-center live angle readout pill
@@ -1059,6 +1066,7 @@ private fun Physical3dStageCanvas(
 
         drawIntoCanvas { composeCanvas ->
             val native = composeCanvas.nativeCanvas
+            val isCartridge = subject == PhysicalViewerSubject.GAME_MEDIA && !isDisc
             if (isDisc) {
                 draw3dOpticalDisc(
                     native = native,
@@ -1073,13 +1081,40 @@ private fun Physical3dStageCanvas(
                     fillPaint = fillPaint,
                     srcPts = srcPts,
                 )
+            } else if (isCartridge && textures.hasRealMedia) {
+                // Real LaunchBox transparent-PNG cartridge scan: extrude its EXACT alpha silhouette in 3D
+                // (so NES notches, SNES shoulders, GB/N64 cutouts never have a rectangular grey box sticking out!)
+                draw3dRealCartridgeScan(
+                    native = native,
+                    quads = quads,
+                    spec = spec,
+                    frontScanBmp = textures.mediaFront,
+                    backShellBmp = textures.mediaBack,
+                    halfD = halfD,
+                    yawDeg = yawDeg,
+                    pitchDeg = pitchDeg,
+                    polyMatrix = polyMatrix,
+                    bmpPaint = bmpPaint,
+                    fillPaint = fillPaint,
+                    srcPts = srcPts,
+                )
             } else {
                 val caseColorArgb = if (subject == PhysicalViewerSubject.RETAIL_BOX) {
                     spec.casePlasticColor.toArgb()
                 } else {
                     spec.mediaShellColor.toArgb()
                 }
-                val isCartridge = subject == PhysicalViewerSubject.GAME_MEDIA
+                val isCardboardBox = subject == PhysicalViewerSubject.RETAIL_BOX && !spec.caseStyle.hasPlasticRim
+                val cardboardTopColor = if (isCardboardBox) {
+                    sampleBitmapEdgeArgb(textures.front, topEdge = true)
+                } else {
+                    caseColorArgb
+                }
+                val cardboardBottomColor = if (isCardboardBox) {
+                    sampleBitmapEdgeArgb(textures.front, topEdge = false)
+                } else {
+                    caseColorArgb
+                }
 
                 for (q in quads) {
                     val d = q.dstPoints
@@ -1090,8 +1125,12 @@ private fun Physical3dStageCanvas(
                     clipPath.lineTo(d[6], d[7])
                     clipPath.close()
 
-                    when (q.face) {
-                        BoxFaceId.FRONT, BoxFaceId.BACK, BoxFaceId.LEFT_SPINE -> {
+                    val useSpineTextureOnRight = isCardboardBox && q.face == BoxFaceId.RIGHT_OPENING
+                    when {
+                        q.face == BoxFaceId.FRONT ||
+                            q.face == BoxFaceId.BACK ||
+                            q.face == BoxFaceId.LEFT_SPINE ||
+                            useSpineTextureOnRight -> {
                             val faceBmp = when {
                                 isCartridge && q.face == BoxFaceId.FRONT -> textures.mediaFront
                                 isCartridge && q.face == BoxFaceId.BACK -> textures.mediaBack
@@ -1112,7 +1151,7 @@ private fun Physical3dStageCanvas(
                                     native.clipPath(clipPath)
                                     native.concat(polyMatrix)
 
-                                    // For rounded cartridges, clip shading & gloss strictly inside the molded shell
+                                    // For procedural rounded cartridges, clip shading & gloss strictly inside the molded shell
                                     // silhouette so no dark rectangular corner ever bleeds past the rounded shell!
                                     if (isCartridge) {
                                         val cartShellClip = AndroidPath().apply {
@@ -1183,7 +1222,7 @@ private fun Physical3dStageCanvas(
                                             )
                                             native.drawRect(bw - creaseW, 0f, bw, bh, fillPaint)
                                             fillPaint.shader = null
-                                        } else if (q.face == BoxFaceId.LEFT_SPINE) {
+                                        } else if (q.face == BoxFaceId.LEFT_SPINE || useSpineTextureOnRight) {
                                             // Subtle rounded cardstock/wrap highlight along spine edges
                                             fillPaint.shader = LinearGradient(
                                                 0f, 0f, bw, 0f,
@@ -1238,7 +1277,12 @@ private fun Physical3dStageCanvas(
                             }
                         }
 
-                        BoxFaceId.RIGHT_OPENING, BoxFaceId.TOP, BoxFaceId.BOTTOM -> {
+                        else -> {
+                            val edgeBaseColor = when {
+                                isCardboardBox && q.face == BoxFaceId.TOP -> cardboardTopColor
+                                isCardboardBox && q.face == BoxFaceId.BOTTOM -> cardboardBottomColor
+                                else -> caseColorArgb
+                            }
                             drawCaseOrCartSideEdge(
                                 native = native,
                                 clipPath = clipPath,
@@ -1246,7 +1290,7 @@ private fun Physical3dStageCanvas(
                                 face = q.face,
                                 subject = subject,
                                 spec = spec,
-                                baseArgb = caseColorArgb,
+                                baseArgb = edgeBaseColor,
                                 shade = q.shade,
                                 polyMatrix = polyMatrix,
                                 fillPaint = fillPaint,
@@ -1266,6 +1310,163 @@ private fun Physical3dStageCanvas(
             }
         }
     }
+}
+
+/**
+ * Renders a real LaunchBox transparent-PNG cartridge scan with true alpha-extruded 3D thickness!
+ * Because each depth slice is stamped directly from the real scan's alpha silhouette, notched NES
+ * corners, curved SNES shoulders, and sculpted GB/N64 profiles extrude cleanly in 3D with zero
+ * rectangular bounding-box outline or ghost shadow over transparent cutouts.
+ */
+private fun draw3dRealCartridgeScan(
+    native: AndroidCanvas,
+    quads: List<com.retrohero.app.data.ProjectedQuad>,
+    spec: PhysicalMediaSpec,
+    frontScanBmp: Bitmap,
+    backShellBmp: Bitmap,
+    halfD: Float,
+    yawDeg: Float,
+    pitchDeg: Float,
+    polyMatrix: Matrix,
+    bmpPaint: Paint,
+    fillPaint: Paint,
+    srcPts: FloatArray,
+) {
+    val mainFace = quads.firstOrNull { it.face == BoxFaceId.FRONT || it.face == BoxFaceId.BACK }
+    val shellArgb = spec.mediaShellColor.toArgb()
+
+    if (mainFace == null) {
+        // Pure edge-on cartridge profile
+        val edge = quads.firstOrNull() ?: return
+        val path = AndroidPath().apply {
+            moveTo(edge.dstPoints[0], edge.dstPoints[1])
+            lineTo(edge.dstPoints[2], edge.dstPoints[3])
+            lineTo(edge.dstPoints[4], edge.dstPoints[5])
+            lineTo(edge.dstPoints[6], edge.dstPoints[7])
+            close()
+        }
+        fillPaint.shader = null
+        fillPaint.color = shadeArgb(shellArgb, 0.84f)
+        native.drawPath(path, fillPaint)
+        return
+    }
+
+    val isFront = mainFace.face == BoxFaceId.FRONT
+    val tex = if (isFront) frontScanBmp else backShellBmp
+    val silhouetteBmp = frontScanBmp
+    val bw = tex.width.toFloat()
+    val bh = tex.height.toFloat()
+    val sw = silhouetteBmp.width.toFloat()
+    val sh = silhouetteBmp.height.toFloat()
+    val d = mainFace.dstPoints
+
+    // Compute 3D extrusion vector pointing away from the viewer along the cartridge thickness
+    val yawRad = Math.toRadians(yawDeg.toDouble())
+    val pitchRad = Math.toRadians(pitchDeg.toDouble())
+    val totalShiftX = (-sin(yawRad).toFloat() * halfD * 1.45f) * if (isFront) 1f else -1f
+    val totalShiftY = (sin(pitchRad).toFloat() * halfD * 1.15f) * if (isFront) 1f else -1f
+
+    // Draw 7 shaded alpha-silhouette depth slices from back to front for genuine 3D molded thickness
+    val slices = 7
+    val slicePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    val sliceDst = FloatArray(8)
+    srcPts[0] = 0f; srcPts[1] = 0f
+    srcPts[2] = sw; srcPts[3] = 0f
+    srcPts[4] = sw; srcPts[5] = sh
+    srcPts[6] = 0f; srcPts[7] = sh
+
+    for (i in slices downTo 1) {
+        val t = i.toFloat() / slices.toFloat()
+        val ox = totalShiftX * t
+        val oy = totalShiftY * t
+        for (pIdx in 0..3) {
+            sliceDst[pIdx * 2] = d[pIdx * 2] + ox
+            sliceDst[pIdx * 2 + 1] = d[pIdx * 2 + 1] + oy
+        }
+        if (polyMatrix.setPolyToPoly(srcPts, 0, sliceDst, 0, 4)) {
+            // Subtle molded clamshell parting seam at the middle slice
+            val isSeamSlice = i == (slices / 2 + 1)
+            val sliceShade = if (isSeamSlice) {
+                (0.54f * mainFace.shade).coerceIn(0.32f, 0.72f)
+            } else {
+                ((0.86f - t * 0.22f) * mainFace.shade).coerceIn(0.45f, 0.94f)
+            }
+            slicePaint.colorFilter = android.graphics.PorterDuffColorFilter(
+                shadeArgb(shellArgb, sliceShade),
+                PorterDuff.Mode.SRC_IN,
+            )
+            native.save()
+            native.concat(polyMatrix)
+            native.drawBitmap(silhouetteBmp, 0f, 0f, slicePaint)
+            native.restore()
+        }
+    }
+    slicePaint.colorFilter = null
+
+    // Draw the crisp front scan (or rear molded shell masked to the real cartridge silhouette!)
+    srcPts[0] = 0f; srcPts[1] = 0f
+    srcPts[2] = bw; srcPts[3] = 0f
+    srcPts[4] = bw; srcPts[5] = bh
+    srcPts[6] = 0f; srcPts[7] = bh
+    if (polyMatrix.setPolyToPoly(srcPts, 0, d, 0, 4)) {
+        native.save()
+        native.concat(polyMatrix)
+        // Use an offscreen layer + SRC_ATOP so lighting & gloss ONLY touch opaque cartridge pixels!
+        val layerId = native.saveLayer(0f, 0f, bw, bh, null)
+        if (isFront) {
+            native.drawBitmap(tex, 0f, 0f, bmpPaint)
+        } else {
+            // Mask the procedural rear shell to the exact real LaunchBox cartridge silhouette!
+            native.drawBitmap(silhouetteBmp, null, RectF(0f, 0f, bw, bh), bmpPaint)
+            val maskPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
+                xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
+            }
+            native.drawBitmap(tex, 0f, 0f, maskPaint)
+        }
+
+        // Apply subtle directional shading + moving specular strictly onto opaque pixels (SRC_ATOP)
+        fillPaint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_ATOP)
+        drawFaceLightingAndGloss(
+            native = native,
+            bw = bw,
+            bh = bh,
+            shade = mainFace.shade,
+            specular = mainFace.specular,
+            glossy = true,
+            isCartridge = true,
+            yawDeg = yawDeg,
+            pitchDeg = pitchDeg,
+            paint = fillPaint,
+        )
+        fillPaint.xfermode = null
+        native.restoreToCount(layerId)
+        native.restore()
+    }
+}
+
+/** Samples the average cardstock color along the top or bottom edge of a box cover bitmap. */
+private fun sampleBitmapEdgeArgb(bmp: Bitmap, topEdge: Boolean): Int {
+    val w = bmp.width
+    val h = bmp.height
+    if (w <= 2 || h <= 2) return AndroidColor.rgb(32, 34, 42)
+    val y = if (topEdge) (h * 0.03f).roundToInt().coerceIn(0, h - 1) else (h * 0.97f).roundToInt().coerceIn(0, h - 1)
+    var rSum = 0L
+    var gSum = 0L
+    var bSum = 0L
+    var count = 0
+    val samples = 12
+    for (i in 1..samples) {
+        val x = (w * i / (samples + 1)).coerceIn(0, w - 1)
+        val px = bmp.getPixel(x, y)
+        if (AndroidColor.alpha(px) > 128) {
+            rSum += AndroidColor.red(px)
+            gSum += AndroidColor.green(px)
+            bSum += AndroidColor.blue(px)
+            count++
+        }
+    }
+    if (count == 0) return AndroidColor.rgb(32, 34, 42)
+    return AndroidColor.rgb((rSum / count).toInt(), (gSum / count).toInt(), (bSum / count).toInt())
 }
 
 private fun draw3dOpticalDisc(
@@ -1562,16 +1763,27 @@ private fun drawCaseOrCartSideEdge(
             native.drawRoundRect(RectF(ew * 0.18f, eh * 0.40f, ew * 0.82f, eh * 0.60f), 14f, 14f, fillPaint)
         }
     } else {
-        // Printed retail cardboard box flap with fold crease & tuck seam
-        val cardColor = shadeArgb(AndroidColor.rgb(46, 48, 58), shade)
-        fillPaint.color = cardColor
+        // Printed retail cardboard box top/bottom tuck flap matched to the real box cover cardstock color!
+        fillPaint.shader = LinearGradient(
+            0f, 0f, ew, 0f,
+            intArrayOf(
+                shadeArgb(baseArgb, shade * 1.06f),
+                shadeArgb(baseArgb, shade * 0.92f),
+                shadeArgb(baseArgb, shade * 0.80f),
+            ),
+            floatArrayOf(0f, 0.50f, 1f),
+            Shader.TileMode.CLAMP,
+        )
         native.drawRect(0f, 0f, ew, eh, fillPaint)
-        // Accent stripe from console header
-        fillPaint.color = shadeArgb(spec.spineHeaderColor.toArgb(), shade)
-        native.drawRect(0f, 0f, ew, eh * 0.11f, fillPaint)
-        // Cardboard tuck-flap seam line
-        fillPaint.color = AndroidColor.argb(95, 0, 0, 0)
-        native.drawRect(ew * 0.14f, eh * 0.03f, ew * 0.19f, eh * 0.97f, fillPaint)
+        fillPaint.shader = null
+        // Authentic cardboard tuck-flap seam & center thumb-tab notch
+        fillPaint.color = AndroidColor.argb(105, 0, 0, 0)
+        native.drawRect(ew * 0.14f, eh * 0.02f, ew * 0.18f, eh * 0.98f, fillPaint)
+        fillPaint.color = AndroidColor.argb(38, 255, 255, 255)
+        native.drawRect(ew * 0.18f, eh * 0.02f, ew * 0.21f, eh * 0.98f, fillPaint)
+        // Subtle semi-circular thumb cutout on the tuck flap
+        fillPaint.color = AndroidColor.argb(85, 0, 0, 0)
+        native.drawOval(RectF(ew * 0.06f, eh * 0.44f, ew * 0.24f, eh * 0.56f), fillPaint)
     }
 
     native.restore()
@@ -2647,7 +2859,7 @@ private fun describeVisibleAngle(
             y in 18f..62f -> "Front & Spine"
             y in 62f..122f -> "Box Spine"
             ay > 142f -> "Back of Box"
-            y in -122f..-62f -> "Case Opening Edge"
+            y in -122f..-62f -> if (spec.caseStyle.hasPlasticRim) "Case Opening Edge" else "Right Spine"
             else -> "3D Retail Case"
         }
     } else if (spec.mediaKind.isOpticalDisc) {
