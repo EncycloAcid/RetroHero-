@@ -838,6 +838,7 @@ fun M3GameCover(
     game: Game,
     modifier: Modifier = Modifier,
     showTitle: Boolean = true,
+    fitCover: Boolean = false,
 ) {
     val sources = rememberArtSources(game)
     var index by remember(game.id, sources) { mutableIntStateOf(0) }
@@ -849,10 +850,19 @@ fun M3GameCover(
         }
         val model = sources.getOrNull(index)
         if (model != null) {
+            if (fitCover) {
+                AsyncImage(
+                    model = model,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    alpha = 0.28f,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
             AsyncImage(
                 model = model,
                 contentDescription = game.title,
-                contentScale = ContentScale.Crop,
+                contentScale = if (fitCover) ContentScale.Fit else ContentScale.Crop,
                 onSuccess = { loaded = true },
                 onError = { if (index < sources.lastIndex) index++ },
                 modifier = Modifier.fillMaxSize(),

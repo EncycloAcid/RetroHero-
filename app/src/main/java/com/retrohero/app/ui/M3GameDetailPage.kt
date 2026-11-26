@@ -89,8 +89,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -430,6 +433,7 @@ internal fun M3GameDetailPage(
         }
     }
     var selectedSlideIdx by remember(game.id) { mutableIntStateOf(0) }
+    var lightboxSlideIdx by remember(game.id) { mutableStateOf<Int?>(null) }
     val activeSlide = slides.getOrNull(selectedSlideIdx) ?: slides.firstOrNull()
 
     val listState = rememberLazyListState()
@@ -458,7 +462,7 @@ internal fun M3GameDetailPage(
             contentPadding = PaddingValues(bottom = 36.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            // 1. CINEMATIC HERO BANNER
+            // 1. STOREFRONT HERO BANNER
             item(key = "detail_hero") {
                 Box(
                     Modifier
@@ -466,13 +470,13 @@ internal fun M3GameDetailPage(
                         .height(336.dp)
                         .clipToBounds(),
                 ) {
-                    // Backdrop artwork (prefers gameplay snap / title screen / editorial art)
+                    // Storefront key-art backdrop (prefers retail key/box art or editorial hero, then title/gameplay)
                     val heroSources = remember(game.id, dossier.heroImageUrl) {
                         buildList<Any> {
-                            addAll(game.gameplaySnapUrls.take(2))
-                            addAll(game.titleScreenUrls.take(2))
                             dossier.heroImageUrl?.let { add(it) }
                             addAll(game.boxArtUrls.take(2))
+                            addAll(game.titleScreenUrls.take(2))
+                            addAll(game.gameplaySnapUrls.take(2))
                         }
                     }
                     M3FallbackArtFrame(
@@ -487,14 +491,14 @@ internal fun M3GameDetailPage(
                             .background(
                                 Brush.verticalGradient(
                                     0.0f to cs.background.copy(alpha = 0.50f),
-                                    0.38f to cs.background.copy(alpha = 0.32f),
+                                    0.38f to cs.background.copy(alpha = 0.36f),
                                     0.72f to cs.background.copy(alpha = 0.88f),
                                     1.0f to cs.background,
                                 ),
                             ),
                     )
 
-                    // Bottom hero lockup: Box Art + Title + Developer/Year + Tagline
+                    // Bottom hero lockup: Uncropped Retail Box Art + Title + Developer/Year + Tagline
                     Row(
                         Modifier
                             .align(Alignment.BottomStart)
@@ -506,11 +510,13 @@ internal fun M3GameDetailPage(
                         M3GameCover(
                             game = game,
                             showTitle = false,
+                            fitCover = true,
                             modifier = Modifier
                                 .width(96.dp)
-                                .aspectRatio(0.82f)
-                                .clip(RoundedCornerShape(22.dp))
-                                .border(2.dp, cs.surfaceContainerHighest, RoundedCornerShape(22.dp)),
+                                .aspectRatio(0.86f)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(cs.surfaceContainerHighest)
+                                .border(1.5.dp, cs.outlineVariant.copy(alpha = 0.55f), RoundedCornerShape(20.dp)),
                         )
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(
@@ -1081,7 +1087,7 @@ internal fun M3GameDetailPage(
                 }
             }
 
-            // 4. INTERACTIVE MEDIA GALLERY & PROMO ADVERTISEMENT VIEWPORT
+            // 4. CLEAN STOREFRONT SCREENSHOTS & MEDIA GALLERY
             if (activeSlide != null) {
                 item(key = "detail_gallery") {
                     Column(
@@ -1116,95 +1122,73 @@ internal fun M3GameDetailPage(
                             }
                         }
 
-                        // Featured 16:9 Showcase Viewport with editorial promo banner
+                        // Clean full-frame storefront screenshot viewport (uncropped, unobstructed — tap to expand)
                         Box(
                             Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 20.dp)
-                                .aspectRatio(16f / 9.5f)
-                                .clip(RoundedCornerShape(28.dp))
-                                .background(cs.surfaceContainerHigh),
+                                .aspectRatio(16f / 10.5f)
+                                .clip(RoundedCornerShape(24.dp))
+                                .background(cs.surfaceContainerHigh)
+                                .border(1.dp, cs.outlineVariant.copy(alpha = 0.35f), RoundedCornerShape(24.dp))
+                                .clickable {
+                                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                    lightboxSlideIdx = selectedSlideIdx
+                                },
                         ) {
                             AnimatedContent(
                                 targetState = activeSlide,
-                                transitionSpec = { fadeIn(tween(240)) togetherWith fadeOut(tween(180)) },
+                                transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(160)) },
                                 label = "galleryShowcase",
                             ) { slide ->
                                 M3FallbackArtFrame(
                                     game = game,
                                     sources = slide.sources,
+                                    storefrontFit = true,
                                     modifier = Modifier.fillMaxSize(),
-                                )
-                            }
-
-                            // Bottom editorial advertisement pull-quote overlay
-                            Box(
-                                Modifier
-                                    .align(Alignment.BottomCenter)
-                                    .fillMaxWidth()
-                                    .background(
-                                        Brush.verticalGradient(
-                                            listOf(Color.Transparent, cs.scrim.copy(alpha = 0.82f)),
-                                        ),
-                                    )
-                                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                            ) {
-                                Row(
-                                    Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.Bottom,
-                                ) {
-                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                        Text(
-                                            text = "“${dossier.promoQuote}”",
-                                            style = MaterialTheme.typography.titleSmall.copy(
-                                                fontWeight = FontWeight.Black,
-                                                letterSpacing = 0.5.sp,
-                                            ),
-                                            color = Color.White,
-                                            maxLines = 2,
-                                        )
-                                        Text(
-                                            text = "${activeSlide.label} · ${game.system?.name ?: game.systemId.uppercase()}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = Color.White.copy(alpha = 0.78f),
-                                        )
-                                    }
-                                    if (activeSlide.userShotFile != null) {
-                                        Row(
-                                            Modifier
-                                                .clip(CircleShape)
-                                                .background(cs.primary)
-                                                .clickable { onUseScreenshotAsCover(activeSlide.userShotFile) }
-                                                .padding(horizontal = 12.dp, vertical = 7.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(5.dp),
-                                        ) {
-                                            Icon(Icons.Rounded.Wallpaper, null, tint = cs.onPrimary, modifier = Modifier.size(14.dp))
-                                            Text("Use cover", style = MaterialTheme.typography.labelSmall, color = cs.onPrimary)
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Top-left media pill
-                            Box(
-                                Modifier
-                                    .align(Alignment.TopStart)
-                                    .padding(12.dp)
-                                    .clip(CircleShape)
-                                    .background(cs.surfaceContainerHighest.copy(alpha = 0.88f))
-                                    .padding(horizontal = 10.dp, vertical = 4.dp),
-                            ) {
-                                Text(
-                                    text = activeSlide.label.uppercase(),
-                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
-                                    color = cs.onSurface,
                                 )
                             }
                         }
 
-                        // Horizontal thumbnail selector strip
+                        // Subtle caption row below the photo (never covering the screenshot)
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 24.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = "${activeSlide.label} · ${game.system?.name ?: game.systemId.uppercase()}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = cs.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            if (activeSlide.userShotFile != null) {
+                                Row(
+                                    Modifier
+                                        .clip(CircleShape)
+                                        .background(cs.primaryContainer)
+                                        .clickable { onUseScreenshotAsCover(activeSlide.userShotFile) }
+                                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    Icon(Icons.Rounded.Wallpaper, null, tint = cs.onPrimaryContainer, modifier = Modifier.size(13.dp))
+                                    Text("Use as cover", style = MaterialTheme.typography.labelSmall, color = cs.onPrimaryContainer)
+                                }
+                            } else {
+                                Text(
+                                    text = "Tap to expand",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = cs.primary,
+                                )
+                            }
+                        }
+
+                        // Clean uncropped horizontal thumbnail strip with labels below each image
                         if (slides.size > 1) {
                             LazyRow(
                                 contentPadding = PaddingValues(horizontal = 20.dp),
@@ -1213,45 +1197,50 @@ internal fun M3GameDetailPage(
                                 itemsIndexed(slides, key = { _, s -> s.id }) { idx, slide ->
                                     val selected = idx == selectedSlideIdx
                                     val thumbScale by animateFloatAsState(
-                                        if (selected) 1f else 0.94f,
+                                        if (selected) 1f else 0.96f,
                                         M3ExpressiveSpring,
                                         label = "thumbScale",
                                     )
-                                    Box(
+                                    Column(
                                         Modifier
-                                            .width(106.dp)
-                                            .aspectRatio(16f / 10f)
+                                            .width(104.dp)
                                             .graphicsLayer { scaleX = thumbScale; scaleY = thumbScale }
-                                            .clip(RoundedCornerShape(16.dp))
-                                            .then(
-                                                if (selected) Modifier.border(2.5.dp, cs.primary, RoundedCornerShape(16.dp))
-                                                else Modifier,
-                                            )
-                                            .background(cs.surfaceContainerHigh)
                                             .clickable {
                                                 view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                                                 selectedSlideIdx = idx
                                             },
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(5.dp),
                                     ) {
-                                        M3FallbackArtFrame(
-                                            game = game,
-                                            sources = slide.sources,
-                                            modifier = Modifier.fillMaxSize(),
-                                        )
                                         Box(
                                             Modifier
-                                                .align(Alignment.BottomStart)
                                                 .fillMaxWidth()
-                                                .background(cs.scrim.copy(alpha = 0.56f))
-                                                .padding(horizontal = 7.dp, vertical = 3.dp),
+                                                .aspectRatio(16f / 10.5f)
+                                                .clip(RoundedCornerShape(14.dp))
+                                                .background(cs.surfaceContainerHigh)
+                                                .border(
+                                                    width = if (selected) 2.dp else 1.dp,
+                                                    color = if (selected) cs.primary else cs.outlineVariant.copy(alpha = 0.30f),
+                                                    shape = RoundedCornerShape(14.dp),
+                                                ),
                                         ) {
-                                            Text(
-                                                text = slide.label,
-                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp),
-                                                color = Color.White,
-                                                maxLines = 1,
+                                            M3FallbackArtFrame(
+                                                game = game,
+                                                sources = slide.sources,
+                                                storefrontFit = true,
+                                                modifier = Modifier.fillMaxSize(),
                                             )
                                         }
+                                        Text(
+                                            text = slide.label,
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontSize = 10.sp,
+                                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                            ),
+                                            color = if (selected) cs.primary else cs.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
                                     }
                                 }
                             }
@@ -2166,6 +2155,109 @@ internal fun M3GameDetailPage(
         }
     }
 
+    lightboxSlideIdx?.let { startIdx ->
+        val currentIdx = startIdx.coerceIn(0, (slides.size - 1).coerceAtLeast(0))
+        val slide = slides.getOrNull(currentIdx)
+        if (slide != null) {
+            Dialog(
+                onDismissRequest = { lightboxSlideIdx = null },
+                properties = DialogProperties(usePlatformDefaultWidth = false),
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.94f))
+                        .clickable { lightboxSlideIdx = null },
+                ) {
+                    M3FallbackArtFrame(
+                        game = game,
+                        sources = slide.sources,
+                        storefrontFit = true,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp, vertical = 72.dp),
+                    )
+                    // Top close bar
+                    Row(
+                        Modifier
+                            .align(Alignment.TopCenter)
+                            .fillMaxWidth()
+                            .windowInsetsPadding(WindowInsets.statusBars)
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "${slide.label} (${currentIdx + 1}/${slides.size})",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = Color.White,
+                        )
+                        Box(
+                            Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.16f))
+                                .clickable { lightboxSlideIdx = null },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(Icons.Rounded.Close, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(20.dp))
+                        }
+                    }
+                    // Bottom prev/next controls when multiple slides exist
+                    if (slides.size > 1) {
+                        Row(
+                            Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth()
+                                .windowInsetsPadding(WindowInsets.navigationBars)
+                                .padding(horizontal = 20.dp, vertical = 16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(
+                                Modifier
+                                    .size(44.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White.copy(alpha = 0.16f))
+                                    .clickable {
+                                        val prev = (currentIdx - 1 + slides.size) % slides.size
+                                        lightboxSlideIdx = prev
+                                        selectedSlideIdx = prev
+                                    },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Previous", tint = Color.White)
+                            }
+                            Text(
+                                text = game.title,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Color.White.copy(alpha = 0.80f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(horizontal = 12.dp).weight(1f),
+                                textAlign = TextAlign.Center,
+                            )
+                            Box(
+                                Modifier
+                                    .size(44.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White.copy(alpha = 0.16f))
+                                    .clickable {
+                                        val next = (currentIdx + 1) % slides.size
+                                        lightboxSlideIdx = next
+                                        selectedSlideIdx = next
+                                    },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(Icons.AutoMirrored.Rounded.ArrowForward, contentDescription = "Next", tint = Color.White)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     if (showCheatsSheet) {
         M3GameCheatsSheet(
             game = game,
@@ -2587,25 +2679,37 @@ private fun M3FallbackArtFrame(
     game: Game,
     sources: List<Any>,
     modifier: Modifier = Modifier,
+    storefrontFit: Boolean = false,
 ) {
     var idx by remember(game.id, sources) { mutableIntStateOf(0) }
     var loaded by remember(game.id, sources) { mutableStateOf(false) }
 
-    Box(modifier) {
+    Box(modifier, contentAlignment = Alignment.Center) {
         if (!loaded || idx >= sources.size) {
-            M3GameCover(game = game, showTitle = false, modifier = Modifier.fillMaxSize())
+            M3GameCover(game = game, showTitle = false, fitCover = storefrontFit, modifier = Modifier.fillMaxSize())
         }
         if (idx < sources.size) {
+            if (storefrontFit) {
+                AsyncImage(
+                    model = sources[idx],
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    alpha = 0.24f,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .blur(18.dp),
+                )
+            }
             AsyncImage(
                 model = sources[idx],
                 contentDescription = null,
-                contentScale = ContentScale.Crop,
+                contentScale = if (storefrontFit) ContentScale.Fit else ContentScale.Crop,
                 onSuccess = { loaded = true },
                 onError = {
                     loaded = false
                     idx++
                 },
-                modifier = Modifier.fillMaxSize(),
+                modifier = if (storefrontFit) Modifier.fillMaxSize().padding(4.dp) else Modifier.fillMaxSize(),
             )
         }
     }
