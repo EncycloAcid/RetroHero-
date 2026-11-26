@@ -80,6 +80,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.graphics.shapes.RoundedPolygon
+import com.retrohero.app.BuildConfig
 import com.retrohero.app.data.BiosFile
 import com.retrohero.app.data.BiosManager
 import com.retrohero.app.data.CoreInfo
@@ -238,7 +239,7 @@ internal fun M3SettingsPage(
                             .background(cs.secondaryContainer)
                             .padding(horizontal = 10.dp, vertical = 4.dp),
                     ) {
-                        Text(text = "Engine · $abi", style = MaterialTheme.typography.labelSmall, color = cs.onSecondaryContainer)
+                        Text(text = "v${BuildConfig.VERSION_NAME} · $abi", style = MaterialTheme.typography.labelSmall, color = cs.onSecondaryContainer)
                     }
                     Text(text = "Settings", style = MaterialTheme.typography.displayMedium, color = cs.onBackground)
                 }

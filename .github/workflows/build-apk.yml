@@ -6,8 +6,13 @@ on:
       - main
       - master
       - "ccr-*"
+    tags:
+      - "v*"
   pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -35,11 +40,32 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Decode persistent signing keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.RETROHERO_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            KS_PATH="${RUNNER_TEMP}/retrohero-signing.jks"
+            printf '%s' "$KEYSTORE_B64" | base64 -d > "$KS_PATH"
+            echo "RETROHERO_KEYSTORE_PATH=$KS_PATH" >> "$GITHUB_ENV"
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "ERROR: RETROHERO_KEYSTORE_B64 secret is required for tagged releases so APKs can update in-place."
+            exit 1
+          fi
+
       - name: Make gradlew executable
         run: chmod +x gradlew
 
       - name: Build Debug & Release APKs
+        env:
+          RETROHERO_STORE_PASSWORD: ${{ secrets.RETROHERO_STORE_PASSWORD }}
+          RETROHERO_KEY_ALIAS: ${{ secrets.RETROHERO_KEY_ALIAS }}
+          RETROHERO_KEY_PASSWORD: ${{ secrets.RETROHERO_KEY_PASSWORD }}
         run: ./gradlew assembleDebug assembleRelease
+
+      - name: Verify APK signing certificate
+        run: |
+          keytool -printcert -jarfile app/build/outputs/apk/release/app-release.apk | grep -E "Owner:|SHA256:" || true
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
@@ -52,3 +78,17 @@ jobs:
         with:
           name: retrohero-release-apk
           path: app/build/outputs/apk/release/*.apk
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          cp app/build/outputs/apk/release/app-release.apk "RetroHero-${TAG}-release.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk "RetroHero-${TAG}-debug.apk"
+          gh release create "$TAG" \
+            "RetroHero-${TAG}-release.apk" \
+            "RetroHero-${TAG}-debug.apk" \
+            --title "RetroHero ${TAG}" \
+            --generate-notes

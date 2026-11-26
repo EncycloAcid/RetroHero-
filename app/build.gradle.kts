@@ -3,6 +3,37 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+fun computeVersionFromTag(raw: String): Pair<Int, String>? {
+    val clean = raw.removePrefix("v").trim()
+    val match = Regex("""^(\d+)\.(\d+)\.(\d+)(?:-(.+))?$""").matchEntire(clean) ?: return null
+    val major = match.groupValues[1].toInt()
+    val minor = match.groupValues[2].toInt()
+    val patch = match.groupValues[3].toInt()
+    val suffix = match.groupValues[4]
+    val stageBoost = if (suffix.isEmpty()) 5 else 0
+    val code = major * 10_000_000 + minor * 10_000 + patch * 10 + stageBoost
+    return code to clean
+}
+
+val resolvedVersion: Pair<Int, String> = run {
+    val explicitName = (project.findProperty("versionName") as? String)
+        ?: System.getenv("RETROHERO_VERSION_NAME")
+        ?: System.getenv("GITHUB_REF_NAME")?.takeIf { it.startsWith("v") }
+    val explicitCode = ((project.findProperty("versionCode") as? String)
+        ?: System.getenv("RETROHERO_VERSION_CODE"))?.toIntOrNull()
+    val parsed = explicitName?.let(::computeVersionFromTag)
+    val fallbackCode = 20180
+    val fallbackName = "0.2.18-preview"
+    val code = explicitCode ?: parsed?.first ?: fallbackCode
+    val name = parsed?.second ?: explicitName?.removePrefix("v") ?: fallbackName
+    code to name
+}
+
+val ciKeystoreFile = System.getenv("RETROHERO_KEYSTORE_PATH")
+    ?.takeIf { it.isNotBlank() }
+    ?.let(::file)
+    ?.takeIf { it.exists() }
+
 android {
     namespace = "com.retrohero.app"
     compileSdk {
@@ -14,8 +45,8 @@ android {
         applicationId = "com.retrohero.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = resolvedVersion.first
+        versionName = resolvedVersion.second
 
         ndk {
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
@@ -27,14 +58,37 @@ android {
         }
     }
 
+    signingConfigs {
+        if (ciKeystoreFile != null) {
+            create("persistent") {
+                storeFile = ciKeystoreFile
+                storePassword = System.getenv("RETROHERO_STORE_PASSWORD")
+                keyAlias = System.getenv("RETROHERO_KEY_ALIAS")
+                keyPassword = System.getenv("RETROHERO_KEY_PASSWORD")
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            if (ciKeystoreFile != null) {
+                signingConfig = signingConfigs.getByName("persistent")
+            }
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Signed with the debug key so `assembleRelease` produces an installable APK.
-            // Replace with your own signing config before publishing.
-            signingConfig = signingConfigs.getByName("debug")
+            // Uses the persistent CI signing key whenever available so updates always install in-place
+            // without uninstalling; falls back to the local debug key for developer builds.
+            signingConfig = if (ciKeystoreFile != null) {
+                signingConfigs.getByName("persistent")
+            } else {
+                signingConfigs.getByName("debug")
+            }
         }
     }
 
