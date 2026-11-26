@@ -1,5 +1,7 @@
 #include "video_output.h"
 
+#include <algorithm>
+#include <cmath>
 #include <cstring>
 
 #include "libretro.h"
@@ -18,7 +20,6 @@ inline uint32_t xrgb8888ToRgbx(uint32_t p) {
     return ((p >> 16) & 0xFF) | (p & 0x0000FF00) | ((p & 0xFF) << 16) | 0xFF000000u;
 }
 
-// Multiply a pixel's brightness by k/256.
 inline uint16_t shade565(uint16_t p, unsigned k) {
     unsigned r = ((p >> 11) & 0x1F) * k >> 8, g = ((p >> 5) & 0x3F) * k >> 8, b = (p & 0x1F) * k >> 8;
     return static_cast<uint16_t>((r << 11) | (g << 5) | b);
@@ -27,6 +28,49 @@ inline uint16_t shade565(uint16_t p, unsigned k) {
 inline uint32_t shadeRgbx(uint32_t p, unsigned k) {
     unsigned r = (p & 0xFF) * k >> 8, g = ((p >> 8) & 0xFF) * k >> 8, b = ((p >> 16) & 0xFF) * k >> 8;
     return r | (g << 8) | (b << 16) | 0xFF000000u;
+}
+
+// Fast integer 3-tap horizontal NTSC composite blend (0.25*L + 0.5*C + 0.25*R) for dither transparency
+inline uint16_t blend565(uint16_t a, uint16_t b, uint16_t c) {
+    unsigned r = (((a >> 11) & 0x1F) + (((b >> 11) & 0x1F) << 1) + ((c >> 11) & 0x1F) + 2) >> 2;
+    unsigned g = (((a >> 5) & 0x3F) + (((b >> 5) & 0x3F) << 1) + ((c >> 5) & 0x3F) + 2) >> 2;
+    unsigned bl = ((a & 0x1F) + ((b & 0x1F) << 1) + (c & 0x1F) + 2) >> 2;
+    return static_cast<uint16_t>((r << 11) | (g << 5) | bl);
+}
+
+inline uint32_t blendRgbx(uint32_t a, uint32_t b, uint32_t c) {
+    unsigned r = ((a & 0xFF) + ((b & 0xFF) << 1) + (c & 0xFF) + 2) >> 2;
+    unsigned g = (((a >> 8) & 0xFF) + (((b >> 8) & 0xFF) << 1) + ((c >> 8) & 0xFF) + 2) >> 2;
+    unsigned bl = (((a >> 16) & 0xFF) + (((b >> 16) & 0xFF) << 1) + ((c >> 16) & 0xFF) + 2) >> 2;
+    return r | (g << 8) | (bl << 16) | 0xFF000000u;
+}
+
+inline uint32_t applyLcdMatrixRgbx(uint32_t p, int profile) {
+    float r = static_cast<float>(p & 0xFF) / 255.0f;
+    float g = static_cast<float>((p >> 8) & 0xFF) / 255.0f;
+    float b = static_cast<float>((p >> 16) & 0xFF) / 255.0f;
+    // Slight gamma lift matches reflective handheld TFT tone response
+    r = std::pow(r, 1.18f);
+    g = std::pow(g, 1.18f);
+    b = std::pow(b, 1.18f);
+    float nr, ng, nb;
+    if (profile == VideoOutput::ColorGbaLcd) {
+        nr = 0.85f * r + 0.12f * g + 0.03f * b;
+        ng = 0.08f * r + 0.78f * g + 0.14f * b;
+        nb = 0.06f * r + 0.22f * g + 0.72f * b;
+    } else {
+        // Authentic GBC reflective LCD color matrix
+        nr = 0.82f * r + 0.14f * g + 0.04f * b;
+        ng = 0.10f * r + 0.74f * g + 0.16f * b;
+        nb = 0.08f * r + 0.18f * g + 0.74f * b;
+    }
+    auto clamp8 = [](float v) -> uint32_t {
+        int i = static_cast<int>(v * 255.0f + 0.5f);
+        if (i < 0) i = 0;
+        if (i > 255) i = 255;
+        return static_cast<uint32_t>(i);
+    };
+    return clamp8(nr) | (clamp8(ng) << 8) | (clamp8(nb) << 16) | 0xFF000000u;
 }
 
 inline uint32_t toArgb(const uint8_t *row, unsigned x, int fmt) {
@@ -68,6 +112,35 @@ void VideoOutput::setFilter(int filter) {
         blitLocked(last_.data(), lastW_, lastH_, lastPitch_, lastFmt_);
 }
 
+void VideoOutput::setColorProfile(int profile) {
+    std::lock_guard<std::mutex> lk(mutex_);
+    int clamped = (profile < ColorNone || profile > ColorCrtComposite) ? ColorNone : profile;
+    if (clamped == colorProfile_) return;
+    colorProfile_ = clamped;
+    rebuildColorLutLocked();
+    if (window_ && !last_.empty())
+        blitLocked(last_.data(), lastW_, lastH_, lastPitch_, lastFmt_);
+}
+
+void VideoOutput::rebuildColorLutLocked() {
+    if (colorProfile_ != ColorGbaLcd && colorProfile_ != ColorGbcLcd) {
+        lut565_.clear();
+        return;
+    }
+    lut565_.resize(65536);
+    for (uint32_t p = 0; p < 65536; p++) {
+        uint32_t r = ((p >> 11) & 0x1F); r = (r << 3) | (r >> 2);
+        uint32_t g = ((p >> 5) & 0x3F); g = (g << 2) | (g >> 4);
+        uint32_t b = (p & 0x1F); b = (b << 3) | (b >> 2);
+        uint32_t rgbx = r | (g << 8) | (b << 16) | 0xFF000000u;
+        uint32_t out = applyLcdMatrixRgbx(rgbx, colorProfile_);
+        uint16_t nr = static_cast<uint16_t>(((out & 0xFF) >> 3) & 0x1F);
+        uint16_t ng = static_cast<uint16_t>((((out >> 8) & 0xFF) >> 2) & 0x3F);
+        uint16_t nb = static_cast<uint16_t>((((out >> 16) & 0xFF) >> 3) & 0x1F);
+        lut565_[p] = static_cast<uint16_t>((nr << 11) | (ng << 5) | nb);
+    }
+}
+
 void VideoOutput::redraw() {
     std::lock_guard<std::mutex> lk(mutex_);
     if (window_ && !last_.empty())
@@ -101,11 +174,22 @@ void VideoOutput::present(const void *data, unsigned width, unsigned height, siz
     if (window_) blitLocked(last_.data(), width, height, pitch, pixelFormat);
 }
 
+void VideoOutput::presentBlack() {
+    std::lock_guard<std::mutex> lk(mutex_);
+    if (!window_ || bufW_ <= 0 || bufH_ <= 0) return;
+    ANativeWindow_Buffer buf;
+    if (ANativeWindow_lock(window_, &buf, nullptr) != 0) return;
+    const size_t bpp = (bufFmt_ == WINDOW_FORMAT_RGBX_8888) ? 4 : 2;
+    const size_t totalBytes = static_cast<size_t>(buf.stride) * static_cast<size_t>(buf.height) * bpp;
+    memset(buf.bits, 0, totalBytes);
+    ANativeWindow_unlockAndPost(window_);
+}
+
+// Fast division-free unrolled software blitter with O(1) GBA/GBC LCD color LUT & CRT composite blend.
 void VideoOutput::blitLocked(const uint8_t *data, unsigned width, unsigned height, size_t pitch,
                              int fmt) {
     const bool is32 = fmt == RETRO_PIXEL_FORMAT_XRGB8888;
     const int winFmt = is32 ? WINDOW_FORMAT_RGBX_8888 : WINDOW_FORMAT_RGB_565;
-    // Cap the pre-scale so large frames (e.g. 640x480) don't cost too much CPU.
     int s = sharpScale_;
     const int cap = height > 0 ? static_cast<int>(800 / height) : 1;
     if (s > cap) s = cap < 1 ? 1 : cap;
@@ -124,46 +208,101 @@ void VideoOutput::blitLocked(const uint8_t *data, unsigned width, unsigned heigh
 
     ANativeWindow_Buffer buf;
     if (ANativeWindow_lock(window_, &buf, nullptr) != 0) return;
-    const int rows = outH < buf.height ? outH : buf.height;
-    const int cols = outW < buf.width ? outW : buf.width;
+    const int srcRows = std::min(static_cast<int>(height), buf.height / s);
+    const int srcCols = std::min(static_cast<int>(width), buf.width / s);
+    const int outCols = srcCols * s;
 
-    // Effects need at least 2 output pixels per source pixel to have anywhere to go.
     const bool crt = filter_ == Crt && s >= 2;
     const bool lcd = filter_ == Lcd && s >= 2;
+    const bool useLcdLut = (colorProfile_ == ColorGbaLcd || colorProfile_ == ColorGbcLcd) && lut565_.size() == 65536;
+    const bool useComposite = colorProfile_ == ColorCrtComposite;
+    const uint16_t *lut = useLcdLut ? lut565_.data() : nullptr;
 
     if (is32) {
         auto *dst = static_cast<uint32_t *>(buf.bits);
-        for (int y = 0; y < rows; y++) {
-            auto *src = reinterpret_cast<const uint32_t *>(data + (y / s) * pitch);
-            uint32_t *d = dst + static_cast<size_t>(y) * buf.stride;
-            const bool edgeRow = y % s == s - 1;
-            for (int x = 0; x < cols; x++) d[x] = xrgb8888ToRgbx(src[x / s]);
-            if (crt && edgeRow) {
-                for (int x = 0; x < cols; x++) d[x] = shadeRgbx(d[x], kScanline);
-            } else if (lcd) {
-                for (int x = 0; x < cols; x++)
-                    if (edgeRow || x % s == s - 1) d[x] = shadeRgbx(d[x], kGrid);
+        const size_t rowBytes = static_cast<size_t>(outCols) * sizeof(uint32_t);
+        auto fetch32 = [&](const uint32_t *src, int sx) -> uint32_t {
+            uint32_t px = xrgb8888ToRgbx(src[sx]);
+            if (useLcdLut) px = applyLcdMatrixRgbx(px, colorProfile_);
+            return px;
+        };
+        for (int sy = 0; sy < srcRows; sy++) {
+            const auto *src = reinterpret_cast<const uint32_t *>(data + static_cast<size_t>(sy) * pitch);
+            uint32_t *firstRow = dst + static_cast<size_t>(sy * s) * buf.stride;
+            uint32_t prevPx = srcCols > 0 ? fetch32(src, 0) : 0;
+            uint32_t curPx = prevPx;
+            for (int sx = 0; sx < srcCols; sx++) {
+                uint32_t nextPx = (sx + 1 < srcCols) ? fetch32(src, sx + 1) : curPx;
+                uint32_t px = useComposite ? blendRgbx(prevPx, curPx, nextPx) : curPx;
+                prevPx = curPx;
+                curPx = nextPx;
+                if (s == 1) {
+                    firstRow[sx] = px;
+                } else if (s == 2) {
+                    uint32_t *d = firstRow + sx * 2;
+                    d[0] = px;
+                    d[1] = lcd ? shadeRgbx(px, kGrid) : px;
+                } else {
+                    uint32_t *d = firstRow + sx * 3;
+                    d[0] = px;
+                    d[1] = px;
+                    d[2] = lcd ? shadeRgbx(px, kGrid) : px;
+                }
+            }
+            for (int r = 1; r < s; r++) {
+                uint32_t *subRow = firstRow + static_cast<size_t>(r) * buf.stride;
+                if (r == s - 1 && (crt || lcd)) {
+                    const unsigned k = crt ? kScanline : kGrid;
+                    for (int x = 0; x < outCols; x++) subRow[x] = shadeRgbx(firstRow[x], k);
+                } else {
+                    memcpy(subRow, firstRow, rowBytes);
+                }
             }
         }
     } else {
         auto *dst = static_cast<uint16_t *>(buf.bits);
         const bool is1555 = fmt == RETRO_PIXEL_FORMAT_0RGB1555;
-        for (int y = 0; y < rows; y++) {
-            auto *src = reinterpret_cast<const uint16_t *>(data + (y / s) * pitch);
-            uint16_t *d = dst + static_cast<size_t>(y) * buf.stride;
-            if (s == 1 && !is1555) {
-                memcpy(d, src, cols * sizeof(uint16_t));
-            } else if (is1555) {
-                for (int x = 0; x < cols; x++) d[x] = rgb1555To565(src[x / s]);
+        const size_t rowBytes = static_cast<size_t>(outCols) * sizeof(uint16_t);
+        auto fetch16 = [&](const uint16_t *src, int sx) -> uint16_t {
+            uint16_t px = is1555 ? rgb1555To565(src[sx]) : src[sx];
+            if (lut) px = lut[px];
+            return px;
+        };
+        for (int sy = 0; sy < srcRows; sy++) {
+            const auto *src = reinterpret_cast<const uint16_t *>(data + static_cast<size_t>(sy) * pitch);
+            uint16_t *firstRow = dst + static_cast<size_t>(sy * s) * buf.stride;
+            if (s == 1 && !is1555 && !lut && !useComposite) {
+                memcpy(firstRow, src, rowBytes);
             } else {
-                for (int x = 0; x < cols; x++) d[x] = src[x / s];
+                uint16_t prevPx = srcCols > 0 ? fetch16(src, 0) : 0;
+                uint16_t curPx = prevPx;
+                for (int sx = 0; sx < srcCols; sx++) {
+                    uint16_t nextPx = (sx + 1 < srcCols) ? fetch16(src, sx + 1) : curPx;
+                    uint16_t px = useComposite ? blend565(prevPx, curPx, nextPx) : curPx;
+                    prevPx = curPx;
+                    curPx = nextPx;
+                    if (s == 1) {
+                        firstRow[sx] = px;
+                    } else if (s == 2) {
+                        uint16_t *d = firstRow + sx * 2;
+                        d[0] = px;
+                        d[1] = lcd ? shade565(px, kGrid) : px;
+                    } else {
+                        uint16_t *d = firstRow + sx * 3;
+                        d[0] = px;
+                        d[1] = px;
+                        d[2] = lcd ? shade565(px, kGrid) : px;
+                    }
+                }
             }
-            const bool edgeRow = y % s == s - 1;
-            if (crt && edgeRow) {
-                for (int x = 0; x < cols; x++) d[x] = shade565(d[x], kScanline);
-            } else if (lcd) {
-                for (int x = 0; x < cols; x++)
-                    if (edgeRow || x % s == s - 1) d[x] = shade565(d[x], kGrid);
+            for (int r = 1; r < s; r++) {
+                uint16_t *subRow = firstRow + static_cast<size_t>(r) * buf.stride;
+                if (r == s - 1 && (crt || lcd)) {
+                    const unsigned k = crt ? kScanline : kGrid;
+                    for (int x = 0; x < outCols; x++) subRow[x] = shade565(firstRow[x], k);
+                } else {
+                    memcpy(subRow, firstRow, rowBytes);
+                }
             }
         }
     }

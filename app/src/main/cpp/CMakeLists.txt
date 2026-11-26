@@ -8,10 +8,14 @@ add_library(retrohero SHARED
         jni_bridge.cpp
         frontend.cpp
         audio_output.cpp
-        video_output.cpp)
+        video_output.cpp
+        hw_renderer.cpp
+        builtin_herobox16.cpp
+        builtin_chip8.cpp
+        builtin_nes.cpp)
 
 target_include_directories(retrohero PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/libretro)
-target_compile_options(retrohero PRIVATE -O2 -Wall -Wextra -Wno-unused-parameter)
+target_compile_options(retrohero PRIVATE -O3 -ffast-math -fno-rtti -Wall -Wextra -Wno-unused-parameter)
 # 16 KB page alignment (required for Android 15+ devices with 16 KB pages).
 target_link_options(retrohero PRIVATE "-Wl,-z,max-page-size=16384")
-target_link_libraries(retrohero android log aaudio dl)
+target_link_libraries(retrohero android log aaudio dl EGL GLESv3)

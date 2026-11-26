@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <condition_variable>
 #include <map>
 #include <mutex>
 #include <string>
@@ -8,6 +9,7 @@
 #include <vector>
 
 #include "audio_output.h"
+#include "hw_renderer.h"
 #include "libretro.h"
 #include "video_output.h"
 
@@ -63,9 +65,19 @@ public:
     bool loadCore(const std::string &corePath, const std::string &systemDir,
                   const std::string &saveDir);
     bool loadGame(const std::string &romPath, const std::string &sramPath);
+    bool loadGameFromMemory(const std::string &virtualPath, const uint8_t *data, size_t size,
+                            const std::string &sramPath, const std::string &scratchDir);
     void start();
     void setPaused(bool paused);
     void setFastForward(bool enabled, float speed);
+    void setSlowMotion(bool enabled);
+    void setRunAhead(int frames);
+    void onVsync(int64_t frameTimeNanos, float displayHz);
+    void setVsyncConfig(bool vsyncLock, bool bfi120Hz);
+    float coreFps() const { return static_cast<float>(fps_.load(std::memory_order_relaxed)); }
+    bool isVsyncLocked() const { return vsyncActive_.load(std::memory_order_relaxed); }
+    bool isBfiActive() const { return bfiActive_.load(std::memory_order_relaxed); }
+    void perfStats(float &fps, float &frameMs, int &activeRunAhead) const;
     // Rewind keeps recent states in memory; holding rewind steps back through them.
     void setRewindEnabled(bool enabled);
     void setRewinding(bool rewinding);
@@ -76,7 +88,15 @@ public:
     bool saveState(const std::string &path);
     bool loadState(const std::string &path);
     bool saveSram(const std::string &path);
+    bool readMemory(unsigned memoryType, std::vector<uint8_t> &out, size_t maxBytes);
     void shutdown(const std::string &sramPath);
+
+    // Multi-disc control (RETRO_ENVIRONMENT_SET_DISK_CONTROL[_EXT]_INTERFACE)
+    void setInitialDisc(unsigned index);
+    int discCount();
+    int currentDiscIndex();
+    std::vector<std::string> discLabels();
+    bool swapDisc(unsigned index);
 
     void setOptionOverride(const std::string &key, const std::string &value);
     std::vector<CoreOption> options();
@@ -84,6 +104,12 @@ public:
     void setButton(unsigned port, unsigned id, bool pressed);
     void setAnalog(unsigned port, unsigned index, unsigned axis, int16_t value);
     void setPointer(int16_t x, int16_t y, bool pressed);
+
+    void setWindow(ANativeWindow *window);
+    void setFilter(int filter);
+    void setColorProfile(int profile);
+    void frameSize(unsigned &width, unsigned &height);
+    bool grabArgb(std::vector<uint32_t> &out, unsigned &width, unsigned &height);
 
     float aspectRatio() const { return aspect_.load(); }
     std::string lastError();
@@ -96,6 +122,8 @@ private:
     void setError(const std::string &msg);
     bool environment(unsigned cmd, void *data);
     void setVariables(const retro_variable *vars);
+    void setCoreOptionsV1(const retro_core_option_definition *defs);
+    void setCoreOptionsV2(const retro_core_option_v2_definition *defs);
     void updateAvInfo(const retro_system_av_info &info);
     void runFrameLocked();
     void pushRewindLocked();
@@ -109,6 +137,8 @@ private:
     static void inputPollCb();
     static int16_t inputStateCb(unsigned port, unsigned device, unsigned index, unsigned id);
     static void logCb(enum retro_log_level level, const char *fmt, ...);
+    static uintptr_t hwGetFramebufferCb();
+    static retro_proc_address_t hwGetProcAddressCb(const char *sym);
 
     CoreApi core_;
     std::mutex coreMutex_;  // guards every call into the core
@@ -116,6 +146,14 @@ private:
     bool gameLoaded_ = false;
     std::vector<uint8_t> romData_;
     std::string romPath_;
+    std::string ephemeralRomPath_;
+    std::vector<std::string> playlistPaths_;
+    unsigned initialDiscIndex_ = 0;
+
+    // Multi-disc control interface registered by the core (v0 or v1 ext).
+    retro_disk_control_ext_callback diskControl_{};
+    bool hasDiskControl_ = false;
+    bool hasDiskControlExt_ = false;
 
     std::string systemDir_, saveDir_;
     int pixelFormat_ = RETRO_PIXEL_FORMAT_0RGB1555;
@@ -128,13 +166,41 @@ private:
     retro_frame_time_callback frameTimeCb_{};
     bool hasFrameTimeCb_ = false;
 
+    // Hardware rendering state (EGL/GLES3)
+    std::atomic<bool> hwRenderEnabled_{false};
+    bool hwContextReady_ = false;
+    retro_hw_render_callback hwRenderCb_{};
+    std::atomic<unsigned> maxVideoW_{640};
+    std::atomic<unsigned> maxVideoH_{480};
+    std::string pendingStatePath_;
+    HwRenderer hw_;
+
     std::atomic<double> fps_{60.0};
     std::atomic<float> aspect_{4.0f / 3.0f};
     std::atomic<bool> running_{false};
     std::atomic<bool> paused_{false};
     std::atomic<bool> fastForward_{false};
     std::atomic<float> ffSpeed_{3.0f};
+    std::atomic<bool> slowMotion_{false};
+    std::atomic<int> runAheadFrames_{0};
+    std::atomic<int> activeRunAhead_{0};
+    std::atomic<float> actualFps_{60.0f};
+    std::atomic<float> frameTimeMs_{0.0f};
+    bool suppressVideo_ = false;
+    bool suppressAudio_ = false;
+    std::vector<uint8_t> runAheadBuf_;
     std::thread thread_;
+
+    // Hardware Choreographer Vsync pacing & 120 Hz OLED BFI
+    std::mutex vsyncMutex_;
+    std::condition_variable vsyncCv_;
+    uint64_t vsyncSeq_ = 0;
+    int64_t lastVsyncNs_ = 0;
+    std::atomic<float> displayHz_{60.0f};
+    std::atomic<bool> vsyncLockEnabled_{true};
+    std::atomic<bool> bfiEnabled_{false};
+    std::atomic<bool> vsyncActive_{false};
+    std::atomic<bool> bfiActive_{false};
 
     // Rewind ring buffer (only touched with coreMutex_ held).
     std::atomic<bool> rewindEnabled_{false};

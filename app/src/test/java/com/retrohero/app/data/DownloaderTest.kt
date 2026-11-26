@@ -129,7 +129,12 @@ class DownloaderTest {
     fun homebrewCatalogIsWellFormed() {
         assertTrue(Homebrew.catalog.isNotEmpty())
         for (g in Homebrew.catalog) {
-            assertTrue(g.url, g.url.startsWith("https://github.com/") && "/releases/download/" in g.url)
+            if (g.embeddedBytes != null) {
+                assertTrue(g.url, g.url.startsWith("builtin://"))
+                assertTrue(g.title, g.embeddedBytes.isNotEmpty())
+            } else {
+                assertTrue(g.url, g.url.startsWith("https://github.com/") && "/releases/download/" in g.url)
+            }
             val system = g.system
             assertNotNull(g.title, system)
             assertTrue(g.fileName, g.fileName.substringAfterLast('.').lowercase() in system!!.extensions)

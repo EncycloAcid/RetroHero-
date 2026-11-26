@@ -8,10 +8,8 @@
 
 namespace rh {
 
-// Lock-free single-producer/single-consumer audio output built on AAudio.
-// The emulation thread pushes interleaved stereo int16 frames at the core's
-// sample rate; they are resampled (linear + dynamic rate control) to the
-// device rate so the ring buffer hovers around half full.
+// Lock-free single-producer/single-consumer power-of-two ring buffer built on AAudio.
+// Batches atomic index updates once per frame and uses 2-chunk memcpy in the audio callback.
 class AudioOutput {
 public:
     ~AudioOutput();
@@ -19,6 +17,7 @@ public:
     bool start();
     void stop();
     void setInputRate(double rate);
+    void setSyncSkew(double skew);
     void write(const int16_t *frames, size_t count);
     void clear();
 
@@ -28,7 +27,6 @@ private:
     static void errorCallback(AAudioStream *stream, void *user, aaudio_result_t error);
     bool openStream();
     void closeStream();
-    void push(int16_t l, int16_t r);
 
     std::mutex streamMutex_;
     AAudioStream *stream_ = nullptr;
@@ -36,9 +34,11 @@ private:
 
     int32_t deviceRate_ = 48000;
     double inputRate_ = 44100.0;
+    std::atomic<double> syncSkew_{1.0};
 
     std::vector<int16_t> ring_;
-    size_t capacity_ = 0;  // in frames
+    size_t capacity_ = 0;  // power of two, in stereo frames
+    size_t mask_ = 0;
     std::atomic<uint64_t> readPos_{0};
     std::atomic<uint64_t> writePos_{0};
 

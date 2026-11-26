@@ -87,6 +87,20 @@ class BiosManager(private val context: Context, private val paths: AppPaths) {
         if (target.fileName.endsWith(".zip", ignoreCase = true)) {
             src.copyTo(File(File(paths.system, "fbneo").apply { mkdirs() }, target.fileName), overwrite = true)
         }
+        // LRPS2 (PCSX2) looks for PS2 BIOS dumps inside system/pcsx2/bios/.
+        if (target.fileName.startsWith("scph3", ignoreCase = true) ||
+            target.fileName.startsWith("scph50", ignoreCase = true) ||
+            target.fileName.startsWith("scph7", ignoreCase = true) ||
+            target.fileName.contains("ps2", ignoreCase = true)
+        ) {
+            src.copyTo(File(File(paths.system, "pcsx2/bios").apply { mkdirs() }, target.fileName), overwrite = true)
+        }
+        // Flycast looks for Dreamcast BIOS inside system/dc/.
+        if (target.fileName.equals("dc_boot.bin", ignoreCase = true) ||
+            target.fileName.equals("dc_flash.bin", ignoreCase = true)
+        ) {
+            src.copyTo(File(File(paths.system, "dc").apply { mkdirs() }, target.fileName), overwrite = true)
+        }
         val verified = target.md5 != null && md5(dest) == target.md5
         return InstallResult(target.fileName, verified)
     }
@@ -94,6 +108,8 @@ class BiosManager(private val context: Context, private val paths: AppPaths) {
     fun delete(name: String) {
         File(paths.system, name).delete()
         File(File(paths.system, "fbneo"), name).delete()
+        File(File(paths.system, "pcsx2/bios"), name).delete()
+        File(File(paths.system, "dc"), name).delete()
     }
 
     private fun displayName(uri: Uri): String? =

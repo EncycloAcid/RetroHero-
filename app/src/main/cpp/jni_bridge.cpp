@@ -33,6 +33,21 @@ JNIEXPORT jboolean JNICALL JNI_FN(loadGame)(JNIEnv *env, jobject, jstring rom, j
     return Frontend::get().loadGame(str(env, rom), str(env, sram));
 }
 
+JNIEXPORT jboolean JNICALL JNI_FN(loadGameMemory)(JNIEnv *env, jobject, jstring virtualPath,
+                                                  jbyteArray romBytes, jstring sram,
+                                                  jstring scratchDir) {
+    if (!romBytes) return JNI_FALSE;
+    jsize len = env->GetArrayLength(romBytes);
+    if (len <= 0) return JNI_FALSE;
+    jbyte *ptr = env->GetByteArrayElements(romBytes, nullptr);
+    if (!ptr) return JNI_FALSE;
+    bool ok = Frontend::get().loadGameFromMemory(
+        str(env, virtualPath), reinterpret_cast<const uint8_t *>(ptr), static_cast<size_t>(len),
+        str(env, sram), str(env, scratchDir));
+    env->ReleaseByteArrayElements(romBytes, ptr, JNI_ABORT);
+    return ok ? JNI_TRUE : JNI_FALSE;
+}
+
 JNIEXPORT void JNICALL JNI_FN(start)(JNIEnv *, jobject) { Frontend::get().start(); }
 
 JNIEXPORT void JNICALL JNI_FN(setPaused)(JNIEnv *, jobject, jboolean paused) {
@@ -41,6 +56,44 @@ JNIEXPORT void JNICALL JNI_FN(setPaused)(JNIEnv *, jobject, jboolean paused) {
 
 JNIEXPORT void JNICALL JNI_FN(setFastForward)(JNIEnv *, jobject, jboolean on, jfloat speed) {
     Frontend::get().setFastForward(on, speed);
+}
+
+JNIEXPORT void JNICALL JNI_FN(setSlowMotion)(JNIEnv *, jobject, jboolean on) {
+    Frontend::get().setSlowMotion(on);
+}
+
+JNIEXPORT void JNICALL JNI_FN(setRunAhead)(JNIEnv *, jobject, jint frames) {
+    Frontend::get().setRunAhead(frames);
+}
+
+JNIEXPORT void JNICALL JNI_FN(onVsync)(JNIEnv *, jobject, jlong frameTimeNanos, jfloat displayHz) {
+    Frontend::get().onVsync(static_cast<int64_t>(frameTimeNanos), static_cast<float>(displayHz));
+}
+
+JNIEXPORT void JNICALL JNI_FN(setVsyncConfig)(JNIEnv *, jobject, jboolean vsyncLock, jboolean bfi120Hz) {
+    Frontend::get().setVsyncConfig(vsyncLock, bfi120Hz);
+}
+
+JNIEXPORT jfloat JNICALL JNI_FN(getCoreFps)(JNIEnv *, jobject) {
+    return Frontend::get().coreFps();
+}
+
+JNIEXPORT jboolean JNICALL JNI_FN(isVsyncLocked)(JNIEnv *, jobject) {
+    return Frontend::get().isVsyncLocked();
+}
+
+JNIEXPORT jboolean JNICALL JNI_FN(isBfiActive)(JNIEnv *, jobject) {
+    return Frontend::get().isBfiActive();
+}
+
+JNIEXPORT jfloatArray JNICALL JNI_FN(getPerfStats)(JNIEnv *env, jobject) {
+    float fps = 0.0f, ms = 0.0f;
+    int ra = 0;
+    Frontend::get().perfStats(fps, ms, ra);
+    jfloatArray arr = env->NewFloatArray(3);
+    jfloat vals[3] = {fps, ms, static_cast<jfloat>(ra)};
+    env->SetFloatArrayRegion(arr, 0, 3, vals);
+    return arr;
 }
 
 JNIEXPORT void JNICALL JNI_FN(reset)(JNIEnv *, jobject) { Frontend::get().reset(); }
@@ -57,17 +110,60 @@ JNIEXPORT jboolean JNICALL JNI_FN(saveSram)(JNIEnv *env, jobject, jstring path) 
     return Frontend::get().saveSram(str(env, path));
 }
 
+JNIEXPORT jbyteArray JNICALL JNI_FN(readMemory)(JNIEnv *env, jobject, jint memoryType, jint maxBytes) {
+    std::vector<uint8_t> buf;
+    size_t cap = maxBytes > 0 ? static_cast<size_t>(maxBytes) : 0;
+    if (!Frontend::get().readMemory(static_cast<unsigned>(memoryType), buf, cap)) return nullptr;
+    jbyteArray arr = env->NewByteArray(static_cast<jsize>(buf.size()));
+    if (!arr) return nullptr;
+    env->SetByteArrayRegion(arr, 0, static_cast<jsize>(buf.size()),
+                            reinterpret_cast<const jbyte *>(buf.data()));
+    return arr;
+}
+
 JNIEXPORT void JNICALL JNI_FN(shutdown)(JNIEnv *env, jobject, jstring sram) {
     Frontend::get().shutdown(str(env, sram));
 }
 
+JNIEXPORT void JNICALL JNI_FN(setInitialDisc)(JNIEnv *, jobject, jint index) {
+    if (index >= 0) Frontend::get().setInitialDisc(static_cast<unsigned>(index));
+}
+
+JNIEXPORT jint JNICALL JNI_FN(getDiscCount)(JNIEnv *, jobject) {
+    return Frontend::get().discCount();
+}
+
+JNIEXPORT jint JNICALL JNI_FN(getCurrentDisc)(JNIEnv *, jobject) {
+    return Frontend::get().currentDiscIndex();
+}
+
+JNIEXPORT jobjectArray JNICALL JNI_FN(getDiscLabels)(JNIEnv *env, jobject) {
+    auto labels = Frontend::get().discLabels();
+    jclass strClass = env->FindClass("java/lang/String");
+    jobjectArray arr = env->NewObjectArray(static_cast<jsize>(labels.size()), strClass, nullptr);
+    for (size_t i = 0; i < labels.size(); i++) {
+        jstring js = env->NewStringUTF(labels[i].c_str());
+        env->SetObjectArrayElement(arr, static_cast<jsize>(i), js);
+        env->DeleteLocalRef(js);
+    }
+    return arr;
+}
+
+JNIEXPORT jboolean JNICALL JNI_FN(swapDisc)(JNIEnv *, jobject, jint index) {
+    return index >= 0 && Frontend::get().swapDisc(static_cast<unsigned>(index));
+}
+
 JNIEXPORT void JNICALL JNI_FN(setSurface)(JNIEnv *env, jobject, jobject surface) {
     ANativeWindow *win = surface ? ANativeWindow_fromSurface(env, surface) : nullptr;
-    Frontend::get().video().setWindow(win);
+    Frontend::get().setWindow(win);
 }
 
 JNIEXPORT void JNICALL JNI_FN(setFilter)(JNIEnv *, jobject, jint filter) {
-    Frontend::get().video().setFilter(filter);
+    Frontend::get().setFilter(filter);
+}
+
+JNIEXPORT void JNICALL JNI_FN(setColorProfile)(JNIEnv *, jobject, jint profile) {
+    Frontend::get().setColorProfile(profile);
 }
 
 JNIEXPORT void JNICALL JNI_FN(setRewindEnabled)(JNIEnv *, jobject, jboolean on) {
@@ -95,7 +191,7 @@ JNIEXPORT jboolean JNICALL JNI_FN(setCheats)(JNIEnv *env, jobject, jobjectArray 
 
 JNIEXPORT jintArray JNICALL JNI_FN(getFrameSize)(JNIEnv *env, jobject) {
     unsigned w = 0, h = 0;
-    Frontend::get().video().frameSize(w, h);
+    Frontend::get().frameSize(w, h);
     jintArray arr = env->NewIntArray(2);
     jint dims[2] = {static_cast<jint>(w), static_cast<jint>(h)};
     env->SetIntArrayRegion(arr, 0, 2, dims);
@@ -106,7 +202,7 @@ JNIEXPORT jintArray JNICALL JNI_FN(getFrameSize)(JNIEnv *env, jobject) {
 JNIEXPORT jintArray JNICALL JNI_FN(grabFrame)(JNIEnv *env, jobject) {
     std::vector<uint32_t> px;
     unsigned w = 0, h = 0;
-    if (!Frontend::get().video().grabArgb(px, w, h)) return nullptr;
+    if (!Frontend::get().grabArgb(px, w, h)) return nullptr;
     jintArray arr = env->NewIntArray(static_cast<jsize>(px.size() + 2));
     if (!arr) return nullptr;
     jint dims[2] = {static_cast<jint>(w), static_cast<jint>(h)};

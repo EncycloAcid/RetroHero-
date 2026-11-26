@@ -26,6 +26,68 @@ class GamePrefs(context: Context, sharpDefault: Boolean) {
         get() = prefs.getBoolean("rewind", true)
         set(v) = prefs.edit { putBoolean("rewind", v) }
 
+    var vsyncLock: Boolean
+        get() = prefs.getBoolean("vsync_lock", true)
+        set(v) = prefs.edit { putBoolean("vsync_lock", v) }
+
+    var bfi120Hz: Boolean
+        get() = prefs.getBoolean("bfi_120hz", false)
+        set(v) = prefs.edit { putBoolean("bfi_120hz", v) }
+
+    var thumbChordZones: Boolean
+        get() = prefs.getBoolean("smart_thumb_chord", true)
+        set(v) = prefs.edit { putBoolean("smart_thumb_chord", v) }
+
+    var shoulderLatch: Boolean
+        get() = prefs.getBoolean("smart_shoulder_latch", true)
+        set(v) = prefs.edit { putBoolean("smart_shoulder_latch", v) }
+
+    var comboMacroEnabled: Boolean
+        get() = prefs.getBoolean("smart_combo_macro", true)
+        set(v) = prefs.edit { putBoolean("smart_combo_macro", v) }
+
+    fun macroIndex(systemId: String): Int = prefs.getInt("smart_macro_$systemId", 0).coerceAtLeast(0)
+    fun setMacroIndex(systemId: String, idx: Int) = prefs.edit { putInt("smart_macro_$systemId", idx.coerceAtLeast(0)) }
+
+    var gyroSteering: Boolean
+        get() = prefs.getBoolean("smart_gyro_steer", false)
+        set(v) = prefs.edit { putBoolean("smart_gyro_steer", v) }
+
+    var portraitTouchMode: Int
+        get() = prefs.getInt("smart_portrait_mode", SmartTouch.PORTRAIT_AUTO)
+        set(v) = prefs.edit { putInt("smart_portrait_mode", v) }
+
+    var leftHandedPortrait: Boolean
+        get() = prefs.getBoolean("smart_left_handed", false)
+        set(v) = prefs.edit { putBoolean("smart_left_handed", v) }
+
+    fun visualMode(gameId: String): String? =
+        prefs.getString("visual_mode_${gameId.hashCode()}", null)?.takeIf { it.isNotBlank() }
+
+    fun setVisualMode(gameId: String, modeId: String) =
+        prefs.edit { putString("visual_mode_${gameId.hashCode()}", modeId) }
+
+    fun colorProfileOverride(gameId: String): Int? {
+        val key = "color_prof_${gameId.hashCode()}"
+        return if (prefs.contains(key)) prefs.getInt(key, 0) else null
+    }
+
+    fun setColorProfileOverride(gameId: String, profile: Int?) = prefs.edit {
+        val key = "color_prof_${gameId.hashCode()}"
+        if (profile == null) remove(key) else putInt(key, profile)
+    }
+
+    fun hasCustomFilter(systemId: String): Boolean = prefs.contains("filter_$systemId")
+
+    fun lastDisc(gameId: String): Int = prefs.getInt("disc_${gameId.hashCode()}", 0).coerceAtLeast(0)
+    fun setLastDisc(gameId: String, index: Int) = prefs.edit { putInt("disc_${gameId.hashCode()}", index.coerceAtLeast(0)) }
+
+    fun stateCore(gameId: String, slot: Int): String? =
+        prefs.getString("state_core_${gameId.hashCode()}_$slot", null)?.takeIf { it.isNotBlank() }
+
+    fun setStateCore(gameId: String, slot: Int, coreId: String) =
+        prefs.edit { putString("state_core_${gameId.hashCode()}_$slot", coreId) }
+
     companion object {
         const val FILE = "game_prefs"
     }

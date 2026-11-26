@@ -9,6 +9,8 @@ import com.retrohero.app.RetroHeroApp
 import com.retrohero.app.data.AppPaths
 import com.retrohero.app.data.CoreInfo
 import com.retrohero.app.data.Game
+import com.retrohero.app.data.GameDossier
+import com.retrohero.app.data.GameMetadataRepository
 import com.retrohero.app.data.GameSystem
 import com.retrohero.app.data.GameCollection
 import com.retrohero.app.data.PlayStat
@@ -31,10 +33,70 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
+data class Shot(val game: Game, val file: File)
+
 class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as RetroHeroApp
     val settings = app.settings
     val bios = app.bios
+    private val metadataRepo by lazy { GameMetadataRepository(File(app.filesDir, "metadata")) }
+    private val raRepo by lazy { com.retrohero.app.data.RetroAchievementsRepository(app, File(app.filesDir, "ra_cache")) }
+
+    fun cachedDossier(game: Game): GameDossier? = metadataRepo.peekCached(game)
+    suspend fun loadDossier(game: Game, forceRefresh: Boolean = false): GameDossier =
+        metadataRepo.load(game, forceRefresh)
+
+    // ---- RetroAchievements ----
+    val raProfile = settings.raProfile
+    val raHardcore = settings.raHardcore
+    val raUnofficial = settings.raUnofficial
+    val raNotifications = settings.raNotifications
+
+    sealed interface RaAuthState {
+        data object Idle : RaAuthState
+        data object SigningIn : RaAuthState
+        data class Failed(val message: String) : RaAuthState
+    }
+
+    private val _raAuth = MutableStateFlow<RaAuthState>(RaAuthState.Idle)
+    val raAuth: StateFlow<RaAuthState> = _raAuth
+    fun resetRaAuthError() { if (_raAuth.value is RaAuthState.Failed) _raAuth.value = RaAuthState.Idle }
+
+    fun signInRetroAchievements(username: String, password: String, onSuccess: () -> Unit = {}) {
+        _raAuth.value = RaAuthState.SigningIn
+        viewModelScope.launch {
+            val res = withContext(Dispatchers.IO) {
+                com.retrohero.app.data.RetroAchievementsApi.login(username, password)
+            }
+            res.onSuccess { profile ->
+                settings.saveRaProfile(profile)
+                raRepo.clearMemoryCache()
+                _raAuth.value = RaAuthState.Idle
+                say("Signed in to RetroAchievements as ${profile.username}")
+                onSuccess()
+            }.onFailure { err ->
+                _raAuth.value = RaAuthState.Failed(err.message ?: "Sign-in failed")
+            }
+        }
+    }
+
+    fun signOutRetroAchievements() {
+        settings.clearRaProfile()
+        raRepo.clearMemoryCache()
+        _raAuth.value = RaAuthState.Idle
+        say("Signed out of RetroAchievements")
+    }
+
+    fun cachedRaGame(game: Game): com.retrohero.app.data.RaGameData? = raRepo.peekCached(game)
+
+    suspend fun loadRaGame(game: Game, forceRefresh: Boolean = false): com.retrohero.app.data.RaGameData? =
+        raRepo.loadForGame(
+            game = game,
+            profile = settings.raProfile.value,
+            hardcore = settings.raHardcore.value,
+            includeUnofficial = settings.raUnofficial.value,
+            forceRefresh = forceRefresh,
+        )
 
     val games = app.library.games
     val scanning = app.library.scanning
@@ -49,6 +111,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val favoriteIds = settings.favorites
+    val shelfStatuses = settings.shelfStatuses
+    fun setShelfStatus(game: Game, status: String) = settings.setShelfStatus(game.id, status)
 
     val favorites: StateFlow<List<Game>> = combine(games, settings.favorites) { all, ids ->
         all.filter { it.id in ids }
@@ -148,9 +212,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     /** Play time per game id (only games that have been played). */
     val stats: StateFlow<Map<String, PlayStat>> = _stats
 
-    private val _shots = MutableStateFlow<List<com.retrohero.app.ui.screens.Shot>>(emptyList())
+    private val _shots = MutableStateFlow<List<Shot>>(emptyList())
     /** Every screenshot you've taken, newest first. */
-    val shots: StateFlow<List<com.retrohero.app.ui.screens.Shot>> = _shots
+    val shots: StateFlow<List<Shot>> = _shots
 
     private val _history = MutableStateFlow<List<com.retrohero.app.data.HistoryEntry>>(emptyList())
     /** Every play session, newest first. */
@@ -164,7 +228,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 if (f.exists()) g.id to PlayTime.read(f) else null
             }.toMap()
             _history.value = com.retrohero.app.data.PlayHistory.entries(games.value, app.paths)
-            _shots.value = games.value.flatMap { g -> app.paths.screenshotsOf(g).map { com.retrohero.app.ui.screens.Shot(g, it) } }
+            _shots.value = games.value.flatMap { g -> app.paths.screenshotsOf(g).map { Shot(g, it) } }
                 .sortedByDescending { it.file.lastModified() }
             _artVersion.value++  // new screenshots may have arrived too
         }
@@ -182,16 +246,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             val cover = app.paths.coverFile(game)
             cover.parentFile?.mkdirs()
             shot.copyTo(cover, overwrite = true)
-            com.retrohero.app.ui.components.forgetArtColor(game.id)
             _artVersion.value++
+            say("Cover updated for ${game.title}")
         }
     }
 
     fun clearCover(game: Game) {
         viewModelScope.launch(Dispatchers.IO) {
             app.paths.coverFile(game).delete()
-            com.retrohero.app.ui.components.forgetArtColor(game.id)
             _artVersion.value++
+            say("Cover reset for ${game.title}")
         }
     }
 
@@ -214,7 +278,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     sealed interface LaunchState {
-        data class NeedsCore(val game: Game, val core: CoreInfo, val slot: Int? = null) : LaunchState
+        data class NeedsCore(
+            val game: Game,
+            val core: CoreInfo,
+            val slot: Int? = null,
+            val patch: com.retrohero.app.data.RomPatch? = null,
+        ) : LaunchState
         data class Downloading(val game: Game, val core: CoreInfo) : LaunchState
         data class Preparing(val game: Game, val file: String) : LaunchState
         data class Error(val message: String) : LaunchState
@@ -334,6 +403,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         games.filter { it.isLocal }.mapTo(HashSet()) { it.fileName }
 
     fun installHomebrew(entry: HomebrewGame) {
+        val embedded = entry.embeddedBytes
+        if (embedded != null) {
+            downloadJob = viewModelScope.launch {
+                val tmp = withContext(Dispatchers.IO) {
+                    app.paths.downloadTmp.mkdirs()
+                    File(app.paths.downloadTmp, entry.fileName).apply { writeBytes(embedded) }
+                }
+                _download.value = finishGame(tmp)
+            }
+            return
+        }
         _download.value = DownloadState.Running(DownloadKind.Game, 0, null, entry.title)
         downloadJob = viewModelScope.launch {
             try {
@@ -421,12 +501,73 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun gamesFor(system: GameSystem) = games.value.filter { it.systemId == system.id }
 
-    /** Starts [game]; with [slot], resumes from that save-state slot instead of the auto-save. */
-    fun play(game: Game, slot: Int? = null) {
+    fun installedExternalEmulators(game: Game): List<com.retrohero.app.data.ExternalEmulator> =
+        com.retrohero.app.data.ExternalEmulators.installedForSystem(app, game.systemId)
+
+    fun selectedExternalEmulator(game: Game): com.retrohero.app.data.ExternalEmulator? {
+        val system = game.system ?: return null
+        val installed = installedExternalEmulators(game)
+        if (installed.isEmpty()) return null
+        val chosenId = settings.externalEmulatorFor(system)
+        if (chosenId != null) return installed.firstOrNull { it.id == chosenId }
+        return if (system.cores.isEmpty()) installed.first() else null
+    }
+
+    fun setExternalEmulator(system: GameSystem, emulator: com.retrohero.app.data.ExternalEmulator) {
+        settings.setExternalEmulatorFor(system, emulator.id)
+        say("Using ${emulator.name} for ${system.shortName}")
+    }
+
+    /** Attached ROM soft-patches (.ips / .bps / .ups / .xdelta) grouped under [game]. */
+    fun patchesFor(game: Game): List<com.retrohero.app.data.RomPatch> = app.patches.list(game)
+
+    fun attachPatch(game: Game, uri: Uri, onDone: (Result<com.retrohero.app.data.RomPatch>) -> Unit) {
+        viewModelScope.launch {
+            val res = withContext(Dispatchers.IO) {
+                runCatching { app.patches.attach(app, game, uri) }
+            }
+            res.onSuccess { p ->
+                say("Attached ${p.name} (${p.format.label})")
+            }.onFailure { err ->
+                say(err.message ?: "Couldn't attach patch file")
+            }
+            onDone(res)
+        }
+    }
+
+    fun deletePatch(game: Game, patchId: String) {
+        app.patches.delete(game, patchId)
+        say("Patch removed")
+    }
+
+    fun setPatchSeparateSave(game: Game, patchId: String, separate: Boolean) {
+        app.patches.setSeparateSave(game, patchId, separate)
+        say(if (separate) "Patch uses its own save slot" else "Patch shares parent game save")
+    }
+
+    /** Starts [game]; with [slot], resumes from that save-state slot; with [patch], soft-patches in memory on boot. */
+    fun play(game: Game, slot: Int? = null, patch: com.retrohero.app.data.RomPatch? = null) {
         val system = game.system ?: return
+        val external = if (patch == null) selectedExternalEmulator(game) else null
+        if (external != null) {
+            val intent = com.retrohero.app.data.ExternalEmulators.launchIntent(app, external, game)
+            if (intent != null) {
+                settings.markPlayed(game.id)
+                viewModelScope.launch { _launchIntents.send(intent) }
+                return
+            }
+        }
         val core = settings.coreFor(system)
-        if (app.cores.isInstalled(core.id)) prepareAndLaunch(game, core, slot)
-        else _launch.value = LaunchState.NeedsCore(game, core, slot)
+        if (core == null) {
+            val options = com.retrohero.app.data.ExternalEmulators.forSystem(system.id).joinToString(", ") { it.name }
+            _launch.value = LaunchState.Error(
+                if (options.isNotEmpty()) "${system.name} runs on mobile via standalone emulators. Install $options on your device to launch ${game.title} directly from RetroHero."
+                else "No compatible mobile core is available for ${system.name} yet.",
+            )
+            return
+        }
+        if (app.cores.isInstalled(core.id)) prepareAndLaunch(game, core, slot, patch)
+        else _launch.value = LaunchState.NeedsCore(game, core, slot, patch)
     }
 
     /** Save-state slots that exist for [game], newest first: slot to last-modified time. */
@@ -450,7 +591,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val error = app.cores.download(state.core.id)
             if (error != null) _launch.value = LaunchState.Error("Couldn't download ${state.core.displayName}: $error")
-            else prepareAndLaunch(state.game, state.core, state.slot)
+            else prepareAndLaunch(state.game, state.core, state.slot, state.patch)
         }
     }
 
@@ -458,17 +599,44 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         if (_launch.value !is LaunchState.Downloading && _launch.value !is LaunchState.Preparing) _launch.value = null
     }
 
-    private fun prepareAndLaunch(game: Game, core: CoreInfo, slot: Int? = null) {
-        _launch.value = LaunchState.Preparing(game, game.fileName)
+    private fun prepareAndLaunch(
+        game: Game,
+        core: CoreInfo,
+        slot: Int? = null,
+        patch: com.retrohero.app.data.RomPatch? = null,
+    ) {
+        _launch.value = LaunchState.Preparing(game, patch?.name ?: game.fileName)
         viewModelScope.launch {
             try {
                 val rom = withContext(Dispatchers.IO) {
                     app.romCache.prepare(game) { _launch.value = LaunchState.Preparing(game, it) }
                 }
-                val corePath = app.cores.coreFile(core.id) ?: error("Core not installed")
+                val corePathStr = if (core.builtIn) {
+                    "builtin://${core.id}"
+                } else {
+                    (app.cores.coreFile(core.id) ?: error("Core not installed")).absolutePath
+                }
+                val launchGame = if (patch != null && patch.separateSave) {
+                    com.retrohero.app.data.RomPatch.saveScopedGame(game, patch.id)
+                } else {
+                    game
+                }
+                val patchFile = patch?.let { app.patches.patchFile(game, it) }
                 settings.markPlayed(game.id)
                 _launch.value = null
-                _launchIntents.send(EmulatorActivity.intent(app, game, core.id, corePath.absolutePath, rom.absolutePath, slot))
+                _launchIntents.send(
+                    EmulatorActivity.intent(
+                        context = app,
+                        game = launchGame,
+                        coreId = core.id,
+                        corePath = corePathStr,
+                        romPath = rom.absolutePath,
+                        slot = slot,
+                        patchPath = patchFile?.absolutePath,
+                        patchName = patch?.name,
+                        patchFormat = patch?.format?.label,
+                    ),
+                )
             } catch (e: Exception) {
                 _launch.value = LaunchState.Error(e.message ?: "Couldn't open this game.")
             }
@@ -477,6 +645,22 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun downloadCore(core: CoreInfo) {
         viewModelScope.launch { app.cores.download(core.id) }
+    }
+
+    /** Downloads a batch of missing cores sequentially (e.g. every core needed by the user's library). */
+    fun downloadCores(cores: List<CoreInfo>) {
+        val missing = cores.distinctBy { it.id }.filter { !app.cores.isInstalled(it.id) }
+        if (missing.isEmpty()) return
+        viewModelScope.launch {
+            var ok = 0
+            for (core in missing) {
+                if (app.cores.download(core.id) == null) ok++
+            }
+            say(
+                if (ok == missing.size) "Installed $ok emulator ${if (ok == 1) "core" else "cores"}"
+                else "Installed $ok of ${missing.size} cores",
+            )
+        }
     }
 
     fun deleteCore(core: CoreInfo) = app.cores.delete(core.id)

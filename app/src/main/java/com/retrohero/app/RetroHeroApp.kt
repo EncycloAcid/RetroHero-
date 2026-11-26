@@ -6,6 +6,7 @@ import com.retrohero.app.data.BiosManager
 import com.retrohero.app.data.CoreManager
 import com.retrohero.app.data.GameLibrary
 import com.retrohero.app.data.RomCache
+import com.retrohero.app.data.RomPatchStore
 import com.retrohero.app.data.Settings
 
 class RetroHeroApp : Application() {
@@ -15,6 +16,7 @@ class RetroHeroApp : Application() {
     val library by lazy { GameLibrary(this, paths) }
     val romCache by lazy { RomCache(this, paths) }
     val bios by lazy { BiosManager(this, paths) }
+    val patches by lazy { RomPatchStore(paths) }
 
     override fun onCreate() {
         super.onCreate()

@@ -19,8 +19,12 @@ class AppPaths(context: Context) {
     val covers = File(context.filesDir, "covers")
     val cheats = File(context.filesDir, "cheats")
     val playtime = File(context.filesDir, "playtime")
+    /** Attached per-game ROM soft-patches (.ips / .bps / .ups / .xdelta) grouped under parent games. */
+    val patches = File(context.filesDir, "patches")
     /** Imported look files. */
     val looks = File(context.filesDir, "looks")
+    /** Imported .deltaskin bundles (extracted one per subfolder). */
+    val deltaSkins = File(context.filesDir, "delta_skins")
     /** Controller remaps; written by the main app, read when a game starts. */
     val remapFile = File(context.filesDir, "remap.json")
     /** Touch-control positions; written in-game. */
@@ -29,8 +33,31 @@ class AppPaths(context: Context) {
     fun saveRam(game: Game): File =
         File(File(saves, game.systemId).apply { mkdirs() }, "${game.baseName}.srm")
 
+    /**
+     * If a player previously played Disc 1 before multi-disc grouping existed, seamlessly migrate
+     * that per-disc `.srm` save into the unified multi-disc save file so zero progress is ever lost.
+     */
+    fun migrateLegacyDiscSave(game: Game): File {
+        val unified = saveRam(game)
+        if (!game.isMultiDisc || unified.exists()) return unified
+        val sysDir = unified.parentFile ?: return unified
+        for (disc in game.discs) {
+            val legacyName = disc.fileName.substringBeforeLast('.').replace(Regex("[\\\\/:*?\"<>|]"), "_")
+            val legacy = File(sysDir, "$legacyName.srm")
+            if (legacy.exists() && legacy.length() > 0L) {
+                runCatching { legacy.copyTo(unified, overwrite = false) }
+                break
+            }
+        }
+        return unified
+    }
+
     fun stateFile(game: Game, slot: Int): File {
-        val name = if (slot == AUTO_SLOT) "${game.baseName}.auto.state" else "${game.baseName}.state$slot"
+        val name = when (slot) {
+            AUTO_SLOT -> "${game.baseName}.auto.state"
+            QUICK_SLOT -> "${game.baseName}.quick.state"
+            else -> "${game.baseName}.state$slot"
+        }
         return File(File(states, game.systemId).apply { mkdirs() }, name)
     }
 
@@ -43,10 +70,12 @@ class AppPaths(context: Context) {
     fun coverFile(game: Game): File = File(File(covers, game.systemId), "${game.baseName}.png")
     fun cheatsFile(game: Game): File = File(File(cheats, game.systemId), "${game.baseName}.json")
     fun playtimeFile(game: Game): File = File(File(playtime, game.systemId), "${game.baseName}.json")
+    fun patchesDir(game: Game): File = File(File(patches, game.systemId), game.baseName)
 
     fun coreOptionsFile(coreId: String): File = File(coreOptions, "$coreId.opt")
 
     companion object {
         const val AUTO_SLOT = -1
+        const val QUICK_SLOT = -2
     }
 }

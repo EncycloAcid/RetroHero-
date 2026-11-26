@@ -42,12 +42,25 @@ class Settings(context: Context) {
         _dynamicColor.value = enabled
     }
 
-    fun coreFor(system: GameSystem): CoreInfo {
+    fun coreFor(system: GameSystem): CoreInfo? {
+        if (system.cores.isEmpty()) return null
         val id = prefs.getString("core_${system.id}", null)
         return system.cores.firstOrNull { it.id == id } ?: system.cores.first()
     }
 
-    fun setCoreFor(system: GameSystem, core: CoreInfo) = prefs.edit { putString("core_${system.id}", core.id) }
+    fun setCoreFor(system: GameSystem, core: CoreInfo) = prefs.edit {
+        putString("core_${system.id}", core.id)
+        remove("ext_emu_${system.id}")
+    }
+
+    /** Optional user-selected external standalone emulator id for [system] (e.g. "nethersx2"). */
+    fun externalEmulatorFor(system: GameSystem): String? =
+        prefs.getString("ext_emu_${system.id}", null)?.takeIf { it.isNotBlank() }
+
+    fun setExternalEmulatorFor(system: GameSystem, emulatorId: String?) = prefs.edit {
+        if (emulatorId.isNullOrBlank()) remove("ext_emu_${system.id}")
+        else putString("ext_emu_${system.id}", emulatorId)
+    }
 
     /** First-run onboarding has been finished or skipped. */
     var onboardingDone: Boolean
@@ -74,15 +87,38 @@ class Settings(context: Context) {
         get() = prefs.getFloat("ff_speed", 3f)
         set(v) = prefs.edit { putFloat("ff_speed", v) }
 
+    /** Zero-latency Run-Ahead frames (0 = off, 1 or 2 frames on supported 2D/retro cores). */
+    var runAheadFrames: Int
+        get() = prefs.getInt("run_ahead_frames", 0).coerceIn(0, 2)
+        set(v) = prefs.edit { putInt("run_ahead_frames", v.coerceIn(0, 2)) }
+
+    /** Show live FPS, frame time (ms), and Run-Ahead status pill while playing. */
+    var showPerfHud: Boolean
+        get() = prefs.getBoolean("show_perf_hud", false)
+        set(v) = prefs.edit { putBoolean("show_perf_hud", v) }
+
     /** Accent colour id from [Looks.accents], or "look:<id>" for an imported look. */
     var accent: String
-        get() = prefs.getString("accent", "salmon")!!
+        get() = prefs.getString("accent", "ember")!!
         set(v) = prefs.edit { putString("accent", v) }
+
+    var darkMode: Boolean
+        get() = prefs.getBoolean("dark_mode", true)
+        set(v) = prefs.edit { putBoolean("dark_mode", v) }
 
     /** Touch-pad skin id from [Looks.skins], or "look:<id>" for an imported look. */
     var padSkin: String
         get() = prefs.getString("pad_skin", "console")!!
         set(v) = prefs.edit { putString("pad_skin", v) }
+
+    /** Selected Delta skin identifier for [systemId], or null to use the built-in touch pad. */
+    fun deltaSkinFor(systemId: String): String? =
+        prefs.getString("delta_skin_$systemId", null)?.takeIf { it.isNotBlank() }
+
+    fun setDeltaSkinFor(systemId: String, identifier: String?) = prefs.edit {
+        if (identifier.isNullOrBlank()) remove("delta_skin_$systemId")
+        else putString("delta_skin_$systemId", identifier)
+    }
 
     private val _reducedMotion = MutableStateFlow(prefs.getBoolean("reduced_motion", false))
     /** Fewer and calmer animations: no tilt, no spinning, instant transitions where possible. */
@@ -113,6 +149,31 @@ class Settings(context: Context) {
     var stickAsDpad: Boolean
         get() = prefs.getBoolean("stick_as_dpad", true)
         set(v) = prefs.edit { putBoolean("stick_as_dpad", v) }
+
+    private val _shelfStatuses = MutableStateFlow(loadShelfStatuses())
+    val shelfStatuses: StateFlow<Map<String, String>> = _shelfStatuses
+
+    private fun loadShelfStatuses(): Map<String, String> {
+        val raw = prefs.getString("shelf_statuses_json", null) ?: return emptyMap()
+        return runCatching {
+            val obj = org.json.JSONObject(raw)
+            buildMap {
+                val keys = obj.keys()
+                while (keys.hasNext()) {
+                    val k = keys.next()
+                    put(k, obj.optString(k))
+                }
+            }
+        }.getOrDefault(emptyMap())
+    }
+
+    fun setShelfStatus(gameId: String, status: String) {
+        val updated = _shelfStatuses.value.toMutableMap().apply { put(gameId, status) }
+        val obj = org.json.JSONObject()
+        updated.forEach { (k, v) -> obj.put(k, v) }
+        prefs.edit { putString("shelf_statuses_json", obj.toString()) }
+        _shelfStatuses.value = updated
+    }
 
     private val _favorites = MutableStateFlow(prefs.getStringSet(KEY_FAVORITES, emptySet())!!.toSet())
     /** Pinned games, shown in the home "Speed dial". */
@@ -197,6 +258,70 @@ class Settings(context: Context) {
         _dynamicColor.value = prefs.getBoolean("dynamic_color", true)
     }
 
+    // ---- RetroAchievements ----
+    private val _raProfile = MutableStateFlow(loadRaProfile())
+    val raProfile: StateFlow<RaProfile?> = _raProfile
+
+    private val _raHardcore = MutableStateFlow(prefs.getBoolean(KEY_RA_HARDCORE, false))
+    val raHardcore: StateFlow<Boolean> = _raHardcore
+
+    private val _raUnofficial = MutableStateFlow(prefs.getBoolean(KEY_RA_UNOFFICIAL, false))
+    val raUnofficial: StateFlow<Boolean> = _raUnofficial
+
+    private val _raNotifications = MutableStateFlow(prefs.getBoolean(KEY_RA_NOTIFICATIONS, true))
+    val raNotifications: StateFlow<Boolean> = _raNotifications
+
+    private fun loadRaProfile(): RaProfile? {
+        val u = prefs.getString(KEY_RA_USER, null)?.takeIf { it.isNotBlank() } ?: return null
+        val t = prefs.getString(KEY_RA_TOKEN, null)?.takeIf { it.isNotBlank() } ?: return null
+        return RaProfile(
+            username = u,
+            token = t,
+            score = prefs.getInt(KEY_RA_SCORE, 0),
+            softcoreScore = prefs.getInt(KEY_RA_SOFTCORE, 0),
+        )
+    }
+
+    fun saveRaProfile(profile: RaProfile) {
+        prefs.edit {
+            putString(KEY_RA_USER, profile.username)
+            putString(KEY_RA_TOKEN, profile.token)
+            putInt(KEY_RA_SCORE, profile.score)
+            putInt(KEY_RA_SOFTCORE, profile.softcoreScore)
+        }
+        _raProfile.value = profile
+    }
+
+    fun updateRaScores(score: Int, softcoreScore: Int) {
+        val cur = _raProfile.value ?: return
+        saveRaProfile(cur.copy(score = score, softcoreScore = softcoreScore))
+    }
+
+    fun clearRaProfile() {
+        prefs.edit {
+            remove(KEY_RA_USER)
+            remove(KEY_RA_TOKEN)
+            remove(KEY_RA_SCORE)
+            remove(KEY_RA_SOFTCORE)
+        }
+        _raProfile.value = null
+    }
+
+    fun setRaHardcore(enabled: Boolean) {
+        prefs.edit { putBoolean(KEY_RA_HARDCORE, enabled) }
+        _raHardcore.value = enabled
+    }
+
+    fun setRaUnofficial(enabled: Boolean) {
+        prefs.edit { putBoolean(KEY_RA_UNOFFICIAL, enabled) }
+        _raUnofficial.value = enabled
+    }
+
+    fun setRaNotifications(enabled: Boolean) {
+        prefs.edit { putBoolean(KEY_RA_NOTIFICATIONS, enabled) }
+        _raNotifications.value = enabled
+    }
+
     fun markPlayed(gameId: String) {
         val updated = (listOf(gameId) + _recents.value.filter { it != gameId }).take(MAX_RECENTS)
         prefs.edit { putString(KEY_RECENTS, JSONArray(updated).toString()) }
@@ -216,8 +341,18 @@ class Settings(context: Context) {
         const val KEY_RECENTS = "recents"
         const val KEY_FAVORITES = "favorites"
         const val KEY_COLLECTIONS = "collections"
+        const val KEY_RA_USER = "ra_username"
+        const val KEY_RA_TOKEN = "ra_token"
+        const val KEY_RA_SCORE = "ra_score"
+        const val KEY_RA_SOFTCORE = "ra_softcore_score"
+        const val KEY_RA_HARDCORE = "ra_hardcore"
+        const val KEY_RA_UNOFFICIAL = "ra_unofficial"
+        const val KEY_RA_NOTIFICATIONS = "ra_notifications"
         const val MAX_RECENTS = 20
-        /** Not portable between phones (folder grants), or saved separately in a backup. */
-        val BackupSkip = setOf(KEY_FOLDERS, KEY_RECENTS, KEY_FAVORITES, KEY_COLLECTIONS, "onboarding_done")
+        /** Not portable between phones (folder grants / auth tokens), or saved separately in a backup. */
+        val BackupSkip = setOf(
+            KEY_FOLDERS, KEY_RECENTS, KEY_FAVORITES, KEY_COLLECTIONS, "onboarding_done",
+            KEY_RA_USER, KEY_RA_TOKEN, KEY_RA_SCORE, KEY_RA_SOFTCORE,
+        )
     }
 }
