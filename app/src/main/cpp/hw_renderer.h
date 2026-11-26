@@ -34,6 +34,9 @@ public:
     /** Sets presentation filter (0 sharp, 1 smooth, 2 CRT, 3 LCD). Safe from any thread. */
     void setFilter(int filter) { filter_.store(filter); }
 
+    /** Sets authentic hardware color matrix (0 none, 1 GBA LCD, 2 GBC LCD, 3 CRT composite). */
+    void setColorProfile(int profile) { colorProfile_.store(profile); }
+
     /** Called on the emulation thread before core_.run() to sync window & bind FBO. */
     void beginFrame(unsigned maxWidth, unsigned maxHeight);
 
@@ -82,11 +85,13 @@ private:
     GLint locUv_ = -1;
     GLint locTex_ = -1;
     GLint locFilter_ = -1;
+    GLint locColorProfile_ = -1;
     GLint locSrcSize_ = -1;
     GLint locUvScale_ = -1;
     GLint locFlipY_ = -1;
 
     std::atomic<int> filter_{0};
+    std::atomic<int> colorProfile_{0};
 
     std::mutex winMutex_;
     ANativeWindow *pendingWindow_ = nullptr;

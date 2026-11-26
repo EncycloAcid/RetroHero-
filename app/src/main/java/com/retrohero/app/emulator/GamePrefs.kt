@@ -61,6 +61,24 @@ class GamePrefs(context: Context, sharpDefault: Boolean) {
         get() = prefs.getBoolean("smart_left_handed", false)
         set(v) = prefs.edit { putBoolean("smart_left_handed", v) }
 
+    fun visualMode(gameId: String): String? =
+        prefs.getString("visual_mode_${gameId.hashCode()}", null)?.takeIf { it.isNotBlank() }
+
+    fun setVisualMode(gameId: String, modeId: String) =
+        prefs.edit { putString("visual_mode_${gameId.hashCode()}", modeId) }
+
+    fun colorProfileOverride(gameId: String): Int? {
+        val key = "color_prof_${gameId.hashCode()}"
+        return if (prefs.contains(key)) prefs.getInt(key, 0) else null
+    }
+
+    fun setColorProfileOverride(gameId: String, profile: Int?) = prefs.edit {
+        val key = "color_prof_${gameId.hashCode()}"
+        if (profile == null) remove(key) else putInt(key, profile)
+    }
+
+    fun hasCustomFilter(systemId: String): Boolean = prefs.contains("filter_$systemId")
+
     fun lastDisc(gameId: String): Int = prefs.getInt("disc_${gameId.hashCode()}", 0).coerceAtLeast(0)
     fun setLastDisc(gameId: String, index: Int) = prefs.edit { putInt("disc_${gameId.hashCode()}", index.coerceAtLeast(0)) }
 

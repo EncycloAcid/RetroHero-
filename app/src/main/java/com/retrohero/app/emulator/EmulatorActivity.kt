@@ -244,6 +244,12 @@ class EmulatorActivity : ComponentActivity() {
     private var gyroDigitalLeft = false
     private var gyroDigitalRight = false
 
+    // Automatic Per-Game Hardware & Shader Intelligence ("Authentic / Enhanced")
+    private var visualMode by mutableStateOf(com.retrohero.app.data.VisualMode.ENHANCED)
+    private var activeProfile by mutableStateOf<com.retrohero.app.data.HardwareProfile?>(null)
+    private var colorProfile by mutableIntStateOf(com.retrohero.app.data.ColorProfile.NONE)
+    private var activeRomCrc: String? = null
+
     // Play time: counted only while the game is actually running on screen.
     private var runningSince = 0L
     private var pendingSession = true
@@ -372,13 +378,23 @@ class EmulatorActivity : ComponentActivity() {
         raSessionHardcore = settings.raProfile.value != null && settings.raHardcore.value &&
             externalState == null && requested == null && cheats.none { it.enabled }
         var bootNotice: String? = null
+        var resolvedProfile: com.retrohero.app.data.HardwareProfile? = null
+        var resolvedMode = com.retrohero.app.data.VisualMode.ENHANCED
         val error = withContext(Dispatchers.IO) {
             val prep = com.retrohero.app.data.SavePortability.prepareForCore(game, coreId, paths)
             preparedSave = prep
             if (prep.converted && prep.note.isNotBlank()) bootNotice = prep.note
+            val crcHex = com.retrohero.app.data.HardwareProfiles.quickCrc32Hex(File(romPath))
+            activeRomCrc = crcHex
+            resolvedMode = com.retrohero.app.data.VisualMode.fromId(gamePrefs.visualMode(game.id))
+                ?: com.retrohero.app.data.HardwareProfiles.defaultModeFor(game, crcHex)
+            val prof = com.retrohero.app.data.HardwareProfiles.resolve(game, coreId, resolvedMode, crcHex)
+            resolvedProfile = prof
+
             val savedDisc = gamePrefs.lastDisc(game.id)
             if (savedDisc > 0) NativeBridge.setInitialDisc(savedDisc)
             com.retrohero.app.data.CoreTuning.defaultsFor(coreId).forEach { (k, v) -> NativeBridge.setOption(k, v) }
+            prof.coreOptions.forEach { (k, v) -> NativeBridge.setOption(k, v) }
             optionsStore.load().forEach { (k, v) -> NativeBridge.setOption(k, v) }
             if (!NativeBridge.loadCore(corePath, paths.system.absolutePath, paths.saves.absolutePath)) {
                 return@withContext NativeBridge.getLastError()
@@ -412,7 +428,17 @@ class EmulatorActivity : ComponentActivity() {
             phase = Phase.Failed(error.ifEmpty { "Failed to start the game." })
             return
         }
+        visualMode = resolvedMode
+        activeProfile = resolvedProfile
+        val prof = resolvedProfile
+        if (prof != null) {
+            if (!gamePrefs.hasCustomFilter(system.id) || gamePrefs.visualMode(game.id) != null) {
+                filter = prof.filter
+            }
+            colorProfile = gamePrefs.colorProfileOverride(game.id) ?: prof.colorProfile
+        }
         NativeBridge.setFilter(filter)
+        NativeBridge.setColorProfile(colorProfile)
         runAheadFrames = settings.runAheadFrames
         showPerfHud = settings.showPerfHud
         NativeBridge.setRunAhead(runAheadFrames)
@@ -431,6 +457,26 @@ class EmulatorActivity : ComponentActivity() {
         bootNotice?.let { toast(it) }
         startClock()
         startRetroAchievements(romPath)
+    }
+
+    private fun applyVisualMode(newMode: com.retrohero.app.data.VisualMode) {
+        visualMode = newMode
+        gamePrefs.setVisualMode(game.id, newMode.id)
+        gamePrefs.setColorProfileOverride(game.id, null)
+        val prof = com.retrohero.app.data.HardwareProfiles.resolve(game, activeCoreId, newMode, activeRomCrc)
+        activeProfile = prof
+        filter = prof.filter
+        colorProfile = prof.colorProfile
+        gamePrefs.setFilter(system.id, filter)
+        NativeBridge.setFilter(filter)
+        NativeBridge.setColorProfile(colorProfile)
+        prof.coreOptions.forEach { (k, v) -> NativeBridge.setOption(k, v) }
+    }
+
+    private fun setColorMatrix(profile: Int) {
+        colorProfile = profile
+        gamePrefs.setColorProfileOverride(game.id, profile)
+        NativeBridge.setColorProfile(profile)
     }
 
     private fun updateSmartTouch(transform: (SmartTouchConfig) -> SmartTouchConfig) {
@@ -2025,8 +2071,88 @@ class EmulatorActivity : ComponentActivity() {
 
     @Composable
     private fun ScreenPage(back: () -> Unit) {
+        val prof = activeProfile
         Column {
             PageHeader("Screen", back)
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+            ) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            "Hardware profile",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        if (prof?.isGameSpecific == true) {
+                            Surface(
+                                shape = RoundedCornerShape(999.dp),
+                                color = MaterialTheme.colorScheme.tertiaryContainer,
+                            ) {
+                                Text(
+                                    "Auto-tuned",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                )
+                            }
+                        }
+                    }
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        com.retrohero.app.data.VisualMode.entries.forEach { mode ->
+                            val selected = visualMode == mode
+                            Surface(
+                                onClick = {
+                                    applyVisualMode(mode)
+                                    toast("${mode.label}: ${activeProfile?.title ?: mode.tagline}")
+                                },
+                                shape = RoundedCornerShape(999.dp),
+                                color = if (selected) MaterialTheme.colorScheme.primaryContainer
+                                else MaterialTheme.colorScheme.surfaceContainerHigh,
+                                contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
+                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Row(
+                                    Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    if (selected) {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                        Spacer(Modifier.width(6.dp))
+                                    }
+                                    Text(
+                                        mode.label,
+                                        style = MaterialTheme.typography.labelLarge,
+                                        maxLines = 1,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    if (prof != null) {
+                        Text(
+                            "${prof.title} — ${prof.summary}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
             SegmentedGroup(null, ScreenFilter.labels.size) {
                 ScreenFilter.labels.forEachIndexed { i, label ->
                     SegmentedListItem(
@@ -2040,19 +2166,33 @@ class EmulatorActivity : ComponentActivity() {
                 }
             }
             Spacer(Modifier.height(12.dp))
-            SegmentedGroup(null, 3) {
-                MenuSwitch(shapes(0), Icons.Default.AspectRatio, "Integer scaling", "Every game pixel the same size, with a border", integerScale) {
+            SegmentedGroup(null, 4) {
+                val safeColorIdx = colorProfile.coerceIn(0, com.retrohero.app.data.ColorProfile.labels.lastIndex)
+                SegmentedListItem(
+                    onClick = {
+                        val next = (safeColorIdx + 1) % com.retrohero.app.data.ColorProfile.labels.size
+                        setColorMatrix(next)
+                    },
+                    shapes = shapes(0),
+                    colors = segmentColors(),
+                    leadingContent = { ShapeIcon(Icons.Default.Tune) },
+                    supportingContent = {
+                        Text("${com.retrohero.app.data.ColorProfile.labels[safeColorIdx]} · ${com.retrohero.app.data.ColorProfile.descriptions[safeColorIdx]}")
+                    },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) { Text("Hardware color matrix") }
+                MenuSwitch(shapes(1), Icons.Default.AspectRatio, "Integer scaling", "Every game pixel the same size, with a border", integerScale) {
                     setScreen(integer = it)
                 }
                 MenuSwitch(
-                    shapes(1),
+                    shapes(2),
                     Icons.Default.Tv,
                     "Tear-free Vsync lock",
                     "Choreographer vsync + micro-pitch audio · ${displayHz.roundToInt()} Hz screen",
                     vsyncLock,
                 ) { setDisplaySync(vsync = it) }
                 MenuSwitch(
-                    shapes(2),
+                    shapes(3),
                     Icons.Default.History,
                     "120 Hz OLED Black Frame Insertion",
                     if (bfiCapable) "CRT-sharp motion clarity on 120 Hz OLED"
@@ -2067,7 +2207,7 @@ class EmulatorActivity : ComponentActivity() {
                 }
             }
             Text(
-                "Saved for every ${system.shortName} game.",
+                "Hardware profile is saved per game; display sync & filter defaults are saved per ${system.shortName}.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 10.dp, start = 4.dp),

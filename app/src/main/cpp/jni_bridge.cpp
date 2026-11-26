@@ -147,6 +147,10 @@ JNIEXPORT void JNICALL JNI_FN(setFilter)(JNIEnv *, jobject, jint filter) {
     Frontend::get().setFilter(filter);
 }
 
+JNIEXPORT void JNICALL JNI_FN(setColorProfile)(JNIEnv *, jobject, jint profile) {
+    Frontend::get().setColorProfile(profile);
+}
+
 JNIEXPORT void JNICALL JNI_FN(setRewindEnabled)(JNIEnv *, jobject, jboolean on) {
     Frontend::get().setRewindEnabled(on);
 }

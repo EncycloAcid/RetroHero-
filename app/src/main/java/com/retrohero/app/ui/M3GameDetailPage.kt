@@ -1505,6 +1505,37 @@ internal fun M3GameDetailPage(
                                     color = cs.onSurfaceVariant,
                                 )
                             }
+                            val autoProf = remember(game.id, currentCore?.id) {
+                                val defMode = com.retrohero.app.data.HardwareProfiles.defaultModeFor(game)
+                                com.retrohero.app.data.HardwareProfiles.resolve(game, currentCore?.id.orEmpty(), defMode)
+                            }
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .background(cs.secondaryContainer.copy(alpha = 0.52f))
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                Icon(Icons.Rounded.AutoAwesome, null, tint = cs.primary, modifier = Modifier.size(18.dp))
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(
+                                        text = "${autoProf.mode.label} · ${autoProf.title}",
+                                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                                        color = cs.onSecondaryContainer,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Text(
+                                        text = autoProf.summary,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = cs.onSecondaryContainer.copy(alpha = 0.80f),
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
                             if (totalEngines > 0) {
                                 Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                     cores.forEachIndexed { idx, core ->

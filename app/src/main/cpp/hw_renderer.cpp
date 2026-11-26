@@ -31,10 +31,34 @@ constexpr const char *kFragmentShader = R"(
 precision mediump float;
 uniform sampler2D uTex;
 uniform int uFilter;
+uniform int uColorProfile;
 uniform vec2 uSrcSize;
 varying vec2 vUv;
 void main() {
     vec4 c = texture2D(uTex, vUv);
+    if (uColorProfile == 3 && uSrcSize.x > 0.0) {
+        // 3-tap horizontal NTSC composite blend (smooths Genesis/PS1 dither waterfalls & fog)
+        float dx = 1.0 / uSrcSize.x;
+        vec3 l = texture2D(uTex, vec2(max(0.0, vUv.x - dx), vUv.y)).rgb;
+        vec3 r = texture2D(uTex, vec2(min(1.0, vUv.x + dx), vUv.y)).rgb;
+        c.rgb = 0.25 * l + 0.50 * c.rgb + 0.25 * r;
+    } else if (uColorProfile == 1) {
+        // Authentic GBA AGB-001 reflective TFT LCD color matrix
+        vec3 g = pow(max(c.rgb, vec3(0.0)), vec3(1.18));
+        c.rgb = vec3(
+            0.85 * g.r + 0.12 * g.g + 0.03 * g.b,
+            0.08 * g.r + 0.78 * g.g + 0.14 * g.b,
+            0.06 * g.r + 0.22 * g.g + 0.72 * g.b
+        );
+    } else if (uColorProfile == 2) {
+        // Authentic GBC reflective LCD color matrix
+        vec3 g = pow(max(c.rgb, vec3(0.0)), vec3(1.18));
+        c.rgb = vec3(
+            0.82 * g.r + 0.14 * g.g + 0.04 * g.b,
+            0.10 * g.r + 0.74 * g.g + 0.16 * g.b,
+            0.08 * g.r + 0.18 * g.g + 0.74 * g.b
+        );
+    }
     c.a = 1.0;
     if (uFilter == 2) {
         // Subtle CRT scanlines
@@ -340,6 +364,7 @@ bool HwRenderer::initQuadProgram() {
     locUv_ = glGetAttribLocation(program_, "aUv");
     locTex_ = glGetUniformLocation(program_, "uTex");
     locFilter_ = glGetUniformLocation(program_, "uFilter");
+    locColorProfile_ = glGetUniformLocation(program_, "uColorProfile");
     locSrcSize_ = glGetUniformLocation(program_, "uSrcSize");
     locUvScale_ = glGetUniformLocation(program_, "uUvScale");
     locFlipY_ = glGetUniformLocation(program_, "uFlipY");
@@ -417,6 +442,7 @@ void HwRenderer::presentFrame(unsigned width, unsigned height, bool bottomLeftOr
     const float vScale = fboH_ > 0 ? std::min(1.0f, static_cast<float>(height) / static_cast<float>(fboH_)) : 1.0f;
     glUniform1i(locTex_, 0);
     glUniform1i(locFilter_, flt);
+    glUniform1i(locColorProfile_, colorProfile_.load());
     glUniform2f(locSrcSize_, static_cast<float>(width), static_cast<float>(height));
     glUniform2f(locUvScale_, uScale, vScale);
     glUniform1f(locFlipY_, bottomLeftOrigin ? 0.0f : 1.0f);
