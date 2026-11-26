@@ -34,6 +34,33 @@ class GamePrefs(context: Context, sharpDefault: Boolean) {
         get() = prefs.getBoolean("bfi_120hz", false)
         set(v) = prefs.edit { putBoolean("bfi_120hz", v) }
 
+    var thumbChordZones: Boolean
+        get() = prefs.getBoolean("smart_thumb_chord", true)
+        set(v) = prefs.edit { putBoolean("smart_thumb_chord", v) }
+
+    var shoulderLatch: Boolean
+        get() = prefs.getBoolean("smart_shoulder_latch", true)
+        set(v) = prefs.edit { putBoolean("smart_shoulder_latch", v) }
+
+    var comboMacroEnabled: Boolean
+        get() = prefs.getBoolean("smart_combo_macro", true)
+        set(v) = prefs.edit { putBoolean("smart_combo_macro", v) }
+
+    fun macroIndex(systemId: String): Int = prefs.getInt("smart_macro_$systemId", 0).coerceAtLeast(0)
+    fun setMacroIndex(systemId: String, idx: Int) = prefs.edit { putInt("smart_macro_$systemId", idx.coerceAtLeast(0)) }
+
+    var gyroSteering: Boolean
+        get() = prefs.getBoolean("smart_gyro_steer", false)
+        set(v) = prefs.edit { putBoolean("smart_gyro_steer", v) }
+
+    var portraitTouchMode: Int
+        get() = prefs.getInt("smart_portrait_mode", SmartTouch.PORTRAIT_AUTO)
+        set(v) = prefs.edit { putInt("smart_portrait_mode", v) }
+
+    var leftHandedPortrait: Boolean
+        get() = prefs.getBoolean("smart_left_handed", false)
+        set(v) = prefs.edit { putBoolean("smart_left_handed", v) }
+
     fun lastDisc(gameId: String): Int = prefs.getInt("disc_${gameId.hashCode()}", 0).coerceAtLeast(0)
     fun setLastDisc(gameId: String, index: Int) = prefs.edit { putInt("disc_${gameId.hashCode()}", index.coerceAtLeast(0)) }
 
