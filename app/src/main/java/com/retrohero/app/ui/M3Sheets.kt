@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Casino
 import androidx.compose.material.icons.rounded.Check
@@ -550,9 +551,10 @@ internal fun M3HomebrewSheet(
             }
 
             LazyColumn(verticalArrangement = Arrangement.spacedBy(3.dp), modifier = Modifier.weight(1f, fill = false)) {
-                items(itemsList.size, key = { itemsList[it].url }) { idx ->
+                items(itemsList.size, key = { itemsList[it].fileName }) { idx ->
                     val item = itemsList[idx]
-                    val installed = item.url in installedUrls
+                    val installed = item.fileName in installedUrls || item.url in installedUrls
+                    val isBuiltIn = item.embeddedBytes != null
                     Row(
                         Modifier
                             .fillMaxWidth()
@@ -564,17 +566,47 @@ internal fun M3HomebrewSheet(
                     ) {
                         M3ShapeBadge(
                             polygon = item.system?.polygon ?: MaterialShapes.Cookie6Sided,
-                            containerColor = cs.secondaryContainer,
+                            containerColor = if (isBuiltIn) cs.primaryContainer else cs.secondaryContainer,
                             size = 44.dp,
                         ) {
                             Text(
-                                text = (item.system?.shortName ?: item.systemId).take(3).uppercase(),
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black),
-                                color = cs.onSecondaryContainer,
+                                text = (item.system?.shortName ?: item.systemId).take(4).uppercase(),
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, fontSize = 10.sp),
+                                color = if (isBuiltIn) cs.onPrimaryContainer else cs.onSecondaryContainer,
+                                maxLines = 1,
+                                softWrap = false,
                             )
                         }
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            Text(item.title, style = MaterialTheme.typography.titleSmall.copy(fontSize = 15.sp), color = cs.onSurface, maxLines = 1)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Text(
+                                    text = item.title,
+                                    style = MaterialTheme.typography.titleSmall.copy(fontSize = 15.sp),
+                                    color = cs.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f, fill = false),
+                                )
+                                if (isBuiltIn) {
+                                    Box(
+                                        Modifier
+                                            .clip(CircleShape)
+                                            .background(cs.tertiaryContainer)
+                                            .padding(horizontal = 6.dp, vertical = 1.5.dp),
+                                    ) {
+                                        Text(
+                                            text = "Instant",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp),
+                                            color = cs.onTertiaryContainer,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                        )
+                                    }
+                                }
+                            }
                             Text(item.description, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         }
                         Row(
@@ -588,13 +620,21 @@ internal fun M3HomebrewSheet(
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
                             Icon(
-                                if (installed) Icons.Rounded.Check else Icons.Rounded.CloudDownload,
+                                when {
+                                    installed -> Icons.Rounded.Check
+                                    isBuiltIn -> Icons.Rounded.Add
+                                    else -> Icons.Rounded.CloudDownload
+                                },
                                 null,
                                 tint = if (installed) cs.onSurfaceVariant else cs.onPrimary,
                                 modifier = Modifier.size(16.dp),
                             )
                             Text(
-                                text = if (installed) "Added" else "Get",
+                                text = when {
+                                    installed -> "Added"
+                                    isBuiltIn -> "Add"
+                                    else -> "Get"
+                                },
                                 style = MaterialTheme.typography.labelMedium,
                                 color = if (installed) cs.onSurfaceVariant else cs.onPrimary,
                             )

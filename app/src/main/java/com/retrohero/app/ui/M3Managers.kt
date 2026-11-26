@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CloudDownload
@@ -241,7 +242,7 @@ internal fun M3CoreManagerPage(
                         color = cs.onSurface,
                     )
                     Text(
-                        text = if (tab == 0) "Add a ROM folder or switch to All to browse all 50 engines." else "Try a different search term.",
+                        text = if (tab == 0) "Add a ROM folder or switch to All to browse all built-in and downloadable engines." else "Try a different search term.",
                         style = MaterialTheme.typography.bodySmall,
                         color = cs.onSurfaceVariant,
                     )
@@ -275,7 +276,22 @@ internal fun M3CoreManagerPage(
                                             overflow = TextOverflow.Ellipsis,
                                             modifier = Modifier.weight(1f, fill = false),
                                         )
-                                        if (core.id in neededIds && state !is CoreState.Installed) {
+                                        if (core.builtIn || (state is CoreState.Installed && state.bundled)) {
+                                            Box(
+                                                Modifier
+                                                    .clip(CircleShape)
+                                                    .background(cs.primaryContainer)
+                                                    .padding(horizontal = 7.dp, vertical = 2.dp),
+                                            ) {
+                                                Text(
+                                                    text = "Built-in",
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp),
+                                                    color = cs.onPrimaryContainer,
+                                                    maxLines = 1,
+                                                    softWrap = false,
+                                                )
+                                            }
+                                        } else if (core.id in neededIds && state !is CoreState.Installed) {
                                             Box(
                                                 Modifier
                                                     .clip(CircleShape)
@@ -294,7 +310,9 @@ internal fun M3CoreManagerPage(
                                     }
                                     val sub = buildString {
                                         append(systems.joinToString(" · ") { it.shortName })
-                                        if (state is CoreState.Installed && state.sizeBytes > 0) {
+                                        if (core.builtIn || (state is CoreState.Installed && state.bundled)) {
+                                            append(" · Built-in native C++")
+                                        } else if (state is CoreState.Installed && state.sizeBytes > 0) {
                                             append(" · ")
                                             append(String.format(Locale.US, "%.1f MB", state.sizeBytes / (1024f * 1024f)))
                                         } else if (state is CoreState.Failed) {
@@ -313,15 +331,27 @@ internal fun M3CoreManagerPage(
 
                                 when (state) {
                                     is CoreState.Installed -> {
-                                        Box(
-                                            Modifier
-                                                .size(38.dp)
-                                                .clip(CircleShape)
-                                                .background(cs.errorContainer)
-                                                .clickable { onDeleteCore(core) },
-                                            contentAlignment = Alignment.Center,
-                                        ) {
-                                            Icon(Icons.Rounded.DeleteOutline, contentDescription = "Remove ${core.displayName}", tint = cs.onErrorContainer, modifier = Modifier.size(19.dp))
+                                        if (core.builtIn || state.bundled) {
+                                            Box(
+                                                Modifier
+                                                    .size(38.dp)
+                                                    .clip(CircleShape)
+                                                    .background(cs.secondaryContainer),
+                                                contentAlignment = Alignment.Center,
+                                            ) {
+                                                Icon(Icons.Rounded.Check, contentDescription = "${core.displayName} built-in", tint = cs.onSecondaryContainer, modifier = Modifier.size(19.dp))
+                                            }
+                                        } else {
+                                            Box(
+                                                Modifier
+                                                    .size(38.dp)
+                                                    .clip(CircleShape)
+                                                    .background(cs.errorContainer)
+                                                    .clickable { onDeleteCore(core) },
+                                                contentAlignment = Alignment.Center,
+                                            ) {
+                                                Icon(Icons.Rounded.DeleteOutline, contentDescription = "Remove ${core.displayName}", tint = cs.onErrorContainer, modifier = Modifier.size(19.dp))
+                                            }
                                         }
                                     }
                                     is CoreState.Downloading -> {

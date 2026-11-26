@@ -39,14 +39,19 @@ class CoreManager(private val context: Context, private val paths: AppPaths) {
     }
 
     private fun installedState(coreId: String): CoreState {
+        if (Systems.coreById(coreId)?.builtIn == true) return CoreState.Installed(bundled = true, sizeBytes = 0L)
         bundledFile(coreId)?.let { return CoreState.Installed(true, it.length()) }
         val f = downloadedFile(coreId)
         return if (f.exists()) CoreState.Installed(false, f.length()) else CoreState.NotInstalled
     }
 
-    fun coreFile(coreId: String): File? = bundledFile(coreId) ?: downloadedFile(coreId).takeIf { it.exists() }
+    fun coreFile(coreId: String): File? {
+        if (Systems.coreById(coreId)?.builtIn == true) return File("builtin://$coreId")
+        return bundledFile(coreId) ?: downloadedFile(coreId).takeIf { it.exists() }
+    }
 
-    fun isInstalled(coreId: String) = coreFile(coreId) != null
+    fun isInstalled(coreId: String) =
+        Systems.coreById(coreId)?.builtIn == true || coreFile(coreId) != null
 
     private fun bundledFile(coreId: String): File? =
         File(context.applicationInfo.nativeLibraryDir, "lib${coreId}_libretro_android.so").takeIf { it.exists() }

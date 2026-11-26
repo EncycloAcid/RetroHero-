@@ -345,6 +345,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         games.filter { it.isLocal }.mapTo(HashSet()) { it.fileName }
 
     fun installHomebrew(entry: HomebrewGame) {
+        val embedded = entry.embeddedBytes
+        if (embedded != null) {
+            downloadJob = viewModelScope.launch {
+                val tmp = withContext(Dispatchers.IO) {
+                    app.paths.downloadTmp.mkdirs()
+                    File(app.paths.downloadTmp, entry.fileName).apply { writeBytes(embedded) }
+                }
+                _download.value = finishGame(tmp)
+            }
+            return
+        }
         _download.value = DownloadState.Running(DownloadKind.Game, 0, null, entry.title)
         downloadJob = viewModelScope.launch {
             try {
@@ -510,10 +521,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 val rom = withContext(Dispatchers.IO) {
                     app.romCache.prepare(game) { _launch.value = LaunchState.Preparing(game, it) }
                 }
-                val corePath = app.cores.coreFile(core.id) ?: error("Core not installed")
+                val corePathStr = if (core.builtIn) {
+                    "builtin://${core.id}"
+                } else {
+                    (app.cores.coreFile(core.id) ?: error("Core not installed")).absolutePath
+                }
                 settings.markPlayed(game.id)
                 _launch.value = null
-                _launchIntents.send(EmulatorActivity.intent(app, game, core.id, corePath.absolutePath, rom.absolutePath, slot))
+                _launchIntents.send(EmulatorActivity.intent(app, game, core.id, corePathStr, rom.absolutePath, slot))
             } catch (e: Exception) {
                 _launch.value = LaunchState.Error(e.message ?: "Couldn't open this game.")
             }
