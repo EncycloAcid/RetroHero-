@@ -38,19 +38,24 @@ import androidx.compose.material.icons.rounded.Backup
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CreateNewFolder
+import androidx.compose.material.icons.rounded.EmojiEvents
 import androidx.compose.material.icons.rounded.FastForward
 import androidx.compose.material.icons.rounded.Gamepad
 import androidx.compose.material.icons.rounded.GridOn
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Memory
+import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.material.icons.rounded.Opacity
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.material.icons.rounded.Save
+import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.SportsEsports
 import androidx.compose.material.icons.rounded.Vibration
 import androidx.compose.material.icons.rounded.Wallpaper
+import coil.compose.AsyncImage
+import com.retrohero.app.data.RaProfile
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
@@ -151,6 +156,15 @@ internal fun M3SettingsPage(
     onDownloadCore: (CoreInfo) -> Unit,
     onDownloadAllNeededCores: () -> Unit,
     onDeleteCore: (CoreInfo) -> Unit,
+    raProfile: RaProfile? = null,
+    raHardcore: Boolean = false,
+    raUnofficial: Boolean = false,
+    raNotifications: Boolean = true,
+    onOpenRaSignIn: () -> Unit = {},
+    onSignOutRa: () -> Unit = {},
+    onSetRaHardcore: (Boolean) -> Unit = {},
+    onSetRaUnofficial: (Boolean) -> Unit = {},
+    onSetRaNotifications: (Boolean) -> Unit = {},
 ) {
     var subPage by rememberSaveable { mutableStateOf(SettingsSubPage.Root) }
 
@@ -370,6 +384,142 @@ internal fun M3SettingsPage(
 
             item(key = "m3_set_wave") {
                 M3WavyBar(color = cs.outlineVariant.copy(alpha = 0.6f), amplitude = 2.dp, wavelength = 24.dp, strokeWidth = 2.dp)
+            }
+
+            // 3b. RetroAchievements Integration Card
+            item(key = "m3_set_ra") {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "RetroAchievements",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = cs.primary,
+                        modifier = Modifier.padding(start = 6.dp),
+                    )
+                    if (raProfile == null) {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(26.dp))
+                                .background(cs.primaryContainer)
+                                .clickable(onClick = onOpenRaSignIn)
+                                .padding(horizontal = 16.dp, vertical = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                        ) {
+                            M3ShapeBadge(polygon = MaterialShapes.Sunny, containerColor = cs.primary, size = 46.dp) {
+                                Icon(Icons.Rounded.EmojiEvents, null, tint = cs.onPrimary, modifier = Modifier.size(24.dp))
+                            }
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(
+                                    text = "Connect RetroAchievements",
+                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
+                                    color = cs.onPrimaryContainer,
+                                )
+                                Text(
+                                    text = "Unlock real trophies, earn points & track completion on retroachievements.org",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = cs.onPrimaryContainer.copy(alpha = 0.82f),
+                                )
+                            }
+                            Box(
+                                Modifier
+                                    .clip(CircleShape)
+                                    .background(cs.primary)
+                                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                            ) {
+                                Text(
+                                    text = "Sign in",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = cs.onPrimary,
+                                )
+                            }
+                        }
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clip(m3SegmentedShape(0, 4))
+                                    .background(cs.primaryContainer)
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Box(
+                                    Modifier
+                                        .size(46.dp)
+                                        .clip(CircleShape)
+                                        .background(cs.primary),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    AsyncImage(
+                                        model = raProfile.avatarUrl,
+                                        contentDescription = raProfile.username,
+                                        modifier = Modifier.fillMaxSize().clip(CircleShape),
+                                    )
+                                }
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(
+                                        text = raProfile.username,
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black),
+                                        color = cs.onPrimaryContainer,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Text(
+                                        text = "${raProfile.score} hardcore pts · ${raProfile.softcoreScore} softcore pts",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = cs.onPrimaryContainer.copy(alpha = 0.82f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                                Box(
+                                    Modifier
+                                        .clip(CircleShape)
+                                        .background(cs.surfaceContainerHighest)
+                                        .clickable(onClick = onSignOutRa)
+                                        .padding(horizontal = 12.dp, vertical = 7.dp),
+                                ) {
+                                    Text("Sign out", style = MaterialTheme.typography.labelMedium, color = cs.onSurface)
+                                }
+                            }
+                            M3SegmentedItem(
+                                index = 1,
+                                count = 4,
+                                icon = Icons.Rounded.Shield,
+                                badgePolygon = MaterialShapes.Pentagon,
+                                badgeContainer = cs.tertiaryContainer,
+                                badgeContent = cs.onTertiaryContainer,
+                                title = "Hardcore mode",
+                                subtitle = "Disable save-state loads, rewind & cheats for hardcore points",
+                                trailing = { M3ExpressiveSwitch(checked = raHardcore, onCheckedChange = onSetRaHardcore) },
+                            )
+                            M3SegmentedItem(
+                                index = 2,
+                                count = 4,
+                                icon = Icons.Rounded.Notifications,
+                                badgePolygon = MaterialShapes.Sunny,
+                                badgeContainer = cs.secondaryContainer,
+                                badgeContent = cs.onSecondaryContainer,
+                                title = "In-game trophy banners",
+                                subtitle = "Show animated RetroAchievements unlock alerts while playing",
+                                trailing = { M3ExpressiveSwitch(checked = raNotifications, onCheckedChange = onSetRaNotifications) },
+                            )
+                            M3SegmentedItem(
+                                index = 3,
+                                count = 4,
+                                icon = Icons.Rounded.EmojiEvents,
+                                badgePolygon = MaterialShapes.Cookie6Sided,
+                                badgeContainer = cs.primaryContainer,
+                                badgeContent = cs.onPrimaryContainer,
+                                title = "Unofficial achievements",
+                                subtitle = "Include community playtest sets alongside official trophies",
+                                trailing = { M3ExpressiveSwitch(checked = raUnofficial, onCheckedChange = onSetRaUnofficial) },
+                            )
+                        }
+                    }
+                }
             }
 
             // 4. Display & Controls (Exposes ALL real emulator video/input powers!)

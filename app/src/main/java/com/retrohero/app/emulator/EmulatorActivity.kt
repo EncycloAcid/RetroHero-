@@ -209,6 +209,19 @@ class EmulatorActivity : ComponentActivity() {
     private var shutDown = false
     private var fastForwardHeld = false
 
+    private data class RaBanner(
+        val title: String,
+        val subtitle: String,
+        val badgeUrl: String?,
+        val points: Int?,
+        val hardcore: Boolean,
+    )
+
+    private var raBanner by mutableStateOf<RaBanner?>(null)
+    private var raSessionHardcore by mutableStateOf(false)
+    private var raSessionGame by mutableStateOf<com.retrohero.app.data.RaGameData?>(null)
+    private var raJob: kotlinx.coroutines.Job? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val gameJson = intent.getStringExtra(EXTRA_GAME)
@@ -272,6 +285,10 @@ class EmulatorActivity : ComponentActivity() {
     }
 
     private suspend fun boot(coreId: String, corePath: String, romPath: String) {
+        val externalState = intent.getStringExtra(EXTRA_STATE_PATH)?.let(::File)?.takeIf { it.isFile }
+        val requested = if (intent.hasExtra(EXTRA_LOAD_SLOT)) intent.getIntExtra(EXTRA_LOAD_SLOT, AppPaths.AUTO_SLOT) else null
+        raSessionHardcore = settings.raProfile.value != null && settings.raHardcore.value &&
+            externalState == null && requested == null && cheats.none { it.enabled }
         val error = withContext(Dispatchers.IO) {
             com.retrohero.app.data.CoreTuning.defaultsFor(coreId).forEach { (k, v) -> NativeBridge.setOption(k, v) }
             optionsStore.load().forEach { (k, v) -> NativeBridge.setOption(k, v) }
@@ -281,10 +298,9 @@ class EmulatorActivity : ComponentActivity() {
             if (!NativeBridge.loadGame(romPath, paths.saveRam(game).absolutePath)) {
                 return@withContext NativeBridge.getLastError()
             }
-            val externalState = intent.getStringExtra(EXTRA_STATE_PATH)?.let(::File)?.takeIf { it.isFile }
-            val requested = if (intent.hasExtra(EXTRA_LOAD_SLOT)) intent.getIntExtra(EXTRA_LOAD_SLOT, AppPaths.AUTO_SLOT) else null
             val resume = when {
                 externalState != null -> externalState
+                raSessionHardcore -> null // Hardcore mode starts cleanly from boot
                 requested != null -> paths.stateFile(game, requested)
                 settings.autoSave -> paths.stateFile(game, AppPaths.AUTO_SLOT)
                 else -> null
@@ -297,15 +313,126 @@ class EmulatorActivity : ComponentActivity() {
             return
         }
         NativeBridge.setFilter(filter)
-        rewindOn = gamePrefs.rewind
+        rewindOn = gamePrefs.rewind && !raSessionHardcore
         NativeBridge.setRewindEnabled(rewindOn)
         cheatsSupported = NativeBridge.supportsCheats()
-        applyCheats()
+        if (!raSessionHardcore) applyCheats()
         aspect = NativeBridge.getAspectRatio()
         NativeBridge.start()
         started = true
         phase = Phase.Running
         startClock()
+        startRetroAchievements(romPath)
+    }
+
+    private fun demoteRaHardcore(reason: String) {
+        if (!raSessionHardcore) return
+        raSessionHardcore = false
+        toast("RetroAchievements: switched to Softcore ($reason)")
+    }
+
+    private fun startRetroAchievements(romPath: String) {
+        val profile = settings.raProfile.value ?: return
+        val notifications = settings.raNotifications.value
+        val includeUnofficial = settings.raUnofficial.value
+        val raRepo = com.retrohero.app.data.RetroAchievementsRepository(this, File(filesDir, "ra_cache"))
+        raJob?.cancel()
+        raJob = lifecycleScope.launch(Dispatchers.IO) {
+            val hash = com.retrohero.app.data.RetroAchievementsHasher.hashFile(File(romPath), system.id)
+                ?: return@launch
+            val gameId = com.retrohero.app.data.RetroAchievementsApi.lookupGameId(hash)
+                ?: return@launch
+            val data = com.retrohero.app.data.RetroAchievementsApi.fetchPatchAndUnlocks(
+                profile = profile,
+                gameId = gameId,
+                romHash = hash,
+                hardcore = raSessionHardcore,
+                includeUnofficial = includeUnofficial,
+            ) ?: return@launch
+
+            com.retrohero.app.data.RetroAchievementsApi.startSession(profile, gameId, raSessionHardcore, hash)
+            withContext(Dispatchers.Main) {
+                raSessionGame = data
+                if (notifications) {
+                    val mode = if (raSessionHardcore) "Hardcore" else "Softcore"
+                    showRaBanner(
+                        RaBanner(
+                            title = data.title.ifBlank { game.title },
+                            subtitle = "${data.unlockedCount}/${data.totalCount} trophies · $mode",
+                            badgeUrl = data.imageIconUrl,
+                            points = null,
+                            hardcore = raSessionHardcore,
+                        ),
+                    )
+                }
+            }
+
+            val triggers = data.achievements
+                .filter { !it.unlocked }
+                .mapNotNull { com.retrohero.app.data.RaLogicEvaluator.compile(it) }
+            if (triggers.isEmpty()) return@launch
+
+            var lastPingMs = SystemClock.elapsedRealtime()
+            while (started && !shutDown) {
+                if (!menuOpen && !editingPad) {
+                    val sysRam = NativeBridge.readMemory(2, 8 * 1024 * 1024) // RETRO_MEMORY_SYSTEM_RAM
+                    val saveRam = NativeBridge.readMemory(0, 512 * 1024)     // RETRO_MEMORY_SAVE_RAM
+                    if (sysRam != null || saveRam != null) {
+                        for (t in triggers) {
+                            if (com.retrohero.app.data.RaLogicEvaluator.step(t, system.id, sysRam, saveRam)) {
+                                val ach = t.achievement
+                                val hc = raSessionHardcore
+                                val awarded = com.retrohero.app.data.RetroAchievementsApi.awardAchievement(
+                                    profile = profile,
+                                    achievementId = ach.id,
+                                    hardcore = hc,
+                                    romHash = hash,
+                                )
+                                awarded.onSuccess { (score, soft) ->
+                                    settings.updateRaScores(score, soft)
+                                }
+                                raRepo.markUnlockedLocally(game, ach.id, hc)
+                                withContext(Dispatchers.Main) {
+                                    raSessionGame = raSessionGame?.let { cur ->
+                                        cur.copy(
+                                            achievements = cur.achievements.map { item ->
+                                                if (item.id == ach.id) item.copy(unlocked = true, unlockedHardcore = item.unlockedHardcore || hc)
+                                                else item
+                                            },
+                                        )
+                                    }
+                                    if (notifications) {
+                                        showRaBanner(
+                                            RaBanner(
+                                                title = ach.title,
+                                                subtitle = ach.description,
+                                                badgeUrl = ach.badgeUrl,
+                                                points = ach.points,
+                                                hardcore = hc,
+                                            ),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    val now = SystemClock.elapsedRealtime()
+                    if (now - lastPingMs >= 120_000L) {
+                        lastPingMs = now
+                        com.retrohero.app.data.RetroAchievementsApi.ping(profile, gameId, "Playing ${game.title} on RetroHero")
+                    }
+                }
+                delay(66L) // ~15 Hz RAM evaluation
+            }
+        }
+    }
+
+    private fun showRaBanner(banner: RaBanner) {
+        raBanner = banner
+        lifecycleScope.launch {
+            delay(4400L)
+            if (raBanner === banner) raBanner = null
+        }
     }
 
     private fun setMenu(open: Boolean) {
@@ -335,6 +462,7 @@ class EmulatorActivity : ComponentActivity() {
     }
 
     private fun updateCheats(list: List<Cheat>) {
+        if (list.any { it.enabled }) demoteRaHardcore("cheats enabled")
         cheats = list
         Cheats.save(paths.cheatsFile(game), list)
         applyCheats()
@@ -349,6 +477,7 @@ class EmulatorActivity : ComponentActivity() {
     }
 
     private fun setRewind(on: Boolean) {
+        if (on) demoteRaHardcore("rewind enabled")
         rewindOn = on
         gamePrefs.rewind = on
         NativeBridge.setRewindEnabled(on)
@@ -522,6 +651,8 @@ class EmulatorActivity : ComponentActivity() {
 
     private fun shutdownCore() {
         if (!started || shutDown) return
+        raJob?.cancel()
+        raJob = null
         stopClock()
         shutDown = true
         NativeBridge.setPaused(true)
@@ -584,6 +715,7 @@ class EmulatorActivity : ComponentActivity() {
                     toast("No quick save yet")
                 } else {
                     val ok = NativeBridge.loadState(file.absolutePath)
+                    if (ok) demoteRaHardcore("save state loaded")
                     toast(if (ok) "Quick loaded" else NativeBridge.getLastError().ifEmpty { "Quick load failed" })
                 }
             }
@@ -770,6 +902,15 @@ class EmulatorActivity : ComponentActivity() {
                 }
             }
             if (editingPad) PadEditBar(Modifier.align(Alignment.TopCenter))
+            raBanner?.let { banner ->
+                RaUnlockBanner(
+                    banner = banner,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .safeDrawingPadding()
+                        .padding(top = 12.dp, start = 16.dp, end = 16.dp),
+                )
+            }
             ScreenshotFlash(flash)
         }
         LaunchedEffect(phase) {
@@ -777,6 +918,72 @@ class EmulatorActivity : ComponentActivity() {
                 val sz = NativeBridge.getFrameSize()
                 if (sz[0] > 0 && sz[1] > 0) frameSize = IntSize(sz[0], sz[1])
                 delay(1000)
+            }
+        }
+    }
+
+    @Composable
+    private fun RaUnlockBanner(banner: RaBanner, modifier: Modifier = Modifier) {
+        val cs = MaterialTheme.colorScheme
+        Row(
+            modifier = modifier
+                .widthIn(max = 360.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(if (banner.hardcore) cs.tertiaryContainer else cs.primaryContainer)
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(
+                Modifier
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(if (banner.hardcore) cs.tertiary else cs.primary),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (banner.badgeUrl != null) {
+                    coil.compose.AsyncImage(
+                        model = banner.badgeUrl,
+                        contentDescription = banner.title,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    Icon(
+                        Icons.Default.Check,
+                        contentDescription = null,
+                        tint = if (banner.hardcore) cs.onTertiary else cs.onPrimary,
+                    )
+                }
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = banner.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = if (banner.hardcore) cs.onTertiaryContainer else cs.onPrimaryContainer,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = banner.subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = (if (banner.hardcore) cs.onTertiaryContainer else cs.onPrimaryContainer).copy(alpha = 0.84f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (banner.points != null) {
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(if (banner.hardcore) cs.tertiary else cs.primary)
+                        .padding(horizontal = 9.dp, vertical = 4.dp),
+                ) {
+                    Text(
+                        text = "+${banner.points}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (banner.hardcore) cs.onTertiary else cs.onPrimary,
+                    )
+                }
             }
         }
     }

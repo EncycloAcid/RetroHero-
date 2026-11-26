@@ -17,6 +17,8 @@ object NativeBridge {
     external fun saveState(path: String): Boolean
     external fun loadState(path: String): Boolean
     external fun saveSram(path: String): Boolean
+    /** Snapshots a libretro memory region (0 = SAVE_RAM, 2 = SYSTEM_RAM) for RetroAchievements. */
+    external fun readMemory(memoryType: Int, maxBytes: Int = 8 * 1024 * 1024): ByteArray?
     external fun shutdown(sramPath: String)
 
     external fun setSurface(surface: Surface?)

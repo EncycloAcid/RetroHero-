@@ -57,6 +57,17 @@ JNIEXPORT jboolean JNICALL JNI_FN(saveSram)(JNIEnv *env, jobject, jstring path) 
     return Frontend::get().saveSram(str(env, path));
 }
 
+JNIEXPORT jbyteArray JNICALL JNI_FN(readMemory)(JNIEnv *env, jobject, jint memoryType, jint maxBytes) {
+    std::vector<uint8_t> buf;
+    size_t cap = maxBytes > 0 ? static_cast<size_t>(maxBytes) : 0;
+    if (!Frontend::get().readMemory(static_cast<unsigned>(memoryType), buf, cap)) return nullptr;
+    jbyteArray arr = env->NewByteArray(static_cast<jsize>(buf.size()));
+    if (!arr) return nullptr;
+    env->SetByteArrayRegion(arr, 0, static_cast<jsize>(buf.size()),
+                            reinterpret_cast<const jbyte *>(buf.data()));
+    return arr;
+}
+
 JNIEXPORT void JNICALL JNI_FN(shutdown)(JNIEnv *env, jobject, jstring sram) {
     Frontend::get().shutdown(str(env, sram));
 }

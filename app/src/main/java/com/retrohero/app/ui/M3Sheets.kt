@@ -825,3 +825,92 @@ internal fun M3BackupDialog(
     }
 }
 
+@Composable
+internal fun M3RetroAchievementsSignInDialog(
+    authState: AppViewModel.RaAuthState,
+    onSignIn: (username: String, password: String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    var username by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    val busy = authState is AppViewModel.RaAuthState.SigningIn
+    val errorMsg = (authState as? AppViewModel.RaAuthState.Failed)?.message
+
+    AlertDialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                M3ShapeBadge(polygon = MaterialShapes.Sunny, containerColor = cs.primaryContainer, size = 34.dp) {
+                    Icon(
+                        Icons.Rounded.AutoAwesome,
+                        contentDescription = null,
+                        tint = cs.onPrimaryContainer,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+                Text("RetroAchievements", style = MaterialTheme.typography.titleLarge)
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = "Sign in with your RetroAchievements.org account to track trophies, earn points, and unlock badges while playing. Your password is exchanged for an auth token and never saved.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = cs.onSurfaceVariant,
+                )
+                OutlinedTextField(
+                    value = username,
+                    onValueChange = { username = it },
+                    label = { Text("Username") },
+                    singleLine = true,
+                    enabled = !busy,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text("Password") },
+                    singleLine = true,
+                    enabled = !busy,
+                    visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (errorMsg != null) {
+                    Text(
+                        text = errorMsg,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = cs.error,
+                    )
+                }
+                if (busy) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.4.dp)
+                        Text("Verifying account…", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = !busy && username.isNotBlank() && password.isNotBlank(),
+                onClick = { onSignIn(username.trim(), password) },
+            ) {
+                Text("Sign in")
+            }
+        },
+        dismissButton = {
+            TextButton(enabled = !busy, onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
+}
+
+

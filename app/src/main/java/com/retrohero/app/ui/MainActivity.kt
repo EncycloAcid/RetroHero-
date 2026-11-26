@@ -120,6 +120,11 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
     val reducedMotion by vm.settings.reducedMotion.collectAsStateWithLifecycle()
     val biosVersion by vm.biosVersion.collectAsStateWithLifecycle()
     val artVersion by vm.artVersion.collectAsStateWithLifecycle()
+    val raProfile by vm.raProfile.collectAsStateWithLifecycle()
+    val raHardcore by vm.raHardcore.collectAsStateWithLifecycle()
+    val raUnofficial by vm.raUnofficial.collectAsStateWithLifecycle()
+    val raNotifications by vm.raNotifications.collectAsStateWithLifecycle()
+    val raAuthState by vm.raAuth.collectAsStateWithLifecycle()
 
     var autoSave by remember { mutableStateOf(vm.settings.autoSave) }
     var haptics by remember { mutableStateOf(vm.settings.haptics) }
@@ -129,6 +134,7 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
     var screenshotsToGallery by remember { mutableStateOf(vm.settings.screenshotsToGallery) }
     var fastForward by remember { mutableFloatStateOf(vm.settings.fastForwardSpeed) }
     var homebrewOpen by rememberSaveable { mutableStateOf(false) }
+    var raSignInOpen by rememberSaveable { mutableStateOf(false) }
     var toastMessage by remember { mutableStateOf<AppViewModel.Message?>(null) }
     var engineVersion by remember { mutableIntStateOf(0) }
 
@@ -284,7 +290,34 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
         onDownloadCore = vm::downloadCore,
         onDownloadAllNeededCores = vm::downloadCores,
         onDeleteCore = vm::deleteCore,
+        raProfile = raProfile,
+        raHardcore = raHardcore,
+        raUnofficial = raUnofficial,
+        raNotifications = raNotifications,
+        cachedRaFor = { g -> vm.cachedRaGame(g) },
+        loadRaFor = { g, force -> vm.loadRaGame(g, force) },
+        onOpenRaSignIn = {
+            vm.resetRaAuthError()
+            raSignInOpen = true
+        },
+        onSignOutRa = vm::signOutRetroAchievements,
+        onSetRaHardcore = { vm.settings.setRaHardcore(it) },
+        onSetRaUnofficial = { vm.settings.setRaUnofficial(it) },
+        onSetRaNotifications = { vm.settings.setRaNotifications(it) },
     )
+
+    if (raSignInOpen) {
+        M3RetroAchievementsSignInDialog(
+            authState = raAuthState,
+            onSignIn = { u, p ->
+                vm.signInRetroAchievements(u, p) { raSignInOpen = false }
+            },
+            onDismiss = {
+                vm.resetRaAuthError()
+                raSignInOpen = false
+            },
+        )
+    }
 
     if (homebrewOpen) {
         M3HomebrewSheet(

@@ -40,10 +40,63 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val settings = app.settings
     val bios = app.bios
     private val metadataRepo by lazy { GameMetadataRepository(File(app.filesDir, "metadata")) }
+    private val raRepo by lazy { com.retrohero.app.data.RetroAchievementsRepository(app, File(app.filesDir, "ra_cache")) }
 
     fun cachedDossier(game: Game): GameDossier? = metadataRepo.peekCached(game)
     suspend fun loadDossier(game: Game, forceRefresh: Boolean = false): GameDossier =
         metadataRepo.load(game, forceRefresh)
+
+    // ---- RetroAchievements ----
+    val raProfile = settings.raProfile
+    val raHardcore = settings.raHardcore
+    val raUnofficial = settings.raUnofficial
+    val raNotifications = settings.raNotifications
+
+    sealed interface RaAuthState {
+        data object Idle : RaAuthState
+        data object SigningIn : RaAuthState
+        data class Failed(val message: String) : RaAuthState
+    }
+
+    private val _raAuth = MutableStateFlow<RaAuthState>(RaAuthState.Idle)
+    val raAuth: StateFlow<RaAuthState> = _raAuth
+    fun resetRaAuthError() { if (_raAuth.value is RaAuthState.Failed) _raAuth.value = RaAuthState.Idle }
+
+    fun signInRetroAchievements(username: String, password: String, onSuccess: () -> Unit = {}) {
+        _raAuth.value = RaAuthState.SigningIn
+        viewModelScope.launch {
+            val res = withContext(Dispatchers.IO) {
+                com.retrohero.app.data.RetroAchievementsApi.login(username, password)
+            }
+            res.onSuccess { profile ->
+                settings.saveRaProfile(profile)
+                raRepo.clearMemoryCache()
+                _raAuth.value = RaAuthState.Idle
+                say("Signed in to RetroAchievements as ${profile.username}")
+                onSuccess()
+            }.onFailure { err ->
+                _raAuth.value = RaAuthState.Failed(err.message ?: "Sign-in failed")
+            }
+        }
+    }
+
+    fun signOutRetroAchievements() {
+        settings.clearRaProfile()
+        raRepo.clearMemoryCache()
+        _raAuth.value = RaAuthState.Idle
+        say("Signed out of RetroAchievements")
+    }
+
+    fun cachedRaGame(game: Game): com.retrohero.app.data.RaGameData? = raRepo.peekCached(game)
+
+    suspend fun loadRaGame(game: Game, forceRefresh: Boolean = false): com.retrohero.app.data.RaGameData? =
+        raRepo.loadForGame(
+            game = game,
+            profile = settings.raProfile.value,
+            hardcore = settings.raHardcore.value,
+            includeUnofficial = settings.raUnofficial.value,
+            forceRefresh = forceRefresh,
+        )
 
     val games = app.library.games
     val scanning = app.library.scanning
