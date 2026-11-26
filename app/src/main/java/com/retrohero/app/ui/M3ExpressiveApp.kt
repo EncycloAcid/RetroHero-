@@ -1,5 +1,6 @@
 package com.retrohero.app.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
@@ -9,6 +10,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
@@ -59,6 +61,7 @@ import com.retrohero.app.data.BiosManager
 import com.retrohero.app.data.CoreInfo
 import com.retrohero.app.data.CoreManager.CoreState
 import com.retrohero.app.data.Game
+import com.retrohero.app.data.GameDossier
 import com.retrohero.app.data.PlayStat
 import com.retrohero.app.ui.components.LocalReducedMotion
 import com.retrohero.app.ui.components.LocalToolbarInset
@@ -75,8 +78,8 @@ private val M3Destinations = listOf(
 
 /**
  * Pure Material 3 Expressive application shell with directional spatial tab choreography,
- * physical background depth pullback when modal sheets open, floating snackbar feedback,
- * and morphing toolbar FAB.
+ * full-screen Hydra-inspired Game Showcase Page, physical depth pullback behind modal sheets,
+ * floating snackbar feedback, and morphing toolbar FAB.
  */
 @Composable
 fun M3ExpressiveAppView(
@@ -102,6 +105,8 @@ fun M3ExpressiveAppView(
     saveSlotsFor: (Game) -> List<Pair<Int, Long>> = { emptyList() },
     screenshotsFor: (Game) -> List<File> = { emptyList() },
     currentCoreFor: (Game) -> CoreInfo? = { it.system?.cores?.firstOrNull() },
+    cachedDossierFor: (Game) -> GameDossier? = { null },
+    loadDossierFor: (suspend (Game, Boolean) -> GameDossier)? = null,
     toastMessage: AppViewModel.Message? = null,
     onDismissToast: () -> Unit = {},
     onPlay: (Game, Int?) -> Unit = { _, _ -> },
@@ -358,9 +363,12 @@ fun M3ExpressiveAppView(
                 )
             }
 
-            // Independent fading backdrop scrim (never slides vertically with the sheet!)
+            BackHandler(enabled = quickAddOpen) { quickAddOpen = false }
+            BackHandler(enabled = detailGame != null) { detailGameId = null }
+
+            // Independent fading backdrop scrim behind Quick Add sheet
             AnimatedVisibility(
-                visible = anySheetOpen,
+                visible = quickAddOpen,
                 enter = fadeIn(tween(220)),
                 exit = fadeOut(tween(180)),
             ) {
@@ -372,23 +380,30 @@ fun M3ExpressiveAppView(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
                         ) {
-                            detailGameId = null
                             quickAddOpen = false
                         },
                 )
             }
 
-            // Expressive Spring Modal Game Detail Sheet
+            // Full-Screen Hydra-Inspired Mobile Material 3 Expressive Game Showcase Page
             AnimatedVisibility(
                 visible = detailGame != null,
-                enter = slideInVertically(spring(dampingRatio = 0.74f, stiffness = 340f)) { it } + fadeIn(tween(160)),
-                exit = slideOutVertically(tween(200)) { it } + fadeOut(tween(140)),
-                modifier = Modifier.align(Alignment.BottomCenter),
+                enter = if (reducedMotion) fadeIn(tween(150)) else {
+                    slideInVertically(spring(dampingRatio = 0.80f, stiffness = 360f)) { it / 6 } +
+                        scaleIn(spring(dampingRatio = 0.82f, stiffness = 380f), initialScale = 0.94f) +
+                        fadeIn(tween(200))
+                },
+                exit = if (reducedMotion) fadeOut(tween(120)) else {
+                    slideOutVertically(tween(180)) { it / 8 } +
+                        scaleOut(tween(160), targetScale = 0.96f) +
+                        fadeOut(tween(150))
+                },
+                modifier = Modifier.fillMaxSize(),
             ) {
                 val game = detailGame ?: return@AnimatedVisibility
                 val core = currentCoreFor(game)
                 val coreReady = core == null || coreStates[core.id] is CoreState.Installed
-                M3GameDetailSheet(
+                M3GameDetailPage(
                     game = game,
                     stat = stats[game.id],
                     isFavorite = game.id in favoriteIds,
@@ -397,6 +412,8 @@ fun M3ExpressiveAppView(
                     currentCore = core,
                     coreInstalled = coreReady,
                     screenshots = screenshotsFor(game),
+                    initialDossier = cachedDossierFor(game),
+                    loadDossier = loadDossierFor,
                     onSetShelfStatus = { st -> onSetShelfStatus(game, st) },
                     onToggleFavorite = { onToggleFavorite(game) },
                     onPlay = { slot ->

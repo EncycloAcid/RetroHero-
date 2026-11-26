@@ -9,6 +9,8 @@ import com.retrohero.app.RetroHeroApp
 import com.retrohero.app.data.AppPaths
 import com.retrohero.app.data.CoreInfo
 import com.retrohero.app.data.Game
+import com.retrohero.app.data.GameDossier
+import com.retrohero.app.data.GameMetadataRepository
 import com.retrohero.app.data.GameSystem
 import com.retrohero.app.data.GameCollection
 import com.retrohero.app.data.PlayStat
@@ -37,6 +39,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val app = application as RetroHeroApp
     val settings = app.settings
     val bios = app.bios
+    private val metadataRepo by lazy { GameMetadataRepository(File(app.filesDir, "metadata")) }
+
+    fun cachedDossier(game: Game): GameDossier? = metadataRepo.peekCached(game)
+    suspend fun loadDossier(game: Game, forceRefresh: Boolean = false): GameDossier =
+        metadataRepo.load(game, forceRefresh)
 
     val games = app.library.games
     val scanning = app.library.scanning
