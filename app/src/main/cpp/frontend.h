@@ -67,6 +67,9 @@ public:
     void start();
     void setPaused(bool paused);
     void setFastForward(bool enabled, float speed);
+    void setSlowMotion(bool enabled);
+    void setRunAhead(int frames);
+    void perfStats(float &fps, float &frameMs, int &activeRunAhead) const;
     // Rewind keeps recent states in memory; holding rewind steps back through them.
     void setRewindEnabled(bool enabled);
     void setRewinding(bool rewinding);
@@ -155,6 +158,14 @@ private:
     std::atomic<bool> paused_{false};
     std::atomic<bool> fastForward_{false};
     std::atomic<float> ffSpeed_{3.0f};
+    std::atomic<bool> slowMotion_{false};
+    std::atomic<int> runAheadFrames_{0};
+    std::atomic<int> activeRunAhead_{0};
+    std::atomic<float> actualFps_{60.0f};
+    std::atomic<float> frameTimeMs_{0.0f};
+    bool suppressVideo_ = false;
+    bool suppressAudio_ = false;
+    std::vector<uint8_t> runAheadBuf_;
     std::thread thread_;
 
     // Rewind ring buffer (only touched with coreMutex_ held).

@@ -70,4 +70,17 @@ class GameTest {
         assertTrue(ch8Games.first().embeddedBytes!!.size >= 16)
     }
 
+    @Test
+    fun consoleArtworkCoversAllSystems() {
+        for (sys in Systems.all) {
+            val urls = com.retrohero.app.ui.components.ConsoleArtwork.urlsFor(sys)
+            if (sys.id != "herobox16" && sys.id != "chip8") {
+                assertTrue("Expected hardware image URLs for ${sys.id}", urls.isNotEmpty())
+                assertTrue(urls.all { it.startsWith("https://raw.githubusercontent.com/libretro/retroarch-assets/") })
+            }
+            // Every system maps to a bespoke vector silhouette fallback
+            assertTrue(com.retrohero.app.ui.components.ConsoleArtwork.formFactorFor(sys.id).name.isNotEmpty())
+        }
+    }
+
 }

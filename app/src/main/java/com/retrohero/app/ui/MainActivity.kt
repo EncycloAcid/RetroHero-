@@ -133,6 +133,8 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
     var stickAsDpad by remember { mutableStateOf(vm.settings.stickAsDpad) }
     var screenshotsToGallery by remember { mutableStateOf(vm.settings.screenshotsToGallery) }
     var fastForward by remember { mutableFloatStateOf(vm.settings.fastForwardSpeed) }
+    var runAheadFrames by remember { mutableIntStateOf(vm.settings.runAheadFrames) }
+    var showPerfHud by remember { mutableStateOf(vm.settings.showPerfHud) }
     var homebrewOpen by rememberSaveable { mutableStateOf(false) }
     var raSignInOpen by rememberSaveable { mutableStateOf(false) }
     var toastMessage by remember { mutableStateOf<AppViewModel.Message?>(null) }
@@ -304,6 +306,10 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
         onSetRaHardcore = { vm.settings.setRaHardcore(it) },
         onSetRaUnofficial = { vm.settings.setRaUnofficial(it) },
         onSetRaNotifications = { vm.settings.setRaNotifications(it) },
+        runAheadFrames = runAheadFrames,
+        showPerfHud = showPerfHud,
+        onSetRunAhead = { f -> runAheadFrames = f; vm.settings.runAheadFrames = f },
+        onSetShowPerfHud = { on -> showPerfHud = on; vm.settings.showPerfHud = on },
     )
 
     if (raSignInOpen) {

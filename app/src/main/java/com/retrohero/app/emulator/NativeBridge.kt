@@ -13,6 +13,10 @@ object NativeBridge {
     external fun start()
     external fun setPaused(paused: Boolean)
     external fun setFastForward(enabled: Boolean, speed: Float)
+    external fun setSlowMotion(enabled: Boolean)
+    external fun setRunAhead(frames: Int)
+    /** Returns [actualFps, frameTimeMs, activeRunAheadFrames]. */
+    external fun getPerfStats(): FloatArray
     external fun reset()
     external fun saveState(path: String): Boolean
     external fun loadState(path: String): Boolean

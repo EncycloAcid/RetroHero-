@@ -90,6 +90,7 @@ import com.retrohero.app.data.Systems
 import com.retrohero.app.ui.components.LocalReducedMotion
 import com.retrohero.app.ui.components.LocalToolbarInset
 import com.retrohero.app.ui.components.M3CircularWavyGauge
+import com.retrohero.app.ui.components.M3ConsoleImage
 import com.retrohero.app.ui.components.M3ExpressiveSpring
 import com.retrohero.app.ui.components.M3GameCover
 import com.retrohero.app.ui.components.M3ShapeBadge
@@ -859,7 +860,7 @@ private fun M3ConsoleMedallion(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),
         modifier = Modifier
-            .width(68.dp)
+            .width(78.dp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .clickable(interactionSource = interaction, indication = null) {
                 view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
@@ -869,21 +870,20 @@ private fun M3ConsoleMedallion(
         M3ShapeBadge(
             polygon = system.polygon,
             containerColor = bg,
-            size = 64.dp,
+            size = 70.dp,
             modifier = Modifier.graphicsLayer { rotationZ = twist },
         ) {
-            Text(
-                text = system.tag,
-                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Black, fontSize = 11.5.sp),
-                color = fg,
-                maxLines = 1,
-                softWrap = false,
-                modifier = Modifier.graphicsLayer { rotationZ = -twist },
+            M3ConsoleImage(
+                system = system,
+                tint = fg,
+                modifier = Modifier
+                    .size(46.dp)
+                    .graphicsLayer { rotationZ = -twist },
             )
         }
         Text(
             text = system.shortName,
-            style = MaterialTheme.typography.labelSmall,
+            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
             color = cs.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
