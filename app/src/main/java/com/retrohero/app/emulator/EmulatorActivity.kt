@@ -255,6 +255,7 @@ class EmulatorActivity : ComponentActivity() {
     private var visualMode by mutableStateOf(com.retrohero.app.data.VisualMode.ENHANCED)
     private var activeProfile by mutableStateOf<com.retrohero.app.data.HardwareProfile?>(null)
     private var colorProfile by mutableIntStateOf(com.retrohero.app.data.ColorProfile.NONE)
+    private var graphicsConfig by mutableStateOf(com.retrohero.app.data.GraphicsConfig())
     private var activePatchName by mutableStateOf<String?>(null)
     private var activePatchFormat by mutableStateOf<String?>(null)
     private var activePatchHeaderNote by mutableStateOf<String?>(null)
@@ -503,8 +504,11 @@ class EmulatorActivity : ComponentActivity() {
 
             val savedDisc = gamePrefs.lastDisc(game.id)
             if (savedDisc > 0) NativeBridge.setInitialDisc(savedDisc)
+            val gfx = gamePrefs.graphicsConfig(system.id, com.retrohero.app.data.GraphicsCoreOptions.is3DCore(coreId))
+            graphicsConfig = gfx
             com.retrohero.app.data.CoreTuning.defaultsFor(coreId).forEach { (k, v) -> NativeBridge.setOption(k, v) }
             prof.coreOptions.forEach { (k, v) -> NativeBridge.setOption(k, v) }
+            com.retrohero.app.data.GraphicsCoreOptions.optionsFor(coreId, gfx).forEach { (k, v) -> NativeBridge.setOption(k, v) }
             optionsStore.load().forEach { (k, v) -> NativeBridge.setOption(k, v) }
             if (!NativeBridge.loadCore(corePath, paths.system.absolutePath, paths.saves.absolutePath)) {
                 return@withContext NativeBridge.getLastError()
@@ -560,6 +564,7 @@ class EmulatorActivity : ComponentActivity() {
             }
             colorProfile = gamePrefs.colorProfileOverride(game.id) ?: prof.colorProfile
         }
+        NativeBridge.setUpscaleFactor(graphicsConfig.upscale)
         NativeBridge.setFilter(filter)
         NativeBridge.setColorProfile(colorProfile)
         runAheadFrames = settings.runAheadFrames
@@ -871,6 +876,16 @@ class EmulatorActivity : ComponentActivity() {
         gamePrefs.setFilter(system.id, newFilter)
         gamePrefs.setIntegerScale(system.id, integer)
         NativeBridge.setFilter(newFilter)
+    }
+
+    private fun updateGraphics(transform: (com.retrohero.app.data.GraphicsConfig) -> com.retrohero.app.data.GraphicsConfig) {
+        val next = transform(graphicsConfig)
+        graphicsConfig = next
+        gamePrefs.setGraphicsConfig(system.id, next)
+        NativeBridge.setUpscaleFactor(next.upscale)
+        com.retrohero.app.data.GraphicsCoreOptions.optionsFor(activeCoreId, next).forEach { (k, v) ->
+            NativeBridge.setOption(k, v)
+        }
     }
 
     private fun setRewind(on: Boolean) {
@@ -1909,18 +1924,34 @@ class EmulatorActivity : ComponentActivity() {
     private fun GameView() {
         BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             val density = LocalDensity.current
-            val size = if (integerScale && frameSize.height > 0) {
+            val ratioOverride = graphicsConfig.aspectRatio.ratio
+            val isFill = ratioOverride != null && ratioOverride < 0f
+            val effectiveAspect = if (ratioOverride != null && ratioOverride > 0f) ratioOverride else aspect
+            val size = if (!isFill && integerScale && frameSize.height > 0) {
                 integerFit(
                     with(density) { maxWidth.toPx() },
                     with(density) { maxHeight.toPx() },
                     frameSize.height,
-                    aspect,
+                    effectiveAspect,
                 )?.let { (w, h) -> with(density) { Modifier.size(w.toDp(), h.toDp()) } }
             } else null
-            val surfaceMod = size ?: Modifier.aspectRatio(aspect)
-            Box(surfaceMod) {
-                GameSurface(Modifier.fillMaxSize())
-                if (liveTranslateOn && !menuOpen && !pocketGuideOpen && translateState is TranslateState.Idle) {
+            val surfaceMod = when {
+                isFill -> Modifier.fillMaxSize()
+                size != null -> size
+                else -> Modifier.aspectRatio(effectiveAspect)
+            }
+            Box(surfaceMod.clip(RoundedCornerShape(0.dp))) {
+                GameSurface(
+                    Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            if (graphicsConfig.cropOverscan) {
+                                scaleX = 1.06f
+                                scaleY = 1.07f
+                            }
+                        },
+                )
+                if (liveTranslateOn && !menuOpen && !pocketGuideOpen && !browserOpen && translateState is TranslateState.Idle) {
                     LiveTranslateOverlay(
                         blocks = liveTranslateBlocks,
                         sourceLang = translateLang,
@@ -2718,13 +2749,21 @@ class EmulatorActivity : ComponentActivity() {
 
     @Composable
     private fun ScreenPage(back: () -> Unit) {
+        val cs = MaterialTheme.colorScheme
         val prof = activeProfile
-        Column {
-            PageHeader("Screen", back)
+        val gfx = graphicsConfig
+        val is3D = com.retrohero.app.data.GraphicsCoreOptions.is3DCore(activeCoreId)
+        val hasPgxp = com.retrohero.app.data.GraphicsCoreOptions.supportsPgxp(activeCoreId)
+        val hasWideHack = com.retrohero.app.data.GraphicsCoreOptions.supportsWidescreenHack(activeCoreId)
+
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            PageHeader("Graphics & screen", back)
+
+            // 1. Hardware Intelligence Profile (Authentic vs Enhanced)
             Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                shape = RoundedCornerShape(22.dp),
+                color = cs.surfaceContainerLow,
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(
@@ -2732,29 +2771,19 @@ class EmulatorActivity : ComponentActivity() {
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        Text(
-                            "Hardware profile",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
+                        Text("Hardware profile", style = MaterialTheme.typography.titleSmall, color = cs.onSurface)
                         if (prof?.isGameSpecific == true) {
-                            Surface(
-                                shape = RoundedCornerShape(999.dp),
-                                color = MaterialTheme.colorScheme.tertiaryContainer,
-                            ) {
+                            Surface(shape = RoundedCornerShape(999.dp), color = cs.tertiaryContainer) {
                                 Text(
                                     "Auto-tuned",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    color = cs.onTertiaryContainer,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                                 )
                             }
                         }
                     }
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         com.retrohero.app.data.VisualMode.entries.forEach { mode ->
                             val selected = visualMode == mode
                             Surface(
@@ -2763,30 +2792,20 @@ class EmulatorActivity : ComponentActivity() {
                                     toast("${mode.label}: ${activeProfile?.title ?: mode.tagline}")
                                 },
                                 shape = RoundedCornerShape(999.dp),
-                                color = if (selected) MaterialTheme.colorScheme.primaryContainer
-                                else MaterialTheme.colorScheme.surfaceContainerHigh,
-                                contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = if (selected) cs.primaryContainer else cs.surfaceContainerHigh,
+                                contentColor = if (selected) cs.onPrimaryContainer else cs.onSurfaceVariant,
                                 modifier = Modifier.weight(1f),
                             ) {
                                 Row(
-                                    Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                    Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
                                     horizontalArrangement = Arrangement.Center,
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     if (selected) {
-                                        Icon(
-                                            Icons.Default.Check,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp),
-                                        )
-                                        Spacer(Modifier.width(6.dp))
+                                        Icon(Icons.Default.Check, null, Modifier.size(15.dp))
+                                        Spacer(Modifier.width(5.dp))
                                     }
-                                    Text(
-                                        mode.label,
-                                        style = MaterialTheme.typography.labelLarge,
-                                        maxLines = 1,
-                                    )
+                                    Text(mode.label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
                                 }
                             }
                         }
@@ -2795,12 +2814,127 @@ class EmulatorActivity : ComponentActivity() {
                         Text(
                             "${prof.title} — ${prof.summary}",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = cs.onSurfaceVariant,
                         )
                     }
                 }
             }
-            SegmentedGroup(null, ScreenFilter.labels.size) {
+
+            // 2. Resolution & Upscaling Card (1x..4x 3D Internal Res or 2D Crisp Prescale + 3D Enhancements)
+            Surface(
+                shape = RoundedCornerShape(22.dp),
+                color = cs.surfaceContainerLow,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            if (is3D) "Internal resolution upscale" else "Pixel upscaling multiplier",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = cs.onSurface,
+                        )
+                        Surface(shape = RoundedCornerShape(999.dp), color = cs.secondaryContainer) {
+                            Text(
+                                "${gfx.upscale}×",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = cs.onSecondaryContainer,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            )
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(1 to "1× Native", 2 to "2× HD", 3 to "3× FHD", 4 to "4× QHD").forEach { (scale, label) ->
+                            val sel = gfx.upscale == scale
+                            Surface(
+                                onClick = {
+                                    updateGraphics { it.copy(upscale = scale) }
+                                    toast(com.retrohero.app.data.GraphicsCoreOptions.upscaleDescription(activeCoreId, scale))
+                                },
+                                shape = RoundedCornerShape(999.dp),
+                                color = if (sel) cs.primaryContainer else cs.surfaceContainerHigh,
+                                contentColor = if (sel) cs.onPrimaryContainer else cs.onSurfaceVariant,
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(
+                                    text = if (is3D) label else "${scale}×",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 1,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 9.dp),
+                                )
+                            }
+                        }
+                    }
+                    Text(
+                        text = com.retrohero.app.data.GraphicsCoreOptions.upscaleDescription(activeCoreId, gfx.upscale),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = cs.onSurfaceVariant,
+                    )
+
+                    if (is3D) {
+                        Text("Texture filtering", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            com.retrohero.app.data.TextureFilterMode.entries.forEach { tf ->
+                                val sel = gfx.textureFilter == tf
+                                Surface(
+                                    onClick = { updateGraphics { it.copy(textureFilter = tf) } },
+                                    shape = RoundedCornerShape(999.dp),
+                                    color = if (sel) cs.secondaryContainer else cs.surfaceContainerHigh,
+                                    contentColor = if (sel) cs.onSecondaryContainer else cs.onSurfaceVariant,
+                                    modifier = Modifier.weight(1f),
+                                ) {
+                                    Text(
+                                        tf.label,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 3. Aspect Ratio Card
+            Surface(
+                shape = RoundedCornerShape(22.dp),
+                color = cs.surfaceContainerLow,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Aspect ratio", style = MaterialTheme.typography.titleSmall, color = cs.onSurface)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        com.retrohero.app.data.AspectRatioMode.entries.forEach { mode ->
+                            val sel = gfx.aspectRatio == mode
+                            Surface(
+                                onClick = { updateGraphics { it.copy(aspectRatio = mode) } },
+                                shape = RoundedCornerShape(999.dp),
+                                color = if (sel) cs.primaryContainer else cs.surfaceContainerHigh,
+                                contentColor = if (sel) cs.onPrimaryContainer else cs.onSurfaceVariant,
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(
+                                    mode.label,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 1,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 4. Shaders & Pixel Upscalers
+            SegmentedGroup("Shader & pixel upscaler", ScreenFilter.labels.size) {
                 ScreenFilter.labels.forEachIndexed { i, label ->
                     SegmentedListItem(
                         onClick = { setScreen(newFilter = i) },
@@ -2812,15 +2946,19 @@ class EmulatorActivity : ComponentActivity() {
                     ) { Text(label) }
                 }
             }
-            Spacer(Modifier.height(12.dp))
-            SegmentedGroup(null, 4) {
+
+            // 5. Color Matrix, 3D Geometry Fixes, Overscan & Display Sync
+            val extra3dSwitches = (if (hasPgxp) 1 else 0) + (if (hasWideHack) 1 else 0)
+            val totalRows = 5 + extra3dSwitches
+            SegmentedGroup("Color, geometry & display sync", totalRows) {
+                var row = 0
                 val safeColorIdx = colorProfile.coerceIn(0, com.retrohero.app.data.ColorProfile.labels.lastIndex)
                 SegmentedListItem(
                     onClick = {
                         val next = (safeColorIdx + 1) % com.retrohero.app.data.ColorProfile.labels.size
                         setColorMatrix(next)
                     },
-                    shapes = shapes(0),
+                    shapes = shapes(row++),
                     colors = segmentColors(),
                     leadingContent = { ShapeIcon(Icons.Default.Tune) },
                     supportingContent = {
@@ -2828,18 +2966,61 @@ class EmulatorActivity : ComponentActivity() {
                     },
                     verticalAlignment = Alignment.CenterVertically,
                 ) { Text("Hardware color matrix") }
-                MenuSwitch(shapes(1), Icons.Default.AspectRatio, "Integer scaling", "Every game pixel the same size, with a border", integerScale) {
-                    setScreen(integer = it)
+
+                if (hasPgxp) {
+                    MenuSwitch(
+                        shapes(row++),
+                        Icons.Default.Tv,
+                        "PGXP anti-wobble 3D",
+                        "Eliminates PS1 polygon jitter & warped textures",
+                        gfx.pgxpEnabled,
+                    ) { on -> updateGraphics { it.copy(pgxpEnabled = on) } }
                 }
+
+                if (hasWideHack) {
+                    MenuSwitch(
+                        shapes(row++),
+                        Icons.Default.AspectRatio,
+                        "3D Widescreen hack",
+                        "Extends 3D camera frustum for true 16:9 gameplay",
+                        gfx.widescreenHack,
+                    ) { on ->
+                        updateGraphics {
+                            it.copy(
+                                widescreenHack = on,
+                                aspectRatio = if (on) com.retrohero.app.data.AspectRatioMode.WIDESCREEN_16_9
+                                else com.retrohero.app.data.AspectRatioMode.AUTO,
+                            )
+                        }
+                    }
+                }
+
                 MenuSwitch(
-                    shapes(2),
+                    shapes(row++),
+                    Icons.Default.AspectRatio,
+                    "Crop TV overscan",
+                    "Trims noisy CRT edge borders on NES/SNES/Genesis/PS1",
+                    gfx.cropOverscan,
+                ) { on -> updateGraphics { it.copy(cropOverscan = on) } }
+
+                MenuSwitch(
+                    shapes(row++),
+                    Icons.Default.AspectRatio,
+                    "Integer scaling",
+                    "Every game pixel the exact same size, with a clean border",
+                    integerScale,
+                ) { setScreen(integer = it) }
+
+                MenuSwitch(
+                    shapes(row++),
                     Icons.Default.Tv,
                     "Tear-free Vsync lock",
                     "Choreographer vsync + micro-pitch audio · ${displayHz.roundToInt()} Hz screen",
                     vsyncLock,
                 ) { setDisplaySync(vsync = it) }
+
                 MenuSwitch(
-                    shapes(3),
+                    shapes(row),
                     Icons.Default.History,
                     "120 Hz OLED Black Frame Insertion",
                     if (bfiCapable) "CRT-sharp motion clarity on 120 Hz OLED"
@@ -2853,11 +3034,12 @@ class EmulatorActivity : ComponentActivity() {
                     }
                 }
             }
+
             Text(
-                "Hardware profile is saved per game; display sync & filter defaults are saved per ${system.shortName}.",
+                "Graphics & upscaling settings are saved per ${system.shortName}; hardware profile is saved per game.",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 10.dp, start = 4.dp),
+                color = cs.onSurfaceVariant,
+                modifier = Modifier.padding(start = 4.dp),
             )
         }
     }

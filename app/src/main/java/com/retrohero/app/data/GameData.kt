@@ -106,11 +106,22 @@ object ScreenFilter {
     const val SMOOTH = 1
     const val CRT = 2
     const val LCD = 3
-    val labels = listOf("Sharp pixels", "Smooth", "CRT scanlines", "LCD grid")
+    const val SCALE2X = 4
+    const val SHARP_BILINEAR = 5
+    val labels = listOf(
+        "Sharp pixels",
+        "Smooth",
+        "CRT scanlines",
+        "LCD grid",
+        "Pixel Art 2× (EPX)",
+        "Sharp Bilinear",
+    )
     val descriptions = listOf(
         "Crisp, square pixels",
-        "Softened by the phone's scaler",
-        "Dark lines like an old TV",
-        "A fine grid like a handheld screen",
+        "Softened by hardware bilinear",
+        "Dark aperture lines like an old TV",
+        "Fine sub-pixel grid like a handheld",
+        "Smooths jagged 2D pixel diagonals (Scale2x)",
+        "Crisp pixels with zero shimmer on any screen",
     )
 }

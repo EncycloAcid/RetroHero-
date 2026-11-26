@@ -22,6 +22,27 @@ class GamePrefs(context: Context, sharpDefault: Boolean) {
     fun integerScale(systemId: String): Boolean = prefs.getBoolean("integer_$systemId", false)
     fun setIntegerScale(systemId: String, on: Boolean) = prefs.edit { putBoolean("integer_$systemId", on) }
 
+    fun graphicsConfig(systemId: String, is3D: Boolean): com.retrohero.app.data.GraphicsConfig {
+        val defaultUpscale = if (is3D) 2 else 3
+        return com.retrohero.app.data.GraphicsConfig(
+            upscale = prefs.getInt("gfx_upscale_$systemId", defaultUpscale).coerceIn(1, 4),
+            aspectRatio = com.retrohero.app.data.AspectRatioMode.fromId(prefs.getString("gfx_aspect_$systemId", null)),
+            textureFilter = com.retrohero.app.data.TextureFilterMode.fromId(prefs.getString("gfx_tex_$systemId", null)),
+            widescreenHack = prefs.getBoolean("gfx_wide_$systemId", false),
+            pgxpEnabled = prefs.getBoolean("gfx_pgxp_$systemId", true),
+            cropOverscan = prefs.getBoolean("gfx_overscan_$systemId", false),
+        )
+    }
+
+    fun setGraphicsConfig(systemId: String, cfg: com.retrohero.app.data.GraphicsConfig) = prefs.edit {
+        putInt("gfx_upscale_$systemId", cfg.upscale.coerceIn(1, 4))
+        putString("gfx_aspect_$systemId", cfg.aspectRatio.id)
+        putString("gfx_tex_$systemId", cfg.textureFilter.id)
+        putBoolean("gfx_wide_$systemId", cfg.widescreenHack)
+        putBoolean("gfx_pgxp_$systemId", cfg.pgxpEnabled)
+        putBoolean("gfx_overscan_$systemId", cfg.cropOverscan)
+    }
+
     var rewind: Boolean
         get() = prefs.getBoolean("rewind", true)
         set(v) = prefs.edit { putBoolean("rewind", v) }

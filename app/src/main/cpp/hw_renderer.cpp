@@ -36,6 +36,35 @@ uniform vec2 uSrcSize;
 varying vec2 vUv;
 void main() {
     vec4 c = texture2D(uTex, vUv);
+    if (uFilter == 4 && uSrcSize.x > 0.0 && uSrcSize.y > 0.0) {
+        // Real-time GLSL EPX / Scale2x diagonal edge-smoothing upscaler
+        vec2 texel = 1.0 / uSrcSize;
+        vec2 pos = vUv * uSrcSize;
+        vec2 sub = fract(pos);
+        vec2 center = (floor(pos) + 0.5) * texel;
+        vec3 E = texture2D(uTex, center).rgb;
+        vec3 B = texture2D(uTex, center + vec2(0.0, -texel.y)).rgb;
+        vec3 H = texture2D(uTex, center + vec2(0.0,  texel.y)).rgb;
+        vec3 D = texture2D(uTex, center + vec2(-texel.x, 0.0)).rgb;
+        vec3 F = texture2D(uTex, center + vec2( texel.x, 0.0)).rgb;
+        vec3 outRgb = E;
+        bool bhDiff = dot(abs(B - H), vec3(1.0)) > 0.06;
+        bool dfDiff = dot(abs(D - F), vec3(1.0)) > 0.06;
+        if (bhDiff && dfDiff) {
+            if (sub.x < 0.5 && sub.y < 0.5 && dot(abs(D - B), vec3(1.0)) < 0.06) outRgb = D;
+            else if (sub.x >= 0.5 && sub.y < 0.5 && dot(abs(B - F), vec3(1.0)) < 0.06) outRgb = F;
+            else if (sub.x < 0.5 && sub.y >= 0.5 && dot(abs(D - H), vec3(1.0)) < 0.06) outRgb = D;
+            else if (sub.x >= 0.5 && sub.y >= 0.5 && dot(abs(H - F), vec3(1.0)) < 0.06) outRgb = F;
+        }
+        c.rgb = outRgb;
+    } else if (uFilter == 5 && uSrcSize.x > 0.0 && uSrcSize.y > 0.0) {
+        // Sharp Bilinear: crisp pixel centers with subtle anti-shimmer edge transitions
+        vec2 pos = vUv * uSrcSize;
+        vec2 fl = floor(pos);
+        vec2 fr = fract(pos);
+        vec2 sharpFr = clamp((fr - 0.5) * 3.0 + 0.5, 0.0, 1.0);
+        c = texture2D(uTex, (fl + sharpFr) / uSrcSize);
+    }
     if (uColorProfile == 3 && uSrcSize.x > 0.0) {
         // 3-tap horizontal NTSC composite blend (smooths Genesis/PS1 dither waterfalls & fog)
         float dx = 1.0 / uSrcSize.x;

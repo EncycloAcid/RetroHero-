@@ -105,8 +105,19 @@ void VideoOutput::setWindow(ANativeWindow *window) {
 
 void VideoOutput::setFilter(int filter) {
     std::lock_guard<std::mutex> lk(mutex_);
-    filter_ = filter < Sharp || filter > Lcd ? Sharp : filter;
-    sharpScale_ = filter_ == Smooth ? 1 : 3;
+    filter_ = (filter < Sharp || filter > SharpBilinear) ? Sharp : filter;
+    sharpScale_ = (filter_ == Smooth) ? 1 : (filter_ == Scale2x ? 2 : upscaleFactor_);
+    bufW_ = bufH_ = 0;
+    if (window_ && !last_.empty())
+        blitLocked(last_.data(), lastW_, lastH_, lastPitch_, lastFmt_);
+}
+
+void VideoOutput::setUpscaleFactor(int factor) {
+    std::lock_guard<std::mutex> lk(mutex_);
+    int clamped = std::clamp(factor, 1, 4);
+    if (clamped == upscaleFactor_) return;
+    upscaleFactor_ = clamped;
+    sharpScale_ = (filter_ == Smooth) ? 1 : (filter_ == Scale2x ? 2 : upscaleFactor_);
     bufW_ = bufH_ = 0;
     if (window_ && !last_.empty())
         blitLocked(last_.data(), lastW_, lastH_, lastPitch_, lastFmt_);
@@ -191,7 +202,7 @@ void VideoOutput::blitLocked(const uint8_t *data, unsigned width, unsigned heigh
     const bool is32 = fmt == RETRO_PIXEL_FORMAT_XRGB8888;
     const int winFmt = is32 ? WINDOW_FORMAT_RGBX_8888 : WINDOW_FORMAT_RGB_565;
     int s = sharpScale_;
-    const int cap = height > 0 ? static_cast<int>(800 / height) : 1;
+    const int cap = height > 0 ? static_cast<int>(1080 / height) : 1;
     if (s > cap) s = cap < 1 ? 1 : cap;
     const int outW = static_cast<int>(width) * s;
     const int outH = static_cast<int>(height) * s;
@@ -214,6 +225,7 @@ void VideoOutput::blitLocked(const uint8_t *data, unsigned width, unsigned heigh
 
     const bool crt = filter_ == Crt && s >= 2;
     const bool lcd = filter_ == Lcd && s >= 2;
+    const bool scale2x = filter_ == Scale2x && s == 2;
     const bool useLcdLut = (colorProfile_ == ColorGbaLcd || colorProfile_ == ColorGbcLcd) && lut565_.size() == 65536;
     const bool useComposite = colorProfile_ == ColorCrtComposite;
     const uint16_t *lut = useLcdLut ? lut565_.data() : nullptr;
@@ -226,36 +238,72 @@ void VideoOutput::blitLocked(const uint8_t *data, unsigned width, unsigned heigh
             if (useLcdLut) px = applyLcdMatrixRgbx(px, colorProfile_);
             return px;
         };
-        for (int sy = 0; sy < srcRows; sy++) {
-            const auto *src = reinterpret_cast<const uint32_t *>(data + static_cast<size_t>(sy) * pitch);
-            uint32_t *firstRow = dst + static_cast<size_t>(sy * s) * buf.stride;
-            uint32_t prevPx = srcCols > 0 ? fetch32(src, 0) : 0;
-            uint32_t curPx = prevPx;
-            for (int sx = 0; sx < srcCols; sx++) {
-                uint32_t nextPx = (sx + 1 < srcCols) ? fetch32(src, sx + 1) : curPx;
-                uint32_t px = useComposite ? blendRgbx(prevPx, curPx, nextPx) : curPx;
-                prevPx = curPx;
-                curPx = nextPx;
-                if (s == 1) {
-                    firstRow[sx] = px;
-                } else if (s == 2) {
-                    uint32_t *d = firstRow + sx * 2;
-                    d[0] = px;
-                    d[1] = lcd ? shadeRgbx(px, kGrid) : px;
-                } else {
-                    uint32_t *d = firstRow + sx * 3;
-                    d[0] = px;
-                    d[1] = px;
-                    d[2] = lcd ? shadeRgbx(px, kGrid) : px;
+        if (scale2x) {
+            for (int sy = 0; sy < srcRows; sy++) {
+                const auto *srcC = reinterpret_cast<const uint32_t *>(data + static_cast<size_t>(sy) * pitch);
+                const auto *srcU = reinterpret_cast<const uint32_t *>(data + static_cast<size_t>(sy > 0 ? sy - 1 : 0) * pitch);
+                const auto *srcD = reinterpret_cast<const uint32_t *>(data + static_cast<size_t>(sy + 1 < srcRows ? sy + 1 : sy) * pitch);
+                uint32_t *row0 = dst + static_cast<size_t>(sy * 2) * buf.stride;
+                uint32_t *row1 = row0 + buf.stride;
+                for (int sx = 0; sx < srcCols; sx++) {
+                    const int xl = sx > 0 ? sx - 1 : 0;
+                    const int xr = sx + 1 < srcCols ? sx + 1 : sx;
+                    const uint32_t E = fetch32(srcC, sx);
+                    const uint32_t B = fetch32(srcU, sx);
+                    const uint32_t H = fetch32(srcD, sx);
+                    const uint32_t D = fetch32(srcC, xl);
+                    const uint32_t F = fetch32(srcC, xr);
+                    uint32_t e0 = E, e1 = E, e2 = E, e3 = E;
+                    if (B != H && D != F) {
+                        if (D == B) e0 = D;
+                        if (B == F) e1 = F;
+                        if (D == H) e2 = D;
+                        if (H == F) e3 = F;
+                    }
+                    row0[sx * 2] = e0;
+                    row0[sx * 2 + 1] = e1;
+                    row1[sx * 2] = e2;
+                    row1[sx * 2 + 1] = e3;
                 }
             }
-            for (int r = 1; r < s; r++) {
-                uint32_t *subRow = firstRow + static_cast<size_t>(r) * buf.stride;
-                if (r == s - 1 && (crt || lcd)) {
-                    const unsigned k = crt ? kScanline : kGrid;
-                    for (int x = 0; x < outCols; x++) subRow[x] = shadeRgbx(firstRow[x], k);
-                } else {
-                    memcpy(subRow, firstRow, rowBytes);
+        } else {
+            for (int sy = 0; sy < srcRows; sy++) {
+                const auto *src = reinterpret_cast<const uint32_t *>(data + static_cast<size_t>(sy) * pitch);
+                uint32_t *firstRow = dst + static_cast<size_t>(sy * s) * buf.stride;
+                uint32_t prevPx = srcCols > 0 ? fetch32(src, 0) : 0;
+                uint32_t curPx = prevPx;
+                for (int sx = 0; sx < srcCols; sx++) {
+                    uint32_t nextPx = (sx + 1 < srcCols) ? fetch32(src, sx + 1) : curPx;
+                    uint32_t px = useComposite ? blendRgbx(prevPx, curPx, nextPx) : curPx;
+                    prevPx = curPx;
+                    curPx = nextPx;
+                    if (s == 1) {
+                        firstRow[sx] = px;
+                    } else if (s == 2) {
+                        uint32_t *d = firstRow + sx * 2;
+                        d[0] = px;
+                        d[1] = lcd ? shadeRgbx(px, kGrid) : px;
+                    } else if (s == 3) {
+                        uint32_t *d = firstRow + sx * 3;
+                        d[0] = px;
+                        d[1] = px;
+                        d[2] = lcd ? shadeRgbx(px, kGrid) : px;
+                    } else {
+                        uint32_t *d = firstRow + sx * 4;
+                        d[0] = px;
+                        d[1] = px;
+                        d[2] = px;
+                        d[3] = lcd ? shadeRgbx(px, kGrid) : px;
+                    }
+                }
+                for (int r = 1; r < s; r++) {
+                    uint32_t *subRow = firstRow + static_cast<size_t>(r) * buf.stride;
+                    if (r == s - 1 && (crt || lcd)) {
+                        const unsigned k = crt ? kScanline : kGrid;
+                        for (int x = 0; x < outCols; x++) subRow[x] = shadeRgbx(firstRow[x], k);
+                    } else {
+                        memcpy(subRow, firstRow, rowBytes);
+                    }
                 }
             }
         }
@@ -268,40 +316,76 @@ void VideoOutput::blitLocked(const uint8_t *data, unsigned width, unsigned heigh
             if (lut) px = lut[px];
             return px;
         };
-        for (int sy = 0; sy < srcRows; sy++) {
-            const auto *src = reinterpret_cast<const uint16_t *>(data + static_cast<size_t>(sy) * pitch);
-            uint16_t *firstRow = dst + static_cast<size_t>(sy * s) * buf.stride;
-            if (s == 1 && !is1555 && !lut && !useComposite) {
-                memcpy(firstRow, src, rowBytes);
-            } else {
-                uint16_t prevPx = srcCols > 0 ? fetch16(src, 0) : 0;
-                uint16_t curPx = prevPx;
+        if (scale2x) {
+            for (int sy = 0; sy < srcRows; sy++) {
+                const auto *srcC = reinterpret_cast<const uint16_t *>(data + static_cast<size_t>(sy) * pitch);
+                const auto *srcU = reinterpret_cast<const uint16_t *>(data + static_cast<size_t>(sy > 0 ? sy - 1 : 0) * pitch);
+                const auto *srcD = reinterpret_cast<const uint16_t *>(data + static_cast<size_t>(sy + 1 < srcRows ? sy + 1 : sy) * pitch);
+                uint16_t *row0 = dst + static_cast<size_t>(sy * 2) * buf.stride;
+                uint16_t *row1 = row0 + buf.stride;
                 for (int sx = 0; sx < srcCols; sx++) {
-                    uint16_t nextPx = (sx + 1 < srcCols) ? fetch16(src, sx + 1) : curPx;
-                    uint16_t px = useComposite ? blend565(prevPx, curPx, nextPx) : curPx;
-                    prevPx = curPx;
-                    curPx = nextPx;
-                    if (s == 1) {
-                        firstRow[sx] = px;
-                    } else if (s == 2) {
-                        uint16_t *d = firstRow + sx * 2;
-                        d[0] = px;
-                        d[1] = lcd ? shade565(px, kGrid) : px;
-                    } else {
-                        uint16_t *d = firstRow + sx * 3;
-                        d[0] = px;
-                        d[1] = px;
-                        d[2] = lcd ? shade565(px, kGrid) : px;
+                    const int xl = sx > 0 ? sx - 1 : 0;
+                    const int xr = sx + 1 < srcCols ? sx + 1 : sx;
+                    const uint16_t E = fetch16(srcC, sx);
+                    const uint16_t B = fetch16(srcU, sx);
+                    const uint16_t H = fetch16(srcD, sx);
+                    const uint16_t D = fetch16(srcC, xl);
+                    const uint16_t F = fetch16(srcC, xr);
+                    uint16_t e0 = E, e1 = E, e2 = E, e3 = E;
+                    if (B != H && D != F) {
+                        if (D == B) e0 = D;
+                        if (B == F) e1 = F;
+                        if (D == H) e2 = D;
+                        if (H == F) e3 = F;
                     }
+                    row0[sx * 2] = e0;
+                    row0[sx * 2 + 1] = e1;
+                    row1[sx * 2] = e2;
+                    row1[sx * 2 + 1] = e3;
                 }
             }
-            for (int r = 1; r < s; r++) {
-                uint16_t *subRow = firstRow + static_cast<size_t>(r) * buf.stride;
-                if (r == s - 1 && (crt || lcd)) {
-                    const unsigned k = crt ? kScanline : kGrid;
-                    for (int x = 0; x < outCols; x++) subRow[x] = shade565(firstRow[x], k);
+        } else {
+            for (int sy = 0; sy < srcRows; sy++) {
+                const auto *src = reinterpret_cast<const uint16_t *>(data + static_cast<size_t>(sy) * pitch);
+                uint16_t *firstRow = dst + static_cast<size_t>(sy * s) * buf.stride;
+                if (s == 1 && !is1555 && !lut && !useComposite) {
+                    memcpy(firstRow, src, rowBytes);
                 } else {
-                    memcpy(subRow, firstRow, rowBytes);
+                    uint16_t prevPx = srcCols > 0 ? fetch16(src, 0) : 0;
+                    uint16_t curPx = prevPx;
+                    for (int sx = 0; sx < srcCols; sx++) {
+                        uint16_t nextPx = (sx + 1 < srcCols) ? fetch16(src, sx + 1) : curPx;
+                        uint16_t px = useComposite ? blend565(prevPx, curPx, nextPx) : curPx;
+                        prevPx = curPx;
+                        curPx = nextPx;
+                        if (s == 1) {
+                            firstRow[sx] = px;
+                        } else if (s == 2) {
+                            uint16_t *d = firstRow + sx * 2;
+                            d[0] = px;
+                            d[1] = lcd ? shade565(px, kGrid) : px;
+                        } else if (s == 3) {
+                            uint16_t *d = firstRow + sx * 3;
+                            d[0] = px;
+                            d[1] = px;
+                            d[2] = lcd ? shade565(px, kGrid) : px;
+                        } else {
+                            uint16_t *d = firstRow + sx * 4;
+                            d[0] = px;
+                            d[1] = px;
+                            d[2] = px;
+                            d[3] = lcd ? shade565(px, kGrid) : px;
+                        }
+                    }
+                }
+                for (int r = 1; r < s; r++) {
+                    uint16_t *subRow = firstRow + static_cast<size_t>(r) * buf.stride;
+                    if (r == s - 1 && (crt || lcd)) {
+                        const unsigned k = crt ? kScanline : kGrid;
+                        for (int x = 0; x < outCols; x++) subRow[x] = shade565(firstRow[x], k);
+                    } else {
+                        memcpy(subRow, firstRow, rowBytes);
+                    }
                 }
             }
         }

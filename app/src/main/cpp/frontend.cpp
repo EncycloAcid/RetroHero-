@@ -935,6 +935,10 @@ void Frontend::setColorProfile(int profile) {
     video_.setColorProfile(profile);
 }
 
+void Frontend::setUpscaleFactor(int factor) {
+    video_.setUpscaleFactor(factor);
+}
+
 void Frontend::frameSize(unsigned &width, unsigned &height) {
     if (hwRenderEnabled_.load()) hw_.frameSize(width, height);
     else video_.frameSize(width, height);

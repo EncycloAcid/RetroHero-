@@ -16,12 +16,13 @@ public:
     ~VideoOutput();
 
     void setWindow(ANativeWindow *window);  // takes ownership of one reference
-    // 0 sharp, 1 smooth, 2 CRT scanlines, 3 LCD grid.
-    enum Filter { Sharp = 0, Smooth = 1, Crt = 2, Lcd = 3 };
+    // 0 sharp, 1 smooth, 2 CRT scanlines, 3 LCD grid, 4 Pixel Art 2x (EPX/Scale2x), 5 Sharp Bilinear.
+    enum Filter { Sharp = 0, Smooth = 1, Crt = 2, Lcd = 3, Scale2x = 4, SharpBilinear = 5 };
     // 0 none (vivid), 1 GBA AGB-001 LCD matrix, 2 GBC LCD matrix, 3 CRT composite horizontal blend.
     enum ColorProfile { ColorNone = 0, ColorGbaLcd = 1, ColorGbcLcd = 2, ColorCrtComposite = 3 };
     void setFilter(int filter);
     void setColorProfile(int profile);
+    void setUpscaleFactor(int factor);
     // Copies the last frame as ARGB_8888 into [out]; false if there is none yet.
     void frameSize(unsigned &width, unsigned &height) {
         std::lock_guard<std::mutex> lk(mutex_);
@@ -42,6 +43,7 @@ private:
     int bufW_ = 0, bufH_ = 0, bufFmt_ = 0;
     int filter_ = Sharp;
     int colorProfile_ = ColorNone;
+    int upscaleFactor_ = 3;
     int sharpScale_ = 3;
     std::vector<uint16_t> lut565_;
 
