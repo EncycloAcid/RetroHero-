@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
@@ -253,6 +254,45 @@ class EmulatorActivity : ComponentActivity() {
     private var activePatchHeaderNote by mutableStateOf<String?>(null)
     private var activeRomCrc: String? = null
 
+    // #8 Real-Time Overlay Translation & Spoiler-Free Pocket Guide
+    private var liveTranslateOn by mutableStateOf(false)
+    private var liveTranslateBlocks by mutableStateOf<List<TranslatedBlock>>(emptyList())
+    private var liveTranslateScanning by mutableStateOf(false)
+    private var liveTranslateJob: kotlinx.coroutines.Job? = null
+    private var pocketGuideOpen by mutableStateOf(false)
+    private var pocketNotes by mutableStateOf("")
+
+    // #9 Playable Challenge Snapshots (Evolving Moment Capsules + Input Ghost + Win Conditions)
+    private var challengeRecording by mutableStateOf(false)
+    private var challengeRecStartMs = 0L
+    private var challengeRecElapsedMs by mutableStateOf(0L)
+    private var challengeRecStartState: File? = null
+    private var challengeRecStartPng: File? = null
+    private val challengeRecFrames = ArrayList<com.retrohero.app.data.GhostFrame>()
+    private var challengeRecTitle = ""
+    private var challengeRecNote = ""
+    private var challengeRecWin: com.retrohero.app.data.ChallengeWinCondition? = null
+
+    private var activeChallengeStateFile: File? = null
+    private var activeChallengeTitle by mutableStateOf<String?>(null)
+    private var activeChallengeGhost by mutableStateOf<List<com.retrohero.app.data.GhostFrame>>(emptyList())
+    private var activeChallengeTargetMs by mutableStateOf(0L)
+    private var activeChallengeWin by mutableStateOf<com.retrohero.app.data.ChallengeWinCondition?>(null)
+    private var challengeElapsedMs by mutableStateOf(0L)
+    private var challengeGhostMask by mutableIntStateOf(0)
+    private var challengeCleared by mutableStateOf(false)
+    private var challengeClearedTimeMs by mutableStateOf<Long?>(null)
+    private var challengeStartRealtime = 0L
+
+    private val challengePicker = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) loadChallengeCapsuleFromUri(uri)
+    }
+
+    // #10 3-Second Mobile Rollback Netplay
+    private val netplaySession by lazy { RollbackNetplaySession(lifecycleScope) }
+
     // Play time: counted only while the game is actually running on screen.
     private var runningSince = 0L
     private var pendingSession = true
@@ -345,6 +385,7 @@ class EmulatorActivity : ComponentActivity() {
             },
         )
         cheats = Cheats.load(paths.cheatsFile(game))
+        pocketNotes = runCatching { paths.notesFile(game).takeIf { it.exists() }?.readText().orEmpty() }.getOrDefault("")
         input.onRewind = { held -> if (rewindOn) NativeBridge.setRewinding(held) }
         input.rewindKeyEnabled = system.id != "psx"
         input.onFastForward = { held -> fastForwardHeld = held; applyFastForward() }
@@ -360,6 +401,7 @@ class EmulatorActivity : ComponentActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 when {
+                    pocketGuideOpen -> closePocketGuide()
                     discPickerOpen -> discPickerOpen = false
                     translateState !is TranslateState.Idle -> dismissTranslate()
                     editingPad -> finishPadEdit(save = true)
@@ -858,14 +900,23 @@ class EmulatorActivity : ComponentActivity() {
         contentResolver.openOutputStream(uri)?.use { out -> f.inputStream().use { it.copyTo(out) } }
     }
 
-    /** Packages the current state + screenshot into a shareable `.rhclip` capsule and opens the share sheet. */
-    private fun shareMoment(title: String, note: String) {
+    /** Packages the current state + screenshot (+ optional recorded input ghost & win condition) into a `.rhclip`. */
+    private fun shareMoment(
+        title: String,
+        note: String,
+        preCapturedState: File? = null,
+        preCapturedPng: File? = null,
+        ghostFrames: List<com.retrohero.app.data.GhostFrame> = emptyList(),
+        targetDurationMs: Long = 0L,
+        winCondition: com.retrohero.app.data.ChallengeWinCondition? = null,
+    ) {
         lifecycleScope.launch {
             val clipFile = withContext(Dispatchers.IO) {
                 runCatching {
-                    val tmpState = File(paths.clipTmp, "moment-${System.nanoTime()}.state")
-                    if (!NativeBridge.saveState(tmpState.absolutePath)) error("Couldn't save state")
-                    val tmpPng = NativeBridge.grabFrame()?.let { raw ->
+                    val tmpState = preCapturedState ?: File(paths.clipTmp, "moment-${System.nanoTime()}.state").also { f ->
+                        if (!NativeBridge.saveState(f.absolutePath)) error("Couldn't save state")
+                    }
+                    val tmpPng = preCapturedPng ?: NativeBridge.grabFrame()?.let { raw ->
                         val w = raw[0]
                         val h = raw[1]
                         if (w > 0 && h > 0) {
@@ -877,6 +928,11 @@ class EmulatorActivity : ComponentActivity() {
                             }
                         } else null
                     }
+                    val tmpGhost = if (ghostFrames.isNotEmpty()) {
+                        File(paths.clipTmp, "ghost-${System.nanoTime()}.bin").also { f ->
+                            f.writeBytes(com.retrohero.app.data.ChallengeGhost.encode(ghostFrames))
+                        }
+                    } else null
                     val manifest = com.retrohero.app.data.MomentManifest(
                         title = title.trim().ifEmpty { game.title },
                         note = note.trim(),
@@ -884,12 +940,18 @@ class EmulatorActivity : ComponentActivity() {
                         coreId = currentCoreId,
                         gameTitle = game.title,
                         gameBaseName = game.baseName,
+                        ghostFrames = ghostFrames.size,
+                        targetDurationMs = targetDurationMs,
+                        winCondition = winCondition,
                     )
                     val safeName = Regex("[^a-zA-Z0-9._-]+").replace(manifest.title, "_").trim('_').ifEmpty { "moment" }.take(40)
                     val dest = File(paths.clips, "$safeName-${System.currentTimeMillis()}.rhclip")
-                    dest.outputStream().use { com.retrohero.app.data.MomentCapsule.export(it, manifest, tmpState, tmpPng) }
+                    dest.outputStream().use {
+                        com.retrohero.app.data.MomentCapsule.export(it, manifest, tmpState, tmpPng, tmpGhost)
+                    }
                     tmpState.delete()
                     tmpPng?.delete()
+                    tmpGhost?.delete()
                     dest
                 }.getOrNull()
             }
@@ -901,9 +963,211 @@ class EmulatorActivity : ComponentActivity() {
             val send = Intent(Intent.ACTION_SEND)
                 .setType("application/octet-stream")
                 .putExtra(Intent.EXTRA_STREAM, uri)
-                .putExtra(Intent.EXTRA_SUBJECT, "RetroHero Moment: ${title.ifBlank { game.title }}")
+                .putExtra(
+                    Intent.EXTRA_SUBJECT,
+                    if (ghostFrames.isNotEmpty()) "RetroHero Challenge: ${title.ifBlank { game.title }}"
+                    else "RetroHero Moment: ${title.ifBlank { game.title }}",
+                )
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            startActivity(Intent.createChooser(send, "Share .rhclip moment"))
+            startActivity(Intent.createChooser(send, "Share .rhclip challenge"))
+        }
+    }
+
+    private fun startChallengeRecording(
+        title: String,
+        note: String,
+        winCondition: com.retrohero.app.data.ChallengeWinCondition?,
+    ) {
+        lifecycleScope.launch {
+            val captured = withContext(Dispatchers.IO) {
+                runCatching {
+                    val stateF = File(paths.clipTmp, "chal-start-${System.nanoTime()}.state")
+                    if (!NativeBridge.saveState(stateF.absolutePath)) error("Save state failed")
+                    val pngF = NativeBridge.grabFrame()?.let { raw ->
+                        val w = raw[0]
+                        val h = raw[1]
+                        if (w > 0 && h > 0) {
+                            val bmp = Bitmap.createBitmap(raw, 2, w, w, h, Bitmap.Config.ARGB_8888)
+                            File(paths.clipTmp, "chal-start-${System.nanoTime()}.png").also { f ->
+                                f.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                            }
+                        } else null
+                    }
+                    stateF to pngF
+                }.getOrNull()
+            }
+            if (captured == null) {
+                toast("Couldn't snapshot starting frame for challenge")
+                return@launch
+            }
+            challengeRecStartState?.delete()
+            challengeRecStartPng?.delete()
+            challengeRecStartState = captured.first
+            challengeRecStartPng = captured.second
+            challengeRecFrames.clear()
+            challengeRecTitle = title.trim().ifEmpty { "${game.title} Challenge" }
+            challengeRecNote = note.trim()
+            challengeRecWin = winCondition
+            challengeRecStartMs = SystemClock.elapsedRealtime()
+            challengeRecElapsedMs = 0L
+            challengeRecording = true
+            setMenu(false)
+            toast("Recording Challenge Ghost — play your run, then tap Finish!")
+        }
+    }
+
+    private fun finishChallengeRecordingAndShare() {
+        if (!challengeRecording) return
+        challengeRecording = false
+        val duration = (SystemClock.elapsedRealtime() - challengeRecStartMs).coerceAtLeast(100L)
+        val stateF = challengeRecStartState
+        val pngF = challengeRecStartPng
+        val framesCopy = challengeRecFrames.toList()
+        challengeRecStartState = null
+        challengeRecStartPng = null
+        challengeRecFrames.clear()
+        val effectiveWin = challengeRecWin ?: com.retrohero.app.data.ChallengeWinCondition(
+            type = com.retrohero.app.data.ChallengeWinType.TIME_TRIAL,
+            label = "Beat ${formatChallengeClock(duration)}",
+        )
+        setMenu(true)
+        shareMoment(
+            title = challengeRecTitle,
+            note = challengeRecNote,
+            preCapturedState = stateF,
+            preCapturedPng = pngF,
+            ghostFrames = framesCopy,
+            targetDurationMs = duration,
+            winCondition = effectiveWin,
+        )
+    }
+
+    private fun cancelChallengeRecording() {
+        challengeRecording = false
+        challengeRecStartState?.delete()
+        challengeRecStartPng?.delete()
+        challengeRecStartState = null
+        challengeRecStartPng = null
+        challengeRecFrames.clear()
+        toast("Challenge recording canceled")
+    }
+
+    private fun loadChallengeCapsuleFromUri(uri: android.net.Uri) {
+        lifecycleScope.launch {
+            val extracted = withContext(Dispatchers.IO) {
+                runCatching {
+                    val destDir = File(paths.clipTmp, "play-${System.nanoTime()}")
+                    contentResolver.openInputStream(uri)?.use { input ->
+                        com.retrohero.app.data.MomentCapsule.extract(input, destDir)
+                    } ?: error("Could not read .rhclip file")
+                }
+            }
+            extracted.onFailure { err ->
+                toast(err.message ?: "Couldn't load .rhclip challenge")
+                return@launch
+            }
+            val moment = extracted.getOrNull() ?: return@launch
+            val loaded = withContext(Dispatchers.IO) {
+                NativeBridge.loadState(moment.stateFile.absolutePath)
+            }
+            if (!loaded) {
+                toast("This .rhclip belongs to a different core or game revision")
+                return@launch
+            }
+            val ghost = withContext(Dispatchers.IO) {
+                moment.ghostFile?.takeIf { it.isFile }?.let {
+                    com.retrohero.app.data.ChallengeGhost.decode(it.readBytes())
+                }.orEmpty()
+            }
+            activeChallengeStateFile = moment.stateFile
+            activeChallengeTitle = moment.manifest.title
+            activeChallengeGhost = ghost
+            activeChallengeTargetMs = moment.manifest.targetDurationMs
+            activeChallengeWin = moment.manifest.winCondition
+            challengeCleared = false
+            challengeClearedTimeMs = null
+            challengeElapsedMs = 0L
+            challengeGhostMask = 0
+            challengeStartRealtime = SystemClock.elapsedRealtime()
+            setMenu(false)
+            toast("Challenge loaded: ${moment.manifest.title}")
+        }
+    }
+
+    private fun retryActiveChallenge() {
+        val stateF = activeChallengeStateFile ?: return
+        lifecycleScope.launch {
+            val ok = withContext(Dispatchers.IO) { NativeBridge.loadState(stateF.absolutePath) }
+            if (ok) {
+                challengeCleared = false
+                challengeClearedTimeMs = null
+                challengeElapsedMs = 0L
+                challengeGhostMask = 0
+                challengeStartRealtime = SystemClock.elapsedRealtime()
+                toast("Retry! Go!")
+            }
+        }
+    }
+
+    private fun openPocketGuide() {
+        menuOpen = false
+        if (started) NativeBridge.setPaused(true)
+        stopClock()
+        pocketGuideOpen = true
+    }
+
+    private fun closePocketGuide() {
+        pocketGuideOpen = false
+        if (started && !shutDown && !menuOpen && !editingPad && translateState is TranslateState.Idle) {
+            NativeBridge.setPaused(false)
+            startClock()
+        }
+    }
+
+    private fun savePocketNotes(text: String) {
+        pocketNotes = text
+        lifecycleScope.launch(Dispatchers.IO) {
+            runCatching { paths.notesFile(game).writeText(text) }
+        }
+    }
+
+    private fun toggleLiveTranslate(enable: Boolean) {
+        liveTranslateOn = enable
+        liveTranslateJob?.cancel()
+        liveTranslateJob = null
+        if (!enable) {
+            liveTranslateBlocks = emptyList()
+            liveTranslateScanning = false
+            return
+        }
+        // Resume gameplay cleanly when activating Live In-Place Overlay!
+        translateState = TranslateState.Idle
+        menuOpen = false
+        if (started && !shutDown) {
+            NativeBridge.setPaused(false)
+            startClock()
+        }
+        toast("Live translate ON (${translateLang.label} → EN) — replacing dialogue in place")
+        liveTranslateJob = lifecycleScope.launch(Dispatchers.Default) {
+            var lastSig = 0L
+            while (liveTranslateOn && !shutDown) {
+                if (!menuOpen && !pocketGuideOpen && translateState is TranslateState.Idle) {
+                    val raw = NativeBridge.grabFrame()
+                    val sig = frameDialogueSignature(raw)
+                    if (sig != 0L && sig != lastSig) {
+                        lastSig = sig
+                        withContext(Dispatchers.Main) { liveTranslateScanning = true }
+                        val res = ScreenTranslator.translateRawFrame(raw, translateLang) {}
+                        withContext(Dispatchers.Main) {
+                            liveTranslateScanning = false
+                            if (res is TranslateState.Ready) {
+                                liveTranslateBlocks = res.blocks
+                            }
+                        }
+                    }
+                }
+                delay(700L)
+            }
         }
     }
 
@@ -941,7 +1205,7 @@ class EmulatorActivity : ComponentActivity() {
 
     private fun dismissTranslate() {
         translateState = TranslateState.Idle
-        if (started && !shutDown && !menuOpen && !editingPad) {
+        if (started && !shutDown && !menuOpen && !editingPad && !pocketGuideOpen) {
             NativeBridge.setPaused(false)
             startClock()
         }
@@ -966,7 +1230,7 @@ class EmulatorActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (started && !shutDown && !menuOpen && !editingPad && translateState is TranslateState.Idle) {
+        if (started && !shutDown && !menuOpen && !editingPad && !pocketGuideOpen && translateState is TranslateState.Idle) {
             applyDisplaySyncLock()
             startVsyncFeed()
             syncGyroSteering()
@@ -994,6 +1258,10 @@ class EmulatorActivity : ComponentActivity() {
 
     private fun shutdownCore() {
         if (!started || shutDown) return
+        liveTranslateOn = false
+        liveTranslateJob?.cancel()
+        liveTranslateJob = null
+        netplaySession.stop()
         stopVsyncFeed()
         gyroController?.stop()
         raJob?.cancel()
@@ -1293,11 +1561,73 @@ class EmulatorActivity : ComponentActivity() {
                 }
             }
             if (discPickerOpen && discCount > 1 && !menuOpen) QuickDiscSwapSheet()
+            val npState by netplaySession.state.collectAsState()
+            if (!menuOpen && !pocketGuideOpen && translateState is TranslateState.Idle && phase is Phase.Running) {
+                Column(
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .safeDrawingPadding()
+                        .padding(top = 8.dp, start = 12.dp, end = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    if (npState.phase != NetplayPhase.IDLE && npState.phase != NetplayPhase.ERROR) {
+                        NetplayHudPill(state = npState, onClick = { setMenu(true) })
+                    }
+                    if (challengeRecording) {
+                        ChallengeRecordingPill(
+                            elapsedMs = challengeRecElapsedMs,
+                            onFinishAndShare = ::finishChallengeRecordingAndShare,
+                            onCancel = ::cancelChallengeRecording,
+                        )
+                    } else if (activeChallengeTitle != null) {
+                        ChallengePlayHud(
+                            title = activeChallengeTitle.orEmpty(),
+                            elapsedMs = challengeElapsedMs,
+                            targetMs = activeChallengeTargetMs,
+                            ghostButtonsMask = challengeGhostMask,
+                            hasGhost = activeChallengeGhost.isNotEmpty(),
+                            winGoalText = activeChallengeWin?.summary().orEmpty(),
+                            cleared = challengeCleared,
+                            clearedTimeMs = challengeClearedTimeMs,
+                            onInstantRetry = ::retryActiveChallenge,
+                        )
+                    }
+                    if (liveTranslateOn) {
+                        Surface(
+                            shape = RoundedCornerShape(999.dp),
+                            color = Color.Black.copy(alpha = 0.72f),
+                            contentColor = Color.White,
+                            onClick = { toggleLiveTranslate(false) },
+                        ) {
+                            Text(
+                                "LIVE ${translateLang.label}→EN · Tap to stop",
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.padding(horizontal = 11.dp, vertical = 5.dp),
+                            )
+                        }
+                    }
+                }
+            }
             if (menuOpen) PauseMenu()
+            if (pocketGuideOpen) {
+                val manual = remember(game.id) { PocketGuides.forGame(game) }
+                PocketGuideDrawer(
+                    game = game,
+                    manual = manual,
+                    initialNotes = pocketNotes,
+                    raData = raSessionGame,
+                    raHardcore = raSessionHardcore,
+                    onSaveNotes = ::savePocketNotes,
+                    onDismiss = ::closePocketGuide,
+                )
+            }
             if (translateState !is TranslateState.Idle) {
                 TranslateOverlay(
                     state = translateState,
                     sourceLang = translateLang,
+                    liveActive = liveTranslateOn,
+                    onToggleLive = ::toggleLiveTranslate,
                     onSelectLang = { runScreenTranslate(it) },
                     onRescan = { runScreenTranslate(translateLang) },
                     onDismiss = ::dismissTranslate,
@@ -1335,6 +1665,52 @@ class EmulatorActivity : ComponentActivity() {
                 )
             }
             ScreenshotFlash(flash)
+        }
+        // 60 Hz Playable Challenge Ghost recorder & live playback / RAM win-condition loop
+        LaunchedEffect(phase, challengeRecording, activeChallengeTitle, menuOpen, pocketGuideOpen, challengeCleared) {
+            if (phase !is Phase.Running || menuOpen || pocketGuideOpen) return@LaunchedEffect
+            var tick = 0
+            while (challengeRecording || (activeChallengeTitle != null && !challengeCleared)) {
+                if (challengeRecording) {
+                    val elapsed = SystemClock.elapsedRealtime() - challengeRecStartMs
+                    challengeRecElapsedMs = elapsed
+                    val mask = NativeBridge.getButtonsMask(0)
+                    if (challengeRecFrames.size < com.retrohero.app.data.ChallengeGhost.MAX_RECORD_FRAMES) {
+                        challengeRecFrames += com.retrohero.app.data.GhostFrame(mask)
+                    } else {
+                        finishChallengeRecordingAndShare()
+                        break
+                    }
+                }
+                if (activeChallengeTitle != null && !challengeCleared) {
+                    val elapsed = SystemClock.elapsedRealtime() - challengeStartRealtime
+                    challengeElapsedMs = elapsed
+                    val ghost = activeChallengeGhost
+                    if (ghost.isNotEmpty()) {
+                        val idx = ((elapsed * 60L) / 1000L).toInt()
+                        challengeGhostMask = if (idx in ghost.indices) ghost[idx].buttons else 0
+                    }
+                    val win = activeChallengeWin
+                    if (win != null) {
+                        val won = when (win.type) {
+                            com.retrohero.app.data.ChallengeWinType.SURVIVE ->
+                                win.targetSeconds > 0 && elapsed >= win.targetSeconds * 1000L
+                            com.retrohero.app.data.ChallengeWinType.RAM_GOAL ->
+                                (tick % 4 == 0) && win.evaluateRam(
+                                    withContext(Dispatchers.IO) { NativeBridge.readMemory(2, 512 * 1024) },
+                                )
+                            else -> false
+                        }
+                        if (won) {
+                            challengeCleared = true
+                            challengeClearedTimeMs = elapsed
+                            toast("Challenge Cleared in ${formatChallengeClock(elapsed)}!")
+                        }
+                    }
+                }
+                tick++
+                delay(16L)
+            }
         }
         LaunchedEffect(phase, showPerfHud) {
             while (phase is Phase.Running) {
@@ -1479,7 +1855,18 @@ class EmulatorActivity : ComponentActivity() {
                     aspect,
                 )?.let { (w, h) -> with(density) { Modifier.size(w.toDp(), h.toDp()) } }
             } else null
-            GameSurface(size ?: Modifier.aspectRatio(aspect))
+            val surfaceMod = size ?: Modifier.aspectRatio(aspect)
+            Box(surfaceMod) {
+                GameSurface(Modifier.fillMaxSize())
+                if (liveTranslateOn && !menuOpen && !pocketGuideOpen && translateState is TranslateState.Idle) {
+                    LiveTranslateOverlay(
+                        blocks = liveTranslateBlocks,
+                        sourceLang = translateLang,
+                        scanning = liveTranslateScanning,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
         }
     }
 
@@ -1562,6 +1949,7 @@ class EmulatorActivity : ComponentActivity() {
                             "screen" -> ScreenPage { page = "main" }
                             "skin" -> DeltaSkinPage { page = "main" }
                             "share" -> ShareMomentPage { page = "main" }
+                            "netplay" -> NetplayPage { page = "main" }
                             else -> MainMenuPage { page = it }
                         }
                     }
@@ -1755,10 +2143,18 @@ class EmulatorActivity : ComponentActivity() {
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ActionTile(Icons.Default.AspectRatio, "Translate (${translateLang.label})", Modifier.weight(1f)) {
+                ActionTile(
+                    Icons.Default.AspectRatio,
+                    if (liveTranslateOn) "Live Translate ON" else "Translate (${translateLang.label})",
+                    Modifier.weight(1f),
+                ) {
                     runScreenTranslate(translateLang)
                 }
-                ActionTile(Icons.Default.Save, "Share moment", Modifier.weight(1f)) { navigate("share") }
+                ActionTile(Icons.Default.Save, "Challenges", Modifier.weight(1f)) { navigate("share") }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ActionTile(Icons.Default.Code, "Pocket Guide", Modifier.weight(1f)) { openPocketGuide() }
+                ActionTile(Icons.Default.Gamepad, "Netplay", Modifier.weight(1f)) { navigate("netplay") }
             }
             val switchCount = if (deltaSkinsForSystem.isNotEmpty()) 9 else 8
             SegmentedGroup(null, switchCount) {
@@ -2516,34 +2912,153 @@ class EmulatorActivity : ComponentActivity() {
 
     @Composable
     private fun ShareMomentPage(back: () -> Unit) {
-        var title by remember { mutableStateOf(game.title) }
+        var title by remember { mutableStateOf("${game.title} Challenge") }
         var note by remember { mutableStateOf("") }
+        var winTypeIdx by remember { mutableIntStateOf(0) } // 0=Time Trial, 1=Survive 30s, 2=RAM Goal, 3=Free Snapshot
+        var surviveSecs by remember { mutableStateOf("30") }
+        var ramAddrHex by remember { mutableStateOf("0000") }
+        var ramTargetVal by remember { mutableStateOf("0") }
+
+        fun buildWinCondition(): com.retrohero.app.data.ChallengeWinCondition? = when (winTypeIdx) {
+            0 -> com.retrohero.app.data.ChallengeWinCondition(
+                type = com.retrohero.app.data.ChallengeWinType.TIME_TRIAL,
+                label = "Beat the ghost run",
+            )
+            1 -> com.retrohero.app.data.ChallengeWinCondition(
+                type = com.retrohero.app.data.ChallengeWinType.SURVIVE,
+                targetSeconds = (surviveSecs.toIntOrNull() ?: 30).coerceIn(5, 300),
+            )
+            2 -> {
+                val off = ramAddrHex.trim().removePrefix("0x").removePrefix("0X").toIntOrNull(16) ?: 0
+                val tv = ramTargetVal.trim().toIntOrNull() ?: 0
+                com.retrohero.app.data.ChallengeWinCondition(
+                    type = com.retrohero.app.data.ChallengeWinType.RAM_GOAL,
+                    ramOffset = off,
+                    ramSize = 1,
+                    op = com.retrohero.app.data.ChallengeRamOp.EQ,
+                    targetValue = tv,
+                )
+            }
+            else -> null
+        }
+
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            PageHeader("Share moment", back)
+            PageHeader("Challenge snapshots", back)
             Text(
-                "Exports your current save state + screenshot as a tiny .rhclip file (no ROM included) so a friend can jump right into this exact moment.",
+                "Record a deterministic save state + input ghost + optional win condition as a tiny .rhclip file (no ROM included) so a friend drops straight into this exact frame.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             OutlinedTextField(
                 value = title,
                 onValueChange = { title = it.take(80) },
-                label = { Text("Moment or challenge title") },
+                label = { Text("Challenge title") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
             OutlinedTextField(
                 value = note,
                 onValueChange = { note = it.take(240) },
-                label = { Text("Note for your friend (optional)") },
-                maxLines = 3,
+                label = { Text("Rule or trash-talk note (optional)") },
+                maxLines = 2,
                 modifier = Modifier.fillMaxWidth(),
             )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("Ghost Race", "Survive", "RAM Goal", "Snapshot").forEachIndexed { idx, label ->
+                    val sel = winTypeIdx == idx
+                    Surface(
+                        onClick = { winTypeIdx = idx },
+                        shape = RoundedCornerShape(999.dp),
+                        color = if (sel) MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.surfaceContainerHigh,
+                        contentColor = if (sel) MaterialTheme.colorScheme.onPrimaryContainer
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            label,
+                            style = MaterialTheme.typography.labelSmall,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
+                        )
+                    }
+                }
+            }
+            if (winTypeIdx == 1) {
+                OutlinedTextField(
+                    value = surviveSecs,
+                    onValueChange = { surviveSecs = it.filter { c -> c.isDigit() }.take(3) },
+                    label = { Text("Survive duration (seconds)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else if (winTypeIdx == 2) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = ramAddrHex,
+                        onValueChange = { ramAddrHex = it.take(8) },
+                        label = { Text("RAM offset (hex)") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    OutlinedTextField(
+                        value = ramTargetVal,
+                        onValueChange = { ramTargetVal = it.filter { c -> c.isDigit() }.take(5) },
+                        label = { Text("Target == value") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
             Button(
-                onClick = { shareMoment(title, note) },
+                onClick = { startChallengeRecording(title, note, buildWinCondition()) },
                 shapes = ButtonDefaults.shapes(),
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text("Create & share .rhclip") }
+            ) { Text("Record Live Challenge Ghost (up to 60s)") }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(
+                    onClick = { shareMoment(title, note, winCondition = buildWinCondition()) },
+                    modifier = Modifier.weight(1f),
+                ) { Text("Instant snapshot") }
+                TextButton(
+                    onClick = { challengePicker.launch(arrayOf("*/*")) },
+                    modifier = Modifier.weight(1f),
+                ) { Text("Load .rhclip") }
+            }
+        }
+    }
+
+    @Composable
+    private fun NetplayPage(back: () -> Unit) {
+        val npState by netplaySession.state.collectAsState()
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            PageHeader("Rollback netplay", back)
+            NetplayPanel(
+                coreId = activeCoreId,
+                state = npState,
+                onHost = { delayFrames ->
+                    netplaySession.hostRoom(delayFrames)
+                },
+                onJoin = { codeOrInvite, delayFrames ->
+                    netplaySession.joinRoom(codeOrInvite, delayFrames)
+                },
+                onStop = {
+                    netplaySession.stop()
+                    toast("Rollback Netplay disconnected")
+                },
+                onCopyInvite = { invite ->
+                    val cm = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                    cm?.setPrimaryClip(android.content.ClipData.newPlainText("RetroHero Netplay", invite))
+                    toast("Room invite copied!")
+                },
+                onShareInvite = { invite ->
+                    val send = Intent(Intent.ACTION_SEND)
+                        .setType("text/plain")
+                        .putExtra(Intent.EXTRA_TEXT, "Join my RetroHero Rollback Netplay room for ${game.title}:\n$invite")
+                    startActivity(Intent.createChooser(send, "Share Netplay room"))
+                },
+            )
         }
     }
 }

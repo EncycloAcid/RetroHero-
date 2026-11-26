@@ -60,9 +60,17 @@ object NativeBridge {
     external fun setCheats(codes: Array<String>): Boolean
 
     external fun setButton(port: Int, id: Int, pressed: Boolean)
+    external fun getButtonsMask(port: Int): Int
     external fun setAnalog(port: Int, index: Int, axis: Int, value: Float)
     /** Normalised pointer position, -1..1 on both axes across the game image. */
     external fun setPointer(x: Float, y: Float, down: Boolean)
+
+    /** 3-Second Mobile Rollback Netplay (GGPO-style native frame rollback). */
+    external fun netplayStart(localPort: Int, inputDelayFrames: Int): Boolean
+    external fun netplayStop()
+    external fun netplayPushRemoteInput(frame: Int, buttonsMask: Int)
+    /** Returns [active, currentFrame, lastLocalFrame, lastLocalMask, rollbackCount, maxDepth, stateChecksum]. */
+    external fun netplayPollTelemetry(): IntArray
 
     external fun setOption(key: String, value: String)
     external fun getOptions(): Array<String>

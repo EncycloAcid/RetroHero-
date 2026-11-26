@@ -73,6 +73,7 @@ class AppPaths(context: Context) {
     fun coverFile(game: Game): File = File(File(covers, game.systemId), "${game.baseName}.png")
     fun cheatsFile(game: Game): File = File(File(cheats, game.systemId), "${game.baseName}.json")
     fun playtimeFile(game: Game): File = File(File(playtime, game.systemId), "${game.baseName}.json")
+    fun notesFile(game: Game): File = File(File(File(saves.parentFile, "notes"), game.systemId).apply { mkdirs() }, "${game.baseName}.txt")
     fun patchesDir(game: Game): File = File(File(patches, game.systemId), game.baseName)
 
     fun coreOptionsFile(coreId: String): File = File(coreOptions, "$coreId.opt")

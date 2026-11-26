@@ -11,6 +11,7 @@
 #include "audio_output.h"
 #include "hw_renderer.h"
 #include "libretro.h"
+#include "rollback_netplay.h"
 #include "video_output.h"
 
 namespace rh {
@@ -102,8 +103,14 @@ public:
     std::vector<CoreOption> options();
 
     void setButton(unsigned port, unsigned id, bool pressed);
+    uint32_t getButtonsMask(unsigned port) const;
     void setAnalog(unsigned port, unsigned index, unsigned axis, int16_t value);
     void setPointer(int16_t x, int16_t y, bool pressed);
+
+    bool netplayStart(int localPort, int inputDelayFrames);
+    void netplayStop();
+    void netplayPushRemoteInput(uint32_t frame, uint32_t buttonsMask);
+    RollbackTelemetry netplayTelemetry() const;
 
     void setWindow(ANativeWindow *window);
     void setFilter(int filter);
@@ -212,6 +219,9 @@ private:
     unsigned rewindTick_ = 0;
 
     std::atomic<uint32_t> buttons_[4]{};
+    std::atomic<uint32_t> localNetplayButtons_{0};
+    RollbackEngine rollback_;
+    std::vector<uint8_t> rollbackScratch_;
     std::atomic<int16_t> analog_[4][2][2]{};
     std::atomic<int16_t> pointerX_{0}, pointerY_{0};
     std::atomic<bool> pointerDown_{false};

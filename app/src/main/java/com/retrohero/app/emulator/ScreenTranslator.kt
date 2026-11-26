@@ -140,6 +140,35 @@ fun mergeDialogueBlocks(blocks: List<RecognizedBlock>, maxVerticalGap: Float = 0
     return merged
 }
 
+/**
+ * Ultra-fast (~0.1 ms) luminance grid signature for Live Overlay Translation.
+ * Only triggers on-device OCR when the game's text area actually changes.
+ */
+fun frameDialogueSignature(rawFrame: IntArray?): Long {
+    if (rawFrame == null || rawFrame.size < 3) return 0L
+    val w = rawFrame[0]
+    val h = rawFrame[1]
+    if (w <= 0 || h <= 0 || rawFrame.size < 2 + w * h) return 0L
+    var hash = -3750763034362895579L // FNV-1a 64-bit offset basis
+    val cols = 32
+    val rows = 16
+    for (ry in 0 until rows) {
+        val y = (ry * h) / rows
+        val rowBase = 2 + y * w
+        for (rx in 0 until cols) {
+            val x = (rx * w) / cols
+            val px = rawFrame[rowBase + x]
+            val r = (px ushr 16) and 0xFF
+            val g = (px ushr 8) and 0xFF
+            val b = px and 0xFF
+            // Quantize luma to 4 bits so tiny scanline/dither flicker never re-triggers OCR
+            val lumaQ = ((r * 77 + g * 150 + b * 29) ushr 12) and 0x0F
+            hash = (hash xor lumaQ.toLong()) * 1099511628211L
+        }
+    }
+    return hash
+}
+
 /** Runs on-device ML Kit OCR + offline neural translation on raw libretro ARGB frames. */
 object ScreenTranslator {
     suspend fun translateRawFrame(
@@ -214,11 +243,70 @@ object ScreenTranslator {
     }
 }
 
+/**
+ * Live in-place dialogue overlay rendered directly over the active game frame without pausing.
+ * Each translated block is positioned over the exact normalized OCR bounding box so Japanese
+ * RPG text boxes are cleanly replaced in place while touch inputs keep flowing smoothly.
+ */
+@Composable
+fun LiveTranslateOverlay(
+    blocks: List<TranslatedBlock>,
+    sourceLang: TranslateSourceLang,
+    scanning: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier = modifier) {
+        val w = maxWidth
+        val h = maxHeight
+        blocks.forEach { block ->
+            val left = (w * block.bounds.left).coerceIn(4.dp, (w - 96.dp).coerceAtLeast(4.dp))
+            val top = (h * block.bounds.top).coerceIn(4.dp, (h - 32.dp).coerceAtLeast(4.dp))
+            val boxW = (w * block.bounds.width).coerceIn(96.dp, (w - left - 4.dp).coerceAtLeast(96.dp))
+            Box(
+                Modifier
+                    .padding(start = left, top = top)
+                    .widthIn(min = 96.dp, max = boxW)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xE610131A))
+                    .border(1.dp, Color(0x66FFFFFF), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 8.dp, vertical = 5.dp),
+            ) {
+                Text(
+                    text = block.translated,
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    lineHeight = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
+        if (scanning && blocks.isEmpty()) {
+            Box(
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 8.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xCC10131A))
+                    .padding(horizontal = 10.dp, vertical = 4.dp),
+            ) {
+                Text(
+                    "Live translate (${sourceLang.label} → EN) watching dialogue…",
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontSize = 10.5.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+        }
+    }
+}
+
 /** Translucent Instrument-styled overlay showing translated on-screen dialogue over the paused game. */
 @Composable
 fun TranslateOverlay(
     state: TranslateState,
     sourceLang: TranslateSourceLang,
+    liveActive: Boolean = false,
+    onToggleLive: (Boolean) -> Unit = {},
     onSelectLang: (TranslateSourceLang) -> Unit,
     onRescan: () -> Unit,
     onDismiss: () -> Unit,
@@ -256,6 +344,21 @@ fun TranslateOverlay(
                 Column(Modifier.weight(1f)) {
                     Text("Screen translate", style = MaterialTheme.typography.titleMedium, color = Tone.Ink)
                     Text("On-device OCR · ${sourceLang.label} → EN", style = MaterialTheme.typography.labelSmall, color = Tone.Muted)
+                }
+                Box(
+                    Modifier
+                        .clip(CircleShape)
+                        .background(if (liveActive) Ascend.accent else Tone.Raised)
+                        .border(1.dp, Tone.Line, CircleShape)
+                        .clickable { onToggleLive(!liveActive) }
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                ) {
+                    Text(
+                        if (liveActive) "LIVE ON" else "Live overlay",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (liveActive) Ascend.onAccent else Tone.Ink,
+                    )
                 }
                 IconButton(onClick = onRescan) {
                     Icon(Icons.Rounded.Refresh, "Re-scan", tint = Tone.Ink)
@@ -309,7 +412,7 @@ fun TranslateOverlay(
                 is TranslateState.Ready -> {
                     if (state.blocks.isEmpty()) {
                         Text(
-                            "No readable text was detected on this frame. Try pausing on a dialogue box and tapping Re-scan.",
+                            "No readable text was detected on this frame. Try pausing on a dialogue box or turn on Live overlay to auto-translate as you play.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = Tone.Muted,
                             modifier = Modifier.padding(vertical = 8.dp),

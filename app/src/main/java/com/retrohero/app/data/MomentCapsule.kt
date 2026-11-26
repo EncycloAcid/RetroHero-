@@ -20,9 +20,15 @@ data class MomentManifest(
     val gameTitle: String,
     val gameBaseName: String,
     val createdAt: Long = System.currentTimeMillis(),
+    val ghostFrames: Int = 0,
+    val targetDurationMs: Long = 0L,
+    val winCondition: ChallengeWinCondition? = null,
 ) {
+    val isChallenge: Boolean
+        get() = ghostFrames > 0 || (winCondition != null && winCondition.type != ChallengeWinType.NONE)
+
     fun toJson(): JSONObject = JSONObject()
-        .put("format", FORMAT_VERSION)
+        .put("format", if (isChallenge) FORMAT_VERSION_V2 else FORMAT_VERSION)
         .put("title", title)
         .put("note", note)
         .put("systemId", systemId)
@@ -30,14 +36,22 @@ data class MomentManifest(
         .put("gameTitle", gameTitle)
         .put("gameBaseName", gameBaseName)
         .put("createdAt", createdAt)
+        .apply {
+            if (ghostFrames > 0) put("ghostFrames", ghostFrames)
+            if (targetDurationMs > 0L) put("targetDurationMs", targetDurationMs)
+            if (winCondition != null && winCondition.type != ChallengeWinType.NONE) {
+                put("winCondition", winCondition.toJson())
+            }
+        }
 
     companion object {
         const val FORMAT_VERSION = 1
+        const val FORMAT_VERSION_V2 = 2
 
         fun fromJson(text: String): MomentManifest {
             val o = JSONObject(text)
             val format = o.optInt("format", 0)
-            if (format != FORMAT_VERSION) {
+            if (format != FORMAT_VERSION && format != FORMAT_VERSION_V2) {
                 throw IllegalArgumentException("Unsupported .rhclip format version: $format")
             }
             val systemId = o.optString("systemId").trim()
@@ -53,6 +67,9 @@ data class MomentManifest(
                 gameTitle = gameTitle,
                 gameBaseName = o.optString("gameBaseName").trim().ifEmpty { gameTitle },
                 createdAt = o.optLong("createdAt", System.currentTimeMillis()),
+                ghostFrames = o.optInt("ghostFrames", 0).coerceAtLeast(0),
+                targetDurationMs = o.optLong("targetDurationMs", 0L).coerceAtLeast(0L),
+                winCondition = ChallengeWinCondition.fromJson(o.optJSONObject("winCondition")),
             )
         }
     }
@@ -63,20 +80,23 @@ data class ExtractedMoment(
     val manifest: MomentManifest,
     val stateFile: File,
     val previewFile: File?,
+    val ghostFile: File? = null,
 )
 
 object MomentCapsule {
     private const val MANIFEST_ENTRY = "manifest.json"
     private const val STATE_ENTRY = "state.bin"
     private const val PREVIEW_ENTRY = "preview.png"
+    private const val GHOST_ENTRY = "ghost.bin"
     private const val MAX_BYTES = 24L * 1024 * 1024
 
-    /** Writes a `.rhclip` ZIP archive containing [manifest], [stateFile], and optional [previewFile]. */
+    /** Writes a `.rhclip` ZIP archive containing [manifest], [stateFile], optional [previewFile], and optional [ghostFile]. */
     fun export(
         out: OutputStream,
         manifest: MomentManifest,
         stateFile: File,
         previewFile: File? = null,
+        ghostFile: File? = null,
     ) {
         require(stateFile.isFile) { "Save state file does not exist" }
         ZipOutputStream(out.buffered()).use { zip ->
@@ -91,6 +111,12 @@ object MomentCapsule {
             if (previewFile != null && previewFile.isFile) {
                 zip.putNextEntry(ZipEntry(PREVIEW_ENTRY))
                 previewFile.inputStream().use { it.copyTo(zip) }
+                zip.closeEntry()
+            }
+
+            if (ghostFile != null && ghostFile.isFile && ghostFile.length() > 0L) {
+                zip.putNextEntry(ZipEntry(GHOST_ENTRY))
+                ghostFile.inputStream().use { it.copyTo(zip) }
                 zip.closeEntry()
             }
         }
@@ -132,7 +158,8 @@ object MomentCapsule {
         if (!stateFile.isFile || stateFile.length() == 0L) throw IllegalArgumentException("Missing save state in .rhclip")
         val manifest = MomentManifest.fromJson(manifestFile.readText())
         val preview = File(destDir, PREVIEW_ENTRY).takeIf { it.isFile && it.length() > 0L }
-        return ExtractedMoment(manifest = manifest, stateFile = stateFile, previewFile = preview)
+        val ghost = File(destDir, GHOST_ENTRY).takeIf { it.isFile && it.length() > 0L }
+        return ExtractedMoment(manifest = manifest, stateFile = stateFile, previewFile = preview, ghostFile = ghost)
     }
 
     /** Finds the best matching local game in [library] for [manifest]. */

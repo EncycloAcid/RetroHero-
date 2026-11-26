@@ -10,6 +10,7 @@ add_library(retrohero SHARED
         audio_output.cpp
         video_output.cpp
         hw_renderer.cpp
+        rollback_netplay.cpp
         builtin_herobox16.cpp
         builtin_chip8.cpp
         builtin_nes.cpp)
