@@ -63,11 +63,11 @@ JNIEXPORT void JNICALL JNI_FN(shutdown)(JNIEnv *env, jobject, jstring sram) {
 
 JNIEXPORT void JNICALL JNI_FN(setSurface)(JNIEnv *env, jobject, jobject surface) {
     ANativeWindow *win = surface ? ANativeWindow_fromSurface(env, surface) : nullptr;
-    Frontend::get().video().setWindow(win);
+    Frontend::get().setWindow(win);
 }
 
 JNIEXPORT void JNICALL JNI_FN(setFilter)(JNIEnv *, jobject, jint filter) {
-    Frontend::get().video().setFilter(filter);
+    Frontend::get().setFilter(filter);
 }
 
 JNIEXPORT void JNICALL JNI_FN(setRewindEnabled)(JNIEnv *, jobject, jboolean on) {
@@ -95,7 +95,7 @@ JNIEXPORT jboolean JNICALL JNI_FN(setCheats)(JNIEnv *env, jobject, jobjectArray 
 
 JNIEXPORT jintArray JNICALL JNI_FN(getFrameSize)(JNIEnv *env, jobject) {
     unsigned w = 0, h = 0;
-    Frontend::get().video().frameSize(w, h);
+    Frontend::get().frameSize(w, h);
     jintArray arr = env->NewIntArray(2);
     jint dims[2] = {static_cast<jint>(w), static_cast<jint>(h)};
     env->SetIntArrayRegion(arr, 0, 2, dims);
@@ -106,7 +106,7 @@ JNIEXPORT jintArray JNICALL JNI_FN(getFrameSize)(JNIEnv *env, jobject) {
 JNIEXPORT jintArray JNICALL JNI_FN(grabFrame)(JNIEnv *env, jobject) {
     std::vector<uint32_t> px;
     unsigned w = 0, h = 0;
-    if (!Frontend::get().video().grabArgb(px, w, h)) return nullptr;
+    if (!Frontend::get().grabArgb(px, w, h)) return nullptr;
     jintArray arr = env->NewIntArray(static_cast<jsize>(px.size() + 2));
     if (!arr) return nullptr;
     jint dims[2] = {static_cast<jint>(w), static_cast<jint>(h)};

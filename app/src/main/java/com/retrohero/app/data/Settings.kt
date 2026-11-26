@@ -42,12 +42,25 @@ class Settings(context: Context) {
         _dynamicColor.value = enabled
     }
 
-    fun coreFor(system: GameSystem): CoreInfo {
+    fun coreFor(system: GameSystem): CoreInfo? {
+        if (system.cores.isEmpty()) return null
         val id = prefs.getString("core_${system.id}", null)
         return system.cores.firstOrNull { it.id == id } ?: system.cores.first()
     }
 
-    fun setCoreFor(system: GameSystem, core: CoreInfo) = prefs.edit { putString("core_${system.id}", core.id) }
+    fun setCoreFor(system: GameSystem, core: CoreInfo) = prefs.edit {
+        putString("core_${system.id}", core.id)
+        remove("ext_emu_${system.id}")
+    }
+
+    /** Optional user-selected external standalone emulator id for [system] (e.g. "nethersx2"). */
+    fun externalEmulatorFor(system: GameSystem): String? =
+        prefs.getString("ext_emu_${system.id}", null)?.takeIf { it.isNotBlank() }
+
+    fun setExternalEmulatorFor(system: GameSystem, emulatorId: String?) = prefs.edit {
+        if (emulatorId.isNullOrBlank()) remove("ext_emu_${system.id}")
+        else putString("ext_emu_${system.id}", emulatorId)
+    }
 
     /** First-run onboarding has been finished or skipped. */
     var onboardingDone: Boolean

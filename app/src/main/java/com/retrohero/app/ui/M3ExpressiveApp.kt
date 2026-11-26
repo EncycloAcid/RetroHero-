@@ -60,6 +60,7 @@ import com.retrohero.app.data.BiosFile
 import com.retrohero.app.data.BiosManager
 import com.retrohero.app.data.CoreInfo
 import com.retrohero.app.data.CoreManager.CoreState
+import com.retrohero.app.data.ExternalEmulator
 import com.retrohero.app.data.Game
 import com.retrohero.app.data.GameDossier
 import com.retrohero.app.data.PlayStat
@@ -105,6 +106,8 @@ fun M3ExpressiveAppView(
     saveSlotsFor: (Game) -> List<Pair<Int, Long>> = { emptyList() },
     screenshotsFor: (Game) -> List<File> = { emptyList() },
     currentCoreFor: (Game) -> CoreInfo? = { it.system?.cores?.firstOrNull() },
+    installedExternalEmulatorsFor: (Game) -> List<ExternalEmulator> = { emptyList() },
+    selectedExternalEmulatorFor: (Game) -> ExternalEmulator? = { null },
     cachedDossierFor: (Game) -> GameDossier? = { null },
     loadDossierFor: (suspend (Game, Boolean) -> GameDossier)? = null,
     toastMessage: AppViewModel.Message? = null,
@@ -114,6 +117,7 @@ fun M3ExpressiveAppView(
     onToggleFavorite: (Game) -> Unit = {},
     onSetShelfStatus: (Game, String) -> Unit = { _, _ -> },
     onSelectCore: (Game, CoreInfo) -> Unit = { _, _ -> },
+    onSelectExternalEmulator: (Game, ExternalEmulator) -> Unit = { _, _ -> },
     onUseScreenshotAsCover: (Game, File) -> Unit = { _, _ -> },
     onClearCover: (Game) -> Unit = {},
     onDeleteGame: ((Game) -> Unit)? = null,
@@ -402,7 +406,8 @@ fun M3ExpressiveAppView(
             ) {
                 val game = detailGame ?: return@AnimatedVisibility
                 val core = currentCoreFor(game)
-                val coreReady = core == null || coreStates[core.id] is CoreState.Installed
+                val extSelected = selectedExternalEmulatorFor(game)
+                val coreReady = extSelected != null || core == null || coreStates[core.id] is CoreState.Installed
                 M3GameDetailPage(
                     game = game,
                     stat = stats[game.id],
@@ -411,6 +416,8 @@ fun M3ExpressiveAppView(
                     saveSlots = saveSlotsFor(game),
                     currentCore = core,
                     coreInstalled = coreReady,
+                    installedExternalEmulators = installedExternalEmulatorsFor(game),
+                    selectedExternalEmulator = extSelected,
                     screenshots = screenshotsFor(game),
                     initialDossier = cachedDossierFor(game),
                     loadDossier = loadDossierFor,
@@ -421,6 +428,7 @@ fun M3ExpressiveAppView(
                         onPlay(game, slot)
                     },
                     onSelectCore = { c -> onSelectCore(game, c) },
+                    onSelectExternalEmulator = { ext -> onSelectExternalEmulator(game, ext) },
                     onUseScreenshotAsCover = { shot -> onUseScreenshotAsCover(game, shot) },
                     onClearCover = { onClearCover(game) },
                     onDelete = onDeleteGame?.let { del ->

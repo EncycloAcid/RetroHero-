@@ -256,11 +256,12 @@ class EmulatorActivity : ComponentActivity() {
 
         setContent { RetroHeroTheme(dynamicColor = settings.dynamicColor.value) { EmulatorScreen() } }
 
-        lifecycleScope.launch { boot(corePath, romPath) }
+        lifecycleScope.launch { boot(coreId, corePath, romPath) }
     }
 
-    private suspend fun boot(corePath: String, romPath: String) {
+    private suspend fun boot(coreId: String, corePath: String, romPath: String) {
         val error = withContext(Dispatchers.IO) {
+            com.retrohero.app.data.CoreTuning.defaultsFor(coreId).forEach { (k, v) -> NativeBridge.setOption(k, v) }
             optionsStore.load().forEach { (k, v) -> NativeBridge.setOption(k, v) }
             if (!NativeBridge.loadCore(corePath, paths.system.absolutePath, paths.saves.absolutePath)) {
                 return@withContext NativeBridge.getLastError()
