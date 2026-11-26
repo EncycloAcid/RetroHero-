@@ -90,6 +90,34 @@ JNIEXPORT void JNICALL JNI_FN(shutdown)(JNIEnv *env, jobject, jstring sram) {
     Frontend::get().shutdown(str(env, sram));
 }
 
+JNIEXPORT void JNICALL JNI_FN(setInitialDisc)(JNIEnv *, jobject, jint index) {
+    if (index >= 0) Frontend::get().setInitialDisc(static_cast<unsigned>(index));
+}
+
+JNIEXPORT jint JNICALL JNI_FN(getDiscCount)(JNIEnv *, jobject) {
+    return Frontend::get().discCount();
+}
+
+JNIEXPORT jint JNICALL JNI_FN(getCurrentDisc)(JNIEnv *, jobject) {
+    return Frontend::get().currentDiscIndex();
+}
+
+JNIEXPORT jobjectArray JNICALL JNI_FN(getDiscLabels)(JNIEnv *env, jobject) {
+    auto labels = Frontend::get().discLabels();
+    jclass strClass = env->FindClass("java/lang/String");
+    jobjectArray arr = env->NewObjectArray(static_cast<jsize>(labels.size()), strClass, nullptr);
+    for (size_t i = 0; i < labels.size(); i++) {
+        jstring js = env->NewStringUTF(labels[i].c_str());
+        env->SetObjectArrayElement(arr, static_cast<jsize>(i), js);
+        env->DeleteLocalRef(js);
+    }
+    return arr;
+}
+
+JNIEXPORT jboolean JNICALL JNI_FN(swapDisc)(JNIEnv *, jobject, jint index) {
+    return index >= 0 && Frontend::get().swapDisc(static_cast<unsigned>(index));
+}
+
 JNIEXPORT void JNICALL JNI_FN(setSurface)(JNIEnv *env, jobject, jobject surface) {
     ANativeWindow *win = surface ? ANativeWindow_fromSurface(env, surface) : nullptr;
     Frontend::get().setWindow(win);

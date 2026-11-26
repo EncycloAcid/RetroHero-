@@ -26,6 +26,9 @@ class GamePrefs(context: Context, sharpDefault: Boolean) {
         get() = prefs.getBoolean("rewind", true)
         set(v) = prefs.edit { putBoolean("rewind", v) }
 
+    fun lastDisc(gameId: String): Int = prefs.getInt("disc_${gameId.hashCode()}", 0).coerceAtLeast(0)
+    fun setLastDisc(gameId: String, index: Int) = prefs.edit { putInt("disc_${gameId.hashCode()}", index.coerceAtLeast(0)) }
+
     companion object {
         const val FILE = "game_prefs"
     }

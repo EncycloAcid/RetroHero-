@@ -83,6 +83,13 @@ public:
     bool readMemory(unsigned memoryType, std::vector<uint8_t> &out, size_t maxBytes);
     void shutdown(const std::string &sramPath);
 
+    // Multi-disc control (RETRO_ENVIRONMENT_SET_DISK_CONTROL[_EXT]_INTERFACE)
+    void setInitialDisc(unsigned index);
+    int discCount();
+    int currentDiscIndex();
+    std::vector<std::string> discLabels();
+    bool swapDisc(unsigned index);
+
     void setOptionOverride(const std::string &key, const std::string &value);
     std::vector<CoreOption> options();
 
@@ -130,6 +137,13 @@ private:
     bool gameLoaded_ = false;
     std::vector<uint8_t> romData_;
     std::string romPath_;
+    std::vector<std::string> playlistPaths_;
+    unsigned initialDiscIndex_ = 0;
+
+    // Multi-disc control interface registered by the core (v0 or v1 ext).
+    retro_disk_control_ext_callback diskControl_{};
+    bool hasDiskControl_ = false;
+    bool hasDiskControlExt_ = false;
 
     std::string systemDir_, saveDir_;
     int pixelFormat_ = RETRO_PIXEL_FORMAT_0RGB1555;

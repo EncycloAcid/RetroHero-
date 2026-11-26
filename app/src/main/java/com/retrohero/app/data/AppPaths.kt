@@ -31,6 +31,25 @@ class AppPaths(context: Context) {
     fun saveRam(game: Game): File =
         File(File(saves, game.systemId).apply { mkdirs() }, "${game.baseName}.srm")
 
+    /**
+     * If a player previously played Disc 1 before multi-disc grouping existed, seamlessly migrate
+     * that per-disc `.srm` save into the unified multi-disc save file so zero progress is ever lost.
+     */
+    fun migrateLegacyDiscSave(game: Game): File {
+        val unified = saveRam(game)
+        if (!game.isMultiDisc || unified.exists()) return unified
+        val sysDir = unified.parentFile ?: return unified
+        for (disc in game.discs) {
+            val legacyName = disc.fileName.substringBeforeLast('.').replace(Regex("[\\\\/:*?\"<>|]"), "_")
+            val legacy = File(sysDir, "$legacyName.srm")
+            if (legacy.exists() && legacy.length() > 0L) {
+                runCatching { legacy.copyTo(unified, overwrite = false) }
+                break
+            }
+        }
+        return unified
+    }
+
     fun stateFile(game: Game, slot: Int): File {
         val name = when (slot) {
             AUTO_SLOT -> "${game.baseName}.auto.state"

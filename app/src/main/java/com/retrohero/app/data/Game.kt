@@ -3,26 +3,72 @@ package com.retrohero.app.data
 import org.json.JSONArray
 import org.json.JSONObject
 
+/** One physical disc belonging to a grouped multi-disc [Game]. */
+data class GameDisc(
+    val id: String,
+    val fileName: String,
+    val parentDocId: String,
+    val size: Long,
+    val discNumber: Int,
+    val label: String = "Disc $discNumber",
+) {
+    fun toJson(): JSONObject = JSONObject()
+        .put("id", id)
+        .put("fileName", fileName)
+        .put("parentDocId", parentDocId)
+        .put("size", size)
+        .put("discNumber", discNumber)
+        .put("label", label)
+
+    companion object {
+        fun fromJson(o: JSONObject) = GameDisc(
+            id = o.getString("id"),
+            fileName = o.getString("fileName"),
+            parentDocId = o.optString("parentDocId"),
+            size = o.optLong("size"),
+            discNumber = o.optInt("discNumber", 1),
+            label = o.optString("label", "Disc ${o.optInt("discNumber", 1)}"),
+        )
+    }
+}
+
 data class Game(
-    /** SAF document URI of the file; unique id. */
+    /** SAF document URI of the file (or Disc 1 for grouped multi-disc sets); unique id. */
     val id: String,
     val fileName: String,
     val systemId: String,
     val treeUri: String,
     val parentDocId: String,
     val size: Long,
+    /** Sorted discs when this entry represents an auto-grouped multi-disc game. */
+    val discs: List<GameDisc> = emptyList(),
 ) {
     /** Downloaded into the app (a plain file) rather than found in a user folder via SAF. */
     val isLocal: Boolean get() = treeUri == LOCAL
 
+    /** True when RetroHero automatically grouped 2+ discs into this single game entry. */
+    val isMultiDisc: Boolean get() = discs.size > 1
+
+    /** Total number of grouped discs (1 for single-disc / cartridge games). */
+    val discCount: Int get() = if (discs.size > 1) discs.size else 1
+
     val extension: String get() = fileName.substringAfterLast('.', "").lowercase()
 
-    /** File name without extension, safe to use for save files. */
-    val baseName: String get() = fileName.substringBeforeLast('.').replace(Regex("[\\\\/:*?\"<>|]"), "_")
+    /**
+     * File name without extension, safe to use for save files.
+     * For auto-grouped multi-disc games, strips the disc suffix ("(Disc 1)", "CD1", etc.)
+     * so all discs share one unified battery save (.srm), memory card, and save-state slot family.
+     */
+    val baseName: String
+        get() {
+            val stem = fileName.substringBeforeLast('.')
+            val canonical = if (isMultiDisc) MultiDisc.stripDiscTag(stem) else stem
+            return canonical.replace(Regex("[\\\\/:*?\"<>|]"), "_")
+        }
 
-    /** Display title with region / revision tags stripped: "Game (USA) (Rev 1)" -> "Game". */
+    /** Display title with region / revision / disc tags stripped: "Game (USA) (Disc 1)" -> "Game". */
     val title: String
-        get() = fileName.substringBeforeLast('.')
+        get() = MultiDisc.stripDiscTag(fileName.substringBeforeLast('.'))
             .replace(Regex("\\s*[(\\[][^)\\]]*[)\\]]"), "")
             .replace('_', ' ')
             .trim()
@@ -37,6 +83,9 @@ data class Game(
         val sys = system ?: return emptyList()
         val raw = fileName.substringBeforeLast('.').trim()
         val names = linkedSetOf(raw)
+        if (isMultiDisc) {
+            MultiDisc.stripDiscTag(raw).takeIf { it.isNotEmpty() }?.let { names += it }
+        }
         // "Game (USA) (Rev 1) [!]" -> "Game (USA)": the most common naming in the sets.
         Regex("""^(.*?\([^)]*\))""").find(raw)?.groupValues?.get(1)?.trim()?.let { names += it }
         // "Game [!]" -> "Game".
@@ -70,6 +119,11 @@ data class Game(
     fun toJson(): JSONObject = JSONObject()
         .put("id", id).put("fileName", fileName).put("systemId", systemId)
         .put("treeUri", treeUri).put("parentDocId", parentDocId).put("size", size)
+        .apply {
+            if (discs.isNotEmpty()) {
+                put("discs", JSONArray().apply { discs.forEach { put(it.toJson()) } })
+            }
+        }
 
     companion object {
         /** Regions to guess, most likely first, when a file name has none. */
@@ -79,14 +133,21 @@ data class Game(
 
         private fun enc(s: String) = android.net.Uri.encode(s)
 
-        fun fromJson(o: JSONObject) = Game(
-            id = o.getString("id"),
-            fileName = o.getString("fileName"),
-            systemId = o.getString("systemId"),
-            treeUri = o.getString("treeUri"),
-            parentDocId = o.getString("parentDocId"),
-            size = o.optLong("size"),
-        )
+        fun fromJson(o: JSONObject): Game {
+            val discsArr = o.optJSONArray("discs")
+            val parsedDiscs = if (discsArr != null) {
+                (0 until discsArr.length()).mapNotNull { runCatching { GameDisc.fromJson(discsArr.getJSONObject(it)) }.getOrNull() }
+            } else emptyList()
+            return Game(
+                id = o.getString("id"),
+                fileName = o.getString("fileName"),
+                systemId = o.getString("systemId"),
+                treeUri = o.getString("treeUri"),
+                parentDocId = o.getString("parentDocId"),
+                size = o.optLong("size"),
+                discs = parsedDiscs,
+            )
+        }
 
         fun listToJson(games: List<Game>): String =
             JSONArray().apply { games.forEach { put(it.toJson()) } }.toString()

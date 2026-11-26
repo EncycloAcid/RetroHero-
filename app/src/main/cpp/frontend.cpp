@@ -39,10 +39,47 @@ bool writeFile(const std::string &path, const void *data, size_t size) {
 }
 
 std::string trim(const std::string &s) {
-    size_t a = s.find_first_not_of(" \t");
+    size_t a = s.find_first_not_of(" \t\r\n");
     if (a == std::string::npos) return "";
-    size_t b = s.find_last_not_of(" \t");
+    size_t b = s.find_last_not_of(" \t\r\n");
     return s.substr(a, b - a + 1);
+}
+
+bool endsWithIgnoreCase(const std::string &s, const char *suffix) {
+    size_t slen = std::strlen(suffix);
+    if (s.size() < slen) return false;
+    for (size_t i = 0; i < slen; i++) {
+        char a = s[s.size() - slen + i];
+        char b = suffix[i];
+        if (a >= 'A' && a <= 'Z') a = static_cast<char>(a - 'A' + 'a');
+        if (b >= 'A' && b <= 'Z') b = static_cast<char>(b - 'A' + 'a');
+        if (a != b) return false;
+    }
+    return true;
+}
+
+std::string baseFileName(const std::string &path) {
+    size_t slash = path.find_last_of("/\\");
+    std::string name = (slash == std::string::npos) ? path : path.substr(slash + 1);
+    size_t dot = name.find_last_of('.');
+    return (dot == std::string::npos) ? name : name.substr(0, dot);
+}
+
+std::vector<std::string> parseM3uEntries(const std::string &m3uPath) {
+    std::vector<std::string> entries;
+    if (!endsWithIgnoreCase(m3uPath, ".m3u")) return entries;
+    std::ifstream f(m3uPath);
+    if (!f) return entries;
+    size_t slash = m3uPath.find_last_of('/');
+    std::string dir = (slash == std::string::npos) ? "" : m3uPath.substr(0, slash + 1);
+    std::string line;
+    while (std::getline(f, line)) {
+        std::string t = trim(line);
+        if (t.empty() || t[0] == '#') continue;
+        if (t[0] == '/') entries.push_back(t);
+        else entries.push_back(dir + t);
+    }
+    return entries;
 }
 
 template <typename T>
@@ -124,6 +161,9 @@ bool Frontend::loadCore(const std::string &corePath, const std::string &systemDi
     }
 
     std::lock_guard<std::mutex> lk(coreMutex_);
+    diskControl_ = {};
+    hasDiskControl_ = false;
+    hasDiskControlExt_ = false;
     core_.set_environment(&Frontend::envCb);
     core_.init();
     coreInitialized_ = true;
@@ -150,21 +190,64 @@ bool Frontend::loadGame(const std::string &romPath, const std::string &sramPath)
     core_.get_system_info(&sys);
 
     romPath_ = romPath;
-    retro_game_info game{};
-    game.path = romPath_.c_str();
-    if (!sys.need_fullpath) {
-        if (!readFile(romPath, romData_)) {
-            setError("Could not read game file");
-            return false;
-        }
-        game.data = romData_.data();
-        game.size = romData_.size();
+    playlistPaths_ = parseM3uEntries(romPath_);
+    if (initialDiscIndex_ > 0 && hasDiskControlExt_ && diskControl_.set_initial_image &&
+        initialDiscIndex_ < playlistPaths_.size()) {
+        diskControl_.set_initial_image(initialDiscIndex_, playlistPaths_[initialDiscIndex_].c_str());
     }
-    if (!core_.load_game(&game)) {
+
+    auto tryLoad = [&](const std::string &path) -> bool {
+        romPath_ = path;
+        retro_game_info game{};
+        game.path = romPath_.c_str();
+        if (!sys.need_fullpath) {
+            if (!readFile(romPath_, romData_)) return false;
+            game.data = romData_.data();
+            game.size = romData_.size();
+        }
+        return core_.load_game(&game);
+    };
+
+    bool loaded = tryLoad(romPath);
+    if (!loaded && !playlistPaths_.empty()) {
+        // Fallback for cores that don't parse .m3u playlists directly: load the initial disc
+        // and register the remaining discs through libretro Disk Control if supported.
+        unsigned startIdx = (initialDiscIndex_ < playlistPaths_.size()) ? initialDiscIndex_ : 0;
+        LOGW("Core rejected .m3u playlist directly; falling back to disc %u (%s)",
+             startIdx + 1, playlistPaths_[startIdx].c_str());
+        loaded = tryLoad(playlistPaths_[startIdx]);
+        if (loaded && hasDiskControl_ && diskControl_.get_num_images &&
+            diskControl_.add_image_index && diskControl_.replace_image_index &&
+            diskControl_.get_num_images() <= 1) {
+            for (size_t i = 0; i < playlistPaths_.size(); i++) {
+                if (i == startIdx) continue;
+                if (diskControl_.add_image_index()) {
+                    unsigned idx = diskControl_.get_num_images() - 1;
+                    retro_game_info info{};
+                    info.path = playlistPaths_[i].c_str();
+                    diskControl_.replace_image_index(idx, &info);
+                }
+            }
+        }
+    }
+
+    if (!loaded) {
         setError("The core could not load this game. It may be unsupported, corrupt, or need a BIOS file.");
         return false;
     }
     gameLoaded_ = true;
+
+    // If an initial disc > 0 was requested and the core only exposes v0 disk control (no set_initial_image),
+    // switch immediately before the first frame runs.
+    if (initialDiscIndex_ > 0 && hasDiskControl_ && diskControl_.get_num_images &&
+        diskControl_.get_image_index && diskControl_.set_eject_state && diskControl_.set_image_index) {
+        unsigned total = diskControl_.get_num_images();
+        if (initialDiscIndex_ < total && diskControl_.get_image_index() != initialDiscIndex_) {
+            diskControl_.set_eject_state(true);
+            diskControl_.set_image_index(initialDiscIndex_);
+            diskControl_.set_eject_state(false);
+        }
+    }
 
     retro_system_av_info av{};
     core_.get_system_av_info(&av);
@@ -521,6 +604,90 @@ void Frontend::shutdown(const std::string &sramPath) {
     // tolerate being unloaded, and the game process exits right after.
 }
 
+void Frontend::setInitialDisc(unsigned index) {
+    std::lock_guard<std::mutex> lk(coreMutex_);
+    initialDiscIndex_ = index;
+}
+
+int Frontend::discCount() {
+    std::lock_guard<std::mutex> lk(coreMutex_);
+    if (!gameLoaded_ || !hasDiskControl_ || !diskControl_.get_num_images) return 0;
+    return static_cast<int>(diskControl_.get_num_images());
+}
+
+int Frontend::currentDiscIndex() {
+    std::lock_guard<std::mutex> lk(coreMutex_);
+    if (!gameLoaded_ || !hasDiskControl_ || !diskControl_.get_image_index) return -1;
+    return static_cast<int>(diskControl_.get_image_index());
+}
+
+std::vector<std::string> Frontend::discLabels() {
+    std::lock_guard<std::mutex> lk(coreMutex_);
+    std::vector<std::string> out;
+    if (!gameLoaded_ || !hasDiskControl_ || !diskControl_.get_num_images) return out;
+    unsigned count = diskControl_.get_num_images();
+    out.reserve(count);
+    char buf[512];
+    for (unsigned i = 0; i < count; i++) {
+        std::string label;
+        if (hasDiskControlExt_ && diskControl_.get_image_label &&
+            diskControl_.get_image_label(i, buf, sizeof(buf)) && buf[0] != '\0') {
+            label = buf;
+        } else if (hasDiskControlExt_ && diskControl_.get_image_path &&
+                   diskControl_.get_image_path(i, buf, sizeof(buf)) && buf[0] != '\0') {
+            label = baseFileName(buf);
+        } else if (i < playlistPaths_.size() && !playlistPaths_[i].empty()) {
+            label = baseFileName(playlistPaths_[i]);
+        } else {
+            label = "Disc " + std::to_string(i + 1);
+        }
+        out.push_back(std::move(label));
+    }
+    return out;
+}
+
+bool Frontend::swapDisc(unsigned index) {
+    bool shouldBriefSpinDown = false;
+    {
+        std::lock_guard<std::mutex> lk(coreMutex_);
+        if (!gameLoaded_ || !hasDiskControl_ || !diskControl_.get_num_images ||
+            !diskControl_.set_eject_state || !diskControl_.set_image_index) {
+            setError("This core does not support runtime disc swapping");
+            return false;
+        }
+        unsigned count = diskControl_.get_num_images();
+        if (index >= count) {
+            setError("Requested disc index out of range");
+            return false;
+        }
+        bool ejected = diskControl_.get_eject_state ? diskControl_.get_eject_state() : false;
+        if (!ejected && diskControl_.get_image_index && diskControl_.get_image_index() == index) {
+            return true;
+        }
+        if (!ejected) {
+            if (!diskControl_.set_eject_state(true)) {
+                setError("Could not open virtual disc tray");
+                return false;
+            }
+        }
+        // Let running cores observe the lid-open state for a few live frames on the emulation thread
+        // (essential for PS1/Saturn titles like Final Fantasy VII, Metal Gear Solid, and Chrono Cross).
+        shouldBriefSpinDown = running_.load() && !paused_.load();
+    }
+
+    if (shouldBriefSpinDown) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(80));
+    }
+
+    std::lock_guard<std::mutex> lk(coreMutex_);
+    if (!gameLoaded_ || !hasDiskControl_) return false;
+    bool okIdx = diskControl_.set_image_index(index);
+    bool okClose = diskControl_.set_eject_state(false);
+    clearRewindLocked();
+    LOGI("Swapped disc to index %u (set_index=%d close=%d)", index, okIdx ? 1 : 0, okClose ? 1 : 0);
+    return okIdx && okClose;
+}
+
 void Frontend::setWindow(ANativeWindow *window) {
     if (hwRenderEnabled_.load()) {
         video_.setWindow(nullptr);
@@ -795,6 +962,41 @@ bool Frontend::environment(unsigned cmd, void *data) {
                     LOGW("Unsupported HW render context_type=%d", cb->context_type);
                     return false;
             }
+        }
+        case RETRO_ENVIRONMENT_GET_DISK_CONTROL_INTERFACE_VERSION:
+            *static_cast<unsigned *>(data) = 1;
+            return true;
+        case RETRO_ENVIRONMENT_SET_DISK_CONTROL_INTERFACE: {
+            diskControl_ = {};
+            hasDiskControlExt_ = false;
+            if (!data) {
+                hasDiskControl_ = false;
+                return true;
+            }
+            auto *cb = static_cast<const retro_disk_control_callback *>(data);
+            diskControl_.set_eject_state = cb->set_eject_state;
+            diskControl_.get_eject_state = cb->get_eject_state;
+            diskControl_.get_image_index = cb->get_image_index;
+            diskControl_.set_image_index = cb->set_image_index;
+            diskControl_.get_num_images = cb->get_num_images;
+            diskControl_.replace_image_index = cb->replace_image_index;
+            diskControl_.add_image_index = cb->add_image_index;
+            hasDiskControl_ = true;
+            LOGI("Registered libretro Disk Control v0 interface");
+            return true;
+        }
+        case RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT_INTERFACE: {
+            diskControl_ = {};
+            if (!data) {
+                hasDiskControl_ = false;
+                hasDiskControlExt_ = false;
+                return true;
+            }
+            diskControl_ = *static_cast<const retro_disk_control_ext_callback *>(data);
+            hasDiskControl_ = true;
+            hasDiskControlExt_ = true;
+            LOGI("Registered libretro Disk Control v1 (Ext) interface");
+            return true;
         }
         case RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME:
         case RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL:
