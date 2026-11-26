@@ -181,6 +181,12 @@ class EmulatorActivity : ComponentActivity() {
     private var menuOpen by mutableStateOf(false)
     private var showPad by mutableStateOf(true)
     private var fastForwardToggle by mutableStateOf(false)
+    private var slowMotion by mutableStateOf(false)
+    private var runAheadFrames by mutableIntStateOf(0)
+    private var showPerfHud by mutableStateOf(false)
+    private var perfFps by mutableFloatStateOf(60f)
+    private var perfMs by mutableFloatStateOf(0f)
+    private var perfActiveRa by mutableIntStateOf(0)
     private var aspect by mutableFloatStateOf(4f / 3f)
     private var frameSize by mutableStateOf(IntSize.Zero)
     private var filter by mutableIntStateOf(0)
@@ -298,6 +304,9 @@ class EmulatorActivity : ComponentActivity() {
             return
         }
         NativeBridge.setFilter(filter)
+        runAheadFrames = settings.runAheadFrames
+        showPerfHud = settings.showPerfHud
+        NativeBridge.setRunAhead(runAheadFrames)
         rewindOn = gamePrefs.rewind && !raSessionHardcore
         NativeBridge.setRewindEnabled(rewindOn)
         cheatsSupported = NativeBridge.supportsCheats()
@@ -764,6 +773,30 @@ class EmulatorActivity : ComponentActivity() {
                 Phase.Running -> Unit
             }
 
+            if (showPerfHud && phase is Phase.Running && !menuOpen) {
+                val hudText = buildString {
+                    append(String.format(java.util.Locale.US, "%.1f FPS", perfFps))
+                    if (perfMs > 0.05f) append(String.format(java.util.Locale.US, " · %.1f ms", perfMs))
+                    if (perfActiveRa > 0) append(" · RA-${perfActiveRa}f")
+                    if (slowMotion) append(" · 0.5×")
+                }
+                Box(
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .safeDrawingPadding()
+                        .padding(top = 10.dp, start = 12.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(Color.Black.copy(alpha = 0.68f))
+                        .padding(horizontal = 11.dp, vertical = 5.dp),
+                ) {
+                    Text(
+                        text = hudText,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(0xFFB9F6CA),
+                        maxLines = 1,
+                    )
+                }
+            }
             if (menuOpen) PauseMenu()
             if (editingPad) PadEditBar(Modifier.align(Alignment.TopCenter))
             raBanner?.let { banner ->
@@ -777,11 +810,21 @@ class EmulatorActivity : ComponentActivity() {
             }
             ScreenshotFlash(flash)
         }
-        LaunchedEffect(phase) {
+        LaunchedEffect(phase, showPerfHud) {
             while (phase is Phase.Running) {
                 val sz = NativeBridge.getFrameSize()
                 if (sz[0] > 0 && sz[1] > 0) frameSize = IntSize(sz[0], sz[1])
-                delay(1000)
+                if (showPerfHud) {
+                    val stats = NativeBridge.getPerfStats()
+                    if (stats.size >= 3) {
+                        perfFps = stats[0]
+                        perfMs = stats[1]
+                        perfActiveRa = stats[2].toInt()
+                    }
+                    delay(450)
+                } else {
+                    delay(1000)
+                }
             }
         }
     }
@@ -1023,22 +1066,59 @@ class EmulatorActivity : ComponentActivity() {
                     setMenu(false)
                 }
             }
-            val switchCount = if (deltaSkinsForSystem.isNotEmpty()) 4 else 3
+            val switchCount = if (deltaSkinsForSystem.isNotEmpty()) 7 else 6
             SegmentedGroup(null, switchCount) {
                 MenuSwitch(shapes(0), Icons.Default.FastForward, "Fast forward", "${settings.fastForwardSpeed.toInt()}× speed", fastForwardToggle) {
                     fastForwardToggle = it
+                    if (it && slowMotion) {
+                        slowMotion = false
+                        NativeBridge.setSlowMotion(false)
+                    }
                     applyFastForward()
                 }
+                MenuSwitch(shapes(1), Icons.Default.History, "Slow motion", "0.5× precision speed", slowMotion) {
+                    slowMotion = it
+                    if (it && fastForwardToggle) {
+                        fastForwardToggle = false
+                        applyFastForward()
+                    }
+                    NativeBridge.setSlowMotion(it)
+                }
                 MenuSwitch(
-                    shapes(1), Icons.Default.FastRewind, "Rewind",
+                    shapes(2), Icons.Default.FastRewind, "Rewind",
                     if (system.id == "psx") "Hold the rewind button" else "Hold the rewind button or L3",
                     rewindOn,
                 ) { setRewind(it) }
-                MenuSwitch(shapes(2), Icons.Default.Gamepad, "Touch controls", "Show the on-screen gamepad", showPad) { showPad = it }
+                SegmentedListItem(
+                    onClick = {
+                        val next = (runAheadFrames + 1) % 3
+                        runAheadFrames = next
+                        settings.runAheadFrames = next
+                        NativeBridge.setRunAhead(next)
+                    },
+                    shapes = shapes(3),
+                    colors = segmentColors(),
+                    leadingContent = { ShapeIcon(Icons.Default.Tune) },
+                    supportingContent = {
+                        Text(
+                            when (runAheadFrames) {
+                                1 -> "1 frame · -16.7 ms input lag"
+                                2 -> "2 frames · -33.3 ms input lag"
+                                else -> "Off · tap to enable on 2D/retro cores"
+                            },
+                        )
+                    },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) { Text("Run-Ahead latency") }
+                MenuSwitch(shapes(4), Icons.Default.Tv, "Live FPS HUD", "FPS, frame time (ms) & Run-Ahead pill", showPerfHud) {
+                    showPerfHud = it
+                    settings.showPerfHud = it
+                }
+                MenuSwitch(shapes(5), Icons.Default.Gamepad, "Touch controls", "Show the on-screen gamepad", showPad) { showPad = it }
                 if (deltaSkinsForSystem.isNotEmpty()) {
                     SegmentedListItem(
                         onClick = { navigate("skin") },
-                        shapes = shapes(3),
+                        shapes = shapes(6),
                         colors = segmentColors(),
                         leadingContent = { ShapeIcon(Icons.Default.AspectRatio) },
                         supportingContent = { Text(activeDeltaSkin?.name ?: "Built-in RetroHero pad") },

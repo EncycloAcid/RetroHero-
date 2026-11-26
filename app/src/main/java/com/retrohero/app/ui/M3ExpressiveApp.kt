@@ -157,6 +157,10 @@ fun M3ExpressiveAppView(
     onSetRaHardcore: (Boolean) -> Unit = {},
     onSetRaUnofficial: (Boolean) -> Unit = {},
     onSetRaNotifications: (Boolean) -> Unit = {},
+    runAheadFrames: Int = 0,
+    showPerfHud: Boolean = false,
+    onSetRunAhead: (Int) -> Unit = {},
+    onSetShowPerfHud: (Boolean) -> Unit = {},
     initialTab: Int = 0,
 ) {
     val cs = MaterialTheme.colorScheme
@@ -320,6 +324,10 @@ fun M3ExpressiveAppView(
                                 onSetRaHardcore = onSetRaHardcore,
                                 onSetRaUnofficial = onSetRaUnofficial,
                                 onSetRaNotifications = onSetRaNotifications,
+                                runAheadFrames = runAheadFrames,
+                                showPerfHud = showPerfHud,
+                                onSetRunAhead = onSetRunAhead,
+                                onSetShowPerfHud = onSetShowPerfHud,
                             )
                         }
                     }

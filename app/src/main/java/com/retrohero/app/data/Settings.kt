@@ -87,6 +87,16 @@ class Settings(context: Context) {
         get() = prefs.getFloat("ff_speed", 3f)
         set(v) = prefs.edit { putFloat("ff_speed", v) }
 
+    /** Zero-latency Run-Ahead frames (0 = off, 1 or 2 frames on supported 2D/retro cores). */
+    var runAheadFrames: Int
+        get() = prefs.getInt("run_ahead_frames", 0).coerceIn(0, 2)
+        set(v) = prefs.edit { putInt("run_ahead_frames", v.coerceIn(0, 2)) }
+
+    /** Show live FPS, frame time (ms), and Run-Ahead status pill while playing. */
+    var showPerfHud: Boolean
+        get() = prefs.getBoolean("show_perf_hud", false)
+        set(v) = prefs.edit { putBoolean("show_perf_hud", v) }
+
     /** Accent colour id from [Looks.accents], or "look:<id>" for an imported look. */
     var accent: String
         get() = prefs.getString("accent", "ember")!!

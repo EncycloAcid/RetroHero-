@@ -165,6 +165,10 @@ internal fun M3SettingsPage(
     onSetRaHardcore: (Boolean) -> Unit = {},
     onSetRaUnofficial: (Boolean) -> Unit = {},
     onSetRaNotifications: (Boolean) -> Unit = {},
+    runAheadFrames: Int = 0,
+    showPerfHud: Boolean = false,
+    onSetRunAhead: (Int) -> Unit = {},
+    onSetShowPerfHud: (Boolean) -> Unit = {},
 ) {
     var subPage by rememberSaveable { mutableStateOf(SettingsSubPage.Root) }
 
@@ -601,6 +605,59 @@ internal fun M3SettingsPage(
                             title = "Import Delta skin (.deltaskin)",
                             subtitle = "Custom handheld controller shells",
                             onClick = onImportSkin,
+                        )
+                    }
+                }
+            }
+
+            // 4b. Pro Emulation Engine (Run-Ahead Zero-Latency + Live Performance HUD)
+            item(key = "m3_set_pro_engine") {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Pro emulation engine",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = cs.primary,
+                        modifier = Modifier.padding(horizontal = 8.dp),
+                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Column(
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(m3SegmentedShape(0, 2))
+                                .background(cs.surfaceContainerHigh)
+                                .padding(horizontal = 16.dp, vertical = 14.dp),
+                            verticalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                M3ShapeBadge(polygon = MaterialShapes.Sunny, containerColor = cs.primaryContainer, size = 40.dp) {
+                                    Icon(Icons.Rounded.FastForward, null, tint = cs.onPrimaryContainer, modifier = Modifier.size(20.dp))
+                                }
+                                Column(Modifier.weight(1f)) {
+                                    Text("Zero-latency Run-Ahead", style = MaterialTheme.typography.titleSmall.copy(fontSize = 15.sp), color = cs.onSurface)
+                                    Text("Shave 16–33 ms of input lag on 8/16-bit & native cores", style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant)
+                                }
+                            }
+                            M3ConnectedButtonGroup(
+                                options = listOf("Off", "1 frame", "2 frames"),
+                                selectedIndex = runAheadFrames.coerceIn(0, 2),
+                                onSelect = onSetRunAhead,
+                                height = 38.dp,
+                            )
+                        }
+                        M3SegmentedItem(
+                            index = 1,
+                            count = 2,
+                            icon = Icons.Rounded.Memory,
+                            badgePolygon = MaterialShapes.Pentagon,
+                            badgeContainer = cs.tertiaryContainer,
+                            badgeContent = cs.onTertiaryContainer,
+                            title = "Live performance HUD",
+                            subtitle = "Show real-time FPS, frame time (ms) & Run-Ahead status in-game",
+                            trailing = { M3ExpressiveSwitch(checked = showPerfHud, onCheckedChange = onSetShowPerfHud) },
                         )
                     }
                 }

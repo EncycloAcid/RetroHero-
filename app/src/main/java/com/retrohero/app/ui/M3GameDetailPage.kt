@@ -107,6 +107,7 @@ import com.retrohero.app.data.RaGameData
 import com.retrohero.app.data.RaProfile
 import com.retrohero.app.ui.components.LocalReducedMotion
 import com.retrohero.app.ui.components.M3ConnectedButtonGroup
+import com.retrohero.app.ui.components.M3ConsoleImage
 import com.retrohero.app.ui.components.M3ExpressiveSpring
 import com.retrohero.app.ui.components.M3GameCover
 import com.retrohero.app.ui.components.M3ShapeBadge
@@ -1523,8 +1524,13 @@ internal fun M3GameDetailPage(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    M3ShapeBadge(polygon = sysPoly, containerColor = cs.primary, size = 22.dp) {
-                        Icon(Icons.Rounded.SportsEsports, null, tint = cs.onPrimary, modifier = Modifier.size(12.dp))
+                    M3ShapeBadge(polygon = sysPoly, containerColor = cs.primary, size = 24.dp) {
+                        val sysObj = game.system
+                        if (sysObj != null) {
+                            M3ConsoleImage(system = sysObj, tint = cs.onPrimary, modifier = Modifier.size(16.dp))
+                        } else {
+                            Icon(Icons.Rounded.SportsEsports, null, tint = cs.onPrimary, modifier = Modifier.size(12.dp))
+                        }
                     }
                     Text(
                         text = (game.system?.shortName ?: game.systemId).uppercase(),

@@ -242,13 +242,18 @@ void Frontend::runLoop() {
     using clock = std::chrono::steady_clock;
     auto next = clock::now();
     auto lastFrame = clock::now();
+    auto fpsWindowStart = next;
+    int fpsFrames = 0;
     while (running_) {
         if (paused_) {
             std::this_thread::sleep_for(std::chrono::milliseconds(16));
             next = clock::now();
             lastFrame = next;
+            fpsWindowStart = next;
+            fpsFrames = 0;
             continue;
         }
+        auto workStart = clock::now();
         {
             std::lock_guard<std::mutex> lk(coreMutex_);
             if (hwContextReady_) {
@@ -262,12 +267,27 @@ void Frontend::runLoop() {
             }
             runFrameLocked();
         }
+        auto workEnd = clock::now();
+        float workMs = std::chrono::duration<float, std::milli>(workEnd - workStart).count();
+        float prevMs = frameTimeMs_.load(std::memory_order_relaxed);
+        frameTimeMs_.store(prevMs <= 0.01f ? workMs : (prevMs * 0.88f + workMs * 0.12f), std::memory_order_relaxed);
+
         if (!audioStaging_.empty()) {
-            if (!fastForward_ && !rewinding_) audio_.write(audioStaging_.data(), audioStaging_.size() / 2);
+            if (!fastForward_ && !rewinding_ && !slowMotion_) {
+                audio_.write(audioStaging_.data(), audioStaging_.size() / 2);
+            }
             audioStaging_.clear();
         }
 
-        double speed = fastForward_ ? ffSpeed_.load() : 1.0;
+        fpsFrames++;
+        auto elapsedFps = std::chrono::duration<float>(workEnd - fpsWindowStart).count();
+        if (elapsedFps >= 0.4f) {
+            actualFps_.store(static_cast<float>(fpsFrames) / elapsedFps, std::memory_order_relaxed);
+            fpsFrames = 0;
+            fpsWindowStart = workEnd;
+        }
+
+        double speed = fastForward_ ? ffSpeed_.load() : (slowMotion_ ? 0.5 : 1.0);
         auto frame = std::chrono::duration_cast<clock::duration>(
                 std::chrono::duration<double>(1.0 / (fps_.load() * speed)));
         next += frame;
@@ -291,12 +311,43 @@ void Frontend::runLoop() {
 
 void Frontend::runFrameLocked() {
     if (rewinding_ && rewindEnabled_) {
-        // Step back one snapshot and run a single frame from it so the screen updates.
-        // With nothing left to rewind to, hold on the current frame.
+        activeRunAhead_.store(0, std::memory_order_relaxed);
         if (popRewindLocked()) core_.run();
         else video_.redraw();
         return;
     }
+
+    const int ra = runAheadFrames_.load(std::memory_order_relaxed);
+    constexpr size_t kMaxRunAheadState = 2u << 20; // 2 MB cap keeps Run-Ahead ultra-fast on mobile
+    if (ra > 0 && !fastForward_ && !hwRenderEnabled_ && core_.serialize_size && core_.serialize && core_.unserialize) {
+        size_t sz = core_.serialize_size();
+        if (sz > 0 && sz <= kMaxRunAheadState) {
+            if (runAheadBuf_.size() != sz) runAheadBuf_.resize(sz);
+            // Step 1: Advance real timeline 1 frame (keep audio, suppress video) and snapshot
+            suppressVideo_ = true;
+            suppressAudio_ = false;
+            core_.run();
+            if (core_.serialize(runAheadBuf_.data(), sz)) {
+                // Step 2: Speculate N frames ahead (suppress audio, render final speculative frame!)
+                suppressAudio_ = true;
+                for (int i = 0; i < ra; i++) {
+                    suppressVideo_ = (i + 1 < ra);
+                    core_.run();
+                }
+                // Step 3: Restore real timeline seamlessly
+                core_.unserialize(runAheadBuf_.data(), sz);
+                suppressVideo_ = false;
+                suppressAudio_ = false;
+                activeRunAhead_.store(ra, std::memory_order_relaxed);
+                if (rewindEnabled_ && !rewindTooBig_ && ++rewindTick_ % kRewindInterval == 0) pushRewindLocked();
+                return;
+            }
+            suppressVideo_ = false;
+            suppressAudio_ = false;
+        }
+    }
+
+    activeRunAhead_.store(0, std::memory_order_relaxed);
     core_.run();
     if (rewindEnabled_ && !rewindTooBig_ && ++rewindTick_ % kRewindInterval == 0) pushRewindLocked();
 }
@@ -378,6 +429,22 @@ void Frontend::setPaused(bool paused) {
 void Frontend::setFastForward(bool enabled, float speed) {
     ffSpeed_ = speed < 1.0f ? 1.0f : speed;
     fastForward_ = enabled;
+}
+
+void Frontend::setSlowMotion(bool enabled) {
+    slowMotion_ = enabled;
+}
+
+void Frontend::setRunAhead(int frames) {
+    if (frames < 0) frames = 0;
+    if (frames > 2) frames = 2;
+    runAheadFrames_.store(frames, std::memory_order_relaxed);
+}
+
+void Frontend::perfStats(float &fps, float &frameMs, int &activeRunAhead) const {
+    fps = actualFps_.load(std::memory_order_relaxed);
+    frameMs = frameTimeMs_.load(std::memory_order_relaxed);
+    activeRunAhead = activeRunAhead_.load(std::memory_order_relaxed);
 }
 
 void Frontend::reset() {
@@ -747,6 +814,7 @@ bool Frontend::environment(unsigned cmd, void *data) {
 void Frontend::videoCb(const void *data, unsigned w, unsigned h, size_t pitch) {
     if (!data) return;
     Frontend &f = get();
+    if (f.suppressVideo_) return;
     static uint32_t ffSkip = 0;
     if (f.fastForward_.load(std::memory_order_relaxed) && (++ffSkip % 3 != 0)) {
         return;
@@ -761,13 +829,17 @@ void Frontend::videoCb(const void *data, unsigned w, unsigned h, size_t pitch) {
 }
 
 void Frontend::audioSampleCb(int16_t l, int16_t r) {
-    auto &st = get().audioStaging_;
+    Frontend &f = get();
+    if (f.suppressAudio_) return;
+    auto &st = f.audioStaging_;
     st.push_back(l);
     st.push_back(r);
 }
 
 size_t Frontend::audioBatchCb(const int16_t *data, size_t frames) {
-    auto &st = get().audioStaging_;
+    Frontend &f = get();
+    if (f.suppressAudio_) return frames;
+    auto &st = f.audioStaging_;
     st.insert(st.end(), data, data + frames * 2);
     return frames;
 }

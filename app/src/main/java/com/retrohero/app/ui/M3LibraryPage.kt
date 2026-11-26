@@ -83,6 +83,7 @@ import com.retrohero.app.data.PlayTime
 import com.retrohero.app.data.Systems
 import com.retrohero.app.ui.components.LocalToolbarInset
 import com.retrohero.app.ui.components.M3ConnectedButtonGroup
+import com.retrohero.app.ui.components.M3ConsoleImage
 import com.retrohero.app.ui.components.M3ExpressiveSpring
 import com.retrohero.app.ui.components.M3GameCover
 import com.retrohero.app.ui.components.M3ShapeBadge
@@ -293,6 +294,7 @@ internal fun M3LibraryPage(
                             badgeText = sys.tag,
                             polygon = sys.polygon,
                             selected = selectedSystem == sys.id,
+                            system = sys,
                             onClick = { onSelectSystem(if (selectedSystem == sys.id) null else sys.id) },
                         )
                     }
@@ -432,11 +434,11 @@ private fun M3ConsoleSpotlightBanner(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            M3ShapeBadge(polygon = system.polygon, containerColor = cs.primary, size = 48.dp) {
-                Text(
-                    text = system.tag,
-                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black),
-                    color = cs.onPrimary,
+            M3ShapeBadge(polygon = system.polygon, containerColor = cs.primary, size = 56.dp) {
+                M3ConsoleImage(
+                    system = system,
+                    tint = cs.onPrimary,
+                    modifier = Modifier.size(38.dp),
                 )
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -590,6 +592,7 @@ private fun M3ConsoleChip(
     badgeText: String,
     polygon: RoundedPolygon,
     selected: Boolean,
+    system: GameSystem? = null,
     onClick: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
@@ -624,20 +627,30 @@ private fun M3ConsoleChip(
         M3ShapeBadge(
             polygon = polygon,
             containerColor = badgeBg,
-            size = 32.dp,
+            size = 34.dp,
             modifier = Modifier.graphicsLayer { rotationZ = badgeRot },
         ) {
-            Text(
-                text = badgeText.take(4),
-                style = MaterialTheme.typography.labelSmall.copy(
-                    fontWeight = FontWeight.Black,
-                    fontSize = if (badgeText.length >= 4) 7.sp else 8.5.sp,
-                ),
-                color = badgeFg,
-                maxLines = 1,
-                softWrap = false,
-                modifier = Modifier.graphicsLayer { rotationZ = -badgeRot },
-            )
+            if (system != null) {
+                M3ConsoleImage(
+                    system = system,
+                    tint = badgeFg,
+                    modifier = Modifier
+                        .size(22.dp)
+                        .graphicsLayer { rotationZ = -badgeRot },
+                )
+            } else {
+                Text(
+                    text = badgeText.take(4),
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontWeight = FontWeight.Black,
+                        fontSize = if (badgeText.length >= 4) 7.sp else 8.5.sp,
+                    ),
+                    color = badgeFg,
+                    maxLines = 1,
+                    softWrap = false,
+                    modifier = Modifier.graphicsLayer { rotationZ = -badgeRot },
+                )
+            }
         }
         Text(
             text = label,

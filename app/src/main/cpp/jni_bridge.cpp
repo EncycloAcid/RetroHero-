@@ -43,6 +43,24 @@ JNIEXPORT void JNICALL JNI_FN(setFastForward)(JNIEnv *, jobject, jboolean on, jf
     Frontend::get().setFastForward(on, speed);
 }
 
+JNIEXPORT void JNICALL JNI_FN(setSlowMotion)(JNIEnv *, jobject, jboolean on) {
+    Frontend::get().setSlowMotion(on);
+}
+
+JNIEXPORT void JNICALL JNI_FN(setRunAhead)(JNIEnv *, jobject, jint frames) {
+    Frontend::get().setRunAhead(frames);
+}
+
+JNIEXPORT jfloatArray JNICALL JNI_FN(getPerfStats)(JNIEnv *env, jobject) {
+    float fps = 0.0f, ms = 0.0f;
+    int ra = 0;
+    Frontend::get().perfStats(fps, ms, ra);
+    jfloatArray arr = env->NewFloatArray(3);
+    jfloat vals[3] = {fps, ms, static_cast<jfloat>(ra)};
+    env->SetFloatArrayRegion(arr, 0, 3, vals);
+    return arr;
+}
+
 JNIEXPORT void JNICALL JNI_FN(reset)(JNIEnv *, jobject) { Frontend::get().reset(); }
 
 JNIEXPORT jboolean JNICALL JNI_FN(saveState)(JNIEnv *env, jobject, jstring path) {
