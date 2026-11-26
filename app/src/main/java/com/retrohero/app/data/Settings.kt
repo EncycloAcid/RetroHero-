@@ -248,6 +248,70 @@ class Settings(context: Context) {
         _dynamicColor.value = prefs.getBoolean("dynamic_color", true)
     }
 
+    // ---- RetroAchievements ----
+    private val _raProfile = MutableStateFlow(loadRaProfile())
+    val raProfile: StateFlow<RaProfile?> = _raProfile
+
+    private val _raHardcore = MutableStateFlow(prefs.getBoolean(KEY_RA_HARDCORE, false))
+    val raHardcore: StateFlow<Boolean> = _raHardcore
+
+    private val _raUnofficial = MutableStateFlow(prefs.getBoolean(KEY_RA_UNOFFICIAL, false))
+    val raUnofficial: StateFlow<Boolean> = _raUnofficial
+
+    private val _raNotifications = MutableStateFlow(prefs.getBoolean(KEY_RA_NOTIFICATIONS, true))
+    val raNotifications: StateFlow<Boolean> = _raNotifications
+
+    private fun loadRaProfile(): RaProfile? {
+        val u = prefs.getString(KEY_RA_USER, null)?.takeIf { it.isNotBlank() } ?: return null
+        val t = prefs.getString(KEY_RA_TOKEN, null)?.takeIf { it.isNotBlank() } ?: return null
+        return RaProfile(
+            username = u,
+            token = t,
+            score = prefs.getInt(KEY_RA_SCORE, 0),
+            softcoreScore = prefs.getInt(KEY_RA_SOFTCORE, 0),
+        )
+    }
+
+    fun saveRaProfile(profile: RaProfile) {
+        prefs.edit {
+            putString(KEY_RA_USER, profile.username)
+            putString(KEY_RA_TOKEN, profile.token)
+            putInt(KEY_RA_SCORE, profile.score)
+            putInt(KEY_RA_SOFTCORE, profile.softcoreScore)
+        }
+        _raProfile.value = profile
+    }
+
+    fun updateRaScores(score: Int, softcoreScore: Int) {
+        val cur = _raProfile.value ?: return
+        saveRaProfile(cur.copy(score = score, softcoreScore = softcoreScore))
+    }
+
+    fun clearRaProfile() {
+        prefs.edit {
+            remove(KEY_RA_USER)
+            remove(KEY_RA_TOKEN)
+            remove(KEY_RA_SCORE)
+            remove(KEY_RA_SOFTCORE)
+        }
+        _raProfile.value = null
+    }
+
+    fun setRaHardcore(enabled: Boolean) {
+        prefs.edit { putBoolean(KEY_RA_HARDCORE, enabled) }
+        _raHardcore.value = enabled
+    }
+
+    fun setRaUnofficial(enabled: Boolean) {
+        prefs.edit { putBoolean(KEY_RA_UNOFFICIAL, enabled) }
+        _raUnofficial.value = enabled
+    }
+
+    fun setRaNotifications(enabled: Boolean) {
+        prefs.edit { putBoolean(KEY_RA_NOTIFICATIONS, enabled) }
+        _raNotifications.value = enabled
+    }
+
     fun markPlayed(gameId: String) {
         val updated = (listOf(gameId) + _recents.value.filter { it != gameId }).take(MAX_RECENTS)
         prefs.edit { putString(KEY_RECENTS, JSONArray(updated).toString()) }
@@ -267,8 +331,18 @@ class Settings(context: Context) {
         const val KEY_RECENTS = "recents"
         const val KEY_FAVORITES = "favorites"
         const val KEY_COLLECTIONS = "collections"
+        const val KEY_RA_USER = "ra_username"
+        const val KEY_RA_TOKEN = "ra_token"
+        const val KEY_RA_SCORE = "ra_score"
+        const val KEY_RA_SOFTCORE = "ra_softcore_score"
+        const val KEY_RA_HARDCORE = "ra_hardcore"
+        const val KEY_RA_UNOFFICIAL = "ra_unofficial"
+        const val KEY_RA_NOTIFICATIONS = "ra_notifications"
         const val MAX_RECENTS = 20
-        /** Not portable between phones (folder grants), or saved separately in a backup. */
-        val BackupSkip = setOf(KEY_FOLDERS, KEY_RECENTS, KEY_FAVORITES, KEY_COLLECTIONS, "onboarding_done")
+        /** Not portable between phones (folder grants / auth tokens), or saved separately in a backup. */
+        val BackupSkip = setOf(
+            KEY_FOLDERS, KEY_RECENTS, KEY_FAVORITES, KEY_COLLECTIONS, "onboarding_done",
+            KEY_RA_USER, KEY_RA_TOKEN, KEY_RA_SCORE, KEY_RA_SOFTCORE,
+        )
     }
 }

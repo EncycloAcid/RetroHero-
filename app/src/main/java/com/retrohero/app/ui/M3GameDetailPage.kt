@@ -103,6 +103,8 @@ import com.retrohero.app.data.Game
 import com.retrohero.app.data.GameDossier
 import com.retrohero.app.data.PlayStat
 import com.retrohero.app.data.PlayTime
+import com.retrohero.app.data.RaGameData
+import com.retrohero.app.data.RaProfile
 import com.retrohero.app.ui.components.LocalReducedMotion
 import com.retrohero.app.ui.components.M3ConnectedButtonGroup
 import com.retrohero.app.ui.components.M3ExpressiveSpring
@@ -274,6 +276,10 @@ internal fun M3GameDetailPage(
     screenshots: List<File> = emptyList(),
     initialDossier: GameDossier? = null,
     loadDossier: (suspend (Game, Boolean) -> GameDossier)? = null,
+    raProfile: RaProfile? = null,
+    initialRaData: RaGameData? = null,
+    loadRaData: (suspend (Game, Boolean) -> RaGameData?)? = null,
+    onOpenRaSignIn: () -> Unit = {},
     onSetShelfStatus: (String) -> Unit,
     onToggleFavorite: () -> Unit,
     onPlay: (Int?) -> Unit,
@@ -301,6 +307,23 @@ internal fun M3GameDetailPage(
         loadingMeta = true
         dossier = runCatching { loader(game, refreshNonce > 0) }.getOrElse { GameDossier.localFallback(game) }
         loadingMeta = false
+    }
+
+    var raData by remember(game.id) { mutableStateOf(initialRaData) }
+    var loadingRa by remember(game.id, raProfile?.username) { mutableStateOf(raProfile != null && loadRaData != null && initialRaData == null) }
+    var raRefreshNonce by remember(game.id) { mutableIntStateOf(0) }
+    var showAllRa by remember(game.id) { mutableStateOf(false) }
+
+    LaunchedEffect(game.id, raProfile?.username, raRefreshNonce) {
+        val loader = loadRaData ?: return@LaunchedEffect
+        if (raProfile == null) {
+            raData = null
+            loadingRa = false
+            return@LaunchedEffect
+        }
+        loadingRa = true
+        raData = runCatching { loader(game, raRefreshNonce > 0) }.getOrNull()
+        loadingRa = false
     }
 
     val milestones = remember(stat, saveSlots, screenshots, isFavorite, shelfStatus) {
@@ -496,10 +519,16 @@ internal fun M3GameDetailPage(
 
             // 3. REAL STATS 4-COLUMN HYDRA-STYLE BENTO STRIP
             item(key = "detail_stats_strip") {
+                val raSet = raData
+                val thirdStat = if (raSet != null && raSet.totalCount > 0) {
+                    "${raSet.unlockedCount}/${raSet.totalCount}" to "TROPHIES"
+                } else {
+                    "$milestonePct%" to "MILESTONES"
+                }
                 val statsCells = listOf(
                     formatCompactPlayTime(stat?.seconds ?: 0L) to "PLAY TIME",
                     "${stat?.sessions ?: 0}" to "SESSIONS",
-                    "$milestonePct%" to "MILESTONES",
+                    thirdStat,
                     (dossier.releaseYear.takeIf { it.length == 4 } ?: formatFileSizeShort(game.size)) to
                         (if (dossier.releaseYear.length == 4) "RELEASED" else "ROM SIZE"),
                 )
@@ -928,6 +957,296 @@ internal fun M3GameDetailPage(
                                 style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 21.sp),
                                 color = cs.onSurfaceVariant,
                             )
+                        }
+                    }
+                }
+            }
+
+            // 7b. RETROACHIEVEMENTS LIVE TROPHY SHOWCASE
+            item(key = "detail_retroachievements") {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    val activeRa = raData
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text(
+                                text = "RetroAchievements",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                                color = cs.onSurface,
+                            )
+                            if (activeRa != null && activeRa.totalCount > 0) {
+                                Box(
+                                    Modifier
+                                        .clip(CircleShape)
+                                        .background(if (activeRa.hardcoreEnabled) cs.tertiaryContainer else cs.primaryContainer)
+                                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                                ) {
+                                    Text(
+                                        text = if (activeRa.hardcoreEnabled) "Hardcore" else "Softcore",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold, fontSize = 10.sp),
+                                        color = if (activeRa.hardcoreEnabled) cs.onTertiaryContainer else cs.onPrimaryContainer,
+                                    )
+                                }
+                            }
+                        }
+                        if (raProfile != null) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                if (loadingRa) {
+                                    CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = cs.primary)
+                                } else {
+                                    Row(
+                                        Modifier
+                                            .clip(CircleShape)
+                                            .background(cs.surfaceContainerHighest)
+                                            .clickable { raRefreshNonce++ }
+                                            .padding(horizontal = 9.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    ) {
+                                        Icon(Icons.Rounded.Refresh, null, tint = cs.onSurfaceVariant, modifier = Modifier.size(12.dp))
+                                        Text(
+                                            text = if (activeRa != null && activeRa.totalCount > 0) "${activeRa.earnedPoints}/${activeRa.totalPoints} pts" else "Sync",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                            color = cs.onSurfaceVariant,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    when {
+                        raProfile == null -> {
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(24.dp))
+                                    .background(cs.primaryContainer)
+                                    .clickable(onClick = onOpenRaSignIn)
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                M3ShapeBadge(polygon = MaterialShapes.Sunny, containerColor = cs.primary, size = 42.dp) {
+                                    Icon(Icons.Rounded.EmojiEvents, null, tint = cs.onPrimary, modifier = Modifier.size(21.dp))
+                                }
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(
+                                        text = "Connect RetroAchievements",
+                                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
+                                        color = cs.onPrimaryContainer,
+                                    )
+                                    Text(
+                                        text = "Sign in to load official trophies and earn real points as you play",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = cs.onPrimaryContainer.copy(alpha = 0.82f),
+                                    )
+                                }
+                                Box(
+                                    Modifier
+                                        .clip(CircleShape)
+                                        .background(cs.primary)
+                                        .padding(horizontal = 13.dp, vertical = 7.dp),
+                                ) {
+                                    Text("Sign in", style = MaterialTheme.typography.labelMedium, color = cs.onPrimary)
+                                }
+                            }
+                        }
+                        loadingRa && activeRa == null -> {
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(22.dp))
+                                    .background(cs.surfaceContainerHigh)
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.2.dp, color = cs.primary)
+                                Text(
+                                    text = "Matching ROM hash with RetroAchievements…",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = cs.onSurfaceVariant,
+                                )
+                            }
+                        }
+                        activeRa == null || activeRa.achievements.isEmpty() -> {
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(22.dp))
+                                    .background(cs.surfaceContainerHigh)
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                M3ShapeBadge(polygon = MaterialShapes.Cookie6Sided, containerColor = cs.surfaceContainerHighest, size = 38.dp) {
+                                    Icon(Icons.Rounded.EmojiEvents, null, tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
+                                }
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(
+                                        text = "No RetroAchievements set matched",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = cs.onSurface,
+                                    )
+                                    Text(
+                                        text = "Signed in as ${raProfile.username}. Use a supported No-Intro/Redump ROM to unlock official RA trophies.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = cs.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
+                        else -> {
+                            M3WavyBar(
+                                progress = (activeRa.unlockedCount.toFloat() / activeRa.totalCount.coerceAtLeast(1)).coerceIn(0f, 1f),
+                                color = cs.surfaceContainerHighest,
+                                progressColor = cs.tertiary,
+                                amplitude = 2.5.dp,
+                                wavelength = 20.dp,
+                                strokeWidth = 3.dp,
+                            )
+
+                            val ordered = remember(activeRa) {
+                                activeRa.achievements.sortedWith(
+                                    compareByDescending<com.retrohero.app.data.RaAchievement> { it.unlocked }
+                                        .thenByDescending { it.type == "win_condition" || it.type == "progression" }
+                                        .thenByDescending { it.points },
+                                )
+                            }
+                            val visibleList = if (showAllRa) ordered else ordered.take(8)
+
+                            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                visibleList.forEachIndexed { idx, ach ->
+                                    Row(
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .clip(m3SegmentedShape(idx, visibleList.size))
+                                            .background(if (ach.unlocked) cs.surfaceContainerHigh else cs.surfaceContainer)
+                                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                    ) {
+                                        Box(
+                                            Modifier
+                                                .size(44.dp)
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .background(if (ach.unlocked) cs.primaryContainer else cs.surfaceContainerHighest),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            AsyncImage(
+                                                model = ach.displayBadgeUrl,
+                                                contentDescription = ach.title,
+                                                contentScale = ContentScale.Crop,
+                                                modifier = Modifier.fillMaxSize(),
+                                            )
+                                        }
+                                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                            ) {
+                                                Text(
+                                                    text = ach.title,
+                                                    style = MaterialTheme.typography.titleSmall.copy(fontSize = 14.sp),
+                                                    color = if (ach.unlocked) cs.onSurface else cs.onSurfaceVariant,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    modifier = Modifier.weight(1f, fill = false),
+                                                )
+                                                if (ach.type.isNotBlank()) {
+                                                    val tag = when (ach.type) {
+                                                        "win_condition" -> "Win"
+                                                        "progression" -> "Story"
+                                                        "missable" -> "Missable"
+                                                        else -> ach.type
+                                                    }
+                                                    Box(
+                                                        Modifier
+                                                            .clip(CircleShape)
+                                                            .background(cs.secondaryContainer)
+                                                            .padding(horizontal = 6.dp, vertical = 1.dp),
+                                                    ) {
+                                                        Text(
+                                                            text = tag,
+                                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                                            color = cs.onSecondaryContainer,
+                                                            maxLines = 1,
+                                                            softWrap = false,
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                            Text(
+                                                text = ach.description,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = cs.onSurfaceVariant,
+                                                maxLines = 2,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                        }
+                                        Column(
+                                            horizontalAlignment = Alignment.End,
+                                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                                        ) {
+                                            Box(
+                                                Modifier
+                                                    .clip(CircleShape)
+                                                    .background(if (ach.unlocked) cs.primaryContainer else cs.surfaceContainerHighest)
+                                                    .padding(horizontal = 8.dp, vertical = 3.dp),
+                                            ) {
+                                                Text(
+                                                    text = "${ach.points} pts",
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold, fontSize = 10.sp),
+                                                    color = if (ach.unlocked) cs.onPrimaryContainer else cs.onSurfaceVariant,
+                                                    maxLines = 1,
+                                                    softWrap = false,
+                                                )
+                                            }
+                                            if (ach.unlocked) {
+                                                Icon(
+                                                    Icons.Rounded.CheckCircle,
+                                                    contentDescription = "Unlocked",
+                                                    tint = cs.primary,
+                                                    modifier = Modifier.size(16.dp),
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (ordered.size > 8) {
+                                Box(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .clip(CircleShape)
+                                        .background(cs.surfaceContainerHighest)
+                                        .clickable { showAllRa = !showAllRa }
+                                        .padding(vertical = 10.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Text(
+                                        text = if (showAllRa) "Show fewer achievements" else "Show all ${ordered.size} achievements",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = cs.primary,
+                                    )
+                                }
+                            }
                         }
                     }
                 }

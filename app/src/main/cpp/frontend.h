@@ -77,6 +77,7 @@ public:
     bool saveState(const std::string &path);
     bool loadState(const std::string &path);
     bool saveSram(const std::string &path);
+    bool readMemory(unsigned memoryType, std::vector<uint8_t> &out, size_t maxBytes);
     void shutdown(const std::string &sramPath);
 
     void setOptionOverride(const std::string &key, const std::string &value);

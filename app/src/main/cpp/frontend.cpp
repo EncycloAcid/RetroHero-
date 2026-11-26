@@ -426,6 +426,18 @@ bool Frontend::saveSram(const std::string &path) {
     return writeFile(path, mem, size);
 }
 
+bool Frontend::readMemory(unsigned memoryType, std::vector<uint8_t> &out, size_t maxBytes) {
+    std::lock_guard<std::mutex> lk(coreMutex_);
+    if (!gameLoaded_ || !core_.get_memory_size || !core_.get_memory_data) return false;
+    size_t size = core_.get_memory_size(memoryType);
+    const void *mem = core_.get_memory_data(memoryType);
+    if (size == 0 || !mem) return false;
+    if (maxBytes > 0 && size > maxBytes) size = maxBytes;
+    out.resize(size);
+    memcpy(out.data(), mem, size);
+    return true;
+}
+
 void Frontend::shutdown(const std::string &sramPath) {
     running_ = false;
     if (thread_.joinable()) thread_.join();

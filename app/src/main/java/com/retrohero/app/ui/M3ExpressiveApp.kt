@@ -146,6 +146,17 @@ fun M3ExpressiveAppView(
     onDownloadCore: (CoreInfo) -> Unit = {},
     onDownloadAllNeededCores: (List<CoreInfo>) -> Unit = {},
     onDeleteCore: (CoreInfo) -> Unit = {},
+    raProfile: com.retrohero.app.data.RaProfile? = null,
+    raHardcore: Boolean = false,
+    raUnofficial: Boolean = false,
+    raNotifications: Boolean = true,
+    cachedRaFor: (Game) -> com.retrohero.app.data.RaGameData? = { null },
+    loadRaFor: (suspend (Game, Boolean) -> com.retrohero.app.data.RaGameData?)? = null,
+    onOpenRaSignIn: () -> Unit = {},
+    onSignOutRa: () -> Unit = {},
+    onSetRaHardcore: (Boolean) -> Unit = {},
+    onSetRaUnofficial: (Boolean) -> Unit = {},
+    onSetRaNotifications: (Boolean) -> Unit = {},
     initialTab: Int = 0,
 ) {
     val cs = MaterialTheme.colorScheme
@@ -300,6 +311,15 @@ fun M3ExpressiveAppView(
                                 onDownloadCore = onDownloadCore,
                                 onDownloadAllNeededCores = { onDownloadAllNeededCores(missingCores) },
                                 onDeleteCore = onDeleteCore,
+                                raProfile = raProfile,
+                                raHardcore = raHardcore,
+                                raUnofficial = raUnofficial,
+                                raNotifications = raNotifications,
+                                onOpenRaSignIn = onOpenRaSignIn,
+                                onSignOutRa = onSignOutRa,
+                                onSetRaHardcore = onSetRaHardcore,
+                                onSetRaUnofficial = onSetRaUnofficial,
+                                onSetRaNotifications = onSetRaNotifications,
                             )
                         }
                     }
@@ -421,6 +441,10 @@ fun M3ExpressiveAppView(
                     screenshots = screenshotsFor(game),
                     initialDossier = cachedDossierFor(game),
                     loadDossier = loadDossierFor,
+                    raProfile = raProfile,
+                    initialRaData = cachedRaFor(game),
+                    loadRaData = loadRaFor,
+                    onOpenRaSignIn = onOpenRaSignIn,
                     onSetShelfStatus = { st -> onSetShelfStatus(game, st) },
                     onToggleFavorite = { onToggleFavorite(game) },
                     onPlay = { slot ->
