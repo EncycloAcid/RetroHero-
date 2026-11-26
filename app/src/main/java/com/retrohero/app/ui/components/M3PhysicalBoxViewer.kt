@@ -1017,21 +1017,33 @@ private fun Physical3dStageCanvas(
         }
         val halfD = max(halfW, halfH) * depthRatio
 
-        // Perspective-coupled contact shadow on the pedestal beneath the floating 3D object
+        // Dual-layer perspective-coupled studio contact shadow (soft wide penumbra + grounded core umbra)
         val yawRad = Math.toRadians(yawDeg.toDouble())
         val projectedFootprintW = abs(halfW * cos(yawRad).toFloat()) + abs(halfD * sin(yawRad).toFloat())
-        val shadowRadiusX = (projectedFootprintW * 1.18f).coerceAtLeast(halfD * 1.8f)
-        val shadowY = cy + halfH * 1.10f
+        val shadowRadiusX = (projectedFootprintW * 1.24f).coerceAtLeast(halfD * 1.9f)
+        val shadowY = cy + halfH * 1.09f
         drawOval(
             brush = Brush.radialGradient(
-                0.0f to Color.Black.copy(alpha = 0.42f),
-                0.62f to Color.Black.copy(alpha = 0.16f),
+                0.0f to Color.Black.copy(alpha = 0.28f),
+                0.55f to Color.Black.copy(alpha = 0.12f),
                 1.0f to Color.Transparent,
-                center = Offset(cx, shadowY),
+                center = Offset(cx, shadowY + halfH * 0.02f),
                 radius = shadowRadiusX.coerceAtLeast(12f),
             ),
-            topLeft = Offset(cx - shadowRadiusX, shadowY - halfH * 0.11f),
-            size = androidx.compose.ui.geometry.Size(shadowRadiusX * 2f, halfH * 0.22f),
+            topLeft = Offset(cx - shadowRadiusX, shadowY - halfH * 0.12f),
+            size = androidx.compose.ui.geometry.Size(shadowRadiusX * 2f, halfH * 0.26f),
+        )
+        val coreShadowX = (projectedFootprintW * 0.88f).coerceAtLeast(halfD * 1.15f)
+        drawOval(
+            brush = Brush.radialGradient(
+                0.0f to Color.Black.copy(alpha = 0.56f),
+                0.65f to Color.Black.copy(alpha = 0.22f),
+                1.0f to Color.Transparent,
+                center = Offset(cx, shadowY),
+                radius = coreShadowX.coerceAtLeast(10f),
+            ),
+            topLeft = Offset(cx - coreShadowX, shadowY - halfH * 0.065f),
+            size = androidx.compose.ui.geometry.Size(coreShadowX * 2f, halfH * 0.13f),
         )
 
         val quads = Box3dMath.projectBox(
@@ -1067,6 +1079,7 @@ private fun Physical3dStageCanvas(
                 } else {
                     spec.mediaShellColor.toArgb()
                 }
+                val isCartridge = subject == PhysicalViewerSubject.GAME_MEDIA
 
                 for (q in quads) {
                     val d = q.dstPoints
@@ -1080,9 +1093,9 @@ private fun Physical3dStageCanvas(
                     when (q.face) {
                         BoxFaceId.FRONT, BoxFaceId.BACK, BoxFaceId.LEFT_SPINE -> {
                             val faceBmp = when {
-                                subject == PhysicalViewerSubject.GAME_MEDIA && q.face == BoxFaceId.FRONT -> textures.mediaFront
-                                subject == PhysicalViewerSubject.GAME_MEDIA && q.face == BoxFaceId.BACK -> textures.mediaBack
-                                subject == PhysicalViewerSubject.GAME_MEDIA -> null
+                                isCartridge && q.face == BoxFaceId.FRONT -> textures.mediaFront
+                                isCartridge && q.face == BoxFaceId.BACK -> textures.mediaBack
+                                isCartridge -> null
                                 q.face == BoxFaceId.FRONT -> textures.front
                                 q.face == BoxFaceId.BACK -> textures.back
                                 else -> textures.spine
@@ -1098,6 +1111,20 @@ private fun Physical3dStageCanvas(
                                     native.save()
                                     native.clipPath(clipPath)
                                     native.concat(polyMatrix)
+
+                                    // For rounded cartridges, clip shading & gloss strictly inside the molded shell
+                                    // silhouette so no dark rectangular corner ever bleeds past the rounded shell!
+                                    if (isCartridge) {
+                                        val cartShellClip = AndroidPath().apply {
+                                            addRoundRect(
+                                                RectF(6f, 6f, bw - 6f, bh - 6f),
+                                                28f,
+                                                28f,
+                                                AndroidPath.Direction.CW,
+                                            )
+                                        }
+                                        native.clipPath(cartShellClip)
+                                    }
 
                                     // Optional molded plastic keep-case / jewel-case outer rim around paper insert
                                     if (subject == PhysicalViewerSubject.RETAIL_BOX && spec.caseStyle.hasPlasticRim) {
@@ -1126,14 +1153,67 @@ private fun Physical3dStageCanvas(
                                         native.drawBitmap(faceBmp, 0f, 0f, bmpPaint)
                                     }
 
-                                    // Directional 3D shading + moving glossy sleeve specular highlight
+                                    // Realistic spine-fold crease shadow + edge catch-light on 3D retail boxes
+                                    if (subject == PhysicalViewerSubject.RETAIL_BOX) {
+                                        if (q.face == BoxFaceId.FRONT) {
+                                            val creaseW = bw * 0.032f
+                                            fillPaint.shader = LinearGradient(
+                                                0f, 0f, creaseW, 0f,
+                                                intArrayOf(
+                                                    AndroidColor.argb(72, 255, 255, 255),
+                                                    AndroidColor.argb(46, 0, 0, 0),
+                                                    AndroidColor.TRANSPARENT,
+                                                ),
+                                                floatArrayOf(0f, 0.24f, 1f),
+                                                Shader.TileMode.CLAMP,
+                                            )
+                                            native.drawRect(0f, 0f, creaseW, bh, fillPaint)
+                                            fillPaint.shader = null
+                                        } else if (q.face == BoxFaceId.BACK) {
+                                            val creaseW = bw * 0.032f
+                                            fillPaint.shader = LinearGradient(
+                                                bw - creaseW, 0f, bw, 0f,
+                                                intArrayOf(
+                                                    AndroidColor.TRANSPARENT,
+                                                    AndroidColor.argb(46, 0, 0, 0),
+                                                    AndroidColor.argb(60, 255, 255, 255),
+                                                ),
+                                                floatArrayOf(0f, 0.76f, 1f),
+                                                Shader.TileMode.CLAMP,
+                                            )
+                                            native.drawRect(bw - creaseW, 0f, bw, bh, fillPaint)
+                                            fillPaint.shader = null
+                                        } else if (q.face == BoxFaceId.LEFT_SPINE) {
+                                            // Subtle rounded cardstock/wrap highlight along spine edges
+                                            fillPaint.shader = LinearGradient(
+                                                0f, 0f, bw, 0f,
+                                                intArrayOf(
+                                                    AndroidColor.argb(54, 0, 0, 0),
+                                                    AndroidColor.TRANSPARENT,
+                                                    AndroidColor.TRANSPARENT,
+                                                    AndroidColor.argb(66, 255, 255, 255),
+                                                ),
+                                                floatArrayOf(0f, 0.16f, 0.84f, 1f),
+                                                Shader.TileMode.CLAMP,
+                                            )
+                                            native.drawRect(0f, 0f, bw, bh, fillPaint)
+                                            fillPaint.shader = null
+                                        }
+                                    }
+
+                                    // Directional 3D shading + moving studio softbox specular highlight
                                     drawFaceLightingAndGloss(
                                         native = native,
                                         bw = bw,
                                         bh = bh,
                                         shade = q.shade,
                                         specular = q.specular,
-                                        glossy = subject == PhysicalViewerSubject.RETAIL_BOX && spec.caseStyle.glossyWrap,
+                                        glossy = if (subject == PhysicalViewerSubject.RETAIL_BOX) {
+                                            spec.caseStyle.glossyWrap
+                                        } else {
+                                            true
+                                        },
+                                        isCartridge = isCartridge,
                                         yawDeg = yawDeg,
                                         pitchDeg = pitchDeg,
                                         paint = fillPaint,
@@ -1141,8 +1221,20 @@ private fun Physical3dStageCanvas(
                                     native.restore()
                                 }
                             } else {
-                                // Cartridge side thickness edge
-                                drawSolidExtrudedEdge(native, clipPath, d, caseColorArgb, q.shade * 0.88f, fillPaint)
+                                // Cartridge extruded left side wall (inset smoothly so it never pokes past rounded corners)
+                                drawCaseOrCartSideEdge(
+                                    native = native,
+                                    clipPath = clipPath,
+                                    dst = d,
+                                    face = q.face,
+                                    subject = subject,
+                                    spec = spec,
+                                    baseArgb = caseColorArgb,
+                                    shade = q.shade * 0.90f,
+                                    polyMatrix = polyMatrix,
+                                    fillPaint = fillPaint,
+                                    srcPts = srcPts,
+                                )
                             }
                         }
 
@@ -1163,10 +1255,13 @@ private fun Physical3dStageCanvas(
                         }
                     }
 
-                    // Crisp anti-aliased bevel crease along every 3D edge
-                    strokePaint.strokeWidth = 1.4f
-                    strokePaint.color = AndroidColor.argb(75, 255, 255, 255)
-                    native.drawPath(clipPath, strokePaint)
+                    // Subtle angle-aware edge bevel on retail boxes only (never draw a sharp rectangular wireframe around rounded cartridges!)
+                    if (!isCartridge) {
+                        val edgeAlpha = (22 + (q.shade * 26f).roundToInt()).coerceIn(18, 48)
+                        strokePaint.strokeWidth = 1.15f
+                        strokePaint.color = AndroidColor.argb(edgeAlpha, 255, 255, 255)
+                        native.drawPath(clipPath, strokePaint)
+                    }
                 }
             }
         }
@@ -1310,35 +1405,58 @@ private fun drawFaceLightingAndGloss(
     shade: Float,
     specular: Float,
     glossy: Boolean,
+    isCartridge: Boolean = false,
     yawDeg: Float,
     pitchDeg: Float,
     paint: Paint,
 ) {
     paint.shader = null
     if (shade < 0.98f) {
-        val darkAlpha = ((1f - shade) * 190f).roundToInt().coerceIn(0, 135)
+        val darkAlpha = ((1f - shade) * 185f).roundToInt().coerceIn(0, 130)
         if (darkAlpha > 2) {
             paint.color = AndroidColor.argb(darkAlpha, 6, 8, 14)
             native.drawRect(0f, 0f, bw, bh, paint)
         }
     }
-    if (glossy || specular > 0.06f) {
-        val sheenCenter = ((yawDeg % 90f) / 90f + 0.5f).coerceIn(0.05f, 0.95f)
-        val bandW = bw * 0.38f
+
+    // Subtle overhead studio softbox falloff (warm top catch-light -> gentle bottom grounding)
+    paint.shader = LinearGradient(
+        0f, 0f, 0f, bh,
+        intArrayOf(
+            AndroidColor.argb(if (isCartridge) 20 else 16, 255, 252, 245),
+            AndroidColor.TRANSPARENT,
+            AndroidColor.argb(if (isCartridge) 26 else 22, 4, 6, 12),
+        ),
+        floatArrayOf(0f, 0.32f, 1f),
+        Shader.TileMode.CLAMP,
+    )
+    native.drawRect(0f, 0f, bw, bh, paint)
+    paint.shader = null
+
+    // Dynamic moving studio specular reflection band coupled to yaw/pitch
+    if (glossy || specular > 0.05f) {
+        val sheenCenter = ((yawDeg % 90f) / 90f + 0.5f).coerceIn(0.06f, 0.94f)
+        val bandW = bw * if (isCartridge) 0.44f else 0.36f
         val x0 = bw * sheenCenter - bandW + pitchDeg * 2.2f
         val x1 = x0 + bandW * 2f
-        val peakAlpha = ((if (glossy) 48f else 24f) + specular * 54f).roundToInt().coerceIn(14, 96)
+        val peakAlpha = when {
+            isCartridge -> (22f + specular * 38f).roundToInt().coerceIn(14, 58)
+            glossy -> (44f + specular * 54f).roundToInt().coerceIn(22, 94)
+            else -> (18f + specular * 32f).roundToInt().coerceIn(10, 48)
+        }
         paint.shader = LinearGradient(
             x0,
             0f,
             x1,
-            bh * 0.55f,
+            bh * 0.58f,
             intArrayOf(
                 AndroidColor.TRANSPARENT,
+                AndroidColor.argb((peakAlpha * 0.45f).roundToInt(), 255, 255, 255),
                 AndroidColor.argb(peakAlpha, 255, 255, 255),
+                AndroidColor.argb((peakAlpha * 0.35f).roundToInt(), 255, 255, 255),
                 AndroidColor.TRANSPARENT,
             ),
-            floatArrayOf(0f, 0.5f, 1f),
+            floatArrayOf(0f, 0.34f, 0.50f, 0.66f, 1f),
             Shader.TileMode.CLAMP,
         )
         native.drawRect(0f, 0f, bw, bh, paint)
@@ -1395,20 +1513,35 @@ private fun drawCaseOrCartSideEdge(
     fillPaint.shader = null
 
     if (subject == PhysicalViewerSubject.GAME_MEDIA) {
-        // Molded cartridge shell seam + bottom gold PCB edge-connector pins!
-        fillPaint.color = shadeArgb(baseArgb, shade * 0.92f)
-        native.drawRect(0f, 0f, ew, eh, fillPaint)
-        // Center mold parting seam line
+        // Inset slightly at both ends so extruded cartridge walls blend cleanly into the rounded shell corners
+        val edgeInsetY = eh * 0.032f
+        val edgeRect = RectF(0f, edgeInsetY, ew, eh - edgeInsetY)
+        fillPaint.shader = LinearGradient(
+            0f, 0f, ew, 0f,
+            intArrayOf(
+                shadeArgb(baseArgb, shade * 1.04f),
+                shadeArgb(baseArgb, shade * 0.90f),
+                shadeArgb(baseArgb, shade * 0.80f),
+            ),
+            floatArrayOf(0f, 0.50f, 1f),
+            Shader.TileMode.CLAMP,
+        )
+        native.drawRoundRect(edgeRect, 10f, 10f, fillPaint)
+        fillPaint.shader = null
+
+        // Crisp two-piece clamshell mold parting seam + subtle catch-light
         fillPaint.color = AndroidColor.argb(95, 0, 0, 0)
-        native.drawRect(ew * 0.47f, 0f, ew * 0.53f, eh, fillPaint)
+        native.drawRect(ew * 0.47f, edgeInsetY + 4f, ew * 0.52f, eh - edgeInsetY - 4f, fillPaint)
+        fillPaint.color = AndroidColor.argb(45, 255, 255, 255)
+        native.drawRect(ew * 0.52f, edgeInsetY + 4f, ew * 0.55f, eh - edgeInsetY - 4f, fillPaint)
 
         if (face == BoxFaceId.BOTTOM) {
             // Recessed cartridge slot + gleaming gold PCB edge connector pins!
             fillPaint.color = AndroidColor.rgb(18, 22, 20)
-            native.drawRect(ew * 0.18f, eh * 0.08f, ew * 0.82f, eh * 0.92f, fillPaint)
-            fillPaint.color = AndroidColor.rgb(42, 98, 56) // green PCB board
+            native.drawRoundRect(RectF(ew * 0.18f, eh * 0.08f, ew * 0.82f, eh * 0.92f), 8f, 8f, fillPaint)
+            fillPaint.color = AndroidColor.rgb(38, 92, 52) // green PCB board
             native.drawRect(ew * 0.44f, eh * 0.11f, ew * 0.56f, eh * 0.89f, fillPaint)
-            fillPaint.color = AndroidColor.rgb(228, 186, 68) // gold connector teeth
+            fillPaint.color = AndroidColor.rgb(236, 194, 76) // gleaming gold connector teeth
             val pins = 20
             val step = (eh * 0.76f) / pins
             for (i in 0 until pins) {
@@ -2168,6 +2301,19 @@ internal fun buildProceduralCartFrontBitmap(
         16f, 16f, p,
     )
     drawFramedBackScreenshot(c, coverBmp, labelRect, spec.spineHeaderColor.toArgb(), p, bmpPaint)
+
+    // Subtle inner top-lip cast shadow inside the recessed sticker well
+    p.shader = LinearGradient(
+        labelRect.left, labelRect.top, labelRect.left, labelRect.top + labelRect.height() * 0.14f,
+        intArrayOf(
+            AndroidColor.argb(72, 0, 0, 0),
+            AndroidColor.TRANSPARENT,
+        ),
+        floatArrayOf(0f, 1f),
+        Shader.TileMode.CLAMP,
+    )
+    c.drawRoundRect(labelRect, 12f, 12f, p)
+    p.shader = null
 
     // Subtle glossy vinyl sticker diagonal specular sheen
     p.shader = LinearGradient(
