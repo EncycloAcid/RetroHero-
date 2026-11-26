@@ -29,6 +29,12 @@ class GamePrefs(context: Context, sharpDefault: Boolean) {
     fun lastDisc(gameId: String): Int = prefs.getInt("disc_${gameId.hashCode()}", 0).coerceAtLeast(0)
     fun setLastDisc(gameId: String, index: Int) = prefs.edit { putInt("disc_${gameId.hashCode()}", index.coerceAtLeast(0)) }
 
+    fun stateCore(gameId: String, slot: Int): String? =
+        prefs.getString("state_core_${gameId.hashCode()}_$slot", null)?.takeIf { it.isNotBlank() }
+
+    fun setStateCore(gameId: String, slot: Int, coreId: String) =
+        prefs.edit { putString("state_core_${gameId.hashCode()}_$slot", coreId) }
+
     companion object {
         const val FILE = "game_prefs"
     }
