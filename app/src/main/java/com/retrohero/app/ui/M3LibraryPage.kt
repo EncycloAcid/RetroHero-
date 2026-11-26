@@ -87,6 +87,8 @@ import com.retrohero.app.ui.components.M3ConsoleImage
 import com.retrohero.app.ui.components.M3ExpressiveSpring
 import com.retrohero.app.ui.components.M3GameCover
 import com.retrohero.app.ui.components.M3ShapeBadge
+import androidx.compose.material.icons.rounded.ViewColumn
+import com.retrohero.app.ui.components.M3BookshelfSection
 import com.retrohero.app.ui.components.m3SegmentedShape
 import com.retrohero.app.ui.components.m3StaggeredEntrance
 import com.retrohero.app.ui.theme.polygon
@@ -112,7 +114,7 @@ internal fun M3LibraryPage(
     var query by rememberSaveable { mutableStateOf("") }
     var filterIdx by rememberSaveable { mutableIntStateOf(0) }
     var sortIdx by rememberSaveable { mutableIntStateOf(0) }
-    var listMode by rememberSaveable { mutableStateOf(false) }
+    var viewMode by rememberSaveable { mutableIntStateOf(0) } // 0 = Grid, 1 = List, 2 = 3D Shelf
 
     val counts = remember(games) { games.groupingBy { it.systemId }.eachCount() }
     val systems = remember(counts) {
@@ -244,29 +246,53 @@ internal fun M3LibraryPage(
                         Icon(Icons.Rounded.Close, contentDescription = "Clear search", tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
                     }
                 }
-                Box(
-                    Modifier
-                        .size(40.dp)
-                        .clip(CircleShape)
-                        .background(cs.secondaryContainer)
-                        .semantics { contentDescription = if (listMode) "Switch to grid view" else "Switch to list view" }
-                        .clickable { listMode = !listMode },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    AnimatedContent(
-                        targetState = listMode,
-                        transitionSpec = {
-                            (scaleIn(spring(dampingRatio = 0.56f, stiffness = 460f), 0.55f) + fadeIn(tween(140))) togetherWith
-                                (scaleOut(tween(110), 0.55f) + fadeOut(tween(100)))
-                        },
-                        label = "libViewModeIcon",
-                    ) { isList ->
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(if (viewMode == 2) cs.primaryContainer else cs.surfaceContainer)
+                            .semantics { contentDescription = if (viewMode == 2) "Exit 3D shelf view" else "Switch to 3D shelf view" }
+                            .clickable {
+                                view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                viewMode = if (viewMode == 2) 0 else 2
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
                         Icon(
-                            imageVector = if (isList) Icons.Rounded.GridView else Icons.Rounded.ViewAgenda,
+                            imageVector = Icons.Rounded.ViewColumn,
                             contentDescription = null,
-                            tint = cs.onSecondaryContainer,
+                            tint = if (viewMode == 2) cs.onPrimaryContainer else cs.onSurfaceVariant,
                             modifier = Modifier.size(20.dp),
                         )
+                    }
+                    Box(
+                        Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(if (viewMode != 2) cs.secondaryContainer else cs.surfaceContainer)
+                            .semantics { contentDescription = if (viewMode == 1) "Switch to grid view" else "Switch to list view" }
+                            .clickable {
+                                view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                viewMode = if (viewMode == 1) 0 else 1
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        AnimatedContent(
+                            targetState = viewMode == 1,
+                            transitionSpec = {
+                                (scaleIn(spring(dampingRatio = 0.56f, stiffness = 460f), 0.55f) + fadeIn(tween(140))) togetherWith
+                                    (scaleOut(tween(110), 0.55f) + fadeOut(tween(100)))
+                            },
+                            label = "libViewModeIcon",
+                        ) { isList ->
+                            Icon(
+                                imageVector = if (isList) Icons.Rounded.GridView else Icons.Rounded.ViewAgenda,
+                                contentDescription = null,
+                                tint = if (viewMode != 2) cs.onSecondaryContainer else cs.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
                     }
                 }
             }
@@ -353,7 +379,16 @@ internal fun M3LibraryPage(
                     Text("Try clearing your search or tap + to add more ROMs.", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
                 }
             }
-        } else if (listMode) {
+        } else if (viewMode == 2) {
+            item(key = "m3_lib_bookshelf", span = { GridItemSpan(maxLineSpan) }) {
+                M3BookshelfSection(
+                    games = filtered,
+                    stats = stats,
+                    onOpenDetail = onOpenDetail,
+                    onQuickPlay = onQuickPlay,
+                )
+            }
+        } else if (viewMode == 1) {
             item(key = "m3_lib_segmented", span = { GridItemSpan(maxLineSpan) }) {
                 Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     filtered.forEachIndexed { idx, game ->
