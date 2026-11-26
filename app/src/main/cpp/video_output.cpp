@@ -101,6 +101,17 @@ void VideoOutput::present(const void *data, unsigned width, unsigned height, siz
     if (window_) blitLocked(last_.data(), width, height, pitch, pixelFormat);
 }
 
+void VideoOutput::presentBlack() {
+    std::lock_guard<std::mutex> lk(mutex_);
+    if (!window_ || bufW_ <= 0 || bufH_ <= 0) return;
+    ANativeWindow_Buffer buf;
+    if (ANativeWindow_lock(window_, &buf, nullptr) != 0) return;
+    const size_t bpp = (bufFmt_ == WINDOW_FORMAT_RGBX_8888) ? 4 : 2;
+    const size_t totalBytes = static_cast<size_t>(buf.stride) * static_cast<size_t>(buf.height) * bpp;
+    memset(buf.bits, 0, totalBytes);
+    ANativeWindow_unlockAndPost(window_);
+}
+
 // Fast division-free unrolled software blitter (5x-8x faster than per-pixel division).
 void VideoOutput::blitLocked(const uint8_t *data, unsigned width, unsigned height, size_t pitch,
                              int fmt) {

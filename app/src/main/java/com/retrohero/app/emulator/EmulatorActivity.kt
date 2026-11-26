@@ -42,9 +42,11 @@ import android.os.Build
 import android.os.Bundle
 import com.retrohero.app.R
 import android.os.Process
+import android.view.Choreographer
 import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
 import android.view.MotionEvent
+import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.View
@@ -211,6 +213,25 @@ class EmulatorActivity : ComponentActivity() {
     private var discPickerOpen by mutableStateOf(false)
     private var swappingDisc by mutableStateOf(false)
 
+    // Tear-free 60/90/120 Hz/LTPO display sync & 120 Hz OLED BFI
+    private var activeSurface: Surface? = null
+    private var vsyncLock by mutableStateOf(true)
+    private var bfi120Hz by mutableStateOf(false)
+    private var displayHz by mutableFloatStateOf(60f)
+    private var bfiCapable by mutableStateOf(false)
+    private var perfVsyncLocked by mutableStateOf(false)
+    private var perfBfiActive by mutableStateOf(false)
+    private var choreographerActive = false
+    private val vsyncCallback = object : Choreographer.FrameCallback {
+        override fun doFrame(frameTimeNanos: Long) {
+            if (!choreographerActive || shutDown) return
+            val liveHz = DisplaySync.currentRefreshRate(this@EmulatorActivity)
+            if (kotlin.math.abs(liveHz - displayHz) >= 0.5f) displayHz = liveHz
+            NativeBridge.onVsync(frameTimeNanos, liveHz)
+            Choreographer.getInstance().postFrameCallback(this)
+        }
+    }
+
     // Play time: counted only while the game is actually running on screen.
     private var runningSince = 0L
     private var pendingSession = true
@@ -260,6 +281,9 @@ class EmulatorActivity : ComponentActivity() {
         padLayouts = PadLayouts(paths.padLayoutFile)
         filter = gamePrefs.filter(system.id)
         integerScale = gamePrefs.integerScale(system.id)
+        vsyncLock = gamePrefs.vsyncLock
+        bfi120Hz = gamePrefs.bfi120Hz
+        displayHz = DisplaySync.currentRefreshRate(this)
         cheats = Cheats.load(paths.cheatsFile(game))
         input.onRewind = { held -> if (rewindOn) NativeBridge.setRewinding(held) }
         input.rewindKeyEnabled = system.id != "psx"
@@ -340,12 +364,47 @@ class EmulatorActivity : ComponentActivity() {
         if (!raSessionHardcore) applyCheats()
         aspect = NativeBridge.getAspectRatio()
         refreshDiscState()
+        applyDisplaySyncLock()
+        startVsyncFeed()
         NativeBridge.start()
         started = true
         phase = Phase.Running
         bootNotice?.let { toast(it) }
         startClock()
         startRetroAchievements(romPath)
+    }
+
+    private fun startVsyncFeed() {
+        if (choreographerActive || shutDown) return
+        choreographerActive = true
+        Choreographer.getInstance().postFrameCallback(vsyncCallback)
+    }
+
+    private fun stopVsyncFeed() {
+        if (!choreographerActive) return
+        choreographerActive = false
+        Choreographer.getInstance().removeFrameCallback(vsyncCallback)
+    }
+
+    private fun applyDisplaySyncLock() {
+        val coreFps = if (started || phase !is Phase.Failed) {
+            runCatching { NativeBridge.getCoreFps().toDouble() }.getOrDefault(60.0)
+        } else 60.0
+        val modes = DisplaySync.supportedRefreshRates(this)
+        val plan = DisplaySync.chooseTargetRefreshRate(coreFps, modes, bfiRequested = bfi120Hz)
+        bfiCapable = plan.bfiCapable
+        val targetHz = if (vsyncLock) plan.targetRefreshHz else DisplaySync.currentRefreshRate(this)
+        DisplaySync.applyHardwareLock(activeSurface, window, targetHz)
+        displayHz = DisplaySync.currentRefreshRate(this)
+        NativeBridge.setVsyncConfig(vsyncLock, bfi120Hz && plan.bfiCapable)
+    }
+
+    private fun setDisplaySync(vsync: Boolean = vsyncLock, bfi: Boolean = bfi120Hz) {
+        vsyncLock = vsync
+        bfi120Hz = bfi
+        gamePrefs.vsyncLock = vsync
+        gamePrefs.bfi120Hz = bfi
+        applyDisplaySyncLock()
     }
 
     /** Atomically flushes the core's SRAM and commits canonicalized bytes into the universal .srm save. */
@@ -620,6 +679,7 @@ class EmulatorActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
+        stopVsyncFeed()
         if (started && !shutDown) {
             NativeBridge.setPaused(true)
             NativeBridge.setRewinding(false)
@@ -631,6 +691,8 @@ class EmulatorActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         if (started && !shutDown && !menuOpen && !editingPad) {
+            applyDisplaySyncLock()
+            startVsyncFeed()
             NativeBridge.setPaused(false)
             startClock()
         }
@@ -655,6 +717,7 @@ class EmulatorActivity : ComponentActivity() {
 
     private fun shutdownCore() {
         if (!started || shutDown) return
+        stopVsyncFeed()
         raJob?.cancel()
         raJob = null
         stopClock()
@@ -885,6 +948,8 @@ class EmulatorActivity : ComponentActivity() {
                 val hudText = buildString {
                     append(String.format(java.util.Locale.US, "%.1f FPS", perfFps))
                     if (perfMs > 0.05f) append(String.format(java.util.Locale.US, " · %.1f ms", perfMs))
+                    if (perfVsyncLocked) append(" · ${displayHz.roundToInt()}Hz")
+                    if (perfBfiActive) append(" · BFI")
                     if (perfActiveRa > 0) append(" · RA-${perfActiveRa}f")
                     if (slowMotion) append(" · 0.5×")
                 }
@@ -958,6 +1023,8 @@ class EmulatorActivity : ComponentActivity() {
                         perfMs = stats[1]
                         perfActiveRa = stats[2].toInt()
                     }
+                    perfVsyncLocked = NativeBridge.isVsyncLocked()
+                    perfBfiActive = NativeBridge.isBfiActive()
                     delay(450)
                 } else {
                     delay(1000)
@@ -1095,9 +1162,16 @@ class EmulatorActivity : ComponentActivity() {
             factory = { ctx ->
                 SurfaceView(ctx).apply {
                     holder.addCallback(object : SurfaceHolder.Callback {
-                        override fun surfaceCreated(holder: SurfaceHolder) = NativeBridge.setSurface(holder.surface)
+                        override fun surfaceCreated(holder: SurfaceHolder) {
+                            activeSurface = holder.surface
+                            NativeBridge.setSurface(holder.surface)
+                            applyDisplaySyncLock()
+                        }
                         override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) = Unit
-                        override fun surfaceDestroyed(holder: SurfaceHolder) = NativeBridge.setSurface(null)
+                        override fun surfaceDestroyed(holder: SurfaceHolder) {
+                            activeSurface = null
+                            NativeBridge.setSurface(null)
+                        }
                     })
                     if (system.touchScreen) setOnTouchListener(::onScreenTouch)
                 }
@@ -1607,9 +1681,30 @@ class EmulatorActivity : ComponentActivity() {
                 }
             }
             Spacer(Modifier.height(12.dp))
-            SegmentedGroup(null, 1) {
+            SegmentedGroup(null, 3) {
                 MenuSwitch(shapes(0), Icons.Default.AspectRatio, "Integer scaling", "Every game pixel the same size, with a border", integerScale) {
                     setScreen(integer = it)
+                }
+                MenuSwitch(
+                    shapes(1),
+                    Icons.Default.Tv,
+                    "Tear-free Vsync lock",
+                    "Choreographer vsync + micro-pitch audio · ${displayHz.roundToInt()} Hz screen",
+                    vsyncLock,
+                ) { setDisplaySync(vsync = it) }
+                MenuSwitch(
+                    shapes(2),
+                    Icons.Default.History,
+                    "120 Hz OLED Black Frame Insertion",
+                    if (bfiCapable) "CRT-sharp motion clarity on 120 Hz OLED"
+                    else "Requires a 120 Hz display (detected ${displayHz.roundToInt()} Hz)",
+                    bfi120Hz && bfiCapable,
+                ) { on ->
+                    if (!bfiCapable && on) {
+                        toast("Black Frame Insertion requires a 120 Hz display")
+                    } else {
+                        setDisplaySync(vsync = if (on) true else vsyncLock, bfi = on)
+                    }
                 }
             }
             Text(

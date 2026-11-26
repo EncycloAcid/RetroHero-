@@ -15,6 +15,11 @@ object NativeBridge {
     external fun setFastForward(enabled: Boolean, speed: Float)
     external fun setSlowMotion(enabled: Boolean)
     external fun setRunAhead(frames: Int)
+    external fun onVsync(frameTimeNanos: Long, displayHz: Float)
+    external fun setVsyncConfig(vsyncLock: Boolean, bfi120Hz: Boolean)
+    external fun getCoreFps(): Float
+    external fun isVsyncLocked(): Boolean
+    external fun isBfiActive(): Boolean
     /** Returns [actualFps, frameTimeMs, activeRunAheadFrames]. */
     external fun getPerfStats(): FloatArray
     external fun reset()

@@ -51,6 +51,26 @@ JNIEXPORT void JNICALL JNI_FN(setRunAhead)(JNIEnv *, jobject, jint frames) {
     Frontend::get().setRunAhead(frames);
 }
 
+JNIEXPORT void JNICALL JNI_FN(onVsync)(JNIEnv *, jobject, jlong frameTimeNanos, jfloat displayHz) {
+    Frontend::get().onVsync(static_cast<int64_t>(frameTimeNanos), static_cast<float>(displayHz));
+}
+
+JNIEXPORT void JNICALL JNI_FN(setVsyncConfig)(JNIEnv *, jobject, jboolean vsyncLock, jboolean bfi120Hz) {
+    Frontend::get().setVsyncConfig(vsyncLock, bfi120Hz);
+}
+
+JNIEXPORT jfloat JNICALL JNI_FN(getCoreFps)(JNIEnv *, jobject) {
+    return Frontend::get().coreFps();
+}
+
+JNIEXPORT jboolean JNICALL JNI_FN(isVsyncLocked)(JNIEnv *, jobject) {
+    return Frontend::get().isVsyncLocked();
+}
+
+JNIEXPORT jboolean JNICALL JNI_FN(isBfiActive)(JNIEnv *, jobject) {
+    return Frontend::get().isBfiActive();
+}
+
 JNIEXPORT jfloatArray JNICALL JNI_FN(getPerfStats)(JNIEnv *env, jobject) {
     float fps = 0.0f, ms = 0.0f;
     int ra = 0;

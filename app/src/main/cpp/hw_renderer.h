@@ -40,6 +40,9 @@ public:
     /** Called on the emulation thread from videoCb(RETRO_HW_FRAME_BUFFER_VALID, w, h). */
     void presentFrame(unsigned width, unsigned height, bool bottomLeftOrigin);
 
+    /** Inserts a single pure black frame for 120 Hz OLED Black Frame Insertion (BFI). */
+    void presentBlack();
+
     /** Returns the offscreen FBO id for libretro's get_current_framebuffer callback. */
     uintptr_t currentFramebuffer() const { return static_cast<uintptr_t>(fbo_); }
 
