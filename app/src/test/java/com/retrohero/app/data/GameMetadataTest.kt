@@ -1,0 +1,56 @@
+package com.retrohero.app.data
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+
+@RunWith(RobolectricTestRunner::class)
+class GameMetadataTest {
+
+    @Test
+    fun parsesWikipediaInfoboxCreditsCleanly() {
+        val wikitext = """
+            {{Infobox video game
+            | title = Super Mario Bros.
+            | developer = [[Nintendo R&D4]]<ref name="dev" />
+            | publisher = [[Nintendo]]
+            | released = {{vgrelease|JP|September 13, 1985|NA|October 18, 1985}}
+            | genre = [[Platform game|Platform]]
+            | modes = [[Single-player video game|Single-player]], [[Multiplayer video game|multiplayer]]
+            }}
+        """.trimIndent()
+
+        assertEquals("Nintendo R&D4", GameMetadataRepository.parseInfoboxField(wikitext, listOf("developer")))
+        assertEquals("Nintendo", GameMetadataRepository.parseInfoboxField(wikitext, listOf("publisher")))
+        assertTrue(GameMetadataRepository.parseInfoboxField(wikitext, listOf("released")).contains("1985"))
+        assertEquals("Platform", GameMetadataRepository.parseInfoboxField(wikitext, listOf("genre")))
+        assertEquals("Single-player, multiplayer", GameMetadataRepository.parseInfoboxField(wikitext, listOf("modes")))
+    }
+
+    @Test
+    fun extractsEditorialSectionsAndRoundTripsJson() {
+        val game = Game("id1", "Super Mario Bros. (USA).nes", "nes", "tree", "doc", 40976L)
+        val fallback = GameDossier.localFallback(game)
+        val extract = """
+            Super Mario Bros. is a 1985 platform game developed and published by Nintendo for the NES.
+
+            == Gameplay ==
+            Players control Mario, or his brother Luigi in multiplayer mode, as they travel across the Mushroom Kingdom to rescue Princess Toadstool from Bowser.
+
+            == Reception ==
+            Critics hailed the game as a landmark achievement in console game design and one of the greatest video games of all time.
+        """.trimIndent()
+
+        val (summary, blocks) = GameMetadataRepository.parseExtractSections(extract, game.title, fallback)
+        assertTrue(summary.contains("1985 platform game"))
+        assertEquals(2, blocks.size)
+        assertEquals("GAMEPLAY & MECHANICS", blocks[0].headline)
+        assertEquals("CRITICAL ACCLAIM", blocks[1].headline)
+
+        val roundTripped = GameDossier.fromJson(fallback.toJson())
+        assertEquals(fallback.title, roundTripped.title)
+        assertEquals(5, roundTripped.radarAxes.size)
+    }
+}

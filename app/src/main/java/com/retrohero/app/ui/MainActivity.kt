@@ -219,6 +219,8 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
             vm.screenshots(g)
         },
         currentCoreFor = { g -> g.system?.let { vm.settings.coreFor(it) } },
+        cachedDossierFor = { g -> vm.cachedDossier(g) },
+        loadDossierFor = { g, force -> vm.loadDossier(g, force) },
         toastMessage = toastMessage,
         onDismissToast = { toastMessage = null },
         onPlay = { g, slot -> vm.play(g, slot) },

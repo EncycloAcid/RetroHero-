@@ -14,10 +14,13 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeUp
 import com.retrohero.app.data.AppPaths
 import com.retrohero.app.data.BiosManager
 import com.retrohero.app.data.CoreManager.CoreState
 import com.retrohero.app.data.Game
+import com.retrohero.app.data.GameDossier
 import com.retrohero.app.data.PlayStat
 import com.retrohero.app.ui.theme.RetroHeroTheme
 import com.retrohero.app.ui.theme.Tone
@@ -133,6 +136,36 @@ class LauncherScreenshotTest {
                             )
                         } else emptyList()
                     },
+                    cachedDossierFor = { g ->
+                        if (g.id == games[0].id) {
+                            GameDossier(
+                                title = g.title,
+                                tagline = "Journey across fractured eras in a timeless 32-bit orchestral RPG masterpiece.",
+                                developer = "Square Product Studio",
+                                publisher = "Square Electronic Arts",
+                                releaseDate = "18 Nov. 1999",
+                                releaseYear = "1999",
+                                genre = "Role-Playing · Adventure",
+                                modes = "Single-player · DualShock",
+                                summary = "Chrono Symphony blends hand-painted pre-rendered vistas with a tactical turn-based battle system and an unforgettable acoustic soundtrack. Explore twin timelines, recruit dozens of allies, and reshape destiny.",
+                                featureSections = listOf(
+                                    GameDossier.FeatureBlock(
+                                        headline = "A FUTURE, UNWRITTEN",
+                                        body = "Shift effortlessly between parallel dimensions where every choice ripples across islands, towns, and companions.",
+                                    ),
+                                    GameDossier.FeatureBlock(
+                                        headline = "EXPLORE VAST REALMS",
+                                        body = "From sun-drenched tropical archipelagos to crystalline citadels, discover secrets tucked into every hand-crafted scene.",
+                                    ),
+                                ),
+                                promoQuote = "A HALLMARK OF 32-BIT EXCELLENCE",
+                                radarAxes = GameDossier.defaultRadar("role-playing adventure chrono"),
+                                heroImageUrl = null,
+                                sourceLabel = "Wikipedia",
+                                isLive = true,
+                            )
+                        } else null
+                    },
                     onPlay = { g, _ -> played = g },
                     onToggleFavorite = { g -> favs = if (g.id in favs) favs - g.id else favs + g.id },
                     onSetShelfStatus = { g, st -> shelfStatuses = shelfStatuses + (g.id to st) },
@@ -148,17 +181,32 @@ class LauncherScreenshotTest {
         compose.onNodeWithText("4 cores needed").assertIsDisplayed()
         save("m3e_home_dark")
 
-        // 2. Open Pure M3E Game Detail Sheet (with Core Readiness badge & relative save timestamps!)
+        // 2. Open Full-Screen Hydra-Inspired Mobile Game Detail Page
         compose.onNodeWithContentDescription("Details for Chrono Symphony").performClick()
         compose.mainClock.advanceTimeBy(950)
         compose.waitForIdle()
-        compose.onNodeWithText("Shelf status").assertIsDisplayed()
         compose.onNodeWithText("Ready").assertIsDisplayed()
-        save("m3e_detail_sheet")
+        compose.onNodeWithText("Screenshots & media").assertIsDisplayed()
+        save("m3e_detail_page_top")
 
-        compose.onNodeWithText("Resume game").performClick()
+        // Scroll gently down to capture Game Info + Pentagonal Genre DNA Radar
+        compose.onRoot().performTouchInput { swipeUp(startY = bottom * 0.72f, endY = bottom * 0.20f, durationMillis = 350) }
+        compose.mainClock.advanceTimeBy(800)
+        compose.waitForIdle()
+        save("m3e_detail_page_mid")
+
+        // Scroll further to capture Editorial Spotlight + Milestones
+        compose.onRoot().performTouchInput { swipeUp(startY = bottom * 0.85f, endY = top + 100f, durationMillis = 250) }
+        compose.mainClock.advanceTimeBy(800)
+        compose.waitForIdle()
+        save("m3e_detail_page_low")
+
+        // Close back to Home via top Back button and verify launcher is intact
+        compose.onNodeWithContentDescription("Close details").performClick()
         compose.mainClock.advanceTimeBy(600)
         compose.waitForIdle()
+        compose.onNodeWithText("Resume").performClick()
+        compose.mainClock.advanceTimeBy(400)
         assertEquals(games[0].id, played?.id)
 
         // 3. Games Tab (1-Tap Sort Pill + 56dp M3 SearchBar + Console Polygons + Editorial Grid)
