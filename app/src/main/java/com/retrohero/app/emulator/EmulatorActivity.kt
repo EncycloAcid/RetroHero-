@@ -242,6 +242,9 @@ class EmulatorActivity : ComponentActivity() {
     private var visualMode by mutableStateOf(com.retrohero.app.data.VisualMode.ENHANCED)
     private var activeProfile by mutableStateOf<com.retrohero.app.data.HardwareProfile?>(null)
     private var colorProfile by mutableIntStateOf(com.retrohero.app.data.ColorProfile.NONE)
+    private var activePatchName by mutableStateOf<String?>(null)
+    private var activePatchFormat by mutableStateOf<String?>(null)
+    private var activePatchHeaderNote by mutableStateOf<String?>(null)
     private var activeRomCrc: String? = null
 
     // Play time: counted only while the game is actually running on screen.
@@ -362,15 +365,63 @@ class EmulatorActivity : ComponentActivity() {
     private suspend fun boot(coreId: String, corePath: String, romPath: String) {
         activeCoreId = coreId
         val requested = if (intent.hasExtra(EXTRA_LOAD_SLOT)) intent.getIntExtra(EXTRA_LOAD_SLOT, AppPaths.AUTO_SLOT) else null
+        val patchPath = intent.getStringExtra(EXTRA_PATCH_PATH)
+        val patchName = intent.getStringExtra(EXTRA_PATCH_NAME)
+        val patchFormatLabel = intent.getStringExtra(EXTRA_PATCH_FORMAT)
         raSessionHardcore = settings.raProfile.value != null && settings.raHardcore.value && requested == null && cheats.none { it.enabled }
         var bootNotice: String? = null
         var resolvedProfile: com.retrohero.app.data.HardwareProfile? = null
         var resolvedMode = com.retrohero.app.data.VisualMode.ENHANCED
+        var resolvedPatchFormat = patchFormatLabel
+        var resolvedHeaderNote: String? = null
         val error = withContext(Dispatchers.IO) {
             val prep = com.retrohero.app.data.SavePortability.prepareForCore(game, coreId, paths)
             preparedSave = prep
             if (prep.converted && prep.note.isNotBlank()) bootNotice = prep.note
-            val crcHex = com.retrohero.app.data.HardwareProfiles.quickCrc32Hex(File(romPath))
+
+            var patchedBytes: ByteArray? = null
+            var crcHex: String? = null
+            if (!patchPath.isNullOrBlank()) {
+                val pFile = File(patchPath)
+                if (!pFile.exists()) {
+                    return@withContext "Attached patch file is missing."
+                }
+                val romFile = File(romPath)
+                if (!romFile.exists()) {
+                    return@withContext "Original ROM file could not be opened."
+                }
+                if (romFile.length() > 128L * 1024L * 1024L) {
+                    return@withContext "In-memory soft-patching supports ROMs up to 128 MB."
+                }
+                val patchRes = try {
+                    com.retrohero.app.data.RomPatcher.applyInMemory(
+                        sourceRom = romFile.readBytes(),
+                        patchBytes = pFile.readBytes(),
+                        systemId = system.id,
+                        fileName = pFile.name,
+                    )
+                } catch (e: Exception) {
+                    return@withContext e.message ?: "Failed to apply ROM patch."
+                }
+                patchedBytes = patchRes.data
+                crcHex = patchRes.targetCrc32Hex
+                resolvedPatchFormat = patchRes.format.label
+                resolvedHeaderNote = patchRes.headerNote
+                bootNotice = buildString {
+                    append("Soft-patched in memory · ")
+                    append(patchName ?: pFile.nameWithoutExtension)
+                    append(" (")
+                    append(patchRes.format.label)
+                    append(')')
+                    if (!patchRes.headerNote.isNullOrBlank()) {
+                        append(" · ")
+                        append(patchRes.headerNote)
+                    }
+                }
+            } else {
+                crcHex = com.retrohero.app.data.HardwareProfiles.quickCrc32Hex(File(romPath))
+            }
+
             activeRomCrc = crcHex
             resolvedMode = com.retrohero.app.data.VisualMode.fromId(gamePrefs.visualMode(game.id))
                 ?: com.retrohero.app.data.HardwareProfiles.defaultModeFor(game, crcHex)
@@ -385,7 +436,17 @@ class EmulatorActivity : ComponentActivity() {
             if (!NativeBridge.loadCore(corePath, paths.system.absolutePath, paths.saves.absolutePath)) {
                 return@withContext NativeBridge.getLastError()
             }
-            if (!NativeBridge.loadGame(romPath, prep.activeFile.absolutePath)) {
+            val loaded = if (patchedBytes != null) {
+                NativeBridge.loadGameMemory(
+                    virtualPath = romPath,
+                    romBytes = patchedBytes,
+                    sramPath = prep.activeFile.absolutePath,
+                    scratchDir = paths.romCache.absolutePath,
+                )
+            } else {
+                NativeBridge.loadGame(romPath, prep.activeFile.absolutePath)
+            }
+            if (!loaded) {
                 return@withContext NativeBridge.getLastError()
             }
             val resumeSlot = when {
@@ -410,6 +471,9 @@ class EmulatorActivity : ComponentActivity() {
             phase = Phase.Failed(error.ifEmpty { "Failed to start the game." })
             return
         }
+        activePatchName = patchName
+        activePatchFormat = resolvedPatchFormat
+        activePatchHeaderNote = resolvedHeaderNote
         visualMode = resolvedMode
         activeProfile = resolvedProfile
         val prof = resolvedProfile
@@ -1475,6 +1539,37 @@ class EmulatorActivity : ComponentActivity() {
     @Composable
     private fun MainMenuPage(navigate: (String) -> Unit) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            val pName = activePatchName
+            if (!pName.isNullOrBlank()) {
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(
+                            text = "Soft-patched in memory · ${activePatchFormat ?: "ROM Patch"}",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.85f),
+                        )
+                        Text(
+                            text = pName,
+                            style = MaterialTheme.typography.titleSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        val hdrNote = activePatchHeaderNote
+                        if (!hdrNote.isNullOrBlank()) {
+                            Text(
+                                text = hdrNote,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.82f),
+                            )
+                        }
+                    }
+                }
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
                     onClick = { setMenu(false) },
@@ -2233,14 +2328,32 @@ class EmulatorActivity : ComponentActivity() {
         private const val EXTRA_ROM_PATH = "rom_path"
 
         private const val EXTRA_LOAD_SLOT = "load_slot"
+        private const val EXTRA_PATCH_PATH = "patch_path"
+        private const val EXTRA_PATCH_NAME = "patch_name"
+        private const val EXTRA_PATCH_FORMAT = "patch_format"
 
         /** [slot]: a save-state slot to resume from (AppPaths.AUTO_SLOT or 1..4); null uses the usual auto-resume. */
-        fun intent(context: Context, game: Game, coreId: String, corePath: String, romPath: String, slot: Int? = null) =
+        fun intent(
+            context: Context,
+            game: Game,
+            coreId: String,
+            corePath: String,
+            romPath: String,
+            slot: Int? = null,
+            patchPath: String? = null,
+            patchName: String? = null,
+            patchFormat: String? = null,
+        ) =
             Intent(context, EmulatorActivity::class.java)
                 .putExtra(EXTRA_GAME, game.toJson().toString())
                 .putExtra(EXTRA_CORE_ID, coreId)
                 .putExtra(EXTRA_CORE_PATH, corePath)
                 .putExtra(EXTRA_ROM_PATH, romPath)
-                .apply { if (slot != null) putExtra(EXTRA_LOAD_SLOT, slot) }
+                .apply {
+                    if (slot != null) putExtra(EXTRA_LOAD_SLOT, slot)
+                    if (!patchPath.isNullOrBlank()) putExtra(EXTRA_PATCH_PATH, patchPath)
+                    if (!patchName.isNullOrBlank()) putExtra(EXTRA_PATCH_NAME, patchName)
+                    if (!patchFormat.isNullOrBlank()) putExtra(EXTRA_PATCH_FORMAT, patchFormat)
+                }
     }
 }

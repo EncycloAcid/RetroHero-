@@ -161,6 +161,11 @@ fun M3ExpressiveAppView(
     showPerfHud: Boolean = false,
     onSetRunAhead: (Int) -> Unit = {},
     onSetShowPerfHud: (Boolean) -> Unit = {},
+    patchesFor: (Game) -> List<com.retrohero.app.data.RomPatch> = { emptyList() },
+    onAttachPatch: (Game) -> Unit = {},
+    onPlayWithPatch: (Game, com.retrohero.app.data.RomPatch) -> Unit = { _, _ -> },
+    onTogglePatchSeparateSave: (Game, com.retrohero.app.data.RomPatch, Boolean) -> Unit = { _, _, _ -> },
+    onDeletePatch: (Game, com.retrohero.app.data.RomPatch) -> Unit = { _, _ -> },
     initialTab: Int = 0,
 ) {
     val cs = MaterialTheme.colorScheme
@@ -468,6 +473,18 @@ fun M3ExpressiveAppView(
                             detailGameId = null
                             del(game)
                         }
+                    },
+                    patches = patchesFor(game),
+                    onAttachPatch = { onAttachPatch(game) },
+                    onPlayWithPatch = { patch ->
+                        detailGameId = null
+                        onPlayWithPatch(game, patch)
+                    },
+                    onTogglePatchSeparateSave = { patch, sep ->
+                        onTogglePatchSeparateSave(game, patch, sep)
+                    },
+                    onDeletePatch = { patch ->
+                        onDeletePatch(game, patch)
                     },
                     allGames = games,
                     onOpenGame = { target -> detailGameId = target.id },

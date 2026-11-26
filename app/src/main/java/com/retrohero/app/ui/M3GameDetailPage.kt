@@ -39,6 +39,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CameraAlt
@@ -295,6 +296,11 @@ internal fun M3GameDetailPage(
     onUseScreenshotAsCover: (File) -> Unit = {},
     onClearCover: () -> Unit = {},
     onDelete: (() -> Unit)?,
+    patches: List<com.retrohero.app.data.RomPatch> = emptyList(),
+    onAttachPatch: () -> Unit = {},
+    onPlayWithPatch: (com.retrohero.app.data.RomPatch) -> Unit = {},
+    onTogglePatchSeparateSave: (com.retrohero.app.data.RomPatch, Boolean) -> Unit = { _, _ -> },
+    onDeletePatch: (com.retrohero.app.data.RomPatch) -> Unit = {},
     allGames: List<Game> = emptyList(),
     onOpenGame: (Game) -> Unit = {},
     onDismiss: () -> Unit,
@@ -582,6 +588,283 @@ internal fun M3GameDetailPage(
                                         style = MaterialTheme.typography.labelLarge.copy(fontSize = 12.5.sp),
                                         color = if (slot == AppPaths.AUTO_SLOT) cs.onPrimaryContainer else cs.onSecondaryContainer,
                                     )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2B. 1-TAP IN-MEMORY ROM SOFT-PATCHING (IPS / BPS / UPS / xDelta)
+            if (!game.isMultiDisc && game.system?.keepZipped != true) {
+                item(key = "detail_patches_section") {
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        if (patches.isEmpty()) {
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(22.dp))
+                                    .background(cs.surfaceContainerLow)
+                                    .clickable {
+                                        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                        onAttachPatch()
+                                    }
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Box(
+                                    Modifier
+                                        .size(36.dp)
+                                        .clip(CircleShape)
+                                        .background(cs.tertiaryContainer),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.AutoAwesome,
+                                        contentDescription = null,
+                                        tint = cs.onTertiaryContainer,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                                    Text(
+                                        text = "Soft-patch ROM (IPS · BPS · UPS · xDelta)",
+                                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold),
+                                        color = cs.onSurface,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Text(
+                                        text = "Attach fan translations or ROM hacks in memory — original ROM untouched",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = cs.onSurfaceVariant,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                                Row(
+                                    Modifier
+                                        .clip(CircleShape)
+                                        .background(cs.primaryContainer)
+                                        .padding(horizontal = 11.dp, vertical = 7.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.Add,
+                                        contentDescription = null,
+                                        tint = cs.onPrimaryContainer,
+                                        modifier = Modifier.size(15.dp),
+                                    )
+                                    Text(
+                                        text = "Attach",
+                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = cs.onPrimaryContainer,
+                                    )
+                                }
+                            }
+                        } else {
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        Text(
+                                            text = "Translations & ROM hacks",
+                                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                                            color = cs.onSurface,
+                                        )
+                                        Box(
+                                            Modifier
+                                                .clip(CircleShape)
+                                                .background(cs.tertiaryContainer)
+                                                .padding(horizontal = 8.dp, vertical = 2.dp),
+                                        ) {
+                                            Text(
+                                                text = "${patches.size}",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                                color = cs.onTertiaryContainer,
+                                            )
+                                        }
+                                    }
+                                    Text(
+                                        text = "Patched cleanly in memory on boot · Auto header alignment · Original ROM untouched",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = cs.onSurfaceVariant,
+                                    )
+                                }
+                                Spacer(Modifier.width(8.dp))
+                                Row(
+                                    Modifier
+                                        .clip(CircleShape)
+                                        .background(cs.primaryContainer)
+                                        .clickable {
+                                            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                            onAttachPatch()
+                                        }
+                                        .padding(horizontal = 12.dp, vertical = 7.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    Icon(
+                                        Icons.Rounded.Add,
+                                        contentDescription = null,
+                                        tint = cs.onPrimaryContainer,
+                                        modifier = Modifier.size(15.dp),
+                                    )
+                                    Text(
+                                        text = "Attach",
+                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                        color = cs.onPrimaryContainer,
+                                    )
+                                }
+                            }
+
+                            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                patches.forEachIndexed { idx, patch ->
+                                    Column(
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .clip(m3SegmentedShape(idx, patches.size))
+                                            .background(cs.surfaceContainerHigh)
+                                            .clickable {
+                                                view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                                onPlayWithPatch(patch)
+                                            }
+                                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        Row(
+                                            Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        ) {
+                                            Box(
+                                                Modifier
+                                                    .clip(RoundedCornerShape(10.dp))
+                                                    .background(cs.tertiaryContainer)
+                                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                            ) {
+                                                Text(
+                                                    text = patch.format.label.uppercase(),
+                                                    style = MaterialTheme.typography.labelSmall.copy(
+                                                        fontWeight = FontWeight.Black,
+                                                        fontSize = 10.sp,
+                                                    ),
+                                                    color = cs.onTertiaryContainer,
+                                                )
+                                            }
+                                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                                                Text(
+                                                    text = patch.name,
+                                                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
+                                                    color = cs.onSurface,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                )
+                                                Text(
+                                                    text = "${formatFileSizeShort(patch.size)} · Grouped under ${game.title}",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = cs.onSurfaceVariant,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                )
+                                            }
+                                            Row(
+                                                Modifier
+                                                    .clip(CircleShape)
+                                                    .background(cs.primary)
+                                                    .clickable {
+                                                        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                                        onPlayWithPatch(patch)
+                                                    }
+                                                    .padding(horizontal = 12.dp, vertical = 7.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                            ) {
+                                                Icon(
+                                                    Icons.Rounded.PlayArrow,
+                                                    contentDescription = null,
+                                                    tint = cs.onPrimary,
+                                                    modifier = Modifier.size(16.dp),
+                                                )
+                                                Text(
+                                                    text = "Play",
+                                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                                    color = cs.onPrimary,
+                                                )
+                                            }
+                                        }
+
+                                        Row(
+                                            Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                        ) {
+                                            Row(
+                                                Modifier
+                                                    .clip(CircleShape)
+                                                    .background(
+                                                        if (patch.separateSave) cs.secondaryContainer
+                                                        else cs.surfaceContainerHighest,
+                                                    )
+                                                    .clickable {
+                                                        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                                        onTogglePatchSeparateSave(patch, !patch.separateSave)
+                                                    }
+                                                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(5.dp),
+                                            ) {
+                                                Icon(
+                                                    Icons.Rounded.Save,
+                                                    contentDescription = null,
+                                                    tint = if (patch.separateSave) cs.onSecondaryContainer else cs.onSurfaceVariant,
+                                                    modifier = Modifier.size(13.dp),
+                                                )
+                                                Text(
+                                                    text = if (patch.separateSave) "Own save slot" else "Shares parent save",
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                                    color = if (patch.separateSave) cs.onSecondaryContainer else cs.onSurfaceVariant,
+                                                )
+                                            }
+                                            Row(
+                                                Modifier
+                                                    .clip(CircleShape)
+                                                    .background(cs.surfaceContainerHighest.copy(alpha = 0.7f))
+                                                    .clickable {
+                                                        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                                        onDeletePatch(patch)
+                                                    }
+                                                    .padding(horizontal = 10.dp, vertical = 5.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                            ) {
+                                                Icon(
+                                                    Icons.Rounded.DeleteOutline,
+                                                    contentDescription = "Remove patch",
+                                                    tint = cs.error,
+                                                    modifier = Modifier.size(14.dp),
+                                                )
+                                                Text(
+                                                    text = "Remove",
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                                    color = cs.error,
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }

@@ -139,6 +139,8 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
     var raSignInOpen by rememberSaveable { mutableStateOf(false) }
     var toastMessage by remember { mutableStateOf<AppViewModel.Message?>(null) }
     var engineVersion by remember { mutableIntStateOf(0) }
+    var patchesVersion by remember { mutableIntStateOf(0) }
+    var pendingPatchGame by remember { mutableStateOf<com.retrohero.app.data.Game?>(null) }
 
     LifecycleResumeEffect(Unit) {
         vm.refreshStats()
@@ -169,6 +171,15 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
     }
     val restorePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) vm.restore(uri)
+    }
+    val patchPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val target = pendingPatchGame
+        pendingPatchGame = null
+        if (uri != null && target != null) {
+            vm.attachPatch(target, uri) {
+                patchesVersion++
+            }
+        }
     }
     val skinPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isNotEmpty()) scope.launch {
@@ -310,6 +321,24 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
         showPerfHud = showPerfHud,
         onSetRunAhead = { f -> runAheadFrames = f; vm.settings.runAheadFrames = f },
         onSetShowPerfHud = { on -> showPerfHud = on; vm.settings.showPerfHud = on },
+        patchesFor = { g ->
+            @Suppress("UNUSED_EXPRESSION")
+            patchesVersion
+            vm.patchesFor(g)
+        },
+        onAttachPatch = { g ->
+            pendingPatchGame = g
+            patchPicker.launch(arrayOf("*/*"))
+        },
+        onPlayWithPatch = { g, patch -> vm.play(g, slot = null, patch = patch) },
+        onTogglePatchSeparateSave = { g, patch, sep ->
+            vm.setPatchSeparateSave(g, patch.id, sep)
+            patchesVersion++
+        },
+        onDeletePatch = { g, patch ->
+            vm.deletePatch(g, patch.id)
+            patchesVersion++
+        },
     )
 
     if (raSignInOpen) {

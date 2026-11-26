@@ -10,6 +10,12 @@ object NativeBridge {
 
     external fun loadCore(corePath: String, systemDir: String, saveDir: String): Boolean
     external fun loadGame(romPath: String, sramPath: String): Boolean
+    external fun loadGameMemory(
+        virtualPath: String,
+        romBytes: ByteArray,
+        sramPath: String,
+        scratchDir: String,
+    ): Boolean
     external fun start()
     external fun setPaused(paused: Boolean)
     external fun setFastForward(enabled: Boolean, speed: Float)
