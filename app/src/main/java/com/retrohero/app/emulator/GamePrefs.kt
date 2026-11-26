@@ -153,6 +153,22 @@ class GamePrefs(context: Context, sharpDefault: Boolean) {
         if (ms == null || ms <= 0L) remove(key) else putLong(key, ms)
     }
 
+    fun nostalgiaConfig(): NostalgiaConfig = NostalgiaConfig(
+        enabled = prefs.getBoolean("nostalgia_enabled", false),
+        tactileStartup = prefs.getBoolean("nostalgia_startup", true),
+        crtWarmup = prefs.getBoolean("nostalgia_warmup", true),
+        displayAging = prefs.getFloat("nostalgia_aging", 0.25f).coerceIn(0f, 1f),
+        batteryLedDimming = prefs.getBoolean("nostalgia_battery_led", true),
+    )
+
+    fun setNostalgiaConfig(cfg: NostalgiaConfig) = prefs.edit {
+        putBoolean("nostalgia_enabled", cfg.enabled)
+        putBoolean("nostalgia_startup", cfg.tactileStartup)
+        putBoolean("nostalgia_warmup", cfg.crtWarmup)
+        putFloat("nostalgia_aging", cfg.displayAging.coerceIn(0f, 1f))
+        putBoolean("nostalgia_battery_led", cfg.batteryLedDimming)
+    }
+
     companion object {
         const val FILE = "game_prefs"
     }

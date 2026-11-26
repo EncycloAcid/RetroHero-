@@ -311,6 +311,11 @@ class EmulatorActivity : ComponentActivity() {
     private var practiceGhostMask by mutableIntStateOf(0)
     private var practiceRunStartedAtMs: Long = 0L
     private val practiceCurrentGhost = mutableListOf<GhostSample>()
+    private var nostalgiaConfig by mutableStateOf(NostalgiaConfig())
+    private var nostalgiaSheetOpen by mutableStateOf(false)
+    private var warmupProgress by mutableFloatStateOf(1f)
+    private var batteryPercent by mutableIntStateOf(100)
+    private var batteryPulsePhase by mutableFloatStateOf(0f)
     private var browserOpen by mutableStateOf(false)
     private var browserLastUrl by mutableStateOf<String?>(null)
     private var browserBookmarkedUrl by mutableStateOf<String?>(null)
@@ -442,6 +447,8 @@ class EmulatorActivity : ComponentActivity() {
         cheats = Cheats.load(paths.cheatsFile(game))
         pocketNotes = runCatching { paths.notesFile(game).takeIf { it.exists() }?.readText().orEmpty() }.getOrDefault("")
         pinnedGuideNote = gamePrefs.pinnedNote(game.id)
+        nostalgiaConfig = gamePrefs.nostalgiaConfig()
+        batteryPercent = readBatteryPercent()
         browserBookmarkedUrl = runCatching {
             paths.browserBookmarkFile(game).takeIf { it.exists() }?.readText()?.trim()?.takeIf { it.isNotBlank() }
         }.getOrNull()
@@ -1432,6 +1439,52 @@ class EmulatorActivity : ComponentActivity() {
         toast("Practice stats & PB reset")
     }
 
+    private fun readBatteryPercent(): Int = runCatching {
+        val bm = getSystemService(android.content.Context.BATTERY_SERVICE) as? android.os.BatteryManager
+        val pct = bm?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: 100
+        if (pct in 0..100) pct else 100
+    }.getOrDefault(100)
+
+    private fun updateNostalgiaConfig(cfg: NostalgiaConfig) {
+        nostalgiaConfig = cfg
+        gamePrefs.setNostalgiaConfig(cfg)
+    }
+
+    private fun triggerWarmupSequence(playChime: Boolean) {
+        if (playChime) {
+            NostalgiaAudioSynth.playAsync(NostalgiaAudioSynth.synthesizeBootChime(system.id))
+        }
+        if (nostalgiaConfig.crtWarmup) {
+            lifecycleScope.launch {
+                val start = System.currentTimeMillis()
+                val durationMs = 820L
+                warmupProgress = 0f
+                while (true) {
+                    val t = ((System.currentTimeMillis() - start).toFloat() / durationMs).coerceIn(0f, 1f)
+                    warmupProgress = t
+                    if (t >= 1f) break
+                    delay(16L)
+                }
+            }
+        } else {
+            warmupProgress = 1f
+        }
+    }
+
+    private fun performCartridgeBlow() {
+        NostalgiaAudioSynth.playAsync(NostalgiaAudioSynth.synthesizeCartridgeBlow())
+        if (settings.haptics) {
+            window.decorView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+        }
+        setMenu(false)
+        lifecycleScope.launch {
+            delay(420L)
+            NativeBridge.reset()
+            triggerWarmupSequence(playChime = false)
+            toast("Cartridge blown & reseated!")
+        }
+    }
+
     private fun toggleLiveTranslate(enable: Boolean) {
         liveTranslateOn = enable
         liveTranslateJob?.cancel()
@@ -1746,6 +1799,33 @@ class EmulatorActivity : ComponentActivity() {
                 }
             }
 
+            val nostalgiaLedOverride = if (nostalgiaConfig.enabled && nostalgiaConfig.batteryLedDimming && shellStyle != null) {
+                NostalgiaMath.batteryLedColor(batteryPercent, shellStyle.ledColor, batteryPulsePhase)
+            } else null
+
+            LaunchedEffect(phase) {
+                if (phase is Phase.Running && nostalgiaConfig.enabled) {
+                    triggerWarmupSequence(playChime = nostalgiaConfig.tactileStartup)
+                }
+            }
+
+            LaunchedEffect(phase, nostalgiaConfig.enabled, nostalgiaConfig.batteryLedDimming) {
+                if (phase !is Phase.Running || !nostalgiaConfig.enabled || !nostalgiaConfig.batteryLedDimming) {
+                    return@LaunchedEffect
+                }
+                while (true) {
+                    batteryPercent = readBatteryPercent()
+                    if (batteryPercent <= 15) {
+                        repeat(30) {
+                            batteryPulsePhase = (batteryPulsePhase + 0.08f) % 1f
+                            delay(100L)
+                        }
+                    } else {
+                        delay(15_000L)
+                    }
+                }
+            }
+
             if (skin != null && deltaRep != null) {
                 val deltaLayout = remember(containerW, containerH, deltaRep, landscape) {
                     computeDeltaLayout(containerW, containerH, deltaRep, landscape)
@@ -1783,6 +1863,7 @@ class EmulatorActivity : ComponentActivity() {
                     fastForwardActive = fastForwardToggle || fastForwardHeld,
                     sustainedCount = sustainedCount,
                     ambilight = ambilightState,
+                    ledColorOverride = nostalgiaLedOverride,
                     gameContent = {
                         Box(Modifier.fillMaxSize().padding(horizontal = dsLandscapeInset), contentAlignment = Alignment.Center) {
                             GameView()
@@ -1819,6 +1900,7 @@ class EmulatorActivity : ComponentActivity() {
                     sustainedCount = sustainedCount,
                     ambilight = ambilightState,
                     padHeightFraction = if (isDs) DsDualScreen.PORTRAIT_PAD_FRACTION else 0.47f,
+                    ledColorOverride = nostalgiaLedOverride,
                     gameContent = { GameView() },
                     padContent = {
                         if (phase is Phase.Running) {
@@ -2014,6 +2096,17 @@ class EmulatorActivity : ComponentActivity() {
                     onResetStats = ::resetPracticeStats,
                     onStopLoop = ::stopPracticeLoop,
                     onDismiss = { practiceSheetOpen = false },
+                )
+            }
+            if (nostalgiaSheetOpen && !menuOpen) {
+                NostalgiaModeSheet(
+                    config = nostalgiaConfig,
+                    systemId = system.id,
+                    batteryPercent = batteryPercent,
+                    onUpdate = ::updateNostalgiaConfig,
+                    onPreviewChime = { NostalgiaAudioSynth.playAsync(NostalgiaAudioSynth.synthesizeBootChime(system.id)) },
+                    onBlowCartridge = ::performCartridgeBlow,
+                    onDismiss = { nostalgiaSheetOpen = false },
                 )
             }
             LaunchedEffect(phase, practiceState.active, menuOpen, pocketGuideOpen, practiceSheetOpen, browserOpen) {
@@ -2328,6 +2421,20 @@ class EmulatorActivity : ComponentActivity() {
                             }
                         },
                 )
+                if (nostalgiaConfig.enabled && nostalgiaConfig.displayAging > 0.01f) {
+                    NostalgiaAgingOverlay(
+                        aging = nostalgiaConfig.displayAging,
+                        isHandheld = NostalgiaMath.isHandheld(system.id),
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                if (warmupProgress < 1f) {
+                    NostalgiaWarmupOverlay(
+                        progress = warmupProgress,
+                        isCrt = NostalgiaMath.isCrtConsole(system.id),
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
                 if (liveTranslateOn && !menuOpen && !pocketGuideOpen && !browserOpen && translateState is TranslateState.Idle) {
                     LiveTranslateOverlay(
                         blocks = liveTranslateBlocks,
@@ -3007,6 +3114,50 @@ class EmulatorActivity : ComponentActivity() {
                                 .padding(horizontal = 10.dp, vertical = 5.dp),
                         )
                     }
+                }
+            }
+
+            // Hardware Nostalgia Mode & Blow Cartridge
+            Surface(
+                onClick = {
+                    setMenu(false)
+                    nostalgiaSheetOpen = true
+                },
+                shape = RoundedCornerShape(18.dp),
+                color = if (nostalgiaConfig.enabled) cs.tertiaryContainer else cs.surfaceContainerHigh,
+                contentColor = if (nostalgiaConfig.enabled) cs.onTertiaryContainer else cs.onSurface,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Icon(Icons.Rounded.AutoAwesome, null, Modifier.size(20.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = if (nostalgiaConfig.enabled) "Hardware Nostalgia Mode · ON" else "Hardware Nostalgia & Blow Cart",
+                            style = MaterialTheme.typography.titleSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = "Cartridge boot chimes, CRT/LCD aging & battery LED dimming",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = (if (nostalgiaConfig.enabled) cs.onTertiaryContainer else cs.onSurfaceVariant).copy(alpha = 0.82f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    Text(
+                        text = "Blow",
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(cs.primary.copy(alpha = 0.22f))
+                            .clickable { performCartridgeBlow() }
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                    )
                 }
             }
 

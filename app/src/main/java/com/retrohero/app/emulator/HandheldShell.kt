@@ -204,12 +204,14 @@ fun HandheldShell(
     sustainedCount: Int = 0,
     ambilight: AmbilightState = AmbilightState.Off,
     padHeightFraction: Float = 0.47f,
+    ledColorOverride: Color? = null,
     modifier: Modifier = Modifier,
     gameContent: @Composable () -> Unit,
     padContent: @Composable () -> Unit,
 ) {
     val activeLed = when {
         fastForwardActive || sustainedCount > 0 -> Color(0xFFFF6A1A)
+        ledColorOverride != null -> ledColorOverride
         else -> style.ledColor
     }
     val statusText = when {
@@ -527,12 +529,14 @@ fun LandscapeConsoleShell(
     fastForwardActive: Boolean = false,
     sustainedCount: Int = 0,
     ambilight: AmbilightState = AmbilightState.Off,
+    ledColorOverride: Color? = null,
     modifier: Modifier = Modifier,
     gameContent: @Composable () -> Unit,
     padContent: @Composable () -> Unit,
 ) {
     val activeLed = when {
         fastForwardActive || sustainedCount > 0 -> Color(0xFFFF6A1A)
+        ledColorOverride != null -> ledColorOverride
         else -> style.ledColor
     }
     val pillBorder = if (ambilight.isVisiblyGlowing) {
