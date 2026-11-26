@@ -19,6 +19,8 @@ class AppPaths(context: Context) {
     val covers = File(context.filesDir, "covers")
     val cheats = File(context.filesDir, "cheats")
     val playtime = File(context.filesDir, "playtime")
+    /** Attached per-game ROM soft-patches (.ips / .bps / .ups / .xdelta) grouped under parent games. */
+    val patches = File(context.filesDir, "patches")
     /** Imported look files. */
     val looks = File(context.filesDir, "looks")
     /** Imported .deltaskin bundles (extracted one per subfolder). */
@@ -71,6 +73,7 @@ class AppPaths(context: Context) {
     fun coverFile(game: Game): File = File(File(covers, game.systemId), "${game.baseName}.png")
     fun cheatsFile(game: Game): File = File(File(cheats, game.systemId), "${game.baseName}.json")
     fun playtimeFile(game: Game): File = File(File(playtime, game.systemId), "${game.baseName}.json")
+    fun patchesDir(game: Game): File = File(File(patches, game.systemId), game.baseName)
 
     fun coreOptionsFile(coreId: String): File = File(coreOptions, "$coreId.opt")
 

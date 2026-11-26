@@ -266,6 +266,78 @@ bool Frontend::loadGame(const std::string &romPath, const std::string &sramPath)
     return true;
 }
 
+bool Frontend::loadGameFromMemory(const std::string &virtualPath, const uint8_t *data, size_t size,
+                                  const std::string &sramPath, const std::string &scratchDir) {
+    std::lock_guard<std::mutex> lk(coreMutex_);
+    if (!coreInitialized_) {
+        setError("No core loaded");
+        return false;
+    }
+    if (!data || size == 0) {
+        setError("Soft-patched ROM buffer is empty");
+        return false;
+    }
+    retro_system_info sys{};
+    core_.get_system_info(&sys);
+
+    playlistPaths_.clear();
+    ephemeralRomPath_.clear();
+
+    retro_game_info game{};
+    if (!sys.need_fullpath) {
+        // Pure RAM-only soft-patch: zero patched ROM bytes ever hit storage.
+        romPath_ = virtualPath;
+        romData_.assign(data, data + size);
+        game.path = romPath_.c_str();
+        game.data = romData_.data();
+        game.size = romData_.size();
+        LOGI("Loading soft-patched ROM purely in memory (%zu bytes, virtual=%s)",
+             size, romPath_.c_str());
+    } else {
+        // Some cores (e.g. mGBA/melonDS/SwanStation) require a file path via need_fullpath.
+        // Write to an ephemeral private cache path that is unlinked automatically on shutdown(),
+        // never touching or duplicating the user's original ROM.
+        std::string fileName = baseFileName(virtualPath);
+        if (fileName.empty()) fileName = "softpatch.rom";
+        std::string baseDir = scratchDir.empty() ? saveDir_ : scratchDir;
+        ephemeralRomPath_ = baseDir + "/_softpatch_" + fileName;
+        if (!writeFile(ephemeralRomPath_, data, size)) {
+            setError("Could not stage soft-patched ROM for core");
+            ephemeralRomPath_.clear();
+            return false;
+        }
+        romPath_ = ephemeralRomPath_;
+        romData_.clear();
+        game.path = romPath_.c_str();
+        LOGI("Staged ephemeral soft-patched ROM for need_fullpath core (%zu bytes)", size);
+    }
+
+    if (!core_.load_game(&game)) {
+        if (!ephemeralRomPath_.empty()) {
+            std::remove(ephemeralRomPath_.c_str());
+            ephemeralRomPath_.clear();
+        }
+        setError("The core could not load this patched ROM. Check that the patch matches the base ROM.");
+        return false;
+    }
+    gameLoaded_ = true;
+
+    retro_system_av_info av{};
+    core_.get_system_av_info(&av);
+    updateAvInfo(av);
+
+    if (!sramPath.empty()) {
+        size_t sramSize = core_.get_memory_size(RETRO_MEMORY_SAVE_RAM);
+        void *mem = core_.get_memory_data(RETRO_MEMORY_SAVE_RAM);
+        std::vector<uint8_t> sram;
+        if (sramSize > 0 && mem && readFile(sramPath, sram)) {
+            memcpy(mem, sram.data(), sram.size() < sramSize ? sram.size() : sramSize);
+            LOGI("Loaded %zu bytes of save RAM", sram.size());
+        }
+    }
+    return true;
+}
+
 void Frontend::updateAvInfo(const retro_system_av_info &av) {
     if (av.timing.fps > 1.0) fps_ = av.timing.fps;
     if (av.timing.sample_rate > 1.0) audio_.setInputRate(av.timing.sample_rate);
@@ -696,6 +768,10 @@ void Frontend::shutdown(const std::string &sramPath) {
     std::lock_guard<std::mutex> lk(coreMutex_);
     if (gameLoaded_) core_.unload_game();
     gameLoaded_ = false;
+    if (!ephemeralRomPath_.empty()) {
+        std::remove(ephemeralRomPath_.c_str());
+        ephemeralRomPath_.clear();
+    }
     if (coreInitialized_) core_.deinit();
     coreInitialized_ = false;
     // The core library is intentionally not dlclose()d: many cores do not

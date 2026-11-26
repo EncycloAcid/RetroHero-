@@ -278,7 +278,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     sealed interface LaunchState {
-        data class NeedsCore(val game: Game, val core: CoreInfo, val slot: Int? = null) : LaunchState
+        data class NeedsCore(
+            val game: Game,
+            val core: CoreInfo,
+            val slot: Int? = null,
+            val patch: com.retrohero.app.data.RomPatch? = null,
+        ) : LaunchState
         data class Downloading(val game: Game, val core: CoreInfo) : LaunchState
         data class Preparing(val game: Game, val file: String) : LaunchState
         data class Error(val message: String) : LaunchState
@@ -513,11 +518,44 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         say("Using ${emulator.name} for ${system.shortName}")
     }
 
-    /** Starts [game]; with [slot] or [statePath], resumes from that save state instead of the auto-save. */
-    fun play(game: Game, slot: Int? = null, statePath: String? = null, challengeTitle: String? = null) {
+    /** Attached ROM soft-patches (.ips / .bps / .ups / .xdelta) grouped under [game]. */
+    fun patchesFor(game: Game): List<com.retrohero.app.data.RomPatch> = app.patches.list(game)
+
+    fun attachPatch(game: Game, uri: Uri, onDone: (Result<com.retrohero.app.data.RomPatch>) -> Unit) {
+        viewModelScope.launch {
+            val res = withContext(Dispatchers.IO) {
+                runCatching { app.patches.attach(app, game, uri) }
+            }
+            res.onSuccess { p ->
+                say("Attached ${p.name} (${p.format.label})")
+            }.onFailure { err ->
+                say(err.message ?: "Couldn't attach patch file")
+            }
+            onDone(res)
+        }
+    }
+
+    fun deletePatch(game: Game, patchId: String) {
+        app.patches.delete(game, patchId)
+        say("Patch removed")
+    }
+
+    fun setPatchSeparateSave(game: Game, patchId: String, separate: Boolean) {
+        app.patches.setSeparateSave(game, patchId, separate)
+        say(if (separate) "Patch uses its own save slot" else "Patch shares parent game save")
+    }
+
+    /** Starts [game]; with [slot] or [statePath], resumes from that save state; with [patch], soft-patches in memory on boot. */
+    fun play(
+        game: Game,
+        slot: Int? = null,
+        statePath: String? = null,
+        challengeTitle: String? = null,
+        patch: com.retrohero.app.data.RomPatch? = null,
+    ) {
         val system = game.system ?: return
-        val external = selectedExternalEmulator(game)
-        if (external != null && statePath == null) {
+        val external = if (patch == null && statePath == null) selectedExternalEmulator(game) else null
+        if (external != null) {
             val intent = com.retrohero.app.data.ExternalEmulators.launchIntent(app, external, game)
             if (intent != null) {
                 settings.markPlayed(game.id)
@@ -534,8 +572,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             )
             return
         }
-        if (app.cores.isInstalled(core.id)) prepareAndLaunch(game, core, slot, statePath, challengeTitle)
-        else _launch.value = LaunchState.NeedsCore(game, core, slot)
+        if (app.cores.isInstalled(core.id)) prepareAndLaunch(game, core, slot, statePath, challengeTitle, patch)
+        else _launch.value = LaunchState.NeedsCore(game, core, slot, patch)
     }
 
     /** Save-state slots that exist for [game], newest first: slot to last-modified time. */
@@ -559,7 +597,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val error = app.cores.download(state.core.id)
             if (error != null) _launch.value = LaunchState.Error("Couldn't download ${state.core.displayName}: $error")
-            else prepareAndLaunch(state.game, state.core, state.slot)
+            else prepareAndLaunch(state.game, state.core, state.slot, patch = state.patch)
         }
     }
 
@@ -573,8 +611,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         slot: Int? = null,
         statePath: String? = null,
         challengeTitle: String? = null,
+        patch: com.retrohero.app.data.RomPatch? = null,
     ) {
-        _launch.value = LaunchState.Preparing(game, game.fileName)
+        _launch.value = LaunchState.Preparing(game, patch?.name ?: game.fileName)
         viewModelScope.launch {
             try {
                 val rom = withContext(Dispatchers.IO) {
@@ -585,10 +624,28 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 } else {
                     (app.cores.coreFile(core.id) ?: error("Core not installed")).absolutePath
                 }
+                val launchGame = if (patch != null && patch.separateSave) {
+                    com.retrohero.app.data.RomPatch.saveScopedGame(game, patch.id)
+                } else {
+                    game
+                }
+                val patchFile = patch?.let { app.patches.patchFile(game, it) }
                 settings.markPlayed(game.id)
                 _launch.value = null
                 _launchIntents.send(
-                    EmulatorActivity.intent(app, game, core.id, corePathStr, rom.absolutePath, slot, statePath, challengeTitle),
+                    EmulatorActivity.intent(
+                        context = app,
+                        game = launchGame,
+                        coreId = core.id,
+                        corePath = corePathStr,
+                        romPath = rom.absolutePath,
+                        slot = slot,
+                        statePath = statePath,
+                        challengeTitle = challengeTitle,
+                        patchPath = patchFile?.absolutePath,
+                        patchName = patch?.name,
+                        patchFormat = patch?.format?.label,
+                    ),
                 )
             } catch (e: Exception) {
                 _launch.value = LaunchState.Error(e.message ?: "Couldn't open this game.")

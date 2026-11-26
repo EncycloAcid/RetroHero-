@@ -65,6 +65,8 @@ public:
     bool loadCore(const std::string &corePath, const std::string &systemDir,
                   const std::string &saveDir);
     bool loadGame(const std::string &romPath, const std::string &sramPath);
+    bool loadGameFromMemory(const std::string &virtualPath, const uint8_t *data, size_t size,
+                            const std::string &sramPath, const std::string &scratchDir);
     void start();
     void setPaused(bool paused);
     void setFastForward(bool enabled, float speed);
@@ -145,6 +147,7 @@ private:
     bool gameLoaded_ = false;
     std::vector<uint8_t> romData_;
     std::string romPath_;
+    std::string ephemeralRomPath_;
     std::vector<std::string> playlistPaths_;
     unsigned initialDiscIndex_ = 0;
 

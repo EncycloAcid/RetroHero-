@@ -33,6 +33,21 @@ JNIEXPORT jboolean JNICALL JNI_FN(loadGame)(JNIEnv *env, jobject, jstring rom, j
     return Frontend::get().loadGame(str(env, rom), str(env, sram));
 }
 
+JNIEXPORT jboolean JNICALL JNI_FN(loadGameMemory)(JNIEnv *env, jobject, jstring virtualPath,
+                                                  jbyteArray romBytes, jstring sram,
+                                                  jstring scratchDir) {
+    if (!romBytes) return JNI_FALSE;
+    jsize len = env->GetArrayLength(romBytes);
+    if (len <= 0) return JNI_FALSE;
+    jbyte *ptr = env->GetByteArrayElements(romBytes, nullptr);
+    if (!ptr) return JNI_FALSE;
+    bool ok = Frontend::get().loadGameFromMemory(
+        str(env, virtualPath), reinterpret_cast<const uint8_t *>(ptr), static_cast<size_t>(len),
+        str(env, sram), str(env, scratchDir));
+    env->ReleaseByteArrayElements(romBytes, ptr, JNI_ABORT);
+    return ok ? JNI_TRUE : JNI_FALSE;
+}
+
 JNIEXPORT void JNICALL JNI_FN(start)(JNIEnv *, jobject) { Frontend::get().start(); }
 
 JNIEXPORT void JNICALL JNI_FN(setPaused)(JNIEnv *, jobject, jboolean paused) {
