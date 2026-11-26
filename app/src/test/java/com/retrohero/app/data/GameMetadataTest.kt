@@ -186,9 +186,64 @@ class GameMetadataTest {
         assertTrue("SotN ADVENTURE >= 0.90", sotn["ADVENTURE"]!! >= 0.90f)
         assertTrue("SotN RPG >= 0.80", sotn["RPG"]!! >= 0.80f)
 
-        // Verify schema v2 caches are invalidated by v3
-        val staleV2 = JSONObject(GameDossier.localFallback(Game("id1", "Super Mario Bros. (USA).nes", "nes", "tree", "doc", 40976L)).toJson().toString())
-            .put("schemaVersion", 2)
-        assertNull("Stale v2 cache should be invalidated by v3", GameDossier.fromJson(staleV2))
+        // Verify schema v2 & v3 caches are invalidated by v4
+        val baseJson = GameDossier.localFallback(Game("id1", "Super Mario Bros. (USA).nes", "nes", "tree", "doc", 40976L)).toJson().toString()
+        assertNull("Stale v2 cache should be invalidated", GameDossier.fromJson(JSONObject(baseJson).put("schemaVersion", 2)))
+        assertNull("Stale v3 cache should be invalidated by v4", GameDossier.fromJson(JSONObject(baseJson).put("schemaVersion", 3)))
+    }
+
+    @Test
+    fun resolvesPrequelsSequelsAndMatchesOwnedLibraryGames() {
+        // 1. Curated franchise timeline: Super Mario Bros. (1985)
+        val smb = GameSeries.resolve("Super Mario Bros. (USA)", "nes")
+        assertEquals("Super Mario", smb.seriesName)
+        assertTrue("Expected Mario Bros. as prequel", smb.entries.any { it.title == "Mario Bros." && it.relation == "Prequel" })
+        assertTrue("Expected Super Mario Bros. 2 as sequel", smb.entries.any { it.title == "Super Mario Bros. 2" && it.relation == "Sequel" })
+        assertTrue("Expected Super Mario Bros. 3 as sequel", smb.entries.any { it.title == "Super Mario Bros. 3" && it.relation == "Sequel" })
+
+        // 2. Curated franchise with subtitle alias: Ocarina of Time
+        val oot = GameSeries.resolve("The Legend of Zelda - Ocarina of Time (USA)", "n64")
+        assertEquals("The Legend of Zelda", oot.seriesName)
+        assertTrue("Expected A Link to the Past as prequel", oot.entries.any { it.title.contains("A Link to the Past") && it.relation == "Prequel" })
+        assertTrue("Expected Majora's Mask as sequel", oot.entries.any { it.title.contains("Majora's Mask") && it.relation == "Sequel" })
+
+        // 3. Wikipedia infobox fallback for non-curated series
+        val wiki = GameSeries.resolve(
+            gameTitle = "Banjo-Tooie",
+            systemId = "n64",
+            wikiSeries = "Banjo-Kazooie",
+            wikiPrecededBy = "Banjo-Kazooie",
+            wikiFollowedBy = "Banjo-Kazooie: Grunty's Revenge",
+        )
+        assertEquals("Banjo-Kazooie", wiki.seriesName)
+        assertEquals(2, wiki.entries.size)
+        assertEquals("Prequel", wiki.entries[0].relation)
+        assertEquals("Sequel", wiki.entries[1].relation)
+
+        // 4. Library cross-matching + automatic numbered sequel discovery
+        val g1 = Game("id1", "Super Mario Bros. (USA).nes", "nes", "t", "d1", 40976L)
+        val g2 = Game("id2", "Super Mario Bros. 3 (USA).nes", "nes", "t", "d2", 393232L)
+        val aw1 = Game("aw1", "Advance Wars (USA).gba", "gba", "t", "d3", 8388608L)
+        val aw2 = Game("aw2", "Advance Wars 2 (USA).gba", "gba", "t", "d4", 8388608L)
+
+        val smbPaired = GameSeries.resolveWithLibrary(g1, smb.entries, listOf(g1, g2, aw1, aw2))
+        val ownedSmb3 = smbPaired.firstOrNull { it.first.title == "Super Mario Bros. 3" }
+        assertNotNull("Super Mario Bros. 3 should match owned library ROM", ownedSmb3?.second)
+        assertEquals("id2", ownedSmb3!!.second!!.id)
+
+        val awPaired = GameSeries.resolveWithLibrary(aw1, emptyList(), listOf(g1, g2, aw1, aw2))
+        assertEquals(1, awPaired.size)
+        assertEquals("Sequel", awPaired[0].first.relation)
+        assertEquals("aw2", awPaired[0].second?.id)
+
+        // 5. Built-in HeroBox-16 launch titles link to each other & round-trip JSON cleanly
+        val hb = Game("hb1", "Starlight Vanguard.hbx", "herobox16", "local", "hb1", 64L)
+        val hbDossier = GameDossier.localFallback(hb)
+        assertEquals("HeroBox-16 Originals", hbDossier.seriesName)
+        assertEquals(2, hbDossier.relatedGames.size)
+        val rt = GameDossier.fromJson(hbDossier.toJson())
+        assertNotNull(rt)
+        assertEquals("HeroBox-16 Originals", rt!!.seriesName)
+        assertEquals(2, rt.relatedGames.size)
     }
 }

@@ -469,6 +469,8 @@ fun M3ExpressiveAppView(
                             del(game)
                         }
                     },
+                    allGames = games,
+                    onOpenGame = { target -> detailGameId = target.id },
                     onDismiss = { detailGameId = null },
                 )
             }
