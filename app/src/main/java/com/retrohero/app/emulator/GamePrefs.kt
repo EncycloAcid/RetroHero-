@@ -137,6 +137,14 @@ class GamePrefs(context: Context, sharpDefault: Boolean) {
     fun dsSwapped(gameId: String): Boolean = prefs.getBoolean("ds_swap_${gameId.hashCode()}", false)
     fun setDsSwapped(gameId: String, swapped: Boolean) = prefs.edit { putBoolean("ds_swap_${gameId.hashCode()}", swapped) }
 
+    fun pinnedNote(gameId: String): String? =
+        prefs.getString("guide_pin_${gameId.hashCode()}", null)?.takeIf { it.isNotBlank() }
+
+    fun setPinnedNote(gameId: String, note: String?) = prefs.edit {
+        val key = "guide_pin_${gameId.hashCode()}"
+        if (note.isNullOrBlank()) remove(key) else putString(key, note.trim())
+    }
+
     companion object {
         const val FILE = "game_prefs"
     }

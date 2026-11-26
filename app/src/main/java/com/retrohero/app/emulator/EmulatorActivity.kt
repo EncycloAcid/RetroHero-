@@ -304,6 +304,7 @@ class EmulatorActivity : ComponentActivity() {
     private var liveTranslateJob: kotlinx.coroutines.Job? = null
     private var pocketGuideOpen by mutableStateOf(false)
     private var pocketNotes by mutableStateOf("")
+    private var pinnedGuideNote by mutableStateOf<String?>(null)
     private var browserOpen by mutableStateOf(false)
     private var browserLastUrl by mutableStateOf<String?>(null)
     private var browserBookmarkedUrl by mutableStateOf<String?>(null)
@@ -434,6 +435,7 @@ class EmulatorActivity : ComponentActivity() {
         )
         cheats = Cheats.load(paths.cheatsFile(game))
         pocketNotes = runCatching { paths.notesFile(game).takeIf { it.exists() }?.readText().orEmpty() }.getOrDefault("")
+        pinnedGuideNote = gamePrefs.pinnedNote(game.id)
         browserBookmarkedUrl = runCatching {
             paths.browserBookmarkFile(game).takeIf { it.exists() }?.readText()?.trim()?.takeIf { it.isNotBlank() }
         }.getOrNull()
@@ -1346,6 +1348,13 @@ class EmulatorActivity : ComponentActivity() {
         }
     }
 
+    private fun updatePinnedGuideNote(note: String?) {
+        val clean = note?.trim()?.takeIf { it.isNotBlank() }
+        pinnedGuideNote = clean
+        gamePrefs.setPinnedNote(game.id, clean)
+        if (clean != null) toast("Pinned to screen")
+    }
+
     private fun toggleLiveTranslate(enable: Boolean) {
         liveTranslateOn = enable
         liveTranslateJob?.cancel()
@@ -1876,6 +1885,14 @@ class EmulatorActivity : ComponentActivity() {
                             onInstantRetry = ::retryActiveChallenge,
                         )
                     }
+                    val pinned = pinnedGuideNote
+                    if (!pinned.isNullOrBlank()) {
+                        PinnedNoteBanner(
+                            note = pinned,
+                            onOpenGuide = ::openPocketGuide,
+                            onUnpin = { updatePinnedGuideNote(null) },
+                        )
+                    }
                     if (liveTranslateOn) {
                         Surface(
                             shape = RoundedCornerShape(999.dp),
@@ -1892,20 +1909,30 @@ class EmulatorActivity : ComponentActivity() {
                     }
                 }
             }
-            if (menuOpen) PauseMenu()
-            if (pocketGuideOpen) {
-                val manual = remember(game.id) { PocketGuides.forGame(game) }
-                PocketGuideDrawer(
-                    game = game,
-                    manual = manual,
-                    initialNotes = pocketNotes,
-                    raData = raSessionGame,
-                    raHardcore = raSessionHardcore,
-                    onSaveNotes = ::savePocketNotes,
-                    onOpenWebBrowser = ::openInGameBrowser,
-                    onDismiss = ::closePocketGuide,
+            if (phase is Phase.Running && !menuOpen && !pocketGuideOpen && !editingPad && !browserOpen && translateState is TranslateState.Idle) {
+                GuideEdgeHandle(
+                    onOpen = ::openPocketGuide,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .safeDrawingPadding()
+                        .padding(top = if (isDs || discCount > 1) 54.dp else 18.dp),
                 )
             }
+            if (menuOpen) PauseMenu()
+            val manual = remember(game.id) { PocketGuides.forGame(game) }
+            PocketGuideDrawer(
+                visible = pocketGuideOpen,
+                game = game,
+                manual = manual,
+                initialNotes = pocketNotes,
+                pinnedNote = pinnedGuideNote,
+                raData = raSessionGame,
+                raHardcore = raSessionHardcore,
+                onSaveNotes = ::savePocketNotes,
+                onPinNote = ::updatePinnedGuideNote,
+                onOpenWebBrowser = ::openInGameBrowser,
+                onDismiss = ::closePocketGuide,
+            )
             if (browserOpen) {
                 val startUrl = browserLastUrl
                     ?: browserBookmarkedUrl
