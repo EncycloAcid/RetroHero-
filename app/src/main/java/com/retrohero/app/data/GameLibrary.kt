@@ -30,11 +30,14 @@ class GameLibrary(private val context: Context, private val paths: AppPaths) {
     fun find(id: String): Game? = _games.value.firstOrNull { it.id == id }
 
     private fun load(): List<Game> =
-        if (paths.library.exists()) runCatching { Game.listFromJson(paths.library.readText()) }.getOrDefault(emptyList())
-        else emptyList()
+        if (paths.library.exists()) {
+            runCatching { MultiDisc.collapseMultiDiscGames(Game.listFromJson(paths.library.readText())) }
+                .getOrDefault(emptyList())
+        } else emptyList()
 
     private fun publish(list: List<Game>) {
-        val sorted = list.distinctBy { it.id }.sortedBy { it.title.lowercase() }
+        val grouped = MultiDisc.collapseMultiDiscGames(list)
+        val sorted = grouped.distinctBy { it.id }.sortedBy { it.title.lowercase() }
         paths.library.writeText(Game.listToJson(sorted))
         _games.value = sorted
     }
@@ -63,12 +66,16 @@ class GameLibrary(private val context: Context, private val paths: AppPaths) {
         val system = classify(file.name, file.length(), emptyList()) { file.inputStream() } ?: return@withContext null
         val game = localGame(file, system)
         publish(_games.value.filter { it.id != game.id } + game)
-        game
+        _games.value.firstOrNull { it.id == game.id || it.discs.any { d -> d.id == game.id } } ?: game
     }
 
     suspend fun deleteLocal(game: Game) = withContext(Dispatchers.IO) {
         if (!game.isLocal) return@withContext
-        File(Uri.parse(game.id).path ?: return@withContext).delete()
+        if (game.isMultiDisc) {
+            game.discs.forEach { d -> Uri.parse(d.id).path?.let { File(it).delete() } }
+        } else {
+            File(Uri.parse(game.id).path ?: return@withContext).delete()
+        }
         publish(_games.value.filter { it.id != game.id })
     }
 

@@ -22,9 +22,16 @@ object RetroAchievementsHasher {
     /** Hashes a local ROM file on disk using the console's official RetroAchievements method. */
     fun hashFile(file: File, systemId: String): String? {
         if (!file.exists() || !file.isFile) return null
+        val ext = file.extension.lowercase()
+        if (ext == "m3u") {
+            val firstEntry = runCatching {
+                file.readLines().map { it.trim() }.firstOrNull { it.isNotEmpty() && !it.startsWith("#") }
+            }.getOrNull() ?: return null
+            val target = File(firstEntry).let { if (it.isAbsolute) it else File(file.parentFile, firstEntry) }
+            return if (target.exists() && target != file) hashFile(target, systemId) else null
+        }
         val size = file.length()
         if (size <= 0L || size > MAX_DIRECT_HASH_BYTES) return null
-        val ext = file.extension.lowercase()
         return runCatching {
             if (ext == "zip") {
                 FileInputStream(file).use { fis -> hashZipStream(fis, systemId) }

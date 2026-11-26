@@ -39,6 +39,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
+import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.Check
@@ -499,6 +500,62 @@ internal fun M3GameDetailPage(
                         height = 56.dp,
                     )
 
+                    if (game.isMultiDisc) {
+                        Column(
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(22.dp))
+                                .background(cs.secondaryContainer.copy(alpha = 0.65f))
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                Box(
+                                    Modifier
+                                        .size(34.dp)
+                                        .clip(CircleShape)
+                                        .background(cs.primaryContainer),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(Icons.Rounded.Album, null, tint = cs.onPrimaryContainer, modifier = Modifier.size(18.dp))
+                                }
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        text = "${game.discCount}-Disc Set · Auto-grouped",
+                                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold),
+                                        color = cs.onSecondaryContainer,
+                                    )
+                                    Text(
+                                        text = "Virtual .m3u + shared battery save · 1-tap Swap Disc in-game",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = cs.onSecondaryContainer.copy(alpha = 0.80f),
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                items(game.discs, key = { it.id }) { disc ->
+                                    Box(
+                                        Modifier
+                                            .clip(CircleShape)
+                                            .background(cs.surfaceContainerHighest.copy(alpha = 0.88f))
+                                            .padding(horizontal = 10.dp, vertical = 4.dp),
+                                    ) {
+                                        Text(
+                                            text = "${disc.label} · ${formatFileSizeShort(disc.size)}",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                            color = cs.onSurface,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     if (saveSlots.isNotEmpty()) {
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             items(saveSlots, key = { it.first }) { (slot, timestamp) ->
@@ -820,6 +877,7 @@ internal fun M3GameDetailPage(
 
                     val infoRows = buildList {
                         if (dossier.seriesName.isNotBlank()) add("SERIES" to dossier.seriesName)
+                        if (game.isMultiDisc) add("DISCS" to "${game.discCount} discs · Unified save & virtual .m3u")
                         add("DEVELOPED BY" to dossier.developer)
                         add("PUBLISHED BY" to dossier.publisher)
                         add("RELEASE DATE" to dossier.releaseDate)

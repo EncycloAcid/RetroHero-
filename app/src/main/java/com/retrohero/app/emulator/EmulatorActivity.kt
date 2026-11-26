@@ -7,6 +7,7 @@ import android.os.SystemClock
 import android.provider.MediaStore
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.FastRewind
@@ -207,6 +208,13 @@ class EmulatorActivity : ComponentActivity() {
     private var translateState by mutableStateOf<TranslateState>(TranslateState.Idle)
     private var translateLang by mutableStateOf(TranslateSourceLang.JAPANESE)
 
+    // Zero-config multi-disc runtime state
+    private var discCount by mutableIntStateOf(0)
+    private var currentDisc by mutableIntStateOf(0)
+    private var discLabels by mutableStateOf<List<String>>(emptyList())
+    private var discPickerOpen by mutableStateOf(false)
+    private var swappingDisc by mutableStateOf(false)
+
     // Play time: counted only while the game is actually running on screen.
     private var runningSince = 0L
     private var pendingSession = true
@@ -277,6 +285,7 @@ class EmulatorActivity : ComponentActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 when {
+                    discPickerOpen -> discPickerOpen = false
                     translateState !is TranslateState.Idle -> dismissTranslate()
                     editingPad -> finishPadEdit(save = true)
                     phase is Phase.Running -> setMenu(!menuOpen)
@@ -296,12 +305,15 @@ class EmulatorActivity : ComponentActivity() {
         raSessionHardcore = settings.raProfile.value != null && settings.raHardcore.value &&
             externalState == null && requested == null && cheats.none { it.enabled }
         val error = withContext(Dispatchers.IO) {
+            val sramFile = paths.migrateLegacyDiscSave(game)
+            val savedDisc = gamePrefs.lastDisc(game.id)
+            if (savedDisc > 0) NativeBridge.setInitialDisc(savedDisc)
             com.retrohero.app.data.CoreTuning.defaultsFor(coreId).forEach { (k, v) -> NativeBridge.setOption(k, v) }
             optionsStore.load().forEach { (k, v) -> NativeBridge.setOption(k, v) }
             if (!NativeBridge.loadCore(corePath, paths.system.absolutePath, paths.saves.absolutePath)) {
                 return@withContext NativeBridge.getLastError()
             }
-            if (!NativeBridge.loadGame(romPath, paths.saveRam(game).absolutePath)) {
+            if (!NativeBridge.loadGame(romPath, sramFile.absolutePath)) {
                 return@withContext NativeBridge.getLastError()
             }
             val resume = when {
@@ -327,11 +339,55 @@ class EmulatorActivity : ComponentActivity() {
         cheatsSupported = NativeBridge.supportsCheats()
         if (!raSessionHardcore) applyCheats()
         aspect = NativeBridge.getAspectRatio()
+        refreshDiscState()
         NativeBridge.start()
         started = true
         phase = Phase.Running
         startClock()
         startRetroAchievements(romPath)
+    }
+
+    private fun refreshDiscState() {
+        val count = NativeBridge.getDiscCount()
+        discCount = count
+        if (count > 1) {
+            currentDisc = NativeBridge.getCurrentDisc().coerceIn(0, count - 1)
+            val nativeLabels = NativeBridge.getDiscLabels().toList()
+            discLabels = (0 until count).map { idx ->
+                val grouped = game.discs.getOrNull(idx)
+                val raw = nativeLabels.getOrNull(idx).orEmpty()
+                when {
+                    grouped != null -> grouped.label
+                    raw.isNotBlank() -> raw
+                    else -> "Disc ${idx + 1}"
+                }
+            }
+        } else {
+            currentDisc = 0
+            discLabels = emptyList()
+        }
+    }
+
+    private fun performDiscSwap(targetIndex: Int, closeMenuAfter: Boolean = false) {
+        if (swappingDisc || discCount <= 1 || targetIndex !in 0 until discCount) return
+        swappingDisc = true
+        lifecycleScope.launch {
+            val ok = withContext(Dispatchers.IO) {
+                NativeBridge.saveSram(paths.saveRam(game).absolutePath)
+                NativeBridge.swapDisc(targetIndex)
+            }
+            swappingDisc = false
+            if (ok) {
+                refreshDiscState()
+                gamePrefs.setLastDisc(game.id, currentDisc)
+                discPickerOpen = false
+                if (closeMenuAfter) setMenu(false)
+                val label = discLabels.getOrElse(currentDisc) { "Disc ${currentDisc + 1}" }
+                toast("Swapped to $label · Unified save active")
+            } else {
+                toast(NativeBridge.getLastError().ifEmpty { "Couldn't swap disc" })
+            }
+        }
     }
 
     private fun demoteRaHardcore(reason: String) {
@@ -903,6 +959,35 @@ class EmulatorActivity : ComponentActivity() {
                     )
                 }
             }
+            if (discCount > 1 && phase is Phase.Running && !menuOpen && !editingPad) {
+                val activeLabel = discLabels.getOrElse(currentDisc) { "Disc ${currentDisc + 1}" }
+                Row(
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .safeDrawingPadding()
+                        .padding(top = 10.dp, end = 12.dp)
+                        .clip(RoundedCornerShape(50))
+                        .background(Color.Black.copy(alpha = 0.72f))
+                        .clickable(enabled = !swappingDisc) { discPickerOpen = true }
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Icon(
+                        Icons.Default.Album,
+                        contentDescription = "Swap disc",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(15.dp),
+                    )
+                    Text(
+                        text = "$activeLabel/$discCount · Swap",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White,
+                        maxLines = 1,
+                    )
+                }
+            }
+            if (discPickerOpen && discCount > 1 && !menuOpen) QuickDiscSwapSheet()
             if (menuOpen) PauseMenu()
             if (translateState !is TranslateState.Idle) {
                 TranslateOverlay(
@@ -1149,6 +1234,7 @@ class EmulatorActivity : ComponentActivity() {
                         label = "menuPage",
                     ) { p ->
                         when (p) {
+                            "discs" -> DiscsPage { page = "main" }
                             "save" -> SlotPage(saving = true) { page = "main" }
                             "load" -> SlotPage(saving = false) { page = "main" }
                             "options" -> OptionsPage { page = "main" }
@@ -1158,6 +1244,112 @@ class EmulatorActivity : ComponentActivity() {
                             "share" -> ShareMomentPage { page = "main" }
                             else -> MainMenuPage { page = it }
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun QuickDiscSwapSheet() {
+        val nextIdx = (currentDisc + 1) % discCount
+        val nextLabel = discLabels.getOrElse(nextIdx) { "Disc ${nextIdx + 1}" }
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.56f))
+                .clickable(interactionSource = null, indication = null) { discPickerOpen = false }
+                .safeDrawingPadding(),
+            contentAlignment = Alignment.Center,
+        ) {
+            Surface(
+                shape = MaterialTheme.shapes.extraLarge,
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                modifier = Modifier
+                    .padding(20.dp)
+                    .widthIn(max = 420.dp)
+                    .clickable(interactionSource = null, indication = null) {},
+            ) {
+                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        ShapeIcon(Icons.Default.Album)
+                        Column(Modifier.weight(1f)) {
+                            Text("Swap disc", style = MaterialTheme.typography.titleLarge)
+                            Text(
+                                "Unified battery save & memory card active across all $discCount discs",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    Button(
+                        onClick = { performDiscSwap(nextIdx, closeMenuAfter = false) },
+                        enabled = !swappingDisc,
+                        shapes = ButtonDefaults.shapes(),
+                        modifier = Modifier.fillMaxWidth().height(ButtonDefaults.MediumContainerHeight),
+                    ) {
+                        Icon(Icons.Default.Album, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text(if (swappingDisc) "Swapping disc…" else "Quick swap → $nextLabel")
+                    }
+                    SegmentedGroup(null, discCount) {
+                        for (i in 0 until discCount) {
+                            val label = discLabels.getOrElse(i) { "Disc ${i + 1}" }
+                            val sub = game.discs.getOrNull(i)?.fileName
+                                ?: if (i == currentDisc) "Currently inserted" else "Tap to insert"
+                            SegmentedListItem(
+                                onClick = { performDiscSwap(i, closeMenuAfter = false) },
+                                shapes = shapes(i),
+                                colors = segmentColors(),
+                                leadingContent = { RadioButton(selected = i == currentDisc, onClick = null) },
+                                supportingContent = { Text(sub, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) { Text(label) }
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = { discPickerOpen = false }) { Text("Close") }
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun DiscsPage(back: () -> Unit) {
+        val nextIdx = (currentDisc + 1) % discCount.coerceAtLeast(1)
+        val nextLabel = discLabels.getOrElse(nextIdx) { "Disc ${nextIdx + 1}" }
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            PageHeader("Swap disc", back)
+            Text(
+                "RetroHero automatically maintains one shared save (.srm) and virtual .m3u playlist across every disc in this set.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (discCount > 1) {
+                Button(
+                    onClick = { performDiscSwap(nextIdx, closeMenuAfter = true) },
+                    enabled = !swappingDisc,
+                    shapes = ButtonDefaults.shapes(),
+                    modifier = Modifier.fillMaxWidth().height(ButtonDefaults.MediumContainerHeight),
+                ) {
+                    Icon(Icons.Default.Album, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text(if (swappingDisc) "Swapping disc…" else "Quick swap → $nextLabel")
+                }
+                SegmentedGroup(null, discCount) {
+                    for (i in 0 until discCount) {
+                        val label = discLabels.getOrElse(i) { "Disc ${i + 1}" }
+                        val sub = game.discs.getOrNull(i)?.fileName
+                            ?: if (i == currentDisc) "Currently inserted" else "Tap to insert"
+                        SegmentedListItem(
+                            onClick = { performDiscSwap(i, closeMenuAfter = true) },
+                            shapes = shapes(i),
+                            colors = segmentColors(),
+                            leadingContent = { RadioButton(selected = i == currentDisc, onClick = null) },
+                            supportingContent = { Text(sub, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) { Text(label) }
                     }
                 }
             }
@@ -1183,6 +1375,14 @@ class EmulatorActivity : ComponentActivity() {
                     shapes = IconButtonDefaults.shapes(),
                     modifier = Modifier.size(ButtonDefaults.MediumContainerHeight),
                 ) { Icon(Icons.AutoMirrored.Filled.ExitToApp, "Quit game") }
+            }
+            if (discCount > 1) {
+                val activeLabel = discLabels.getOrElse(currentDisc) { "Disc ${currentDisc + 1}" }
+                ActionTile(
+                    Icons.Default.Album,
+                    "Swap disc · $activeLabel of $discCount",
+                    Modifier.fillMaxWidth(),
+                ) { navigate("discs") }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ActionTile(Icons.Default.Save, "Save", Modifier.weight(1f)) { navigate("save") }

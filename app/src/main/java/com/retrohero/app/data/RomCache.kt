@@ -20,7 +20,9 @@ class RomCache(private val context: Context, private val paths: AppPaths) {
         dir.setLastModified(System.currentTimeMillis())
         val tree = Uri.parse(game.treeUri)
 
-        val result = if (game.extension == "zip" && !system.keepZipped) {
+        val result = if (game.isMultiDisc) {
+            prepareMultiDiscPlaylist(game, tree, dir, onProgress)
+        } else if (game.extension == "zip" && !system.keepZipped) {
             extractZip(game, system, dir)
         } else if (game.isLocal) {
             val file = File(Uri.parse(game.id).path ?: throw IOException("Bad path"))
@@ -42,6 +44,34 @@ class RomCache(private val context: Context, private val paths: AppPaths) {
         }
         trim(keep = dir)
         return result
+    }
+
+    /**
+     * Stages every disc of a grouped multi-disc [game] (including any `.cue` -> `.bin` tracks)
+     * and generates an invisible unified `${game.baseName}.m3u` playlist so libretro cores
+     * expose all discs via Disk Control and share a single memory card / battery save.
+     */
+    private fun prepareMultiDiscPlaylist(
+        game: Game,
+        tree: Uri,
+        dir: File,
+        onProgress: (String) -> Unit,
+    ): File {
+        val entries = ArrayList<String>(game.discs.size)
+        for (disc in game.discs) {
+            if (game.isLocal) {
+                val f = File(Uri.parse(disc.id).path ?: throw IOException("Bad path for ${disc.fileName}"))
+                if (!f.exists()) throw IOException("${disc.fileName} was deleted")
+                entries += f.absolutePath
+            } else {
+                onProgress("${disc.label}: ${disc.fileName}")
+                copyWithReferences(tree, disc.parentDocId, disc.fileName, dir, onProgress, depth = 0)
+                entries += disc.fileName
+            }
+        }
+        val m3u = File(dir, "${game.baseName}.m3u")
+        m3u.writeText(entries.joinToString("\n") + "\n")
+        return m3u
     }
 
     private fun copyWithReferences(

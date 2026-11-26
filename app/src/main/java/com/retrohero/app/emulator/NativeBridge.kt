@@ -25,6 +25,12 @@ object NativeBridge {
     external fun readMemory(memoryType: Int, maxBytes: Int = 8 * 1024 * 1024): ByteArray?
     external fun shutdown(sramPath: String)
 
+    external fun setInitialDisc(index: Int)
+    external fun getDiscCount(): Int
+    external fun getCurrentDisc(): Int
+    external fun getDiscLabels(): Array<String>
+    external fun swapDisc(index: Int): Boolean
+
     external fun setSurface(surface: Surface?)
     /** See [ScreenFilter]. */
     external fun setFilter(filter: Int)
