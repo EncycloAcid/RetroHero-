@@ -17,6 +17,7 @@ public:
     bool start();
     void stop();
     void setInputRate(double rate);
+    void setSyncSkew(double skew);
     void write(const int16_t *frames, size_t count);
     void clear();
     /** Returns and resets the peak audio-haptic intensity [0..1] detected since the last call. */
@@ -36,6 +37,7 @@ private:
 
     int32_t deviceRate_ = 48000;
     double inputRate_ = 44100.0;
+    std::atomic<double> syncSkew_{1.0};
 
     std::vector<int16_t> ring_;
     size_t capacity_ = 0;  // power of two, in stereo frames

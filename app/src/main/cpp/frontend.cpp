@@ -5,6 +5,7 @@
 #include <sys/resource.h>
 
 #include <chrono>
+#include <cmath>
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
@@ -327,13 +328,21 @@ void Frontend::runLoop() {
     auto lastFrame = clock::now();
     auto fpsWindowStart = next;
     int fpsFrames = 0;
+    uint64_t lastSyncedSeq = 0;
     while (running_) {
         if (paused_) {
+            vsyncActive_.store(false, std::memory_order_relaxed);
+            bfiActive_.store(false, std::memory_order_relaxed);
+            audio_.setSyncSkew(1.0);
             std::this_thread::sleep_for(std::chrono::milliseconds(16));
             next = clock::now();
             lastFrame = next;
             fpsWindowStart = next;
             fpsFrames = 0;
+            {
+                std::lock_guard<std::mutex> vlk(vsyncMutex_);
+                lastSyncedSeq = vsyncSeq_;
+            }
             continue;
         }
         auto workStart = clock::now();
@@ -370,15 +379,82 @@ void Frontend::runLoop() {
             fpsWindowStart = workEnd;
         }
 
-        double speed = fastForward_ ? ffSpeed_.load() : (slowMotion_ ? 0.5 : 1.0);
-        auto frame = std::chrono::duration_cast<clock::duration>(
-                std::chrono::duration<double>(1.0 / (fps_.load() * speed)));
-        next += frame;
-        auto now = clock::now();
-        if (next < now - std::chrono::milliseconds(100)) {
-            next = now;  // fell far behind (e.g. a slow frame); don't try to catch up
-        } else if (next > now) {
-            std::this_thread::sleep_until(next);
+        const bool normalSpeed = !fastForward_ && !slowMotion_ && !rewinding_;
+        const double coreRate = fps_.load(std::memory_order_relaxed);
+        const double dispHz = static_cast<double>(displayHz_.load(std::memory_order_relaxed));
+        int div = (coreRate > 1.0 && dispHz > 1.0) ? static_cast<int>(std::lround(dispHz / coreRate)) : 1;
+        if (div < 1) div = 1;
+        if (div > 4) div = 4;
+        const double effFps = dispHz / static_cast<double>(div);
+        const double skew = (coreRate > 1.0) ? (effFps / coreRate) : 1.0;
+        const bool canLockVsync = vsyncLockEnabled_.load(std::memory_order_relaxed) &&
+                                  normalSpeed && std::abs(skew - 1.0) <= 0.035;
+
+        bool usedVsync = false;
+        if (canLockVsync) {
+            std::unique_lock<std::mutex> vlk(vsyncMutex_);
+            if (vsyncSeq_ > 0) {
+                if (lastSyncedSeq == 0 || vsyncSeq_ > lastSyncedSeq + static_cast<uint64_t>(div) + 2) {
+                    lastSyncedSeq = vsyncSeq_;
+                }
+                const bool doBfi = bfiEnabled_.load(std::memory_order_relaxed) && div >= 2;
+                vsyncActive_.store(true, std::memory_order_relaxed);
+                bfiActive_.store(doBfi, std::memory_order_relaxed);
+                audio_.setSyncSkew(skew);
+
+                if (doBfi) {
+                    // 120 Hz OLED Black Frame Insertion: wait 1 hardware refresh (~8.3 ms), insert black frame,
+                    // then wait remaining refresh(es) for the next real game frame.
+                    uint64_t blackTick = lastSyncedSeq + 1;
+                    bool gotBlack = vsyncCv_.wait_for(vlk, std::chrono::milliseconds(24), [&]() {
+                        return !running_ || paused_ || vsyncSeq_ >= blackTick;
+                    });
+                    if (gotBlack && running_ && !paused_) {
+                        vlk.unlock();
+                        {
+                            std::lock_guard<std::mutex> clk(coreMutex_);
+                            if (hwContextReady_) hw_.presentBlack();
+                            else video_.presentBlack();
+                        }
+                        vlk.lock();
+                    }
+                    uint64_t nextGameTick = lastSyncedSeq + static_cast<uint64_t>(div);
+                    bool gotNext = vsyncCv_.wait_for(vlk, std::chrono::milliseconds(24), [&]() {
+                        return !running_ || paused_ || vsyncSeq_ >= nextGameTick;
+                    });
+                    if (gotNext) {
+                        lastSyncedSeq = vsyncSeq_;
+                        usedVsync = true;
+                    }
+                } else {
+                    uint64_t targetTick = lastSyncedSeq + static_cast<uint64_t>(div);
+                    bool gotTick = vsyncCv_.wait_for(vlk, std::chrono::milliseconds(30), [&]() {
+                        return !running_ || paused_ || vsyncSeq_ >= targetTick;
+                    });
+                    if (gotTick) {
+                        lastSyncedSeq = vsyncSeq_;
+                        usedVsync = true;
+                    }
+                }
+            }
+        }
+
+        if (usedVsync) {
+            next = clock::now();
+        } else {
+            vsyncActive_.store(false, std::memory_order_relaxed);
+            bfiActive_.store(false, std::memory_order_relaxed);
+            audio_.setSyncSkew(1.0);
+            double speed = fastForward_ ? ffSpeed_.load() : (slowMotion_ ? 0.5 : 1.0);
+            auto frame = std::chrono::duration_cast<clock::duration>(
+                    std::chrono::duration<double>(1.0 / (coreRate * speed)));
+            next += frame;
+            auto now = clock::now();
+            if (next < now - std::chrono::milliseconds(100)) {
+                next = now;  // fell far behind (e.g. a slow frame); don't try to catch up
+            } else if (next > now) {
+                std::this_thread::sleep_until(next);
+            }
         }
     }
 
@@ -500,6 +576,7 @@ bool Frontend::setCheats(const std::vector<std::string> &codes) {
 
 void Frontend::setPaused(bool paused) {
     paused_ = paused;
+    vsyncCv_.notify_all();
     if (!running_) return;
     if (paused) {
         audio_.stop();
@@ -512,16 +589,36 @@ void Frontend::setPaused(bool paused) {
 void Frontend::setFastForward(bool enabled, float speed) {
     ffSpeed_ = speed < 1.0f ? 1.0f : speed;
     fastForward_ = enabled;
+    vsyncCv_.notify_all();
 }
 
 void Frontend::setSlowMotion(bool enabled) {
     slowMotion_ = enabled;
+    vsyncCv_.notify_all();
 }
 
 void Frontend::setRunAhead(int frames) {
     if (frames < 0) frames = 0;
     if (frames > 2) frames = 2;
     runAheadFrames_.store(frames, std::memory_order_relaxed);
+}
+
+void Frontend::onVsync(int64_t frameTimeNanos, float displayHz) {
+    if (displayHz >= 45.0f && displayHz <= 245.0f) {
+        displayHz_.store(displayHz, std::memory_order_relaxed);
+    }
+    {
+        std::lock_guard<std::mutex> lk(vsyncMutex_);
+        lastVsyncNs_ = frameTimeNanos;
+        vsyncSeq_++;
+    }
+    vsyncCv_.notify_one();
+}
+
+void Frontend::setVsyncConfig(bool vsyncLock, bool bfi120Hz) {
+    vsyncLockEnabled_.store(vsyncLock, std::memory_order_relaxed);
+    bfiEnabled_.store(bfi120Hz, std::memory_order_relaxed);
+    vsyncCv_.notify_all();
 }
 
 void Frontend::perfStats(float &fps, float &frameMs, int &activeRunAhead) const {
@@ -592,6 +689,7 @@ bool Frontend::readMemory(unsigned memoryType, std::vector<uint8_t> &out, size_t
 
 void Frontend::shutdown(const std::string &sramPath) {
     running_ = false;
+    vsyncCv_.notify_all();
     if (thread_.joinable()) thread_.join();
     audio_.stop();
     saveSram(sramPath);

@@ -27,6 +27,7 @@ public:
     }
     bool grabArgb(std::vector<uint32_t> &out, unsigned &width, unsigned &height);
     void present(const void *data, unsigned width, unsigned height, size_t pitch, int pixelFormat);
+    void presentBlack();
     void redraw();
 
 private:

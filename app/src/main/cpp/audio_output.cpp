@@ -89,6 +89,12 @@ void AudioOutput::setInputRate(double rate) {
     if (rate > 0) inputRate_ = rate;
 }
 
+void AudioOutput::setSyncSkew(double skew) {
+    if (skew < 0.985) skew = 0.985;
+    if (skew > 1.015) skew = 1.015;
+    syncSkew_.store(skew, std::memory_order_relaxed);
+}
+
 void AudioOutput::clear() {
     readPos_.store(writePos_.load(std::memory_order_acquire), std::memory_order_release);
     hapticPeak_.store(0.0f, std::memory_order_relaxed);
@@ -137,8 +143,9 @@ void AudioOutput::write(const int16_t *frames, size_t count) {
     const uint64_t rd = readPos_.load(std::memory_order_acquire);
     const uint64_t fill = w - rd;
     const double fillRatio = static_cast<double>(fill) / static_cast<double>(capacity_);
-    // Dynamic rate control: gently nudge resampling ratio to keep ring buffer centered.
-    const double step = (inputRate_ / deviceRate_) * (1.0 + 0.005 * (2.0 * fillRatio - 1.0));
+    const double skew = syncSkew_.load(std::memory_order_relaxed);
+    // Dynamic micro-pitch rate control: match display vsync skew + gently center ring buffer.
+    const double step = (inputRate_ / deviceRate_) * skew * (1.0 + 0.004 * (2.0 * fillRatio - 1.0));
     const size_t mask = mask_;
     int16_t *ring = ring_.data();
 

@@ -457,6 +457,20 @@ void HwRenderer::presentFrame(unsigned width, unsigned height, bool bottomLeftOr
     if (prevCull) glEnable(GL_CULL_FACE);
 }
 
+void HwRenderer::presentBlack() {
+    if (display_ == EGL_NO_DISPLAY || winSurface_ == EGL_NO_SURFACE || context_ == EGL_NO_CONTEXT) return;
+    GLint prevFbo = 0;
+    glGetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFbo);
+    GLboolean prevScissor = glIsEnabled(GL_SCISSOR_TEST);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glDisable(GL_SCISSOR_TEST);
+    glClearColor(0.f, 0.f, 0.f, 1.f);
+    glClear(GL_COLOR_BUFFER_BIT);
+    eglSwapBuffers(display_, winSurface_);
+    glBindFramebuffer(GL_FRAMEBUFFER, static_cast<GLuint>(prevFbo));
+    if (prevScissor) glEnable(GL_SCISSOR_TEST);
+}
+
 void HwRenderer::captureSnapshotLocked(unsigned width, unsigned height, bool bottomLeftOrigin) {
     const unsigned cw = std::min(width, fboW_);
     const unsigned ch = std::min(height, fboH_);

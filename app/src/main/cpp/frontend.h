@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <condition_variable>
 #include <map>
 #include <mutex>
 #include <string>
@@ -69,6 +70,11 @@ public:
     void setFastForward(bool enabled, float speed);
     void setSlowMotion(bool enabled);
     void setRunAhead(int frames);
+    void onVsync(int64_t frameTimeNanos, float displayHz);
+    void setVsyncConfig(bool vsyncLock, bool bfi120Hz);
+    float coreFps() const { return static_cast<float>(fps_.load(std::memory_order_relaxed)); }
+    bool isVsyncLocked() const { return vsyncActive_.load(std::memory_order_relaxed); }
+    bool isBfiActive() const { return bfiActive_.load(std::memory_order_relaxed); }
     void perfStats(float &fps, float &frameMs, int &activeRunAhead) const;
     // Rewind keeps recent states in memory; holding rewind steps back through them.
     void setRewindEnabled(bool enabled);
@@ -181,6 +187,17 @@ private:
     bool suppressAudio_ = false;
     std::vector<uint8_t> runAheadBuf_;
     std::thread thread_;
+
+    // Hardware Choreographer Vsync pacing & 120 Hz OLED BFI
+    std::mutex vsyncMutex_;
+    std::condition_variable vsyncCv_;
+    uint64_t vsyncSeq_ = 0;
+    int64_t lastVsyncNs_ = 0;
+    std::atomic<float> displayHz_{60.0f};
+    std::atomic<bool> vsyncLockEnabled_{true};
+    std::atomic<bool> bfiEnabled_{false};
+    std::atomic<bool> vsyncActive_{false};
+    std::atomic<bool> bfiActive_{false};
 
     // Rewind ring buffer (only touched with coreMutex_ held).
     std::atomic<bool> rewindEnabled_{false};
