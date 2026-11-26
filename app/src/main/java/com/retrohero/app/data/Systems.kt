@@ -146,6 +146,7 @@ private object Cores {
     val mame2016 = CoreInfo("mame2016", "MAME 2016", "GPLv2")
     val herobox16 = CoreInfo("herobox16", "HeroBox-16 Native", "MIT", builtIn = true)
     val retroheroChip8 = CoreInfo("retrohero_chip8", "RetroHero CHIP-8 Native", "MIT", builtIn = true)
+    val heroNes = CoreInfo("retrohero_nes", "HeroNES (Built-in)", "MIT", builtIn = true)
 }
 
 private object Layouts {
@@ -265,7 +266,7 @@ object Systems {
         GameSystem(
             id = "nes", name = "Nintendo Entertainment System", shortName = "NES", manufacturer = "Nintendo",
             extensions = setOf("nes", "fds", "unf", "unif"),
-            cores = listOf(Cores.fceumm, Cores.nestopia),
+            cores = listOf(Cores.heroNes, Cores.fceumm, Cores.nestopia),
             thumbnailDb = "Nintendo - Nintendo Entertainment System",
             layout = Layouts.nes, color = Color(0xFFE53935),
             folderHints = setOf("nes", "famicom", "fds"),

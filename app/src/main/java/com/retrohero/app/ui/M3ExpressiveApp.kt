@@ -175,7 +175,7 @@ fun M3ExpressiveAppView(
         games.mapNotNull { g -> currentCoreFor(g) }.distinctBy { it.id }
     }
     val missingCores = remember(neededCores, coreStates) {
-        neededCores.filter { c -> coreStates[c.id] !is CoreState.Installed }
+        neededCores.filter { c -> !c.builtIn && coreStates[c.id] !is CoreState.Installed }
     }
     val installingCores = remember(neededCores, coreStates) {
         neededCores.any { c -> coreStates[c.id] is CoreState.Downloading }
@@ -427,7 +427,7 @@ fun M3ExpressiveAppView(
                 val game = detailGame ?: return@AnimatedVisibility
                 val core = currentCoreFor(game)
                 val extSelected = selectedExternalEmulatorFor(game)
-                val coreReady = extSelected != null || core == null || coreStates[core.id] is CoreState.Installed
+                val coreReady = extSelected != null || core == null || core.builtIn || coreStates[core.id] is CoreState.Installed
                 M3GameDetailPage(
                     game = game,
                     stat = stats[game.id],
