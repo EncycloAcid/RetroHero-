@@ -271,6 +271,9 @@ class EmulatorActivity : ComponentActivity() {
     private var activeProfile by mutableStateOf<com.retrohero.app.data.HardwareProfile?>(null)
     private var colorProfile by mutableIntStateOf(com.retrohero.app.data.ColorProfile.NONE)
     private var graphicsConfig by mutableStateOf(com.retrohero.app.data.GraphicsConfig())
+    private var ambilightMode by mutableStateOf(AmbilightMode.VIVID)
+    private var ambilightState by mutableStateOf(AmbilightState.Off)
+    private val ambilightTracker = AmbilightTracker()
     private var activePatchName by mutableStateOf<String?>(null)
     private var activePatchFormat by mutableStateOf<String?>(null)
     private var activePatchHeaderNote by mutableStateOf<String?>(null)
@@ -375,6 +378,7 @@ class EmulatorActivity : ComponentActivity() {
         integerScale = gamePrefs.integerScale(system.id)
         vsyncLock = gamePrefs.vsyncLock
         bfi120Hz = gamePrefs.bfi120Hz
+        ambilightMode = gamePrefs.ambilightMode
         displayHz = DisplaySync.currentRefreshRate(this)
         smartTouch = SmartTouchConfig(
             thumbChordZones = gamePrefs.thumbChordZones,
@@ -580,6 +584,7 @@ class EmulatorActivity : ComponentActivity() {
             colorProfile = gamePrefs.colorProfileOverride(game.id) ?: prof.colorProfile
         }
         NativeBridge.setUpscaleFactor(graphicsConfig.upscale)
+        NativeBridge.setAmbilightEnabled(ambilightMode.isEnabled)
         NativeBridge.setFilter(filter)
         NativeBridge.setColorProfile(colorProfile)
         runAheadFrames = settings.runAheadFrames
@@ -950,6 +955,19 @@ class EmulatorActivity : ComponentActivity() {
         NativeBridge.setUpscaleFactor(next.upscale)
         com.retrohero.app.data.GraphicsCoreOptions.optionsFor(activeCoreId, next).forEach { (k, v) ->
             NativeBridge.setOption(k, v)
+        }
+    }
+
+    private fun setAmbilight(mode: AmbilightMode) {
+        ambilightMode = mode
+        gamePrefs.ambilightMode = mode
+        NativeBridge.setAmbilightEnabled(mode.isEnabled)
+        if (!mode.isEnabled) {
+            ambilightTracker.reset()
+            ambilightState = AmbilightState.Off
+        } else if (started) {
+            NativeBridge.pollAmbilight(ambilightTracker.rawBuffer)
+            ambilightState = ambilightTracker.step(ambilightTracker.rawBuffer, mode)
         }
     }
 
@@ -1518,6 +1536,19 @@ class EmulatorActivity : ComponentActivity() {
             }
         }
 
+        LaunchedEffect(phase, menuOpen, ambilightMode) {
+            if (!ambilightMode.isEnabled) {
+                ambilightState = AmbilightState.Off
+                return@LaunchedEffect
+            }
+            if (phase !is Phase.Running || menuOpen) return@LaunchedEffect
+            while (true) {
+                NativeBridge.pollAmbilight(ambilightTracker.rawBuffer)
+                ambilightState = ambilightTracker.step(ambilightTracker.rawBuffer, ambilightMode)
+                delay(33L)
+            }
+        }
+
         padLandscape = landscape
         BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
             val density = LocalDensity.current
@@ -1581,6 +1612,7 @@ class EmulatorActivity : ComponentActivity() {
                     style = shellStyle,
                     fastForwardActive = fastForwardToggle || fastForwardHeld,
                     sustainedCount = sustainedCount,
+                    ambilight = ambilightState,
                     gameContent = { GameView() },
                     padContent = {
                         if (phase is Phase.Running) {
@@ -1593,6 +1625,7 @@ class EmulatorActivity : ComponentActivity() {
                     },
                 )
             } else if (landscape) {
+                AmbilightBackdropHalo(ambilight = ambilightState, landscape = true)
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { GameView() }
                 if (showPad && phase is Phase.Running) {
                     Pad(
@@ -1607,6 +1640,7 @@ class EmulatorActivity : ComponentActivity() {
                     style = shellStyle,
                     fastForwardActive = fastForwardToggle || fastForwardHeld,
                     sustainedCount = sustainedCount,
+                    ambilight = ambilightState,
                     gameContent = { GameView() },
                     padContent = {
                         if (phase is Phase.Running) {
@@ -1620,6 +1654,7 @@ class EmulatorActivity : ComponentActivity() {
                     },
                 )
             } else {
+                AmbilightBackdropHalo(ambilight = ambilightState, landscape = false)
                 Column(Modifier.fillMaxSize().safeDrawingPadding()) {
                     Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) { GameView() }
                     if (showPad && phase is Phase.Running) {
@@ -2418,7 +2453,7 @@ class EmulatorActivity : ComponentActivity() {
                         else -> "${padSkin.name} · ${system.shortName}"
                     }
             }
-            SegmentedGroup(null, 8) {
+            SegmentedGroup(null, 9) {
                 MenuSwitch(shapes(0), Icons.Default.FastForward, "Fast forward", "${settings.fastForwardSpeed.toInt()}× speed", fastForwardToggle) {
                     fastForwardToggle = it
                     if (it && slowMotion) {
@@ -2466,14 +2501,24 @@ class EmulatorActivity : ComponentActivity() {
                     settings.showPerfHud = it
                 }
                 MenuSwitch(shapes(5), Icons.Default.Gamepad, "Touch controls", "Show the on-screen gamepad", showPad) { showPad = it }
-                MenuSwitch(shapes(6), Icons.Default.Tune, "Audio rumble", "Feel bass impacts from game audio", audioHapticsOn) {
+                MenuSwitch(
+                    shapes(6),
+                    Icons.Rounded.AutoAwesome,
+                    "Ambilight bezel glow",
+                    if (ambilightMode.isEnabled) "${ambilightMode.label} · Live OLED edge halo & flash"
+                    else "Off · Static bezel",
+                    ambilightMode.isEnabled,
+                ) { on ->
+                    setAmbilight(if (on) gamePrefs.lastActiveAmbilightMode else AmbilightMode.OFF)
+                }
+                MenuSwitch(shapes(7), Icons.Default.Tune, "Audio rumble", "Feel bass impacts from game audio", audioHapticsOn) {
                     audioHapticsOn = it
                     settings.audioHaptics = it
                     if (!it) audioHaptics.cancel()
                 }
                 SegmentedListItem(
                     onClick = { navigate("skin") },
-                    shapes = shapes(7),
+                    shapes = shapes(8),
                     colors = segmentColors(),
                     leadingContent = { ShapeIcon(Icons.Default.AspectRatio) },
                     supportingContent = { Text(consoleSkinSummary, maxLines = 1, overflow = TextOverflow.Ellipsis) },
@@ -2933,6 +2978,78 @@ class EmulatorActivity : ComponentActivity() {
                             color = cs.onSurfaceVariant,
                         )
                     }
+                }
+            }
+
+            // 1b. Live Framebuffer OLED Ambilight Bezel Glow Card
+            Surface(
+                shape = RoundedCornerShape(22.dp),
+                color = cs.surfaceContainerLow,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Icon(Icons.Rounded.AutoAwesome, null, tint = cs.primary, modifier = Modifier.size(18.dp))
+                            Text("OLED Ambilight bezel glow", style = MaterialTheme.typography.titleSmall, color = cs.onSurface)
+                        }
+                        Surface(shape = RoundedCornerShape(999.dp), color = if (ambilightMode.isEnabled) cs.primaryContainer else cs.surfaceContainerHigh) {
+                            Text(
+                                ambilightMode.label,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (ambilightMode.isEnabled) cs.onPrimaryContainer else cs.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            )
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        AmbilightMode.entries.forEach { mode ->
+                            val sel = ambilightMode == mode
+                            Surface(
+                                onClick = {
+                                    setAmbilight(mode)
+                                    toast("Ambilight: ${mode.label}")
+                                },
+                                shape = RoundedCornerShape(999.dp),
+                                color = if (sel) cs.primaryContainer else cs.surfaceContainerHigh,
+                                contentColor = if (sel) cs.onPrimaryContainer else cs.onSurfaceVariant,
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(
+                                    text = mode.label,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 1,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 9.dp),
+                                )
+                            }
+                        }
+                    }
+                    if (ambilightState.isVisiblyGlowing) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .clip(RoundedCornerShape(999.dp))
+                                .background(
+                                    androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                        listOf(ambilightState.left, ambilightState.top, ambilightState.bottom, ambilightState.right),
+                                    ),
+                                ),
+                        )
+                    }
+                    Text(
+                        text = ambilightMode.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = cs.onSurfaceVariant,
+                    )
                 }
             }
 

@@ -6,6 +6,7 @@
 #include <cstring>
 
 #include "log.h"
+#include "video_output.h"
 
 namespace rh {
 
@@ -231,6 +232,7 @@ void HwRenderer::destroyContext() {
             EGLSurface s = winSurface_ != EGL_NO_SURFACE ? winSurface_ : pbuffer_;
             if (s != EGL_NO_SURFACE) eglMakeCurrent(display_, s, s, context_);
             destroyFbo();
+            destroyAmbilightFbo();
             if (program_) {
                 glDeleteProgram(program_);
                 program_ = 0;
@@ -493,6 +495,29 @@ void HwRenderer::presentFrame(unsigned width, unsigned height, bool bottomLeftOr
     glVertexAttribPointer(static_cast<GLuint>(locPos_), 2, GL_FLOAT, GL_FALSE, 0, kQuadPos);
     glVertexAttribPointer(static_cast<GLuint>(locUv_), 2, GL_FLOAT, GL_FALSE, 0, kQuadUv);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+    // Near-zero-cost 16x16 hardware-downsampled Ambilight pass (~20 Hz when enabled, 1 KB stack readback)
+    if (ambilightEnabled_.load(std::memory_order_relaxed) && (++ambiTick_ % 3u == 0u) && ensureAmbilightFbo()) {
+        glBindFramebuffer(GL_FRAMEBUFFER, ambiFbo_);
+        glViewport(0, 0, 16, 16);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glUniform1i(locFilter_, 1);
+        glUniform1f(locFlipY_, bottomLeftOrigin ? 1.0f : 0.0f);
+        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+        uint8_t tinyRgba[16 * 16 * 4];
+        glPixelStorei(GL_PACK_ALIGNMENT, 1);
+        glReadPixels(0, 0, 16, 16, GL_RGBA, GL_UNSIGNED_BYTE, tinyRgba);
+
+        uint32_t sampled[5] = {0xFF000000u, 0xFF000000u, 0xFF000000u, 0xFF000000u, 0u};
+        computeAmbilightFromRgbaGrid(tinyRgba, false, ambilightAvgLuma_, sampled);
+        for (int i = 0; i < 5; i++) {
+            ambilight_[i].store(sampled[i], std::memory_order_relaxed);
+        }
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    }
+
     glDisableVertexAttribArray(static_cast<GLuint>(locPos_));
     glDisableVertexAttribArray(static_cast<GLuint>(locUv_));
 
@@ -510,6 +535,43 @@ void HwRenderer::presentFrame(unsigned width, unsigned height, bool bottomLeftOr
     if (prevDepth) glEnable(GL_DEPTH_TEST);
     if (prevScissor) glEnable(GL_SCISSOR_TEST);
     if (prevCull) glEnable(GL_CULL_FACE);
+}
+
+bool HwRenderer::ensureAmbilightFbo() {
+    if (ambiFbo_ && ambiTex_) return true;
+    destroyAmbilightFbo();
+    glGenFramebuffers(1, &ambiFbo_);
+    glBindFramebuffer(GL_FRAMEBUFFER, ambiFbo_);
+    glGenTextures(1, &ambiTex_);
+    glBindTexture(GL_TEXTURE_2D, ambiTex_);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 16, 16, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, ambiTex_, 0);
+    bool ok = (glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
+    if (!ok) destroyAmbilightFbo();
+    // Rebind colorTex_ to TEXTURE_2D unit 0 for caller draw
+    glBindTexture(GL_TEXTURE_2D, colorTex_);
+    return ok;
+}
+
+void HwRenderer::destroyAmbilightFbo() {
+    if (ambiTex_) {
+        glDeleteTextures(1, &ambiTex_);
+        ambiTex_ = 0;
+    }
+    if (ambiFbo_) {
+        glDeleteFramebuffers(1, &ambiFbo_);
+        ambiFbo_ = 0;
+    }
+}
+
+void HwRenderer::pollAmbilight(uint32_t out[5]) const {
+    for (int i = 0; i < 5; i++) {
+        out[i] = ambilight_[i].load(std::memory_order_relaxed);
+    }
 }
 
 void HwRenderer::presentBlack() {

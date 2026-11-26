@@ -939,6 +939,19 @@ void Frontend::setUpscaleFactor(int factor) {
     video_.setUpscaleFactor(factor);
 }
 
+void Frontend::setAmbilightEnabled(bool enabled) {
+    hw_.setAmbilightEnabled(enabled);
+    video_.setAmbilightEnabled(enabled);
+}
+
+void Frontend::pollAmbilight(uint32_t out[5]) const {
+    if (hwRenderEnabled_.load(std::memory_order_relaxed)) {
+        hw_.pollAmbilight(out);
+    } else {
+        video_.pollAmbilight(out);
+    }
+}
+
 void Frontend::frameSize(unsigned &width, unsigned &height) {
     if (hwRenderEnabled_.load()) hw_.frameSize(width, height);
     else video_.frameSize(width, height);

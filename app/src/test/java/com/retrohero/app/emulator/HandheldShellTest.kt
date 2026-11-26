@@ -131,4 +131,86 @@ class HandheldShellTest {
             File(outDir, "$name.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
         }
     }
+
+    @Test
+    fun renderAmbilightShellAndLandscapeGrips() {
+        val vividAmbilight = AmbilightState(
+            enabled = true,
+            top = Color(0xFF00E5FF),
+            bottom = Color(0xFFFF5500),
+            left = Color(0xFFFF2A85),
+            right = Color(0xFFFFC400),
+            flash = 0.65f,
+            intensity = AmbilightMode.HYPER.multiplier,
+        )
+        val landscapeMode = androidx.compose.runtime.mutableStateOf(false)
+        compose.setContent {
+            val sys = Systems.get(if (landscapeMode.value) "psp" else "snes")!!
+            val style = ConsoleStyles.forSystem(sys.id, sys.color)
+            RetroHeroTheme {
+                if (!landscapeMode.value) {
+                    HandheldShell(
+                        style = style,
+                        ambilight = vividAmbilight,
+                        gameContent = {
+                            Box(
+                                Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        Brush.verticalGradient(
+                                            listOf(Color(0xFF00B8D4), Color(0xFF311B92), Color(0xFFFF5500)),
+                                        ),
+                                    ),
+                            )
+                        },
+                        padContent = {
+                            VirtualGamepad(
+                                layout = sys.layout,
+                                landscape = false,
+                                opacity = 1f,
+                                onButton = { _, _ -> },
+                                onMenu = {},
+                                onFastForward = {},
+                                onPress = {},
+                                modifier = Modifier.fillMaxSize(),
+                                accent = sys.color,
+                                skin = Looks.Console,
+                                systemId = sys.id,
+                                inShell = true,
+                            )
+                        },
+                    )
+                } else {
+                    LandscapeConsoleShell(
+                        style = style,
+                        ambilight = vividAmbilight,
+                        gameContent = {
+                            Box(
+                                Modifier
+                                    .fillMaxSize(0.62f)
+                                    .background(
+                                        Brush.horizontalGradient(
+                                            listOf(Color(0xFFFF2A85), Color(0xFF1A103C), Color(0xFFFFC400)),
+                                        ),
+                                    ),
+                            )
+                        },
+                        padContent = {},
+                    )
+                }
+            }
+        }
+        compose.waitForIdle()
+        val portraitBmp = compose.onRoot().captureToImage().asAndroidBitmap()
+        File(outDir, "shell_snes_ambilight.png").outputStream().use {
+            portraitBmp.compress(Bitmap.CompressFormat.PNG, 100, it)
+        }
+
+        compose.runOnIdle { landscapeMode.value = true }
+        compose.waitForIdle()
+        val landscapeBmp = compose.onRoot().captureToImage().asAndroidBitmap()
+        File(outDir, "shell_psp_landscape_ambilight.png").outputStream().use {
+            landscapeBmp.compress(Bitmap.CompressFormat.PNG, 100, it)
+        }
+    }
 }

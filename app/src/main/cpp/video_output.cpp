@@ -158,6 +158,137 @@ void VideoOutput::redraw() {
         blitLocked(last_.data(), lastW_, lastH_, lastPitch_, lastFmt_);
 }
 
+namespace {
+
+struct EdgeAccum {
+    uint32_t rSum = 0;
+    uint32_t gSum = 0;
+    uint32_t bSum = 0;
+    uint32_t wSum = 0;
+    uint32_t lumaSum = 0;
+    uint32_t count = 0;
+
+    inline void add(uint32_t r, uint32_t g, uint32_t b) {
+        uint32_t maxC = std::max({r, g, b});
+        uint32_t minC = std::min({r, g, b});
+        uint32_t chroma = maxC - minC;
+        uint32_t luma = (r * 77u + g * 150u + b * 29u) >> 8;
+        // Favor saturated & luminous pixels so black overscan/void borders don't dull live game colors
+        uint32_t w = 14u + (chroma >> 1) + (luma >> 2);
+        rSum += r * w;
+        gSum += g * w;
+        bSum += b * w;
+        wSum += w;
+        lumaSum += luma;
+        count++;
+    }
+
+    inline uint32_t toBoostedArgb() const {
+        if (wSum == 0) return 0xFF000000u;
+        float r = static_cast<float>(rSum) / static_cast<float>(wSum);
+        float g = static_cast<float>(gSum) / static_cast<float>(wSum);
+        float b = static_cast<float>(bSum) / static_cast<float>(wSum);
+        // Subtle OLED chroma boost (+32% saturation around neutral axis; preserves pure white flashes)
+        float mid = (r + g + b) * (1.0f / 3.0f);
+        auto boost = [mid](float c) -> uint32_t {
+            float v = mid + (c - mid) * 1.32f;
+            int iv = static_cast<int>(v + 0.5f);
+            if (iv < 0) iv = 0;
+            if (iv > 255) iv = 255;
+            return static_cast<uint32_t>(iv);
+        };
+        return 0xFF000000u | (boost(r) << 16) | (boost(g) << 8) | boost(b);
+    }
+
+    inline float meanLuma() const {
+        return count > 0 ? static_cast<float>(lumaSum) / static_cast<float>(count) : 0.0f;
+    }
+};
+
+inline uint32_t computeFlashStep(float frameLuma, float &avgLumaState) {
+    if (avgLumaState < 0.0f) {
+        avgLumaState = frameLuma;
+        return 0u;
+    }
+    float jump = std::max(0.0f, frameLuma - avgLumaState);
+    avgLumaState = avgLumaState * 0.88f + frameLuma * 0.12f;
+    int flash = static_cast<int>(jump * 3.2f + 0.5f);
+    return static_cast<uint32_t>(std::clamp(flash, 0, 255));
+}
+
+}  // namespace
+
+void computeAmbilightFromRgbaGrid(const uint8_t *rgba16x16, bool bottomLeftOrigin,
+                                  float &avgLumaState, uint32_t out[5]) {
+    if (!rgba16x16) return;
+    EdgeAccum top, bottom, left, right;
+    auto sampleAt = [&](int gx, int gy, EdgeAccum &acc) {
+        int sy = bottomLeftOrigin ? (15 - gy) : gy;
+        const uint8_t *p = rgba16x16 + (sy * 16 + gx) * 4;
+        acc.add(p[0], p[1], p[2]);
+    };
+    // Inset by 1 cell (1..14) so 1-row overscan borders don't mute the halo
+    for (int i = 1; i <= 14; i++) {
+        sampleAt(i, 1, top);
+        sampleAt(i, 2, top);
+        sampleAt(i, 14, bottom);
+        sampleAt(i, 13, bottom);
+        sampleAt(1, i, left);
+        sampleAt(2, i, left);
+        sampleAt(14, i, right);
+        sampleAt(13, i, right);
+    }
+    float frameLuma = 0.25f * (top.meanLuma() + bottom.meanLuma() + left.meanLuma() + right.meanLuma());
+    out[0] = top.toBoostedArgb();
+    out[1] = bottom.toBoostedArgb();
+    out[2] = left.toBoostedArgb();
+    out[3] = right.toBoostedArgb();
+    out[4] = computeFlashStep(frameLuma, avgLumaState);
+}
+
+void VideoOutput::pollAmbilight(uint32_t out[5]) const {
+    for (int i = 0; i < 5; i++) {
+        out[i] = ambilight_[i].load(std::memory_order_relaxed);
+    }
+}
+
+void VideoOutput::sampleAmbilight(const uint8_t *data, unsigned width, unsigned height,
+                                  size_t pitch, int fmt) {
+    if (width < 4 || height < 4) return;
+    EdgeAccum top, bottom, left, right;
+    const unsigned insetX = std::max(1u, width / 12u);
+    const unsigned insetY = std::max(1u, height / 12u);
+    const unsigned spanX = width > insetX * 2 ? (width - insetX * 2) : width;
+    const unsigned spanY = height > insetY * 2 ? (height - insetY * 2) : height;
+
+    auto readRgb = [&](unsigned x, unsigned y, EdgeAccum &acc) {
+        uint32_t argb = toArgb(data + static_cast<size_t>(y) * pitch, x, fmt);
+        acc.add((argb >> 16) & 0xFFu, (argb >> 8) & 0xFFu, argb & 0xFFu);
+    };
+
+    constexpr unsigned kSamples = 16;
+    const unsigned yTop = std::min(insetY, height - 1);
+    const unsigned yBottom = height > insetY ? (height - 1 - insetY) : (height - 1);
+    const unsigned xLeft = std::min(insetX, width - 1);
+    const unsigned xRight = width > insetX ? (width - 1 - insetX) : (width - 1);
+
+    for (unsigned i = 0; i < kSamples; i++) {
+        unsigned sx = std::min(width - 1, insetX + (i * spanX) / kSamples);
+        unsigned sy = std::min(height - 1, insetY + (i * spanY) / kSamples);
+        readRgb(sx, yTop, top);
+        readRgb(sx, yBottom, bottom);
+        readRgb(xLeft, sy, left);
+        readRgb(xRight, sy, right);
+    }
+
+    float frameLuma = 0.25f * (top.meanLuma() + bottom.meanLuma() + left.meanLuma() + right.meanLuma());
+    ambilight_[0].store(top.toBoostedArgb(), std::memory_order_relaxed);
+    ambilight_[1].store(bottom.toBoostedArgb(), std::memory_order_relaxed);
+    ambilight_[2].store(left.toBoostedArgb(), std::memory_order_relaxed);
+    ambilight_[3].store(right.toBoostedArgb(), std::memory_order_relaxed);
+    ambilight_[4].store(computeFlashStep(frameLuma, ambilightAvgLuma_), std::memory_order_relaxed);
+}
+
 bool VideoOutput::grabArgb(std::vector<uint32_t> &out, unsigned &width, unsigned &height) {
     std::lock_guard<std::mutex> lk(mutex_);
     if (last_.empty() || lastW_ == 0 || lastH_ == 0) return false;
@@ -174,6 +305,9 @@ bool VideoOutput::grabArgb(std::vector<uint32_t> &out, unsigned &width, unsigned
 void VideoOutput::present(const void *data, unsigned width, unsigned height, size_t pitch,
                           int pixelFormat) {
     if (!data || width == 0 || height == 0) return;
+    if (ambilightEnabled_.load(std::memory_order_relaxed)) {
+        sampleAmbilight(static_cast<const uint8_t *>(data), width, height, pitch, pixelFormat);
+    }
     std::lock_guard<std::mutex> lk(mutex_);
     size_t bytes = pitch * height;
     if (last_.size() != bytes) last_.resize(bytes);

@@ -55,6 +55,17 @@ class GamePrefs(context: Context, sharpDefault: Boolean) {
         get() = prefs.getBoolean("bfi_120hz", false)
         set(v) = prefs.edit { putBoolean("bfi_120hz", v) }
 
+    var ambilightMode: AmbilightMode
+        get() = AmbilightMode.fromId(prefs.getString("ambilight_mode", AmbilightMode.VIVID.id))
+        set(v) = prefs.edit {
+            putString("ambilight_mode", v.id)
+            if (v.isEnabled) putString("ambilight_last_active", v.id)
+        }
+
+    val lastActiveAmbilightMode: AmbilightMode
+        get() = AmbilightMode.fromId(prefs.getString("ambilight_last_active", AmbilightMode.VIVID.id))
+            .takeIf { it.isEnabled } ?: AmbilightMode.VIVID
+
     var thumbChordZones: Boolean
         get() = prefs.getBoolean("smart_thumb_chord", true)
         set(v) = prefs.edit { putBoolean("smart_thumb_chord", v) }

@@ -116,6 +116,8 @@ public:
     void setFilter(int filter);
     void setColorProfile(int profile);
     void setUpscaleFactor(int factor);
+    void setAmbilightEnabled(bool enabled);
+    void pollAmbilight(uint32_t out[5]) const;
     void frameSize(unsigned &width, unsigned &height);
     bool grabArgb(std::vector<uint32_t> &out, unsigned &width, unsigned &height);
 

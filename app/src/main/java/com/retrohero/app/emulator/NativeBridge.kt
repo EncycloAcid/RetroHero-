@@ -49,6 +49,10 @@ object NativeBridge {
     external fun setColorProfile(profile: Int)
     /** Software pixel prescale multiplier (1..4) for 2D crisp pixel rendering. */
     external fun setUpscaleFactor(factor: Int)
+    /** Enables or disables near-zero-cost C++ framebuffer edge color sampling for OLED Ambilight. */
+    external fun setAmbilightEnabled(enabled: Boolean)
+    /** Writes [topArgb, bottomArgb, leftArgb, rightArgb, flash0to255] into [out5] with zero allocation. */
+    external fun pollAmbilight(out5: IntArray)
     /** Width and height of the last frame the core drew (0, 0 before the first). */
     external fun getFrameSize(): IntArray
     /** [width, height, ARGB pixels…] of the last frame, or null before the first. */

@@ -1,12 +1,18 @@
 #pragma once
 
 #include <android/native_window.h>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
 #include <vector>
 
 namespace rh {
+
+// Computes 4 directional OLED Ambilight ARGB colors [top, bottom, left, right] + transient flash [0..255]
+// from a compact 16x16 RGBA8888 thumbnail buffer.
+void computeAmbilightFromRgbaGrid(const uint8_t *rgba16x16, bool bottomLeftOrigin,
+                                  float &avgLumaState, uint32_t out[5]);
 
 // Software video output: blits core frames straight into the SurfaceView's
 // ANativeWindow. The compositor scales the buffer to the view; an optional
@@ -23,6 +29,8 @@ public:
     void setFilter(int filter);
     void setColorProfile(int profile);
     void setUpscaleFactor(int factor);
+    void setAmbilightEnabled(bool enabled) { ambilightEnabled_.store(enabled, std::memory_order_relaxed); }
+    void pollAmbilight(uint32_t out[5]) const;
     // Copies the last frame as ARGB_8888 into [out]; false if there is none yet.
     void frameSize(unsigned &width, unsigned &height) {
         std::lock_guard<std::mutex> lk(mutex_);
@@ -37,6 +45,7 @@ public:
 private:
     void rebuildColorLutLocked();
     void blitLocked(const uint8_t *data, unsigned width, unsigned height, size_t pitch, int fmt);
+    void sampleAmbilight(const uint8_t *data, unsigned width, unsigned height, size_t pitch, int fmt);
 
     std::mutex mutex_;
     ANativeWindow *window_ = nullptr;
@@ -51,6 +60,10 @@ private:
     unsigned lastW_ = 0, lastH_ = 0;
     size_t lastPitch_ = 0;
     int lastFmt_ = 0;
+
+    std::atomic<bool> ambilightEnabled_{true};
+    std::atomic<uint32_t> ambilight_[5]{0xFF000000u, 0xFF000000u, 0xFF000000u, 0xFF000000u, 0u};
+    float ambilightAvgLuma_ = -1.0f;
 };
 
 }  // namespace rh

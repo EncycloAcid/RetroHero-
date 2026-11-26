@@ -30,6 +30,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
@@ -75,6 +76,89 @@ private fun DrawScope.drawWoodgrainOverlay() {
     }
 }
 
+private fun shellLuminance(c: Color): Float =
+    (0.299f * c.red + 0.587f * c.green + 0.114f * c.blue).coerceIn(0f, 1f)
+
+private fun DrawScope.drawPortraitAmbilight(ambilight: AmbilightState, surfaceLuma: Float = 0f) {
+    if (!ambilight.isVisiblyGlowing) return
+    val w = size.width
+    val h = size.height
+    if (w <= 1f || h <= 1f) return
+
+    val flashBoost = 1f + ambilight.flash * 0.70f
+    val gain = ambilight.intensity * flashBoost
+    // Light matte shells (SNES/NES/DMG/Dreamcast) need SrcOver to tint bright ABS plastic with colored light;
+    // dark shells & pure-black OLED backdrops shine brightest with additive Screen blending.
+    val lightShell = surfaceLuma > 0.38f
+    val mode = if (lightShell) BlendMode.SrcOver else BlendMode.Screen
+    val modeScale = if (lightShell) 0.78f else 1.0f
+
+    fun bloom(color: Color, center: Offset, radius: Float, baseAlpha: Float) {
+        val energy = AmbilightState.edgeEnergy(color)
+        val alpha = (baseAlpha * modeScale * energy * gain).coerceIn(0f, if (lightShell) 0.52f else 0.74f)
+        if (alpha <= 0.015f || radius <= 2f) return
+        drawCircle(
+            brush = Brush.radialGradient(
+                0.0f to color.copy(alpha = alpha),
+                0.52f to color.copy(alpha = alpha * 0.44f),
+                1.0f to Color.Transparent,
+                center = center,
+                radius = radius,
+            ),
+            radius = radius,
+            center = center,
+            blendMode = mode,
+        )
+    }
+
+    // Upper bezel crown & side flank halos
+    bloom(ambilight.top, Offset(w * 0.50f, h * 0.07f), w * (0.74f + 0.16f * ambilight.flash), 0.38f)
+    bloom(ambilight.left, Offset(w * 0.04f, h * 0.27f), w * (0.52f + 0.12f * ambilight.flash), 0.36f)
+    bloom(ambilight.right, Offset(w * 0.96f, h * 0.27f), w * (0.52f + 0.12f * ambilight.flash), 0.36f)
+
+    // Downward OLED Ambilight wash across the physical controller deck & left/right button zones
+    bloom(ambilight.bottom, Offset(w * 0.50f, h * 0.51f), w * (0.90f + 0.22f * ambilight.flash), 0.44f)
+    bloom(ambilight.left, Offset(w * 0.18f, h * 0.60f), w * 0.54f, 0.28f)
+    bloom(ambilight.right, Offset(w * 0.82f, h * 0.60f), w * 0.54f, 0.28f)
+}
+
+private fun DrawScope.drawLandscapeAmbilight(ambilight: AmbilightState, surfaceLuma: Float = 0f) {
+    if (!ambilight.isVisiblyGlowing) return
+    val w = size.width
+    val h = size.height
+    if (w <= 1f || h <= 1f) return
+
+    val flashBoost = 1f + ambilight.flash * 0.72f
+    val gain = ambilight.intensity * flashBoost
+    val sideRadius = maxOf(w * 0.42f, h * 0.82f) * (1f + 0.16f * ambilight.flash)
+    val lightShell = surfaceLuma > 0.38f
+    val mode = if (lightShell) BlendMode.SrcOver else BlendMode.Screen
+    val modeScale = if (lightShell) 0.78f else 1.0f
+
+    fun bloom(color: Color, center: Offset, radius: Float, baseAlpha: Float) {
+        val energy = AmbilightState.edgeEnergy(color)
+        val alpha = (baseAlpha * modeScale * energy * gain).coerceIn(0f, if (lightShell) 0.54f else 0.78f)
+        if (alpha <= 0.015f || radius <= 2f) return
+        drawCircle(
+            brush = Brush.radialGradient(
+                0.0f to color.copy(alpha = alpha),
+                0.50f to color.copy(alpha = alpha * 0.46f),
+                1.0f to Color.Transparent,
+                center = center,
+                radius = radius,
+            ),
+            radius = radius,
+            center = center,
+            blendMode = mode,
+        )
+    }
+
+    bloom(ambilight.left, Offset(w * 0.16f, h * 0.50f), sideRadius, 0.46f)
+    bloom(ambilight.right, Offset(w * 0.84f, h * 0.50f), sideRadius, 0.46f)
+    bloom(ambilight.top, Offset(w * 0.50f, h * 0.04f), w * 0.48f, 0.30f)
+    bloom(ambilight.bottom, Offset(w * 0.50f, h * 0.96f), w * 0.48f, 0.30f)
+}
+
 @Composable
 private fun BezelStripeStack(
     stripeA: Color,
@@ -92,16 +176,33 @@ private fun BezelStripeStack(
 }
 
 /**
+ * Standalone OLED Ambilight cinema halo for translucent / minimal touch skins or controller-only play
+ * on pure black backgrounds (both landscape and portrait).
+ */
+@Composable
+fun AmbilightBackdropHalo(
+    ambilight: AmbilightState,
+    landscape: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    if (!ambilight.isVisiblyGlowing) return
+    Canvas(modifier.fillMaxSize()) {
+        if (landscape) drawLandscapeAmbilight(ambilight, 0f) else drawPortraitAmbilight(ambilight, 0f)
+    }
+}
+
+/**
  * Full-device console-authentic physical shell for portrait gameplay:
  * wraps both the live game display inside a console-specific molded bezel (with form-factor silhouette,
- * glowing Power/Status LED, hardware accent pinstripes, console subtitle, and stamped wordmark) and
- * the sculpted tactile controller deck (with speaker grille and seamless hardware casing).
+ * glowing Power/Status LED, hardware accent pinstripes, console subtitle, live OLED Ambilight halo,
+ * and stamped wordmark) and the sculpted tactile controller deck.
  */
 @Composable
 fun HandheldShell(
     style: ConsoleStyle,
     fastForwardActive: Boolean = false,
     sustainedCount: Int = 0,
+    ambilight: AmbilightState = AmbilightState.Off,
     modifier: Modifier = Modifier,
     gameContent: @Composable () -> Unit,
     padContent: @Composable () -> Unit,
@@ -116,6 +217,14 @@ fun HandheldShell(
         else -> "POWER"
     }
 
+    val rimTintFraction = if (ambilight.isVisiblyGlowing) {
+        (0.45f * ambilight.maxEnergy * ambilight.intensity + ambilight.flash * 0.30f).coerceIn(0f, 0.82f)
+    } else 0f
+    val dynamicBezelBorder = if (rimTintFraction > 0f) {
+        lerp(style.bezelBorder, ambilight.rimColor, rimTintFraction)
+    } else style.bezelBorder
+    val portraitLuma = shellLuminance(lerp(style.plateTop, style.plateBottom, 0.5f))
+
     Box(
         modifier
             .fillMaxSize()
@@ -125,9 +234,12 @@ fun HandheldShell(
                 ),
             ),
     ) {
-        // Subtle casing highlights, optional vintage woodgrain, and etched console speaker grille
+        // Subtle casing highlights, optional vintage woodgrain, live OLED Ambilight halo, and speaker grille
         Canvas(Modifier.fillMaxSize()) {
             if (style.woodgrain) drawWoodgrainOverlay()
+
+            // Live Framebuffer OLED Ambilight halo across casing & controller deck
+            drawPortraitAmbilight(ambilight, portraitLuma)
 
             // Subtle molded casing bevel around screen edges
             drawRect(
@@ -217,12 +329,22 @@ fun HandheldShell(
                     BezelFormFactor.HandheldWide -> 10.dp
                     else -> 8.dp
                 }
+                val bezelTopGlass = if (rimTintFraction > 0f) {
+                    lerp(lerp(style.bezel, Color.White, 0.05f), ambilight.top, rimTintFraction * 0.24f)
+                } else lerp(style.bezel, Color.White, 0.05f)
+                val bezelBottomGlass = if (rimTintFraction > 0f) {
+                    lerp(style.bezel, ambilight.bottom, rimTintFraction * 0.24f)
+                } else style.bezel
+                val innerCutoutBorder = if (rimTintFraction > 0f) {
+                    lerp(Color.Black.copy(alpha = 0.85f), ambilight.rimColor, (rimTintFraction * 0.78f).coerceAtMost(0.75f))
+                } else Color.Black.copy(alpha = 0.85f)
+
                 Column(
                     Modifier
                         .fillMaxSize()
                         .clip(bezelShape)
-                        .background(Brush.verticalGradient(listOf(lerp(style.bezel, Color.White, 0.05f), style.bezel)))
-                        .border(1.5.dp, style.bezelBorder, bezelShape)
+                        .background(Brush.verticalGradient(listOf(bezelTopGlass, bezelBottomGlass)))
+                        .border(1.5.dp, dynamicBezelBorder, bezelShape)
                         .padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 9.dp),
                 ) {
                     // Console-specific top accent pinstripes & hardware subtitle
@@ -268,7 +390,7 @@ fun HandheldShell(
                             .weight(1f)
                             .clip(RoundedCornerShape(screenCorner))
                             .background(Color.Black)
-                            .border(1.dp, Color.Black.copy(alpha = 0.85f), RoundedCornerShape(screenCorner)),
+                            .border(1.dp, innerCutoutBorder, RoundedCornerShape(screenCorner)),
                         contentAlignment = Alignment.Center,
                     ) {
                         gameContent()
@@ -371,9 +493,12 @@ fun HandheldShell(
                     )
                 }
             } else {
+                val seamGlow = if (rimTintFraction > 0f) {
+                    ambilight.bottom.copy(alpha = (rimTintFraction * 0.36f).coerceAtMost(0.42f))
+                } else Color.White.copy(alpha = 0.16f)
                 Column(Modifier.fillMaxWidth()) {
                     Box(Modifier.fillMaxWidth().height(1.dp).background(Color.Black.copy(alpha = 0.22f)))
-                    Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.16f)))
+                    Box(Modifier.fillMaxWidth().height(1.dp).background(seamGlow))
                 }
             }
 
@@ -391,14 +516,16 @@ fun HandheldShell(
 
 /**
  * Console-authentic landscape shell: dresses the left and right ergonomic grip margins in the
- * exact console's hardware housing (casing gradient, optional woodgrain, power LED & subtle
- * console wordmark) while keeping the centered live game display at full unobstructed height.
+ * exact console's hardware housing (casing gradient, optional woodgrain, live directional OLED
+ * Ambilight grip halos, power LED & subtle console wordmark) while keeping the centered live game
+ * display at full unobstructed height.
  */
 @Composable
 fun LandscapeConsoleShell(
     style: ConsoleStyle,
     fastForwardActive: Boolean = false,
     sustainedCount: Int = 0,
+    ambilight: AmbilightState = AmbilightState.Off,
     modifier: Modifier = Modifier,
     gameContent: @Composable () -> Unit,
     padContent: @Composable () -> Unit,
@@ -407,20 +534,29 @@ fun LandscapeConsoleShell(
         fastForwardActive || sustainedCount > 0 -> Color(0xFFFF6A1A)
         else -> style.ledColor
     }
+    val pillBorder = if (ambilight.isVisiblyGlowing) {
+        val f = (0.45f * ambilight.maxEnergy * ambilight.intensity + ambilight.flash * 0.30f).coerceIn(0f, 0.80f)
+        lerp(style.bezelBorder.copy(alpha = 0.75f), ambilight.bottom, f)
+    } else style.bezelBorder.copy(alpha = 0.75f)
+
+    val gripTop = lerp(style.plateTop, Color.Black, 0.12f)
+    val gripBottom = lerp(style.plateBottom, Color.Black, 0.20f)
+    val landscapeLuma = shellLuminance(lerp(gripTop, gripBottom, 0.5f))
+
     Box(
         modifier
             .fillMaxSize()
             .background(
                 Brush.verticalGradient(
-                    listOf(
-                        lerp(style.plateTop, Color.Black, 0.12f),
-                        lerp(style.plateBottom, Color.Black, 0.20f),
-                    ),
+                    listOf(gripTop, gripBottom),
                 ),
             ),
     ) {
         Canvas(Modifier.fillMaxSize()) {
             if (style.woodgrain) drawWoodgrainOverlay()
+            // Live directional OLED Ambilight glow across left & right landscape grips
+            drawLandscapeAmbilight(ambilight, landscapeLuma)
+
             // Subtle side grip bevel shading
             drawRect(
                 brush = Brush.horizontalGradient(
@@ -467,7 +603,7 @@ fun LandscapeConsoleShell(
                 .padding(bottom = 4.dp)
                 .clip(RoundedCornerShape(50))
                 .background(style.bezel.copy(alpha = 0.72f))
-                .border(0.75.dp, style.bezelBorder.copy(alpha = 0.75f), RoundedCornerShape(50))
+                .border(0.75.dp, pillBorder, RoundedCornerShape(50))
                 .padding(horizontal = 10.dp, vertical = 3.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),

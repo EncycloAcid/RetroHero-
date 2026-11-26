@@ -170,6 +170,24 @@ JNIEXPORT void JNICALL JNI_FN(setUpscaleFactor)(JNIEnv *, jobject, jint factor) 
     Frontend::get().setUpscaleFactor(factor);
 }
 
+JNIEXPORT void JNICALL JNI_FN(setAmbilightEnabled)(JNIEnv *, jobject, jboolean enabled) {
+    Frontend::get().setAmbilightEnabled(enabled == JNI_TRUE);
+}
+
+JNIEXPORT void JNICALL JNI_FN(pollAmbilight)(JNIEnv *env, jobject, jintArray outArr) {
+    if (!outArr || env->GetArrayLength(outArr) < 5) return;
+    uint32_t raw[5] = {0};
+    Frontend::get().pollAmbilight(raw);
+    jint vals[5] = {
+        static_cast<jint>(raw[0]),
+        static_cast<jint>(raw[1]),
+        static_cast<jint>(raw[2]),
+        static_cast<jint>(raw[3]),
+        static_cast<jint>(raw[4]),
+    };
+    env->SetIntArrayRegion(outArr, 0, 5, vals);
+}
+
 JNIEXPORT void JNICALL JNI_FN(setRewindEnabled)(JNIEnv *, jobject, jboolean on) {
     Frontend::get().setRewindEnabled(on);
 }
