@@ -136,6 +136,7 @@ private sealed interface Region {
     val rect: Rect
 
     data class Buttons(override val rect: Rect, val ids: List<Int>) : Region
+    data class FaceButton(override val rect: Rect, val id: Int) : Region
     data class Dpad(override val rect: Rect) : Region
 }
 
@@ -144,9 +145,15 @@ private class Regions {
     val map = HashMap<String, Region>()
 }
 
+private val LocalSmartTouch = staticCompositionLocalOf { SmartTouchConfig() }
+
 /**
- * Multi-touch on-screen gamepad with Delta-style Button Sustain (Hold). All touches are handled
- * by a single pointer handler so a finger can slide between buttons and press D-pad diagonals.
+ * Multi-touch on-screen gamepad with Smart Touch Ergonomics:
+ * - Thumb-roll chord zones across adjacent face buttons (e.g. Y→B, B→A)
+ * - Tap-to-latch L/R shoulder toggles (zero claw grip)
+ * - 1-thumb Combo Macro pill (e.g. Dash+Jump, Drift+Action)
+ * - Automatic Portrait One-Handed RPG Mode vs. Landscape Action Mode
+ * - Delta-style Button Sustain (Hold)
  */
 @Composable
 fun VirtualGamepad(
@@ -165,6 +172,8 @@ fun VirtualGamepad(
     adjust: Map<String, PadAdjust> = emptyMap(),
     edit: PadEditState? = null,
     inShell: Boolean = false,
+    smartTouch: SmartTouchConfig = SmartTouchConfig(),
+    oneHandedPortrait: Boolean = false,
     onSustainedChanged: (Set<Int>) -> Unit = {},
 ) {
     val regions = remember { Regions() }
@@ -172,23 +181,39 @@ fun VirtualGamepad(
     var sustained by remember { mutableStateOf(emptySet<Int>()) }
     var holdArmed by remember { mutableStateOf(false) }
     var origin by remember { mutableStateOf(Offset.Zero) }
+    val latestSmart = androidx.compose.runtime.rememberUpdatedState(smartTouch)
+
+    // Clear stale regions whenever layout/orientation/one-handed mode switches
+    androidx.compose.runtime.LaunchedEffect(layout, landscape, oneHandedPortrait) {
+        regions.map.clear()
+    }
 
     Box(
         modifier
             .onGloballyPositioned { origin = it.positionInRoot() }
-            .pointerInput(layout, edit != null) {
+            .pointerInput(layout, edit != null, landscape, oneHandedPortrait) {
                 if (edit != null) return@pointerInput
                 val slop = 10.dp.toPx()
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent()
+                        val cfg = latestSmart.value
                         val now = HashSet<Int>()
+                        val faceCircles = regions.map.values.mapNotNull { r ->
+                            if (r is Region.FaceButton) {
+                                SmartTouch.FaceHitCircle(r.id, r.rect.center, minOf(r.rect.width, r.rect.height) * 0.5f)
+                            } else null
+                        }
                         for (change in event.changes) {
                             if (!change.pressed) continue
                             val p = change.position + origin
+                            if (faceCircles.isNotEmpty()) {
+                                now += SmartTouch.resolveFaceChord(p, faceCircles, cfg.thumbChordZones, slop)
+                            }
                             for (region in regions.map.values) {
                                 when (region) {
                                     is Region.Buttons -> if (region.rect.inflate(slop).contains(p)) now += region.ids
+                                    is Region.FaceButton -> Unit // handled above with thumb-roll chord zones
                                     is Region.Dpad -> if (region.rect.inflate(slop * 2).contains(p)) now += dpadDirections(region.rect, p)
                                 }
                             }
@@ -203,7 +228,6 @@ fun VirtualGamepad(
                             // Handle Delta-inspired Hold Button (Sustain) trigger
                             if (ID_HOLD in newlyDown) {
                                 if (sustained.isNotEmpty() && !holdArmed) {
-                                    // Tap HOLD while buttons are latched to release all latched buttons
                                     val cleared = sustained
                                     sustained = emptySet()
                                     onSustainedChanged(sustained)
@@ -214,7 +238,20 @@ fun VirtualGamepad(
                                 onPress()
                             }
 
-                            val gameDown = newlyDown.filter { it < ID_MENU }
+                            // Handle 1-tap L/R Shoulder Latch toggles (zero claw grip!)
+                            val latchedShouldersDown = if (cfg.shoulderLatch && !holdArmed) {
+                                newlyDown.filter { it in SmartTouch.SHOULDER_IDS }
+                            } else emptyList()
+                            if (latchedShouldersDown.isNotEmpty()) {
+                                val nextSustained = sustained.toMutableSet()
+                                for (id in latchedShouldersDown) {
+                                    if (id in nextSustained) nextSustained.remove(id) else nextSustained.add(id)
+                                }
+                                sustained = nextSustained
+                                onSustainedChanged(sustained)
+                            }
+
+                            val gameDown = newlyDown.filter { it < ID_MENU && it !in latchedShouldersDown }
                             if (holdArmed && gameDown.isNotEmpty()) {
                                 val nextSustained = sustained.toMutableSet()
                                 for (id in gameDown) {
@@ -225,15 +262,16 @@ fun VirtualGamepad(
                                 onSustainedChanged(sustained)
                                 onPress()
                             } else if (sustained.isNotEmpty() && gameDown.any { it in sustained }) {
-                                // Tapping an already-latched button releases its sustain
                                 val nextSustained = sustained.toMutableSet()
                                 gameDown.forEach { if (it in nextSustained) nextSustained.remove(it) }
                                 sustained = nextSustained
                                 onSustainedChanged(sustained)
                             }
 
+                            // When a latched shoulder is tapped off, release it immediately without requiring finger-up first
+                            val unlatchedNow = (prevSustained - sustained).intersect(latchedShouldersDown.toSet())
                             val prevEffective = old.filter { it < ID_MENU }.toSet() + prevSustained
-                            val nextEffective = now.filter { it < ID_MENU }.toSet() + sustained
+                            val nextEffective = (now.filter { it < ID_MENU }.toSet() - unlatchedNow) + sustained
                             for (id in nextEffective - prevEffective) onButton(id, true)
                             for (id in prevEffective - nextEffective) onButton(id, false)
 
@@ -277,11 +315,16 @@ fun VirtualGamepad(
             LocalSustained provides sustained,
             LocalHoldArmed provides holdArmed,
             LocalInShell provides inShell,
+            LocalSmartTouch provides smartTouch,
         ) {
             val solid = consoleStyle != null && !landscape
             val visualPressed = pressed + sustained
             Box(Modifier.fillMaxSize().alpha(if (solid) 1f else if (edit != null) maxOf(opacity, 0.85f) else opacity)) {
-                if (landscape) LandscapeControls(layout, regions, visualPressed) else PortraitControls(layout, regions, visualPressed)
+                when {
+                    landscape -> LandscapeControls(layout, regions, visualPressed)
+                    oneHandedPortrait -> OneHandedPortraitControls(layout, regions, visualPressed, smartTouch.leftHandedPortrait)
+                    else -> PortraitControls(layout, regions, visualPressed)
+                }
             }
         }
     }
@@ -378,11 +421,19 @@ private fun pressScale(pressed: Boolean): Float {
 @Composable
 private fun PortraitControls(layout: PadLayout, regions: Regions, pressed: Set<Int>) {
     LocalConsole.current?.let { ControllerPlate(it) }
+    val smart = LocalSmartTouch.current
+    val macro = remember(layout, smart.macroIndex) {
+        val list = SmartTouch.availableMacrosFor(layout)
+        list.getOrNull(smart.macroIndex % list.size.coerceAtLeast(1))
+    }
     BoxWithConstraints(Modifier.fillMaxSize().padding(horizontal = 20.dp, vertical = 8.dp)) {
         val compact = maxWidth < 320.dp
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.fillMaxWidth().height(42.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.padGroup("l")) { Shoulders(layout.leftShoulders, regions, pressed, "l") }
+                if (smart.comboMacroEnabled && macro != null) {
+                    Box(Modifier.padGroup("macro")) { ComboMacroPill(macro, regions, pressed) }
+                }
                 Box(Modifier.padGroup("r")) { Shoulders(layout.rightShoulders, regions, pressed, "r") }
             }
             Row(
@@ -411,8 +462,111 @@ private fun PortraitControls(layout: PadLayout, regions: Regions, pressed: Set<I
     }
 }
 
+/**
+ * Ergonomic Portrait One-Handed RPG Mode: clusters a compact 8-way D-pad, primary confirm/cancel
+ * face buttons, Fast Forward, Start, and Menu within a single thumb's natural sweep (right- or left-handed).
+ */
+@Composable
+private fun OneHandedPortraitControls(
+    layout: PadLayout,
+    regions: Regions,
+    pressed: Set<Int>,
+    leftHanded: Boolean,
+) {
+    LocalConsole.current?.let { ControllerPlate(it) }
+    val primaryButtons = remember(layout) {
+        val d = layout.diamond
+        if (d != null && d.size == 4) listOf(d[2], d[3], d[1], d[0]) // A, B, Y, X (or ○, ✕, □, △)
+        else layout.rows.flatten().reversed()
+    }
+    val confirmBtn = primaryButtons.getOrNull(0)
+    val cancelBtn = primaryButtons.getOrNull(1)
+    val extraBtn = primaryButtons.getOrNull(2)
+
+    Box(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 10.dp)) {
+        Column(
+            Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
+            // Top bar: shoulders + quick speed & menu within easy thumb reach
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    layout.leftShoulders.firstOrNull()?.let { Shoulders(listOf(it), regions, pressed, "l") }
+                    layout.rightShoulders.firstOrNull()?.let { Shoulders(listOf(it), regions, pressed, "r") }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    SpeedControls(regions, pressed, controlSize = 36.dp)
+                    IconControl("menu", ID_MENU, regions, pressed, Icons.Rounded.Pause, "Menu", 36.dp)
+                }
+            }
+
+            // Main single-thumb arc anchored to the dominant side
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                horizontalArrangement = if (leftHanded) Arrangement.Start else Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                val actionCluster: @Composable () -> Unit = {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                            cancelBtn?.let { RoundButton(it, regions, pressed, 56.dp) }
+                            confirmBtn?.let { RoundButton(it, regions, pressed, 64.dp) }
+                        }
+                        extraBtn?.let {
+                            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                RoundButton(it, regions, pressed, 46.dp)
+                                primaryButtons.getOrNull(3)?.let { fourth ->
+                                    RoundButton(fourth, regions, pressed, 46.dp)
+                                }
+                            }
+                        }
+                    }
+                }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (leftHanded) {
+                        Box(Modifier.padGroup("dpad")) { Dpad(regions, pressed, 134.dp) }
+                        Box(Modifier.padGroup("face")) { actionCluster() }
+                    } else {
+                        Box(Modifier.padGroup("face")) { actionCluster() }
+                        Box(Modifier.padGroup("dpad")) { Dpad(regions, pressed, 134.dp) }
+                    }
+                }
+            }
+
+            // Bottom utility row: Select / Start + Hold pinned toward dominant hand
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = if (leftHanded) Arrangement.Start else Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    SelectStart(layout, regions, pressed, Modifier.padGroup("selstart"), compact = true)
+                    IconControl("hold", ID_HOLD, regions, pressed, Icons.Rounded.PushPin, "Hold button", 34.dp)
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun LandscapeControls(layout: PadLayout, regions: Regions, pressed: Set<Int>) {
+    val smart = LocalSmartTouch.current
+    val macro = remember(layout, smart.macroIndex) {
+        val list = SmartTouch.availableMacrosFor(layout)
+        list.getOrNull(smart.macroIndex % list.size.coerceAtLeast(1))
+    }
     Box(Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 14.dp)) {
         Column(Modifier.align(Alignment.TopStart).padGroup("l")) { Shoulders(layout.leftShoulders, regions, pressed, "l") }
         Column(Modifier.align(Alignment.TopEnd).padGroup("r")) { Shoulders(layout.rightShoulders, regions, pressed, "r") }
@@ -422,8 +576,47 @@ private fun LandscapeControls(layout: PadLayout, regions: Regions, pressed: Set<
             IconControl("menu", ID_MENU, regions, pressed, Icons.Rounded.Pause, "Menu")
         }
         Box(Modifier.align(Alignment.CenterStart).offset(y = 24.dp).padGroup("dpad")) { Dpad(regions, pressed, 146.dp) }
-        Box(Modifier.align(Alignment.CenterEnd).offset(y = 24.dp).padGroup("face")) { FaceButtons(layout, regions, pressed) }
+        Column(
+            Modifier.align(Alignment.CenterEnd).offset(y = 18.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (smart.comboMacroEnabled && macro != null) {
+                Box(Modifier.padGroup("macro")) { ComboMacroPill(macro, regions, pressed) }
+            }
+            Box(Modifier.padGroup("face")) { FaceButtons(layout, regions, pressed) }
+        }
         SelectStart(layout, regions, pressed, Modifier.align(Alignment.BottomCenter).padGroup("selstart"))
+    }
+}
+
+/** Dedicated 1-thumb Combo Macro pill that fires a simultaneous multi-button chord on the same frame. */
+@Composable
+private fun ComboMacroPill(macro: ComboMacro, regions: Regions, pressed: Set<Int>) {
+    val active = macro.buttonIds.all { it in pressed }
+    val accent = LocalPadAccent.current
+    val scale = pressScale(active)
+    Box(
+        Modifier
+            .height(34.dp)
+            .onGloballyPositioned { regions.map["macro_${macro.id}"] = Region.Buttons(it.boundsInRoot(), macro.buttonIds) }
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(CircleShape)
+            .background(if (active) accent.copy(alpha = 0.88f) else GlassFill)
+            .border(1.5.dp, if (active) Color.White.copy(alpha = 0.85f) else accent.copy(alpha = 0.65f), CircleShape)
+            .padding(horizontal = 13.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = macro.label,
+            color = if (active) Color.White else (LocalConsole.current?.shoulderLabel ?: PadLabel),
+            style = TextStyle(
+                fontFamily = InterDisplay,
+                fontWeight = FontWeight.Black,
+                fontSize = 12.sp,
+                letterSpacing = 0.6.sp,
+            ),
+        )
     }
 }
 
@@ -602,7 +795,7 @@ private fun RoundButton(button: PadButton, regions: Regions, pressed: Set<Int>, 
     Box(
         modifier
             .size(size)
-            .onGloballyPositioned { regions.map["btn_${button.id}"] = Region.Buttons(it.boundsInRoot(), listOf(button.id)) }
+            .onGloballyPositioned { regions.map["btn_${button.id}"] = Region.FaceButton(it.boundsInRoot(), button.id) }
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
@@ -644,7 +837,7 @@ private fun ConsoleButton(style: ConsoleStyle, button: PadButton, regions: Regio
         Box(
             Modifier
                 .fillMaxSize()
-                .onGloballyPositioned { regions.map["btn_${button.id}"] = Region.Buttons(it.boundsInRoot(), listOf(button.id)) }
+                .onGloballyPositioned { regions.map["btn_${button.id}"] = Region.FaceButton(it.boundsInRoot(), button.id) }
                 .graphicsLayer {
                     scaleX = 0.94f + 0.06f * scale
                     scaleY = 0.94f + 0.06f * scale
@@ -690,9 +883,11 @@ private fun ConsoleButton(style: ConsoleStyle, button: PadButton, regions: Regio
 
 @Composable
 private fun Shoulders(buttons: List<PadButton>, regions: Regions, pressed: Set<Int>, side: String) {
+    val sustained = LocalSustained.current
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         val ordered = if (side == "r") buttons.reversed() else buttons
         ordered.forEach { b ->
+            val latched = b.id in sustained
             GlassControl(
                 key = "sh_${b.id}",
                 id = b.id,
@@ -701,7 +896,18 @@ private fun Shoulders(buttons: List<PadButton>, regions: Regions, pressed: Set<I
                 shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp, bottomStart = 12.dp, bottomEnd = 12.dp),
                 modifier = Modifier.width(if (buttons.size > 1) 68.dp else 84.dp).height(42.dp),
                 kind = "shoulder",
-            ) { Text(b.label, color = LocalConsole.current?.shoulderLabel ?: PadLabel, style = TextStyle(fontFamily = InterDisplay, fontWeight = FontWeight.Bold, fontSize = 16.sp)) }
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        b.label,
+                        color = LocalConsole.current?.shoulderLabel ?: PadLabel,
+                        style = TextStyle(fontFamily = InterDisplay, fontWeight = FontWeight.Bold, fontSize = 16.sp),
+                    )
+                    if (latched) {
+                        Box(Modifier.size(6.dp).clip(CircleShape).background(Color(0xFFFF5416)))
+                    }
+                }
+            }
         }
     }
 }

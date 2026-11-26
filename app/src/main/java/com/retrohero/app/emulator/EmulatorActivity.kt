@@ -232,6 +232,12 @@ class EmulatorActivity : ComponentActivity() {
         }
     }
 
+    // Smart Touch Ergonomics & Gyro-to-Analog steering
+    private var smartTouch by mutableStateOf(SmartTouchConfig())
+    private var gyroController: GyroSteeringController? = null
+    private var gyroDigitalLeft = false
+    private var gyroDigitalRight = false
+
     // Play time: counted only while the game is actually running on screen.
     private var runningSince = 0L
     private var pendingSession = true
@@ -284,6 +290,40 @@ class EmulatorActivity : ComponentActivity() {
         vsyncLock = gamePrefs.vsyncLock
         bfi120Hz = gamePrefs.bfi120Hz
         displayHz = DisplaySync.currentRefreshRate(this)
+        smartTouch = SmartTouchConfig(
+            thumbChordZones = gamePrefs.thumbChordZones,
+            shoulderLatch = gamePrefs.shoulderLatch,
+            comboMacroEnabled = gamePrefs.comboMacroEnabled,
+            macroIndex = gamePrefs.macroIndex(system.id),
+            gyroSteering = gamePrefs.gyroSteering,
+            portraitMode = gamePrefs.portraitTouchMode,
+            leftHandedPortrait = gamePrefs.leftHandedPortrait,
+        )
+        gyroController = GyroSteeringController(
+            context = this,
+            displayRotationProvider = {
+                runCatching {
+                    if (Build.VERSION.SDK_INT >= 30) display?.rotation ?: Surface.ROTATION_0
+                    else @Suppress("DEPRECATION") windowManager.defaultDisplay.rotation
+                }.getOrDefault(Surface.ROTATION_0)
+            },
+            onSteer = { axisX, digLeft, digRight ->
+                if (started && !shutDown && !menuOpen && !editingPad) {
+                    NativeBridge.setAnalog(0, 0, 0, axisX)
+                    val digitalSystem = system.id in setOf("nes", "snes", "gb", "gbc", "gba", "genesis", "sms", "gg", "pce")
+                    if (digitalSystem) {
+                        if (digLeft != gyroDigitalLeft) {
+                            gyroDigitalLeft = digLeft
+                            NativeBridge.setButton(0, com.retrohero.app.data.RetroPad.LEFT, digLeft)
+                        }
+                        if (digRight != gyroDigitalRight) {
+                            gyroDigitalRight = digRight
+                            NativeBridge.setButton(0, com.retrohero.app.data.RetroPad.RIGHT, digRight)
+                        }
+                    }
+                }
+            },
+        )
         cheats = Cheats.load(paths.cheatsFile(game))
         input.onRewind = { held -> if (rewindOn) NativeBridge.setRewinding(held) }
         input.rewindKeyEnabled = system.id != "psx"
@@ -369,9 +409,40 @@ class EmulatorActivity : ComponentActivity() {
         NativeBridge.start()
         started = true
         phase = Phase.Running
+        syncGyroSteering()
         bootNotice?.let { toast(it) }
         startClock()
         startRetroAchievements(romPath)
+    }
+
+    private fun updateSmartTouch(transform: (SmartTouchConfig) -> SmartTouchConfig) {
+        val next = transform(smartTouch)
+        smartTouch = next
+        gamePrefs.thumbChordZones = next.thumbChordZones
+        gamePrefs.shoulderLatch = next.shoulderLatch
+        gamePrefs.comboMacroEnabled = next.comboMacroEnabled
+        gamePrefs.setMacroIndex(system.id, next.macroIndex)
+        gamePrefs.gyroSteering = next.gyroSteering
+        gamePrefs.portraitTouchMode = next.portraitMode
+        gamePrefs.leftHandedPortrait = next.leftHandedPortrait
+        syncGyroSteering()
+    }
+
+    private fun syncGyroSteering() {
+        val wantGyro = smartTouch.gyroSteering && started && !shutDown && !menuOpen && !editingPad
+        if (wantGyro) {
+            gyroController?.start()
+        } else {
+            gyroController?.stop()
+            if (gyroDigitalLeft) {
+                gyroDigitalLeft = false
+                if (started && !shutDown) NativeBridge.setButton(0, com.retrohero.app.data.RetroPad.LEFT, false)
+            }
+            if (gyroDigitalRight) {
+                gyroDigitalRight = false
+                if (started && !shutDown) NativeBridge.setButton(0, com.retrohero.app.data.RetroPad.RIGHT, false)
+            }
+        }
     }
 
     private fun startVsyncFeed() {
@@ -577,6 +648,7 @@ class EmulatorActivity : ComponentActivity() {
         menuOpen = open
         if (started) NativeBridge.setPaused(open)
         if (open) stopClock() else startClock()
+        syncGyroSteering()
     }
 
     private fun startClock() {
@@ -680,6 +752,7 @@ class EmulatorActivity : ComponentActivity() {
     override fun onPause() {
         super.onPause()
         stopVsyncFeed()
+        gyroController?.stop()
         if (started && !shutDown) {
             NativeBridge.setPaused(true)
             NativeBridge.setRewinding(false)
@@ -693,6 +766,7 @@ class EmulatorActivity : ComponentActivity() {
         if (started && !shutDown && !menuOpen && !editingPad) {
             applyDisplaySyncLock()
             startVsyncFeed()
+            syncGyroSteering()
             NativeBridge.setPaused(false)
             startClock()
         }
@@ -718,6 +792,7 @@ class EmulatorActivity : ComponentActivity() {
     private fun shutdownCore() {
         if (!started || shutDown) return
         stopVsyncFeed()
+        gyroController?.stop()
         raJob?.cancel()
         raJob = null
         stopClock()
@@ -1107,6 +1182,9 @@ class EmulatorActivity : ComponentActivity() {
         onSustainedChanged: (Set<Int>) -> Unit = {},
     ) {
         val view = androidx.compose.ui.platform.LocalView.current
+        val oneHanded = remember(smartTouch.portraitMode, landscape, game.title) {
+            SmartTouch.shouldUseOneHandedPortrait(smartTouch.portraitMode, landscape, game.title)
+        }
         VirtualGamepad(
             layout = system.layout,
             landscape = landscape,
@@ -1133,6 +1211,8 @@ class EmulatorActivity : ComponentActivity() {
                 )
             } else null,
             inShell = inShell,
+            smartTouch = smartTouch,
+            oneHandedPortrait = oneHanded,
             onSustainedChanged = onSustainedChanged,
         )
     }
@@ -1225,6 +1305,7 @@ class EmulatorActivity : ComponentActivity() {
                     ) { p ->
                         when (p) {
                             "discs" -> DiscsPage { page = "main" }
+                            "smart_touch" -> SmartTouchPage { page = "main" }
                             "save" -> SlotPage(saving = true) { page = "main" }
                             "load" -> SlotPage(saving = false) { page = "main" }
                             "options" -> OptionsPage { page = "main" }
@@ -1392,7 +1473,7 @@ class EmulatorActivity : ComponentActivity() {
                     setMenu(false)
                 }
             }
-            val switchCount = if (deltaSkinsForSystem.isNotEmpty()) 7 else 6
+            val switchCount = if (deltaSkinsForSystem.isNotEmpty()) 8 else 7
             SegmentedGroup(null, switchCount) {
                 MenuSwitch(shapes(0), Icons.Default.FastForward, "Fast forward", "${settings.fastForwardSpeed.toInt()}× speed", fastForwardToggle) {
                     fastForwardToggle = it
@@ -1436,20 +1517,147 @@ class EmulatorActivity : ComponentActivity() {
                     },
                     verticalAlignment = Alignment.CenterVertically,
                 ) { Text("Run-Ahead latency") }
-                MenuSwitch(shapes(4), Icons.Default.Tv, "Live FPS HUD", "FPS, frame time (ms) & Run-Ahead pill", showPerfHud) {
+                MenuSwitch(shapes(4), Icons.Default.Tv, "Live FPS HUD", "FPS, frame time (ms) & Vsync pill", showPerfHud) {
                     showPerfHud = it
                     settings.showPerfHud = it
                 }
                 MenuSwitch(shapes(5), Icons.Default.Gamepad, "Touch controls", "Show the on-screen gamepad", showPad) { showPad = it }
+                val smartSummary = buildList {
+                    if (smartTouch.thumbChordZones) add("Chords")
+                    if (smartTouch.shoulderLatch) add("L/R latch")
+                    if (smartTouch.comboMacroEnabled) add("Macro")
+                    if (smartTouch.gyroSteering) add("Gyro")
+                }.joinToString(" · ").ifBlank { "Standard touch" }
+                SegmentedListItem(
+                    onClick = { navigate("smart_touch") },
+                    shapes = shapes(6),
+                    colors = segmentColors(),
+                    leadingContent = { ShapeIcon(Icons.Default.Gamepad) },
+                    supportingContent = { Text(smartSummary, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) { Text("Smart Touch ergonomics") }
                 if (deltaSkinsForSystem.isNotEmpty()) {
                     SegmentedListItem(
                         onClick = { navigate("skin") },
-                        shapes = shapes(6),
+                        shapes = shapes(7),
                         colors = segmentColors(),
                         leadingContent = { ShapeIcon(Icons.Default.AspectRatio) },
                         supportingContent = { Text(activeDeltaSkin?.name ?: "Built-in RetroHero pad") },
                         verticalAlignment = Alignment.CenterVertically,
                     ) { Text("Delta skin") }
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun SmartTouchPage(back: () -> Unit) {
+        val macros = remember(system.id) { SmartTouch.availableMacrosFor(system.layout) }
+        val activeMacro = macros.getOrNull(smartTouch.macroIndex % macros.size.coerceAtLeast(1))
+        val portraitLabel = when (smartTouch.portraitMode) {
+            SmartTouch.PORTRAIT_ONE_HAND -> "Always One-Handed (thumb arc)"
+            SmartTouch.PORTRAIT_STANDARD -> "Standard Two-Handed"
+            else -> if (SmartTouch.isRpgFriendly(game.title)) "Auto · One-Handed RPG active" else "Auto · One-Handed for RPGs"
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            PageHeader("Smart Touch", back)
+            SegmentedGroup(null, 6) {
+                MenuSwitch(
+                    shapes(0),
+                    Icons.Default.Gamepad,
+                    "Thumb-roll chord zones",
+                    "Slide across B→A or Y→B to hold both cleanly",
+                    smartTouch.thumbChordZones,
+                ) { on -> updateSmartTouch { it.copy(thumbChordZones = on) } }
+
+                MenuSwitch(
+                    shapes(1),
+                    Icons.Default.OpenWith,
+                    "Tap-to-latch L / R shoulders",
+                    "Tap once to lock aim or drift · zero claw grip",
+                    smartTouch.shoulderLatch,
+                ) { on -> updateSmartTouch { it.copy(shoulderLatch = on) } }
+
+                MenuSwitch(
+                    shapes(2),
+                    Icons.Default.FastForward,
+                    "1-thumb Combo Macro pill",
+                    activeMacro?.let { "${it.label} (${it.subtitle})" } ?: "Simultaneous chord button",
+                    smartTouch.comboMacroEnabled,
+                ) { on -> updateSmartTouch { it.copy(comboMacroEnabled = on) } }
+
+                SegmentedListItem(
+                    onClick = {
+                        if (macros.size > 1) {
+                            updateSmartTouch { it.copy(macroIndex = (it.macroIndex + 1) % macros.size, comboMacroEnabled = true) }
+                        }
+                    },
+                    shapes = shapes(3),
+                    colors = segmentColors(),
+                    leadingContent = { ShapeIcon(Icons.Default.Tune) },
+                    supportingContent = {
+                        Text(
+                            if (activeMacro != null) "${activeMacro.label} · tap to cycle (${macros.size} presets)"
+                            else "No multi-button macro needed for ${system.shortName}",
+                        )
+                    },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) { Text("Combo Macro preset") }
+
+                MenuSwitch(
+                    shapes(4),
+                    Icons.Default.Tv,
+                    "Gyro-to-Analog steering",
+                    if (gyroController?.isAvailable == true) "Tilt phone to steer racing & flight games"
+                    else "Motion sensor unavailable on this device",
+                    smartTouch.gyroSteering,
+                ) { on ->
+                    if (on && gyroController?.isAvailable != true) {
+                        toast("Motion sensor unavailable on this device")
+                    } else {
+                        updateSmartTouch { it.copy(gyroSteering = on) }
+                        if (on) {
+                            gyroController?.recenter()
+                            toast("Gyro steering centered to current angle")
+                        }
+                    }
+                }
+
+                SegmentedListItem(
+                    onClick = {
+                        val nextMode = (smartTouch.portraitMode + 1) % 3
+                        updateSmartTouch { it.copy(portraitMode = nextMode) }
+                    },
+                    shapes = shapes(5),
+                    colors = segmentColors(),
+                    leadingContent = { ShapeIcon(Icons.Default.AspectRatio) },
+                    supportingContent = { Text(portraitLabel) },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) { Text("Portrait layout mode") }
+            }
+
+            if (smartTouch.portraitMode != SmartTouch.PORTRAIT_STANDARD) {
+                SegmentedGroup(null, 1) {
+                    MenuSwitch(
+                        shapes(0),
+                        Icons.Default.OpenWith,
+                        "Left-handed One-Hand mode",
+                        "Anchors portrait thumb arc to the left side",
+                        smartTouch.leftHandedPortrait,
+                    ) { on -> updateSmartTouch { it.copy(leftHandedPortrait = on) } }
+                }
+            }
+
+            if (smartTouch.gyroSteering) {
+                Button(
+                    onClick = {
+                        gyroController?.recenter()
+                        toast("Gyro center reset")
+                    },
+                    shapes = ButtonDefaults.shapes(),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Re-center gyro angle")
                 }
             }
         }
