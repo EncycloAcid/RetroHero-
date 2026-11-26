@@ -20,6 +20,7 @@ import androidx.compose.material.icons.rounded.EmojiEvents
 import androidx.compose.material.icons.rounded.Loop
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Public
+import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.SwapVert
 import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.rounded.Translate
@@ -316,6 +317,17 @@ class EmulatorActivity : ComponentActivity() {
     private var warmupProgress by mutableFloatStateOf(1f)
     private var batteryPercent by mutableIntStateOf(100)
     private var batteryPulsePhase by mutableFloatStateOf(0f)
+    private var macroPhase by mutableStateOf(MacroPhase.IDLE)
+    private var savedMacros by mutableStateOf<List<RecordedMacro>>(emptyList())
+    private var activeMacro by mutableStateOf<RecordedMacro?>(null)
+    private var macroSheetOpen by mutableStateOf(false)
+    private var macroFastForward by mutableStateOf(true)
+    private var macroElapsedMs by mutableStateOf(0L)
+    private var macroLoopCount by mutableIntStateOf(1)
+    private var macroAppliedMask: Int = 0
+    private var macroStartedAtMs: Long = 0L
+    private val macroRecordSteps = mutableListOf<MacroStep>()
+    private var macroBoostedFf: Boolean = false
     private var browserOpen by mutableStateOf(false)
     private var browserLastUrl by mutableStateOf<String?>(null)
     private var browserBookmarkedUrl by mutableStateOf<String?>(null)
@@ -449,6 +461,7 @@ class EmulatorActivity : ComponentActivity() {
         pinnedGuideNote = gamePrefs.pinnedNote(game.id)
         nostalgiaConfig = gamePrefs.nostalgiaConfig()
         batteryPercent = readBatteryPercent()
+        savedMacros = MacroStore.load(paths.macrosFile(game))
         browserBookmarkedUrl = runCatching {
             paths.browserBookmarkFile(game).takeIf { it.exists() }?.readText()?.trim()?.takeIf { it.isNotBlank() }
         }.getOrNull()
@@ -1485,6 +1498,80 @@ class EmulatorActivity : ComponentActivity() {
         }
     }
 
+    private fun startMacroRecording() {
+        stopMacroPlayback(silent = true)
+        macroRecordSteps.clear()
+        macroElapsedMs = 0L
+        macroStartedAtMs = System.currentTimeMillis()
+        macroPhase = MacroPhase.RECORDING
+        setMenu(false)
+        toast("Recording macro (up to 10s) · tap Save when done")
+    }
+
+    private fun stopAndSaveMacroRecording() {
+        if (macroPhase != MacroPhase.RECORDING) return
+        val dur = (System.currentTimeMillis() - macroStartedAtMs).coerceIn(MacroEngine.MIN_DURATION_MS, MacroEngine.MAX_DURATION_MS)
+        val steps = macroRecordSteps.toList()
+        macroPhase = MacroPhase.IDLE
+        macroRecordSteps.clear()
+        if (steps.none { it.buttonsMask != 0 }) {
+            toast("No buttons pressed — macro discarded")
+            return
+        }
+        val num = savedMacros.size + 1
+        val created = MacroEngine.createRecorded(
+            name = "Grind Loop #$num",
+            durationMs = dur,
+            steps = steps,
+            fastForward = macroFastForward,
+        )
+        val updated = (listOf(created) + savedMacros).take(MacroEngine.MAX_SAVED_MACROS)
+        savedMacros = updated
+        lifecycleScope.launch(Dispatchers.IO) { MacroStore.save(paths.macrosFile(game), updated) }
+        toast("Saved ${created.name} · looping!")
+        startMacroLoop(created)
+    }
+
+    private fun startMacroLoop(macro: RecordedMacro) {
+        stopMacroPlayback(silent = true)
+        activeMacro = macro
+        macroLoopCount = 1
+        macroElapsedMs = 0L
+        macroAppliedMask = 0
+        macroStartedAtMs = System.currentTimeMillis()
+        macroPhase = MacroPhase.PLAYING
+        if (macroFastForward && !fastForwardHeld) {
+            macroBoostedFf = true
+            fastForwardHeld = true
+            applyFastForward()
+        }
+        setMenu(false)
+    }
+
+    private fun stopMacroPlayback(silent: Boolean = false) {
+        if (macroAppliedMask != 0) {
+            for ((btnId, pressed) in MacroEngine.diffButtonChanges(macroAppliedMask, 0)) {
+                NativeBridge.setButton(0, btnId, pressed)
+            }
+            macroAppliedMask = 0
+        }
+        if (macroBoostedFf) {
+            macroBoostedFf = false
+            fastForwardHeld = false
+            applyFastForward()
+        }
+        val wasPlaying = macroPhase == MacroPhase.PLAYING
+        macroPhase = MacroPhase.IDLE
+        activeMacro = null
+        if (wasPlaying && !silent) toast("Manual control resumed")
+    }
+
+    private fun deleteSavedMacro(id: String) {
+        val updated = savedMacros.filterNot { it.id == id }
+        savedMacros = updated
+        lifecycleScope.launch(Dispatchers.IO) { MacroStore.save(paths.macrosFile(game), updated) }
+    }
+
     private fun toggleLiveTranslate(enable: Boolean) {
         liveTranslateOn = enable
         liveTranslateJob?.cancel()
@@ -2062,6 +2149,19 @@ class EmulatorActivity : ComponentActivity() {
                             onStop = ::stopPracticeLoop,
                         )
                     }
+                    if (macroPhase != MacroPhase.IDLE) {
+                        MacroHudPill(
+                            phase = macroPhase,
+                            activeMacroName = activeMacro?.name ?: "Grind Loop",
+                            elapsedMs = macroElapsedMs,
+                            loopCount = macroLoopCount,
+                            fastForward = macroFastForward,
+                            onStop = {
+                                if (macroPhase == MacroPhase.RECORDING) stopAndSaveMacroRecording()
+                                else stopMacroPlayback()
+                            },
+                        )
+                    }
                     if (liveTranslateOn) {
                         Surface(
                             shape = RoundedCornerShape(999.dp),
@@ -2108,6 +2208,61 @@ class EmulatorActivity : ComponentActivity() {
                     onBlowCartridge = ::performCartridgeBlow,
                     onDismiss = { nostalgiaSheetOpen = false },
                 )
+            }
+            if (macroSheetOpen && !menuOpen) {
+                MacroManagerSheet(
+                    savedMacros = savedMacros,
+                    fastForwardDefault = macroFastForward,
+                    onToggleFastForward = { macroFastForward = it },
+                    onStartRecording = ::startMacroRecording,
+                    onPlayMacro = ::startMacroLoop,
+                    onDeleteMacro = ::deleteSavedMacro,
+                    onDismiss = { macroSheetOpen = false },
+                )
+            }
+            LaunchedEffect(phase, macroPhase, menuOpen, pocketGuideOpen, macroSheetOpen, browserOpen) {
+                if (phase !is Phase.Running || macroPhase == MacroPhase.IDLE || menuOpen || pocketGuideOpen || macroSheetOpen || browserOpen) {
+                    // Release held macro buttons safely whenever paused or in a sheet
+                    if (macroAppliedMask != 0) {
+                        for ((btnId, pressed) in MacroEngine.diffButtonChanges(macroAppliedMask, 0)) {
+                            NativeBridge.setButton(0, btnId, pressed)
+                        }
+                        macroAppliedMask = 0
+                    }
+                    return@LaunchedEffect
+                }
+                if (macroPhase == MacroPhase.RECORDING) {
+                    macroStartedAtMs = System.currentTimeMillis() - macroElapsedMs
+                    while (macroPhase == MacroPhase.RECORDING) {
+                        val elapsed = (System.currentTimeMillis() - macroStartedAtMs).coerceAtLeast(0L)
+                        macroElapsedMs = elapsed
+                        val mask = NativeBridge.getButtonsMask(0)
+                        if (macroRecordSteps.isEmpty() || macroRecordSteps.last().buttonsMask != mask) {
+                            macroRecordSteps.add(MacroStep(elapsed, mask))
+                        }
+                        if (elapsed >= MacroEngine.MAX_DURATION_MS) {
+                            stopAndSaveMacroRecording()
+                            break
+                        }
+                        delay(33L)
+                    }
+                } else if (macroPhase == MacroPhase.PLAYING) {
+                    val m = activeMacro ?: return@LaunchedEffect
+                    macroStartedAtMs = System.currentTimeMillis() - macroElapsedMs
+                    while (macroPhase == MacroPhase.PLAYING) {
+                        val elapsed = (System.currentTimeMillis() - macroStartedAtMs).coerceAtLeast(0L)
+                        macroElapsedMs = elapsed
+                        macroLoopCount = (elapsed / m.durationMs.coerceAtLeast(1L)).toInt() + 1
+                        val desired = MacroEngine.sampleMaskAt(m, elapsed)
+                        if (desired != macroAppliedMask) {
+                            for ((btnId, pressed) in MacroEngine.diffButtonChanges(macroAppliedMask, desired)) {
+                                NativeBridge.setButton(0, btnId, pressed)
+                            }
+                            macroAppliedMask = desired
+                        }
+                        delay(25L)
+                    }
+                }
             }
             LaunchedEffect(phase, practiceState.active, menuOpen, pocketGuideOpen, practiceSheetOpen, browserOpen) {
                 if (phase !is Phase.Running || !practiceState.active || menuOpen || pocketGuideOpen || practiceSheetOpen || browserOpen) {
@@ -2354,7 +2509,10 @@ class EmulatorActivity : ComponentActivity() {
             layout = system.layout,
             landscape = landscape,
             opacity = settings.overlayOpacity,
-            onButton = { id, pressed -> NativeBridge.setButton(0, id, pressed) },
+            onButton = { id, pressed ->
+                if (macroPhase == MacroPhase.PLAYING && pressed) stopMacroPlayback(silent = true)
+                NativeBridge.setButton(0, id, pressed)
+            },
             onMenu = { setMenu(true) },
             onFastForward = { held ->
                 fastForwardHeld = held
@@ -2473,6 +2631,8 @@ class EmulatorActivity : ComponentActivity() {
     }
 
     private fun onScreenTouch(v: View, e: MotionEvent): Boolean {
+        val down = e.actionMasked != MotionEvent.ACTION_UP && e.actionMasked != MotionEvent.ACTION_CANCEL
+        if (macroPhase == MacroPhase.PLAYING && down) stopMacroPlayback(silent = true)
         val scale = if (graphicsConfig.cropOverscan) 1.06f else 1f
         val (x, y) = DsDualScreen.toPointerClamped(
             px = e.x,
@@ -2483,7 +2643,6 @@ class EmulatorActivity : ComponentActivity() {
             height = v.height.toFloat(),
             contentScale = scale,
         )
-        val down = e.actionMasked != MotionEvent.ACTION_UP && e.actionMasked != MotionEvent.ACTION_CANCEL
         NativeBridge.setPointer(x, y, down)
         return true
     }
@@ -3156,6 +3315,61 @@ class EmulatorActivity : ComponentActivity() {
                             .clip(RoundedCornerShape(50))
                             .background(cs.primary.copy(alpha = 0.22f))
                             .clickable { performCartridgeBlow() }
+                            .padding(horizontal = 10.dp, vertical = 5.dp),
+                    )
+                }
+            }
+
+            // Auto-Play / Grind Helper Macro Recorder
+            Surface(
+                onClick = {
+                    setMenu(false)
+                    macroSheetOpen = true
+                },
+                shape = RoundedCornerShape(18.dp),
+                color = if (macroPhase != MacroPhase.IDLE) cs.primaryContainer else cs.surfaceContainerHigh,
+                contentColor = if (macroPhase != MacroPhase.IDLE) cs.onPrimaryContainer else cs.onSurface,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Icon(Icons.Rounded.Repeat, null, Modifier.size(20.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = when (macroPhase) {
+                                MacroPhase.PLAYING -> "Grind Loop Active · ×$macroLoopCount"
+                                MacroPhase.RECORDING -> "Recording Macro…"
+                                MacroPhase.IDLE -> "Auto-Play / Grind Helper"
+                            },
+                            style = MaterialTheme.typography.titleSmall,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = if (savedMacros.isNotEmpty()) {
+                                "${savedMacros.size} saved loop${if (savedMacros.size == 1) "" else "s"} · Fast-Forward grind macros"
+                            } else {
+                                "Record 3–10s RPG grind loops · stops on your tap"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = (if (macroPhase != MacroPhase.IDLE) cs.onPrimaryContainer else cs.onSurfaceVariant).copy(alpha = 0.82f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    Text(
+                        text = if (macroPhase == MacroPhase.PLAYING) "Stop" else "Rec",
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(50))
+                            .background(cs.primary.copy(alpha = 0.22f))
+                            .clickable {
+                                if (macroPhase == MacroPhase.PLAYING) stopMacroPlayback()
+                                else startMacroRecording()
+                            }
                             .padding(horizontal = 10.dp, vertical = 5.dp),
                     )
                 }

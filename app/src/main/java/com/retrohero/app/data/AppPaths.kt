@@ -78,6 +78,7 @@ class AppPaths(context: Context) {
     fun cheatsFile(game: Game): File = File(File(cheats, game.systemId), "${game.baseName}.json")
     fun playtimeFile(game: Game): File = File(File(playtime, game.systemId), "${game.baseName}.json")
     fun notesFile(game: Game): File = File(File(File(saves.parentFile, "notes"), game.systemId).apply { mkdirs() }, "${game.baseName}.txt")
+    fun macrosFile(game: Game): File = File(File(File(saves.parentFile, "macros"), game.systemId).apply { mkdirs() }, "${game.baseName}.json")
     fun browserBookmarkFile(game: Game): File = File(File(File(saves.parentFile, "browser_bookmarks"), game.systemId).apply { mkdirs() }, "${game.baseName}.url")
     fun patchesDir(game: Game): File = File(File(patches, game.systemId), game.baseName)
 
