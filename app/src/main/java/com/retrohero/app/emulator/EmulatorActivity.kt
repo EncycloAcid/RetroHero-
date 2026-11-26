@@ -7,6 +7,7 @@ import android.os.SystemClock
 import android.provider.MediaStore
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Code
@@ -14,6 +15,11 @@ import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.OpenWith
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material.icons.rounded.EmojiEvents
+import androidx.compose.material.icons.rounded.Public
+import androidx.compose.material.icons.rounded.TouchApp
+import androidx.compose.material.icons.rounded.Translate
+import androidx.compose.material.icons.rounded.Wifi
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.runtime.collectAsState
@@ -1962,32 +1968,58 @@ class EmulatorActivity : ComponentActivity() {
     @Composable
     private fun PauseMenu() {
         var page by remember { mutableStateOf("main") }
+        val cs = MaterialTheme.colorScheme
         Box(
             Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.6f))
+                .background(Color.Black.copy(alpha = 0.64f))
                 .clickable(interactionSource = null, indication = null) { if (page == "main") setMenu(false) else page = "main" }
                 .safeDrawingPadding(),
             contentAlignment = Alignment.Center,
         ) {
             Surface(
-                shape = MaterialTheme.shapes.extraLarge,
-                color = MaterialTheme.colorScheme.surfaceContainer,
+                shape = RoundedCornerShape(30.dp),
+                color = cs.surfaceContainer,
+                tonalElevation = 4.dp,
                 modifier = Modifier
-                    .padding(16.dp)
+                    .padding(horizontal = 14.dp, vertical = 12.dp)
                     .widthIn(max = 460.dp)
+                    .fillMaxWidth()
                     .clickable(interactionSource = null, indication = null) {},
             ) {
-                Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        SystemBadge(system, 52.dp)
-                        Spacer(Modifier.width(16.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(game.title, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            Text(system.name, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Column(Modifier.verticalScroll(rememberScrollState()).padding(18.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        SystemBadge(system, 46.dp)
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                            Text(
+                                game.title,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = cs.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                system.name,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = cs.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        Surface(
+                            onClick = { page = "screen" },
+                            shape = RoundedCornerShape(999.dp),
+                            color = cs.secondaryContainer,
+                            contentColor = cs.onSecondaryContainer,
+                        ) {
+                            Text(
+                                text = visualMode.label,
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            )
                         }
                     }
-                    Spacer(Modifier.height(20.dp))
+                    Spacer(Modifier.height(14.dp))
                     AnimatedContent(
                         targetState = page,
                         transitionSpec = {
@@ -2122,20 +2154,21 @@ class EmulatorActivity : ComponentActivity() {
 
     @Composable
     private fun MainMenuPage(navigate: (String) -> Unit) {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        val cs = MaterialTheme.colorScheme
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             val pName = activePatchName
             if (!pName.isNullOrBlank()) {
                 Surface(
                     shape = RoundedCornerShape(18.dp),
-                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                    color = cs.tertiaryContainer,
+                    contentColor = cs.onTertiaryContainer,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Column(Modifier.padding(horizontal = 14.dp, vertical = 9.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
                             text = "Soft-patched in memory · ${activePatchFormat ?: "ROM Patch"}",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.85f),
+                            color = cs.onTertiaryContainer.copy(alpha = 0.85f),
                         )
                         Text(
                             text = pName,
@@ -2148,74 +2181,123 @@ class EmulatorActivity : ComponentActivity() {
                             Text(
                                 text = hdrNote,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.82f),
+                                color = cs.onTertiaryContainer.copy(alpha = 0.82f),
                             )
                         }
                     }
                 }
             }
+
+            // Primary Controls: Resume + Reset + Quit in one crisp row
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
                     onClick = { setMenu(false) },
                     shapes = ButtonDefaults.shapes(),
-                    modifier = Modifier.weight(1f).height(ButtonDefaults.MediumContainerHeight),
-                    contentPadding = ButtonDefaults.contentPaddingFor(ButtonDefaults.MediumContainerHeight),
+                    modifier = Modifier.weight(1f).height(52.dp),
                 ) {
-                    Icon(Icons.Default.PlayArrow, null, Modifier.size(ButtonDefaults.iconSizeFor(ButtonDefaults.MediumContainerHeight)))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Resume", style = ButtonDefaults.textStyleFor(ButtonDefaults.MediumContainerHeight))
+                    Icon(Icons.Default.PlayArrow, null, Modifier.size(20.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Resume", style = MaterialTheme.typography.titleSmall)
                 }
+                FilledTonalIconButton(
+                    onClick = {
+                        NativeBridge.reset()
+                        setMenu(false)
+                    },
+                    shapes = IconButtonDefaults.shapes(),
+                    modifier = Modifier.size(52.dp),
+                ) { Icon(Icons.Default.RestartAlt, "Reset game") }
                 FilledTonalIconButton(
                     onClick = { quit() },
                     shapes = IconButtonDefaults.shapes(),
-                    modifier = Modifier.size(ButtonDefaults.MediumContainerHeight),
+                    modifier = Modifier.size(52.dp),
                 ) { Icon(Icons.AutoMirrored.Filled.ExitToApp, "Quit game") }
             }
+
             if (discCount > 1) {
                 val activeLabel = discLabels.getOrElse(currentDisc) { "Disc ${currentDisc + 1}" }
-                ActionTile(
-                    Icons.Default.Album,
-                    "Swap disc · $activeLabel of $discCount",
-                    Modifier.fillMaxWidth(),
-                ) { navigate("discs") }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ActionTile(Icons.Default.Save, "Save", Modifier.weight(1f)) { navigate("save") }
-                ActionTile(Icons.Default.Download, "Load", Modifier.weight(1f)) { navigate("load") }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ActionTile(Icons.Default.PhotoCamera, "Screenshot", Modifier.weight(1f)) { takeScreenshot() }
-                ActionTile(Icons.Default.Tv, "Screen", Modifier.weight(1f)) { navigate("screen") }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ActionTile(Icons.Default.Code, if (cheats.any { it.enabled }) "Cheats · ${cheats.count { it.enabled }}" else "Cheats", Modifier.weight(1f)) { navigate("cheats") }
-                ActionTile(Icons.Default.OpenWith, "Edit controls", Modifier.weight(1f)) { startPadEdit() }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ActionTile(Icons.Default.Tune, "Options", Modifier.weight(1f)) { navigate("options") }
-                ActionTile(Icons.Default.RestartAlt, "Reset", Modifier.weight(1f)) {
-                    NativeBridge.reset()
-                    setMenu(false)
-                }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ActionTile(
-                    Icons.Default.AspectRatio,
-                    if (liveTranslateOn) "Live Translate ON" else "Translate (${translateLang.label})",
-                    Modifier.weight(1f),
+                Surface(
+                    onClick = { navigate("discs") },
+                    shape = RoundedCornerShape(18.dp),
+                    color = cs.secondaryContainer,
+                    contentColor = cs.onSecondaryContainer,
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
-                    runScreenTranslate(translateLang)
+                    Row(
+                        Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Icon(Icons.Default.Album, null, Modifier.size(18.dp))
+                        Text(
+                            "Swap disc · $activeLabel of $discCount",
+                            style = MaterialTheme.typography.labelLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
-                ActionTile(Icons.Default.Save, "Challenges", Modifier.weight(1f)) { navigate("share") }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ActionTile(Icons.Default.Code, "Pocket Guide", Modifier.weight(1f)) { openPocketGuide() }
-                ActionTile(Icons.Default.Tv, "Guide Browser", Modifier.weight(1f)) { openInGameBrowser() }
+
+            // Quick Actions 4-Column Dock (Save, Load, Snap, Screen)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                CompactMenuTile(Icons.Default.Save, "Save", Modifier.weight(1f)) { navigate("save") }
+                CompactMenuTile(Icons.Default.Download, "Load", Modifier.weight(1f)) { navigate("load") }
+                CompactMenuTile(Icons.Default.PhotoCamera, "Snap", Modifier.weight(1f)) { takeScreenshot() }
+                CompactMenuTile(Icons.Default.Tv, "Screen", Modifier.weight(1f)) { navigate("screen") }
             }
-            ActionTile(Icons.Default.Gamepad, "Rollback Netplay (QR / 6-Digit Room)", Modifier.fillMaxWidth()) {
-                navigate("netplay")
+
+            // Tools & Guides 3x3 Expressive Bento Grid (distinct icons, zero bloat)
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    CompactMenuTile(
+                        Icons.AutoMirrored.Rounded.MenuBook,
+                        "Guide",
+                        Modifier.weight(1f),
+                        accent = true,
+                    ) { openPocketGuide() }
+                    CompactMenuTile(
+                        Icons.Rounded.Public,
+                        "Browser",
+                        Modifier.weight(1f),
+                        accent = true,
+                    ) { openInGameBrowser() }
+                    CompactMenuTile(
+                        Icons.Rounded.Translate,
+                        if (liveTranslateOn) "Live ON" else "Translate",
+                        Modifier.weight(1f),
+                        active = liveTranslateOn,
+                        accent = true,
+                    ) { runScreenTranslate(translateLang) }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    CompactMenuTile(
+                        Icons.Rounded.EmojiEvents,
+                        "Challenges",
+                        Modifier.weight(1f),
+                        active = challengeRecording || activeChallengeTitle != null,
+                    ) { navigate("share") }
+                    CompactMenuTile(
+                        Icons.Rounded.Wifi,
+                        "Netplay",
+                        Modifier.weight(1f),
+                    ) { navigate("netplay") }
+                    CompactMenuTile(
+                        Icons.Default.Code,
+                        if (cheats.any { it.enabled }) "Cheats (${cheats.count { it.enabled }})" else "Cheats",
+                        Modifier.weight(1f),
+                        active = cheats.any { it.enabled },
+                    ) { navigate("cheats") }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    CompactMenuTile(Icons.Default.OpenWith, "Edit pad", Modifier.weight(1f)) { startPadEdit() }
+                    CompactMenuTile(Icons.Rounded.TouchApp, "Smart Touch", Modifier.weight(1f)) { navigate("smart_touch") }
+                    CompactMenuTile(Icons.Default.Tune, "Options", Modifier.weight(1f)) { navigate("options") }
+                }
             }
-            val switchCount = if (deltaSkinsForSystem.isNotEmpty()) 9 else 8
+
+            // Live Gameplay Toggles (harmonized with Material 3 Expressive surfaces)
+            val switchCount = if (deltaSkinsForSystem.isNotEmpty()) 8 else 7
             SegmentedGroup(null, switchCount) {
                 MenuSwitch(shapes(0), Icons.Default.FastForward, "Fast forward", "${settings.fastForwardSpeed.toInt()}× speed", fastForwardToggle) {
                     fastForwardToggle = it
@@ -2269,24 +2351,10 @@ class EmulatorActivity : ComponentActivity() {
                     settings.audioHaptics = it
                     if (!it) audioHaptics.cancel()
                 }
-                val smartSummary = buildList {
-                    if (smartTouch.thumbChordZones) add("Chords")
-                    if (smartTouch.shoulderLatch) add("L/R latch")
-                    if (smartTouch.comboMacroEnabled) add("Macro")
-                    if (smartTouch.gyroSteering) add("Gyro")
-                }.joinToString(" · ").ifBlank { "Standard touch" }
-                SegmentedListItem(
-                    onClick = { navigate("smart_touch") },
-                    shapes = shapes(7),
-                    colors = segmentColors(),
-                    leadingContent = { ShapeIcon(Icons.Default.Gamepad) },
-                    supportingContent = { Text(smartSummary, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    verticalAlignment = Alignment.CenterVertically,
-                ) { Text("Smart Touch ergonomics") }
                 if (deltaSkinsForSystem.isNotEmpty()) {
                     SegmentedListItem(
                         onClick = { navigate("skin") },
-                        shapes = shapes(8),
+                        shapes = shapes(7),
                         colors = segmentColors(),
                         leadingContent = { ShapeIcon(Icons.Default.AspectRatio) },
                         supportingContent = { Text(activeDeltaSkin?.name ?: "Built-in RetroHero pad") },
@@ -2441,24 +2509,53 @@ class EmulatorActivity : ComponentActivity() {
     }
 
     @Composable
-    private fun ActionTile(icon: ImageVector, label: String, modifier: Modifier, onClick: () -> Unit) {
+    private fun CompactMenuTile(
+        icon: ImageVector,
+        label: String,
+        modifier: Modifier = Modifier,
+        active: Boolean = false,
+        accent: Boolean = false,
+        onClick: () -> Unit,
+    ) {
+        val cs = MaterialTheme.colorScheme
         val interaction = remember { MutableInteractionSource() }
-        val press = rememberPressFeedback(interaction, restCorner = 28.dp, pressedCorner = 14.dp, pressedScale = 0.96f)
+        val press = rememberPressFeedback(interaction, restCorner = 20.dp, pressedCorner = 12.dp, pressedScale = 0.95f)
+        val bg = when {
+            active -> cs.primaryContainer
+            accent -> cs.secondaryContainer
+            else -> cs.surfaceContainerHigh
+        }
+        val fg = when {
+            active -> cs.onPrimaryContainer
+            accent -> cs.onSecondaryContainer
+            else -> cs.onSurface
+        }
         Surface(
             shape = RoundedCornerShape(press.corner.value),
-            color = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            color = bg,
+            contentColor = fg,
             modifier = modifier
-                .height(84.dp)
+                .height(62.dp)
                 .graphicsLayer {
                     scaleX = press.scale.value
                     scaleY = press.scale.value
                 }
                 .clickable(interactionSource = interaction, indication = null, onClick = onClick),
         ) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.SpaceBetween) {
-                Icon(icon, null)
-                Text(label, style = MaterialTheme.typography.titleMedium)
+            Column(
+                Modifier.fillMaxSize().padding(horizontal = 6.dp, vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Icon(icon, null, Modifier.size(20.dp))
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                )
             }
         }
     }

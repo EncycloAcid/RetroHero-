@@ -64,9 +64,22 @@ fun Modifier.press3D(maxTilt: Float = 7f, pressedScale: Float = 0.97f): Modifier
 fun MonoSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
     val alpha = if (enabled) 1f else 0.38f
     val view = androidx.compose.ui.platform.LocalView.current
-    val track by animateColorAsState(if (checked) Ascend.accent.copy(alpha = alpha) else Tone.Bg.copy(alpha = alpha), tween(160), label = "track")
-    val border by animateColorAsState(if (checked) Color.Transparent else Tone.Line.copy(alpha = alpha), tween(160), label = "border")
-    val thumb by animateColorAsState(if (checked) Ascend.onAccent.copy(alpha = alpha) else Tone.Muted.copy(alpha = 0.55f * alpha), tween(160), label = "thumb")
+    val cs = androidx.compose.material3.MaterialTheme.colorScheme
+    val track by animateColorAsState(
+        if (checked) cs.primary.copy(alpha = alpha) else cs.surfaceContainerHighest.copy(alpha = alpha),
+        tween(160),
+        label = "track",
+    )
+    val border by animateColorAsState(
+        if (checked) Color.Transparent else cs.outline.copy(alpha = 0.55f * alpha),
+        tween(160),
+        label = "border",
+    )
+    val thumb by animateColorAsState(
+        if (checked) cs.onPrimary.copy(alpha = alpha) else cs.onSurfaceVariant.copy(alpha = 0.78f * alpha),
+        tween(160),
+        label = "thumb",
+    )
     val x by animateDpAsState(if (checked) 52.dp - 24.dp - 4.dp else 4.dp, spring(dampingRatio = 0.7f, stiffness = 700f), label = "thumbX")
     Box(
         modifier
@@ -91,7 +104,7 @@ fun MonoSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit, modifier: M
             Icon(
                 if (checked) Icons.Rounded.Check else Icons.Rounded.Close,
                 null,
-                tint = if (checked) Ascend.accent else Tone.Surface,
+                tint = if (checked) cs.primary else cs.surfaceContainerHighest,
                 modifier = Modifier.size(14.dp),
             )
         }
