@@ -115,6 +115,9 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import coil.imageLoader
 import coil.request.ImageRequest
 import coil.request.SuccessResult
+import coil.size.Scale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.retrohero.app.data.Box3dMath
 import com.retrohero.app.data.BoxFaceId
 import com.retrohero.app.data.Game
@@ -991,6 +994,22 @@ private fun Physical3dStageCanvas(
         }
     }
     val srcPts = remember { FloatArray(8) }
+    val cardboardTopColor = remember(textures.front) { sampleBitmapEdgeArgb(textures.front, topEdge = true) }
+    val cardboardBottomColor = remember(textures.front) { sampleBitmapEdgeArgb(textures.front, topEdge = false) }
+    val realCartShellColor = remember(textures.mediaFront, textures.hasRealMedia, spec.mediaShellColor) {
+        if (textures.hasRealMedia) {
+            sampleRealCartShellArgb(textures.mediaFront, spec.mediaShellColor.toArgb())
+        } else {
+            spec.mediaShellColor.toArgb()
+        }
+    }
+    val maskedCartBackBmp = remember(textures.mediaFront, textures.mediaBack, textures.hasRealMedia) {
+        if (textures.hasRealMedia && !spec.mediaKind.isOpticalDisc) {
+            maskBitmapToAlphaSilhouette(textures.mediaBack, textures.mediaFront)
+        } else {
+            textures.mediaBack
+        }
+    }
 
     Canvas(modifier) {
         val stageW = size.width
@@ -1087,9 +1106,9 @@ private fun Physical3dStageCanvas(
                 draw3dRealCartridgeScan(
                     native = native,
                     quads = quads,
-                    spec = spec,
+                    shellArgb = realCartShellColor,
                     frontScanBmp = textures.mediaFront,
-                    backShellBmp = textures.mediaBack,
+                    backShellBmp = maskedCartBackBmp,
                     halfD = halfD,
                     yawDeg = yawDeg,
                     pitchDeg = pitchDeg,
@@ -1105,16 +1124,6 @@ private fun Physical3dStageCanvas(
                     spec.mediaShellColor.toArgb()
                 }
                 val isCardboardBox = subject == PhysicalViewerSubject.RETAIL_BOX && !spec.caseStyle.hasPlasticRim
-                val cardboardTopColor = if (isCardboardBox) {
-                    sampleBitmapEdgeArgb(textures.front, topEdge = true)
-                } else {
-                    caseColorArgb
-                }
-                val cardboardBottomColor = if (isCardboardBox) {
-                    sampleBitmapEdgeArgb(textures.front, topEdge = false)
-                } else {
-                    caseColorArgb
-                }
 
                 for (q in quads) {
                     val d = q.dstPoints
@@ -1321,7 +1330,7 @@ private fun Physical3dStageCanvas(
 private fun draw3dRealCartridgeScan(
     native: AndroidCanvas,
     quads: List<com.retrohero.app.data.ProjectedQuad>,
-    spec: PhysicalMediaSpec,
+    shellArgb: Int,
     frontScanBmp: Bitmap,
     backShellBmp: Bitmap,
     halfD: Float,
@@ -1333,7 +1342,6 @@ private fun draw3dRealCartridgeScan(
     srcPts: FloatArray,
 ) {
     val mainFace = quads.firstOrNull { it.face == BoxFaceId.FRONT || it.face == BoxFaceId.BACK }
-    val shellArgb = spec.mediaShellColor.toArgb()
 
     if (mainFace == null) {
         // Pure edge-on cartridge profile
@@ -1363,8 +1371,8 @@ private fun draw3dRealCartridgeScan(
     // Compute 3D extrusion vector pointing away from the viewer along the cartridge thickness
     val yawRad = Math.toRadians(yawDeg.toDouble())
     val pitchRad = Math.toRadians(pitchDeg.toDouble())
-    val totalShiftX = (-sin(yawRad).toFloat() * halfD * 1.45f) * if (isFront) 1f else -1f
-    val totalShiftY = (sin(pitchRad).toFloat() * halfD * 1.15f) * if (isFront) 1f else -1f
+    val totalShiftX = (-sin(yawRad).toFloat() * halfD * 1.40f) * if (isFront) 1f else -1f
+    val totalShiftY = (sin(pitchRad).toFloat() * halfD * 1.10f) * if (isFront) 1f else -1f
 
     // Draw 7 shaded alpha-silhouette depth slices from back to front for genuine 3D molded thickness
     val slices = 7
@@ -1389,7 +1397,7 @@ private fun draw3dRealCartridgeScan(
             val sliceShade = if (isSeamSlice) {
                 (0.54f * mainFace.shade).coerceIn(0.32f, 0.72f)
             } else {
-                ((0.86f - t * 0.22f) * mainFace.shade).coerceIn(0.45f, 0.94f)
+                ((0.88f - t * 0.22f) * mainFace.shade).coerceIn(0.45f, 0.94f)
             }
             slicePaint.colorFilter = android.graphics.PorterDuffColorFilter(
                 shadeArgb(shellArgb, sliceShade),
@@ -1403,45 +1411,67 @@ private fun draw3dRealCartridgeScan(
     }
     slicePaint.colorFilter = null
 
-    // Draw the crisp front scan (or rear molded shell masked to the real cartridge silhouette!)
+    // Draw the crisp front scan (or pre-masked rear shell) directly with GPU-native LightingColorFilter
+    // (NO saveLayer inside a perspective matrix, which can clip/corrupt on hardware-accelerated Android GPUs!)
     srcPts[0] = 0f; srcPts[1] = 0f
     srcPts[2] = bw; srcPts[3] = 0f
     srcPts[4] = bw; srcPts[5] = bh
     srcPts[6] = 0f; srcPts[7] = bh
     if (polyMatrix.setPolyToPoly(srcPts, 0, d, 0, 4)) {
+        val mul = (mainFace.shade.coerceIn(0.68f, 1.0f) * 255f).roundToInt().coerceIn(170, 255)
+        val add = (mainFace.specular * 22f).roundToInt().coerceIn(0, 24)
+        bmpPaint.colorFilter = android.graphics.LightingColorFilter(
+            AndroidColor.rgb(mul, mul, mul),
+            AndroidColor.rgb(add, add, add),
+        )
         native.save()
         native.concat(polyMatrix)
-        // Use an offscreen layer + SRC_ATOP so lighting & gloss ONLY touch opaque cartridge pixels!
-        val layerId = native.saveLayer(0f, 0f, bw, bh, null)
-        if (isFront) {
-            native.drawBitmap(tex, 0f, 0f, bmpPaint)
-        } else {
-            // Mask the procedural rear shell to the exact real LaunchBox cartridge silhouette!
-            native.drawBitmap(silhouetteBmp, null, RectF(0f, 0f, bw, bh), bmpPaint)
-            val maskPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
-                xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
-            }
-            native.drawBitmap(tex, 0f, 0f, maskPaint)
-        }
-
-        // Apply subtle directional shading + moving specular strictly onto opaque pixels (SRC_ATOP)
-        fillPaint.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_ATOP)
-        drawFaceLightingAndGloss(
-            native = native,
-            bw = bw,
-            bh = bh,
-            shade = mainFace.shade,
-            specular = mainFace.specular,
-            glossy = true,
-            isCartridge = true,
-            yawDeg = yawDeg,
-            pitchDeg = pitchDeg,
-            paint = fillPaint,
-        )
-        fillPaint.xfermode = null
-        native.restoreToCount(layerId)
+        native.drawBitmap(tex, 0f, 0f, bmpPaint)
         native.restore()
+        bmpPaint.colorFilter = null
     }
+}
+
+/** Pre-masks a procedural cartridge rear shell to the exact alpha silhouette of a real LaunchBox scan once. */
+private fun maskBitmapToAlphaSilhouette(shellBmp: Bitmap, silhouetteBmp: Bitmap): Bitmap {
+    val w = shellBmp.width.coerceAtLeast(16)
+    val h = shellBmp.height.coerceAtLeast(16)
+    val out = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+    val c = AndroidCanvas(out)
+    val p = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    c.drawBitmap(silhouetteBmp, null, RectF(0f, 0f, w.toFloat(), h.toFloat()), p)
+    p.xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_IN)
+    c.drawBitmap(shellBmp, 0f, 0f, p)
+    p.xfermode = null
+    return out
+}
+
+/** Samples the real molded plastic shell color from the outer edges of a LaunchBox cartridge PNG. */
+private fun sampleRealCartShellArgb(bmp: Bitmap, fallbackArgb: Int): Int {
+    val w = bmp.width
+    val h = bmp.height
+    if (w <= 8 || h <= 8) return fallbackArgb
+    // Sample left & right outer plastic shoulder strips (away from center art sticker)
+    val sampleCoords = arrayOf(
+        0.08f to 0.20f, 0.08f to 0.45f, 0.08f to 0.70f,
+        0.92f to 0.20f, 0.92f to 0.45f, 0.92f to 0.70f,
+        0.50f to 0.05f, 0.50f to 0.95f,
+    )
+    var rSum = 0L
+    var gSum = 0L
+    var bSum = 0L
+    var count = 0
+    for ((fx, fy) in sampleCoords) {
+        val px = bmp.getPixel((w * fx).roundToInt().coerceIn(0, w - 1), (h * fy).roundToInt().coerceIn(0, h - 1))
+        if (AndroidColor.alpha(px) > 200) {
+            rSum += AndroidColor.red(px)
+            gSum += AndroidColor.green(px)
+            bSum += AndroidColor.blue(px)
+            count++
+        }
+    }
+    if (count < 2) return fallbackArgb
+    return AndroidColor.rgb((rSum / count).toInt(), (gSum / count).toInt(), (bSum / count).toInt())
 }
 
 /** Samples the average cardstock color along the top or bottom edge of a box cover bitmap. */
@@ -1802,18 +1832,25 @@ private fun shadeArgb(argb: Int, factor: Float): Int {
 @Composable
 private fun rememberFirstLoadedBitmap(key: String, candidates: List<Any>): Bitmap? {
     val context = LocalContext.current
-    var bmp by remember(key, candidates) { mutableStateOf<Bitmap?>(null) }
+    var bmp by remember(key) { mutableStateOf<Bitmap?>(null) }
     LaunchedEffect(key, candidates) {
-        bmp = null
+        if (candidates.isEmpty()) return@LaunchedEffect
         for (src in candidates) {
             val loaded = runCatching {
                 val req = ImageRequest.Builder(context)
                     .data(src)
                     .allowHardware(false)
-                    .size(1024)
+                    .bitmapConfig(Bitmap.Config.ARGB_8888)
+                    .size(1200, 1200)
+                    .scale(Scale.FIT)
                     .build()
                 val res = context.imageLoader.execute(req)
-                (res as? SuccessResult)?.drawable?.toBitmap()
+                val raw = (res as? SuccessResult)?.drawable?.toBitmap(config = Bitmap.Config.ARGB_8888)
+                if (raw != null && raw.width >= 16 && raw.height >= 16) {
+                    withContext(Dispatchers.Default) { trimTransparentBounds(raw) }
+                } else {
+                    null
+                }
             }.getOrNull()
             if (loaded != null && loaded.width >= 16 && loaded.height >= 16) {
                 bmp = loaded
@@ -1822,6 +1859,48 @@ private fun rememberFirstLoadedBitmap(key: String, candidates: List<Any>): Bitma
         }
     }
     return bmp
+}
+
+/**
+ * Trims invisible all-transparent outer padding from LaunchBox PNG scans (common on Box - Front,
+ * Box - Spine, and Cart - Front assets) so artwork fills 100% of the 3D box face and cartridge
+ * silhouette edge-to-edge without floating borders or shrunk textures.
+ */
+private fun trimTransparentBounds(src: Bitmap): Bitmap {
+    val w = src.width
+    val h = src.height
+    if (w < 24 || h < 24 || !src.hasAlpha()) return src
+    val pixels = IntArray(w * h)
+    src.getPixels(pixels, 0, w, 0, 0, w, h)
+
+    var minX = w
+    var minY = h
+    var maxX = -1
+    var maxY = -1
+    val alphaThreshold = 18
+    // Step by 2px for speed, then pad by 2px so anti-aliased edges stay silky smooth
+    for (y in 0 until h step 2) {
+        val rowOffset = y * w
+        for (x in 0 until w step 2) {
+            if ((pixels[rowOffset + x] ushr 24) > alphaThreshold) {
+                if (x < minX) minX = x
+                if (x > maxX) maxX = x
+                if (y < minY) minY = y
+                if (y > maxY) maxY = y
+            }
+        }
+    }
+    if (maxX <= minX || maxY <= minY) return src
+    val left = (minX - 2).coerceAtLeast(0)
+    val top = (minY - 2).coerceAtLeast(0)
+    val right = (maxX + 3).coerceAtMost(w)
+    val bottom = (maxY + 3).coerceAtMost(h)
+    val cropW = right - left
+    val cropH = bottom - top
+    // Only crop if there is meaningful transparent margin (> 2%) and resulting image is valid
+    if (cropW >= (w * 0.98f).toInt() && cropH >= (h * 0.98f).toInt()) return src
+    if (cropW < 16 || cropH < 16) return src
+    return runCatching { Bitmap.createBitmap(src, left, top, cropW, cropH) }.getOrDefault(src)
 }
 
 @Composable
