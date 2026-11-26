@@ -31,6 +31,8 @@ data class GameDossier(
     val heroImageUrl: String?,
     val sourceLabel: String,
     val isLive: Boolean,
+    val seriesName: String = "",
+    val relatedGames: List<RelatedGame> = emptyList(),
 ) {
     data class FeatureBlock(val headline: String, val body: String)
     data class RadarAxis(val label: String, val value: Float)
@@ -50,6 +52,11 @@ data class GameDossier(
         .put("heroImageUrl", heroImageUrl ?: JSONObject.NULL)
         .put("sourceLabel", sourceLabel)
         .put("isLive", isLive)
+        .put("seriesName", seriesName)
+        .put(
+            "relatedGames",
+            JSONArray().apply { relatedGames.forEach { put(it.toJson()) } },
+        )
         .put(
             "featureSections",
             JSONArray().apply {
@@ -68,7 +75,7 @@ data class GameDossier(
         )
 
     companion object {
-        const val CACHE_SCHEMA_VERSION = 3
+        const val CACHE_SCHEMA_VERSION = 4
 
         fun fromJson(o: JSONObject): GameDossier? {
             if (o.optInt("schemaVersion", 1) < CACHE_SCHEMA_VERSION) return null
@@ -88,6 +95,13 @@ data class GameDossier(
                     axes += RadarAxis(item.optString("label"), item.optDouble("value", 0.5).toFloat())
                 }
             }
+            val related = mutableListOf<RelatedGame>()
+            val relArr = o.optJSONArray("relatedGames")
+            if (relArr != null) {
+                for (i in 0 until relArr.length()) {
+                    related += RelatedGame.fromJson(relArr.getJSONObject(i))
+                }
+            }
             return GameDossier(
                 title = o.optString("title"),
                 tagline = o.optString("tagline"),
@@ -104,13 +118,16 @@ data class GameDossier(
                 heroImageUrl = o.optString("heroImageUrl").takeIf { it.isNotBlank() && it != "null" },
                 sourceLabel = o.optString("sourceLabel"),
                 isLive = o.optBoolean("isLive", false),
+                seriesName = o.optString("seriesName"),
+                relatedGames = related,
             )
         }
 
         /** Bespoke dossiers for RetroHero's built-in HeroBox-16 and CHIP-8 launch cartridges. */
         fun builtInDossier(game: Game): GameDossier? {
             val t = game.title.lowercase()
-            return when {
+            val resolvedSeries = GameSeries.resolve(game.title, game.systemId)
+            val base = when {
                 game.systemId == "herobox16" && "starlight vanguard" in t -> GameDossier(
                     title = "Starlight Vanguard",
                     tagline = "Vertical 16-bit arcade space shooter built natively for RetroHero's HeroBox-16 fantasy console.",
@@ -213,6 +230,10 @@ data class GameDossier(
                 )
                 else -> null
             }
+            return base?.copy(
+                seriesName = resolvedSeries.seriesName,
+                relatedGames = resolvedSeries.entries,
+            )
         }
 
         /** Instant local fallback dossier shown immediately while live Wikipedia metadata loads. */
@@ -225,6 +246,7 @@ data class GameDossier(
             val region = Regex("""\((USA|Europe|Japan|World|USA, Europe)\)""", RegexOption.IGNORE_CASE)
                 .find(game.fileName)?.groupValues?.get(1) ?: "Classic Edition"
             val guessedGenre = guessGenreFromTitle(game.title, game.systemId)
+            val resolvedSeries = GameSeries.resolve(game.title, game.systemId)
             return GameDossier(
                 title = game.title,
                 tagline = "Experience ${game.title} on $sysName — preserved with instant save states, crisp scaling, and modern controller support.",
@@ -256,6 +278,8 @@ data class GameDossier(
                 heroImageUrl = null,
                 sourceLabel = "Local Library",
                 isLive = false,
+                seriesName = resolvedSeries.seriesName,
+                relatedGames = resolvedSeries.entries,
             )
         }
 
@@ -711,6 +735,9 @@ class GameMetadataRepository(private val cacheDir: File) {
             val releaseDate = cleanReleaseDate(releaseRaw, releaseYear).ifBlank { fallback.releaseDate }
             val genre = parseInfoboxField(wikitext, listOf("genre", "genres")).ifBlank { fallback.genre }
             val modes = parseInfoboxField(wikitext, listOf("modes", "mode")).ifBlank { fallback.modes }
+            val wikiSeries = parseInfoboxField(wikitext, listOf("series"))
+            val wikiPrecededBy = parseInfoboxField(wikitext, listOf("preceded_by", "preceded by", "prequel"))
+            val wikiFollowedBy = parseInfoboxField(wikitext, listOf("followed_by", "followed by", "sequel"))
 
             val (introSummary, sections) = parseExtractSections(extract, game.title, fallback)
             val tagline = buildCleanTagline(introSummary, fallback.tagline)
@@ -721,6 +748,14 @@ class GameMetadataRepository(private val cacheDir: File) {
                 title = game.title,
                 summary = introSummary,
                 systemId = game.systemId,
+            )
+            val resolvedSeries = GameSeries.resolve(
+                gameTitle = game.title,
+                systemId = game.systemId,
+                wikiSeries = wikiSeries,
+                wikiPrecededBy = wikiPrecededBy,
+                wikiFollowedBy = wikiFollowedBy,
+                wikiExtract = extract,
             )
 
             return GameDossier(
@@ -739,6 +774,8 @@ class GameMetadataRepository(private val cacheDir: File) {
                 heroImageUrl = page.thumbUrl,
                 sourceLabel = "Wikipedia",
                 isLive = true,
+                seriesName = resolvedSeries.seriesName,
+                relatedGames = resolvedSeries.entries,
             )
         }
 

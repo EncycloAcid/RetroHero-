@@ -38,6 +38,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.Check
@@ -101,10 +102,14 @@ import com.retrohero.app.data.ExternalEmulator
 import com.retrohero.app.data.ExternalEmulators
 import com.retrohero.app.data.Game
 import com.retrohero.app.data.GameDossier
+import com.retrohero.app.data.GameSeries
+import com.retrohero.app.data.GameSystem
 import com.retrohero.app.data.PlayStat
 import com.retrohero.app.data.PlayTime
 import com.retrohero.app.data.RaGameData
 import com.retrohero.app.data.RaProfile
+import com.retrohero.app.data.RelatedGame
+import com.retrohero.app.data.Systems
 import com.retrohero.app.ui.components.LocalReducedMotion
 import com.retrohero.app.ui.components.M3ConnectedButtonGroup
 import com.retrohero.app.ui.components.M3ConsoleImage
@@ -289,6 +294,8 @@ internal fun M3GameDetailPage(
     onUseScreenshotAsCover: (File) -> Unit = {},
     onClearCover: () -> Unit = {},
     onDelete: (() -> Unit)?,
+    allGames: List<Game> = emptyList(),
+    onOpenGame: (Game) -> Unit = {},
     onDismiss: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
@@ -327,6 +334,10 @@ internal fun M3GameDetailPage(
         loadingRa = false
     }
 
+    val seriesCards = remember(game.id, dossier.relatedGames, allGames) {
+        GameSeries.resolveWithLibrary(game, dossier.relatedGames, allGames)
+    }
+
     val milestones = remember(stat, saveSlots, screenshots, isFavorite, shelfStatus) {
         buildGameMilestones(stat, saveSlots, screenshots, isFavorite, shelfStatus)
     }
@@ -358,6 +369,9 @@ internal fun M3GameDetailPage(
     val activeSlide = slides.getOrNull(selectedSlideIdx) ?: slides.firstOrNull()
 
     val listState = rememberLazyListState()
+    LaunchedEffect(game.id) {
+        listState.scrollToItem(0)
+    }
     val scrolledPastHero by remember {
         derivedStateOf {
             listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 140
@@ -804,15 +818,16 @@ internal fun M3GameDetailPage(
                         }
                     }
 
-                    val infoRows = listOf(
-                        "DEVELOPED BY" to dossier.developer,
-                        "PUBLISHED BY" to dossier.publisher,
-                        "RELEASE DATE" to dossier.releaseDate,
-                        "GENRE" to dossier.genre,
-                        "MODES" to dossier.modes,
-                        "PLATFORM" to (game.system?.name ?: game.systemId.uppercase()),
-                        "ROM FILE" to "${game.extension.uppercase()} · ${formatFileSizeShort(game.size)}",
-                    )
+                    val infoRows = buildList {
+                        if (dossier.seriesName.isNotBlank()) add("SERIES" to dossier.seriesName)
+                        add("DEVELOPED BY" to dossier.developer)
+                        add("PUBLISHED BY" to dossier.publisher)
+                        add("RELEASE DATE" to dossier.releaseDate)
+                        add("GENRE" to dossier.genre)
+                        add("MODES" to dossier.modes)
+                        add("PLATFORM" to (game.system?.name ?: game.systemId.uppercase()))
+                        add("ROM FILE" to "${game.extension.uppercase()} · ${formatFileSizeShort(game.size)}")
+                    }
                     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         infoRows.forEachIndexed { idx, (key, value) ->
                             Row(
@@ -855,6 +870,20 @@ internal fun M3GameDetailPage(
                     genreLabel = dossier.genre,
                     modifier = Modifier.padding(horizontal = 20.dp),
                 )
+            }
+
+            // 6b. PREQUELS & SEQUELS FRANCHISE TIMELINE
+            if (seriesCards.isNotEmpty()) {
+                item(key = "detail_series") {
+                    M3SeriesTimelineSection(
+                        seriesName = dossier.seriesName,
+                        cards = seriesCards,
+                        onOpenGame = { target ->
+                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                            onOpenGame(target)
+                        },
+                    )
+                }
             }
 
             // 7. MAGAZINE-STYLE GAME ADVERTISEMENT & EDITORIAL SHOWCASE (Screenshots 3 & 4)
@@ -1779,6 +1808,306 @@ private fun M3FallbackArtFrame(
                 },
                 modifier = Modifier.fillMaxSize(),
             )
+        }
+    }
+}
+
+private fun resolveHintSystem(hint: String): GameSystem? {
+    val key = hint.trim().lowercase()
+    if (key.isBlank()) return null
+    val mappedId = when (key) {
+        "nes", "famicom" -> "nes"
+        "fds" -> "fds"
+        "snes", "super nintendo", "sfc" -> "snes"
+        "n64", "nintendo 64" -> "n64"
+        "gc", "gamecube" -> "gc"
+        "wii" -> "wii"
+        "wii u", "wiiu" -> "wiiu"
+        "switch" -> "switch"
+        "gb", "game boy" -> "gb"
+        "gbc", "game boy color" -> "gbc"
+        "gba", "game boy advance" -> "gba"
+        "nds", "ds" -> "nds"
+        "3ds" -> "3ds"
+        "ps1", "psx", "playstation" -> "ps1"
+        "ps2", "playstation 2" -> "ps2"
+        "psp" -> "psp"
+        "vita", "ps vita" -> "vita"
+        "genesis", "mega drive", "md" -> "genesis"
+        "sega cd", "segacd", "mega cd" -> "segacd"
+        "saturn" -> "saturn"
+        "dreamcast", "dc" -> "dreamcast"
+        "sms", "master system" -> "sms"
+        "gg", "game gear" -> "gg"
+        "neo geo", "neogeo" -> "neogeo"
+        "hb16", "herobox-16", "herobox16" -> "herobox16"
+        "arcade" -> "arcade"
+        else -> null
+    }
+    return mappedId?.let { Systems.get(it) }
+        ?: Systems.all.firstOrNull {
+            it.shortName.equals(key, ignoreCase = true) ||
+                it.id.equals(key, ignoreCase = true) ||
+                it.name.equals(key, ignoreCase = true)
+        }
+}
+
+/**
+ * Horizontal Material 3 Expressive franchise rail showing chronological prequels, sequels,
+ * and companion titles. Owned entries display live box art + "In library" badge and open
+ * directly on tap; non-owned entries show console hardware art + release era.
+ */
+@Composable
+private fun M3SeriesTimelineSection(
+    seriesName: String,
+    cards: List<Pair<RelatedGame, Game?>>,
+    onOpenGame: (Game) -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    Column(
+        Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Prequels & sequels",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                color = cs.onSurface,
+            )
+            if (seriesName.isNotBlank()) {
+                Box(
+                    Modifier
+                        .clip(CircleShape)
+                        .background(cs.secondaryContainer)
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                ) {
+                    Text(
+                        text = seriesName,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 10.5.sp,
+                            fontWeight = FontWeight.Bold,
+                        ),
+                        color = cs.onSecondaryContainer,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            items(cards, key = { (rel, owned) -> "${rel.relation}:${rel.title}:${owned?.id ?: ""}" }) { (entry, ownedGame) ->
+                val isPrequel = entry.relation.equals("Prequel", ignoreCase = true)
+                val isSequel = entry.relation.equals("Sequel", ignoreCase = true)
+                val pillBg = when {
+                    isSequel -> cs.primaryContainer
+                    isPrequel -> cs.tertiaryContainer
+                    else -> cs.secondaryContainer
+                }
+                val pillFg = when {
+                    isSequel -> cs.onPrimaryContainer
+                    isPrequel -> cs.onTertiaryContainer
+                    else -> cs.onSecondaryContainer
+                }
+                val relIcon = when {
+                    isPrequel -> Icons.AutoMirrored.Rounded.ArrowBack
+                    isSequel -> Icons.AutoMirrored.Rounded.ArrowForward
+                    else -> Icons.Rounded.AutoAwesome
+                }
+                val hintSystem = remember(entry.systemHint, ownedGame?.systemId) {
+                    ownedGame?.system ?: resolveHintSystem(entry.systemHint)
+                }
+
+                Column(
+                    Modifier
+                        .width(166.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(if (ownedGame != null) cs.surfaceContainerHighest else cs.surfaceContainerHigh)
+                        .then(
+                            if (ownedGame != null) {
+                                Modifier
+                                    .border(1.2.dp, cs.primary.copy(alpha = 0.40f), RoundedCornerShape(24.dp))
+                                    .clickable { onOpenGame(ownedGame) }
+                            } else {
+                                Modifier
+                            },
+                        ),
+                ) {
+                    // Top visual showcase area (box art when owned, console hardware art when not owned)
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(106.dp)
+                            .background(pillBg.copy(alpha = 0.36f))
+                            .clipToBounds(),
+                    ) {
+                        if (ownedGame != null) {
+                            M3GameCover(
+                                game = ownedGame,
+                                showTitle = false,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                            Box(
+                                Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        Brush.verticalGradient(
+                                            0f to cs.scrim.copy(alpha = 0.30f),
+                                            0.55f to Color.Transparent,
+                                            1f to cs.scrim.copy(alpha = 0.62f),
+                                        ),
+                                    ),
+                            )
+                        } else if (hintSystem != null) {
+                            Box(
+                                Modifier
+                                    .fillMaxSize()
+                                    .padding(top = 24.dp, bottom = 10.dp, start = 14.dp, end = 14.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                M3ConsoleImage(
+                                    system = hintSystem,
+                                    tint = pillFg,
+                                    modifier = Modifier.size(64.dp),
+                                )
+                            }
+                        } else {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                M3ShapeBadge(
+                                    polygon = if (isSequel) MaterialShapes.Sunny else MaterialShapes.Cookie6Sided,
+                                    containerColor = pillBg,
+                                    size = 46.dp,
+                                ) {
+                                    Icon(Icons.Rounded.SportsEsports, null, tint = pillFg, modifier = Modifier.size(22.dp))
+                                }
+                            }
+                        }
+
+                        // Top-left relation badge (PREQUEL / SEQUEL / SERIES)
+                        Row(
+                            Modifier
+                                .align(Alignment.TopStart)
+                                .padding(8.dp)
+                                .clip(CircleShape)
+                                .background(pillBg.copy(alpha = 0.94f))
+                                .padding(horizontal = 8.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp),
+                        ) {
+                            Icon(relIcon, null, tint = pillFg, modifier = Modifier.size(11.dp))
+                            Text(
+                                text = entry.relation.uppercase(),
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Black,
+                                    letterSpacing = 0.5.sp,
+                                ),
+                                color = pillFg,
+                            )
+                        }
+
+                        // Bottom-right badge: "In library" when owned, or release year
+                        if (ownedGame != null) {
+                            Row(
+                                Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(8.dp)
+                                    .clip(CircleShape)
+                                    .background(cs.primary)
+                                    .padding(horizontal = 8.dp, vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp),
+                            ) {
+                                Icon(Icons.Rounded.CheckCircle, null, tint = cs.onPrimary, modifier = Modifier.size(11.dp))
+                                Text(
+                                    text = "In library",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontSize = 9.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                    ),
+                                    color = cs.onPrimary,
+                                )
+                            }
+                        } else if (entry.year.isNotBlank()) {
+                            Box(
+                                Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(8.dp)
+                                    .clip(CircleShape)
+                                    .background(cs.surfaceContainerHighest.copy(alpha = 0.88f))
+                                    .padding(horizontal = 7.dp, vertical = 2.dp),
+                            ) {
+                                Text(
+                                    text = entry.year,
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontSize = 9.5.sp,
+                                        fontWeight = FontWeight.Bold,
+                                    ),
+                                    color = cs.onSurface,
+                                )
+                            }
+                        }
+                    }
+
+                    // Bottom title & platform footer
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            text = entry.title,
+                            style = MaterialTheme.typography.labelLarge.copy(
+                                fontWeight = FontWeight.ExtraBold,
+                                lineHeight = 16.sp,
+                            ),
+                            color = cs.onSurface,
+                            maxLines = 2,
+                            minLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            val meta = buildList {
+                                if (ownedGame != null && entry.year.isNotBlank()) add(entry.year)
+                                if (entry.systemHint.isNotBlank()) add(entry.systemHint)
+                                else if (ownedGame?.system?.shortName != null) add(ownedGame.system!!.shortName)
+                            }.joinToString(" · ").ifBlank {
+                                if (ownedGame != null) "Tap to open" else entry.relation
+                            }
+                            Text(
+                                text = meta,
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
+                                color = if (ownedGame != null) cs.primary else cs.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            if (ownedGame != null) {
+                                Icon(
+                                    Icons.AutoMirrored.Rounded.ArrowForward,
+                                    contentDescription = "Open ${entry.title}",
+                                    tint = cs.primary,
+                                    modifier = Modifier.size(14.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
