@@ -64,5 +64,7 @@ val GameSystem.tag: String
         "x68000" -> "X68K"
         "pc98" -> "PC98"
         "j2me" -> "J2ME"
+        "herobox16" -> "HB16"
+        "chip8" -> "CHP8"
         else -> shortName.uppercase().take(4)
     }

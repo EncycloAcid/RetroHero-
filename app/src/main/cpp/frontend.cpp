@@ -1,6 +1,8 @@
 #include "frontend.h"
 
 #include <dlfcn.h>
+#include <pthread.h>
+#include <sys/resource.h>
 
 #include <chrono>
 #include <cstdarg>
@@ -8,6 +10,7 @@
 #include <cstring>
 #include <fstream>
 
+#include "builtin_cores.h"
 #include "log.h"
 
 namespace rh {
@@ -70,45 +73,52 @@ bool Frontend::loadCore(const std::string &corePath, const std::string &systemDi
                         const std::string &saveDir) {
     systemDir_ = systemDir;
     saveDir_ = saveDir;
+    audioStaging_.reserve(4096);
 
-    void *h = dlopen(corePath.c_str(), RTLD_NOW | RTLD_LOCAL);
-    if (!h) {
-        setError(std::string("Could not load core: ") + dlerror());
-        return false;
-    }
-    core_.handle = h;
-    bool ok = loadSym(h, "retro_init", core_.init) && loadSym(h, "retro_deinit", core_.deinit) &&
-              loadSym(h, "retro_api_version", core_.api_version) &&
-              loadSym(h, "retro_get_system_info", core_.get_system_info) &&
-              loadSym(h, "retro_get_system_av_info", core_.get_system_av_info) &&
-              loadSym(h, "retro_set_environment", core_.set_environment) &&
-              loadSym(h, "retro_set_video_refresh", core_.set_video_refresh) &&
-              loadSym(h, "retro_set_audio_sample", core_.set_audio_sample) &&
-              loadSym(h, "retro_set_audio_sample_batch", core_.set_audio_sample_batch) &&
-              loadSym(h, "retro_set_input_poll", core_.set_input_poll) &&
-              loadSym(h, "retro_set_input_state", core_.set_input_state) &&
-              loadSym(h, "retro_reset", core_.reset) && loadSym(h, "retro_run", core_.run) &&
-              loadSym(h, "retro_serialize_size", core_.serialize_size) &&
-              loadSym(h, "retro_serialize", core_.serialize) &&
-              loadSym(h, "retro_unserialize", core_.unserialize) &&
-              loadSym(h, "retro_load_game", core_.load_game) &&
-              loadSym(h, "retro_unload_game", core_.unload_game) &&
-              loadSym(h, "retro_get_memory_data", core_.get_memory_data) &&
-              loadSym(h, "retro_get_memory_size", core_.get_memory_size);
-    // Optional symbols.
-    loadSym(h, "retro_cheat_reset", core_.cheat_reset);
-    loadSym(h, "retro_cheat_set", core_.cheat_set);
-    if (!ok) {
-        setError("Core is missing required libretro symbols");
-        dlclose(h);
-        core_ = CoreApi{};
-        return false;
-    }
-    if (core_.api_version() != RETRO_API_VERSION) {
-        setError("Core uses an incompatible libretro API version");
-        dlclose(h);
-        core_ = CoreApi{};
-        return false;
+    if (corePath == "builtin://herobox16" || corePath.find("herobox16") != std::string::npos) {
+        core_ = builtin::heroBox16Api();
+    } else if (corePath == "builtin://retrohero_chip8" || corePath.find("retrohero_chip8") != std::string::npos) {
+        core_ = builtin::chip8Api();
+    } else {
+        void *h = dlopen(corePath.c_str(), RTLD_NOW | RTLD_LOCAL);
+        if (!h) {
+            setError(std::string("Could not load core: ") + dlerror());
+            return false;
+        }
+        core_.handle = h;
+        bool ok = loadSym(h, "retro_init", core_.init) && loadSym(h, "retro_deinit", core_.deinit) &&
+                  loadSym(h, "retro_api_version", core_.api_version) &&
+                  loadSym(h, "retro_get_system_info", core_.get_system_info) &&
+                  loadSym(h, "retro_get_system_av_info", core_.get_system_av_info) &&
+                  loadSym(h, "retro_set_environment", core_.set_environment) &&
+                  loadSym(h, "retro_set_video_refresh", core_.set_video_refresh) &&
+                  loadSym(h, "retro_set_audio_sample", core_.set_audio_sample) &&
+                  loadSym(h, "retro_set_audio_sample_batch", core_.set_audio_sample_batch) &&
+                  loadSym(h, "retro_set_input_poll", core_.set_input_poll) &&
+                  loadSym(h, "retro_set_input_state", core_.set_input_state) &&
+                  loadSym(h, "retro_reset", core_.reset) && loadSym(h, "retro_run", core_.run) &&
+                  loadSym(h, "retro_serialize_size", core_.serialize_size) &&
+                  loadSym(h, "retro_serialize", core_.serialize) &&
+                  loadSym(h, "retro_unserialize", core_.unserialize) &&
+                  loadSym(h, "retro_load_game", core_.load_game) &&
+                  loadSym(h, "retro_unload_game", core_.unload_game) &&
+                  loadSym(h, "retro_get_memory_data", core_.get_memory_data) &&
+                  loadSym(h, "retro_get_memory_size", core_.get_memory_size);
+        // Optional symbols.
+        loadSym(h, "retro_cheat_reset", core_.cheat_reset);
+        loadSym(h, "retro_cheat_set", core_.cheat_set);
+        if (!ok) {
+            setError("Core is missing required libretro symbols");
+            dlclose(h);
+            core_ = CoreApi{};
+            return false;
+        }
+        if (core_.api_version() != RETRO_API_VERSION) {
+            setError("Core uses an incompatible libretro API version");
+            dlclose(h);
+            core_ = CoreApi{};
+            return false;
+        }
     }
 
     std::lock_guard<std::mutex> lk(coreMutex_);
@@ -194,6 +204,9 @@ void Frontend::start() {
 }
 
 void Frontend::runLoop() {
+    pthread_setname_np(pthread_self(), "RetroHeroEmu");
+    setpriority(PRIO_PROCESS, 0, -8);
+
     if (hwRenderEnabled_.load()) {
         unsigned reqMaj = hwRenderCb_.version_major;
         unsigned reqMin = hwRenderCb_.version_minor;
@@ -720,6 +733,10 @@ bool Frontend::environment(unsigned cmd, void *data) {
 void Frontend::videoCb(const void *data, unsigned w, unsigned h, size_t pitch) {
     if (!data) return;
     Frontend &f = get();
+    static uint32_t ffSkip = 0;
+    if (f.fastForward_.load(std::memory_order_relaxed) && (++ffSkip % 3 != 0)) {
+        return;
+    }
     if (data == RETRO_HW_FRAME_BUFFER_VALID) {
         if (f.hwRenderEnabled_.load()) {
             f.hw_.presentFrame(w, h, f.hwRenderCb_.bottom_left_origin);

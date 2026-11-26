@@ -43,6 +43,8 @@ data class CoreInfo(
     val license: String,
     /** Override buildbot archive filename when it differs from "<id>_libretro_android.so.zip". */
     val archiveName: String? = null,
+    /** Compiled directly into libretrohero.so (0ms instant launch, zero download). */
+    val builtIn: Boolean = false,
 ) {
     fun archiveFileName(): String = archiveName ?: "${id}_libretro_android.so.zip"
 }
@@ -142,6 +144,8 @@ private object Cores {
     val fbneo = CoreInfo("fbneo", "FinalBurn Neo", "Non-commercial")
     val mame2003 = CoreInfo("mame2003_plus", "MAME 2003-Plus", "MAME (non-commercial)")
     val mame2016 = CoreInfo("mame2016", "MAME 2016", "GPLv2")
+    val herobox16 = CoreInfo("herobox16", "HeroBox-16 Native", "MIT", builtIn = true)
+    val retroheroChip8 = CoreInfo("retrohero_chip8", "RetroHero CHIP-8 Native", "MIT", builtIn = true)
 }
 
 private object Layouts {
@@ -816,6 +820,22 @@ object Systems {
             layout = Layouts.snes, color = Color(0xFFEF6C00),
             folderHints = setOf("j2me", "java", "javame"),
             touchScreen = true,
+        ),
+        GameSystem(
+            id = "herobox16", name = "HeroBox-16 Original Console", shortName = "HB-16", manufacturer = "RetroHero",
+            extensions = setOf("hbx"),
+            cores = listOf(Cores.herobox16),
+            thumbnailDb = "PICO-8",
+            layout = Layouts.snes, color = Color(0xFFD0BCFF),
+            folderHints = setOf("herobox16", "herobox", "hb16"),
+        ),
+        GameSystem(
+            id = "chip8", name = "CHIP-8 / SUPER-CHIP", shortName = "CHIP-8", manufacturer = "COSMAC / RetroHero",
+            extensions = setOf("ch8", "sc8", "c8"),
+            cores = listOf(Cores.retroheroChip8),
+            thumbnailDb = "CHIP-8",
+            layout = Layouts.snes, color = Color(0xFF9CD67D),
+            folderHints = setOf("chip8", "chip-8", "schip", "superchip"),
         ),
         GameSystem(
             id = "arcade", name = "Arcade", shortName = "Arcade", manufacturer = "Various",
