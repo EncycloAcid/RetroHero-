@@ -22,8 +22,8 @@ val resolvedVersion: Pair<Int, String> = run {
     val explicitCode = ((project.findProperty("versionCode") as? String)
         ?: System.getenv("RETROHERO_VERSION_CODE"))?.toIntOrNull()
     val parsed = explicitName?.let(::computeVersionFromTag)
-    val fallbackCode = 20530
-    val fallbackName = "0.2.53-preview"
+    val fallbackCode = 20540
+    val fallbackName = "0.2.54-preview"
     val code = explicitCode ?: parsed?.first ?: fallbackCode
     val name = parsed?.second ?: explicitName?.removePrefix("v") ?: fallbackName
     code to name

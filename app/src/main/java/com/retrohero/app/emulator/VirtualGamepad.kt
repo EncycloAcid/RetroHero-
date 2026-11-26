@@ -206,6 +206,8 @@ fun VirtualGamepad(
                 if (edit != null) return@pointerInput
                 val slop = 10.dp.toPx()
                 var stylusId: androidx.compose.ui.input.pointer.PointerId? = null
+                var lastStylusX = 0f
+                var lastStylusY = 0f
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent()
@@ -218,18 +220,22 @@ fun VirtualGamepad(
                         }
                         val touchRect = latestTouchRect.value
                         val touchCb = latestOnTouch.value
+                        var stylusStillPresent = false
                         for (change in event.changes) {
                             // DS / touch-screen stylus passthrough
                             if (stylusId != null && change.id == stylusId) {
+                                stylusStillPresent = true
                                 val p = change.position + origin
                                 if (change.pressed && touchRect != null && touchCb != null) {
                                     val (sx, sy) = DsDualScreen.toPointerClamped(
                                         p.x, p.y, touchRect.left, touchRect.top, touchRect.width, touchRect.height,
                                         latestTouchScale.value,
                                     )
+                                    lastStylusX = sx
+                                    lastStylusY = sy
                                     touchCb(sx, sy, true)
                                 } else {
-                                    touchCb?.invoke(0f, 0f, false)
+                                    touchCb?.invoke(lastStylusX, lastStylusY, false)
                                     stylusId = null
                                 }
                                 change.consume()
@@ -257,11 +263,18 @@ fun VirtualGamepad(
                                 )
                                 if (ptr != null) {
                                     stylusId = change.id
+                                    lastStylusX = ptr.first
+                                    lastStylusY = ptr.second
+                                    stylusStillPresent = true
                                     touchCb(ptr.first, ptr.second, true)
                                 }
                             }
                             now += hit
                             change.consume()
+                        }
+                        if (stylusId != null && !stylusStillPresent) {
+                            touchCb?.invoke(lastStylusX, lastStylusY, false)
+                            stylusId = null
                         }
                         if (now != pressed) {
                             val old = pressed

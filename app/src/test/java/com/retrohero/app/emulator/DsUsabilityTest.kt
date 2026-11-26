@@ -141,5 +141,16 @@ class DsUsabilityTest {
         assertEquals(0f, DsDualScreen.landscapeSideInsetFraction(DsScreenLayout.STACKED), 1e-4f)
         assertTrue(DsDualScreen.landscapeSideInsetFraction(DsScreenLayout.HYBRID) > 0.1f)
         assertTrue(DsDualScreen.PORTRAIT_PAD_FRACTION < 0.42f)
+
+        assertEquals(256f / 384f, DsDualScreen.expectedAspect(DsScreenLayout.STACKED), 1e-3f)
+        assertEquals(512f / 192f, DsDualScreen.expectedAspect(DsScreenLayout.SIDE_BY_SIDE), 1e-3f)
+        assertEquals(256f / 192f, DsDualScreen.expectedAspect(DsScreenLayout.TOP_ONLY), 1e-3f)
+        assertTrue(DsDualScreen.expectedAspect(DsScreenLayout.HYBRID) > 1.5f)
+
+        val tuning = com.retrohero.app.data.CoreTuning.defaultsFor(DsDualScreen.CORE_MELONDS_DS)
+        assertEquals("software", tuning["melonds_render_mode"])
+        assertEquals("direct", tuning["melonds_boot_mode"])
+        assertEquals("enabled", tuning["melonds_jit_enable"])
+        assertEquals("never", tuning["melonds_cursor_mode"])
     }
 }

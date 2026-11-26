@@ -62,6 +62,7 @@ object DsDualScreen {
                 "melonds_number_of_screen_layouts" to "1",
                 "melonds_screen_layout1" to melonDsDsLayout(layout, swapped),
                 "melonds_touch_mode" to "touch",
+                "melonds_cursor_mode" to "never",
                 "melonds_mic_input" to "blow",
                 "melonds_mic_input_active" to "hold",
                 "melonds_hybrid_ratio" to "3",
@@ -172,6 +173,14 @@ object DsDualScreen {
     fun landscapeSideInsetFraction(layout: DsScreenLayout): Float = when (layout) {
         DsScreenLayout.STACKED -> 0f // already a narrow column in the middle
         else -> 0.16f
+    }
+
+    /** Expected aspect ratio of each DS layout so the viewport snaps immediately before the next core frame. */
+    fun expectedAspect(layout: DsScreenLayout): Float = when (layout) {
+        DsScreenLayout.STACKED -> 256f / 384f
+        DsScreenLayout.HYBRID -> 1.7778f
+        DsScreenLayout.SIDE_BY_SIDE -> 512f / 192f
+        DsScreenLayout.TOP_ONLY, DsScreenLayout.BOTTOM_ONLY -> 256f / 192f
     }
 
     /** Portrait share of the screen the gamepad gets for DS (shorter than other systems: two screens need height). */

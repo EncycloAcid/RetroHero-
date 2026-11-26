@@ -686,12 +686,14 @@ class EmulatorActivity : ComponentActivity() {
         DsDualScreen.coreOptions(activeCoreId, newLayout, swapped).forEach { (k, v) ->
             NativeBridge.setOption(k, v)
         }
-        // Poll geometry right away so the viewport snaps to the new layout's aspect ratio promptly.
+        // Snap immediately to the expected layout aspect ratio so there is never a stretched frame,
+        // then refine with the core's exact reported geometry once retro_run() processes the option update.
+        aspect = DsDualScreen.expectedAspect(newLayout)
         lifecycleScope.launch {
             delay(80)
-            aspect = NativeBridge.getAspectRatio().takeIf { it > 0.1f } ?: aspect
-            delay(180)
-            aspect = NativeBridge.getAspectRatio().takeIf { it > 0.1f } ?: aspect
+            NativeBridge.getAspectRatio().takeIf { it > 0.1f }?.let { aspect = it }
+            delay(220)
+            NativeBridge.getAspectRatio().takeIf { it > 0.1f }?.let { aspect = it }
         }
     }
 
@@ -1853,6 +1855,17 @@ class EmulatorActivity : ComponentActivity() {
                 applyDsLayout(target, dsSwapped, landscape, persist = false)
             }
         }
+        LaunchedEffect(phase, menuOpen, dsLayout, dsSwapped) {
+            if (phase !is Phase.Running || !DsDualScreen.isDs(system.id) || menuOpen) return@LaunchedEffect
+            // Sync viewport aspect with the DS core once retro_run() processes any pending layout change.
+            repeat(12) {
+                delay(180L)
+                val live = NativeBridge.getAspectRatio()
+                if (live > 0.1f && kotlin.math.abs(live - aspect) > 0.015f) {
+                    aspect = live
+                }
+            }
+        }
 
         padLandscape = landscape
         val isDs = DsDualScreen.isDs(system.id)
@@ -2538,7 +2551,7 @@ class EmulatorActivity : ComponentActivity() {
             oneHandedPortrait = oneHanded,
             onSustainedChanged = onSustainedChanged,
             touchScreenRect = if (system.touchScreen) gamePictureRect else null,
-            touchScreenContentScale = if (graphicsConfig.cropOverscan) 1.06f else 1f,
+            touchScreenContentScale = if (graphicsConfig.cropOverscan && !DsDualScreen.isDs(system.id)) 1.06f else 1f,
             onTouchScreen = if (system.touchScreen) { x, y, down -> NativeBridge.setPointer(x, y, down) } else null,
         )
     }
@@ -2548,7 +2561,9 @@ class EmulatorActivity : ComponentActivity() {
     private fun GameView() {
         BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             val density = LocalDensity.current
-            val ratioOverride = graphicsConfig.aspectRatio.ratio
+            val isDs = DsDualScreen.isDs(system.id)
+            val cropOverscan = graphicsConfig.cropOverscan && !isDs
+            val ratioOverride = if (isDs) null else graphicsConfig.aspectRatio.ratio
             val isFill = ratioOverride != null && ratioOverride < 0f
             val effectiveAspect = if (ratioOverride != null && ratioOverride > 0f) ratioOverride else aspect
             val size = if (!isFill && integerScale && frameSize.height > 0) {
@@ -2573,7 +2588,7 @@ class EmulatorActivity : ComponentActivity() {
                     Modifier
                         .fillMaxSize()
                         .graphicsLayer {
-                            if (graphicsConfig.cropOverscan) {
+                            if (cropOverscan) {
                                 scaleX = 1.06f
                                 scaleY = 1.07f
                             }
@@ -2633,7 +2648,7 @@ class EmulatorActivity : ComponentActivity() {
     private fun onScreenTouch(v: View, e: MotionEvent): Boolean {
         val down = e.actionMasked != MotionEvent.ACTION_UP && e.actionMasked != MotionEvent.ACTION_CANCEL
         if (macroPhase == MacroPhase.PLAYING && down) stopMacroPlayback(silent = true)
-        val scale = if (graphicsConfig.cropOverscan) 1.06f else 1f
+        val scale = if (graphicsConfig.cropOverscan && !DsDualScreen.isDs(system.id)) 1.06f else 1f
         val (x, y) = DsDualScreen.toPointerClamped(
             px = e.x,
             py = e.y,
