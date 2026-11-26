@@ -118,4 +118,77 @@ class GameMetadataTest {
         assertEquals("HeroBox-16 Original", hbDossier.sourceLabel)
         assertTrue(hbDossier.isLive)
     }
+
+    @Test
+    fun gameDnaProducesAccurateProfilesWithoutSubstringCorruption() {
+        fun axisMap(axes: List<GameDossier.RadarAxis>) = axes.associate { it.label to it.value }
+
+        // Super Mario Bros.: Wikipedia summary intentionally includes trap words ("simple", "similar", "arcade", "beating")
+        val mario = axisMap(
+            GameDossier.computeGameDna(
+                genre = "Platform",
+                modes = "Single-player, multiplayer",
+                title = "Super Mario Bros.",
+                summary = "Super Mario Bros. is a simple yet iconic arcade-inspired platform game about beating Bowser, similar to earlier classics.",
+                systemId = "nes",
+            ),
+        )
+        assertTrue("Mario ACTION should be high (${mario["ACTION"]})", mario["ACTION"]!! >= 0.80f)
+        assertTrue("Mario SKILL should be high (${mario["SKILL"]})", mario["SKILL"]!! >= 0.85f)
+        assertTrue("Mario REPLAY should be high (${mario["REPLAY"]})", mario["REPLAY"]!! >= 0.90f)
+        assertTrue("Mario RPG must stay low (${mario["RPG"]})", mario["RPG"]!! <= 0.15f)
+
+        // Chrono Trigger (JRPG)
+        val chrono = axisMap(
+            GameDossier.computeGameDna(
+                genre = "Role-playing",
+                modes = "Single-player",
+                title = "Chrono Trigger",
+                summary = "A turn-based role-playing game with party members, quests, and experience points.",
+                systemId = "snes",
+            ),
+        )
+        assertTrue("Chrono RPG should be >= 0.95 (${chrono["RPG"]})", chrono["RPG"]!! >= 0.95f)
+        assertTrue("Chrono ADVENTURE should be >= 0.90 (${chrono["ADVENTURE"]})", chrono["ADVENTURE"]!! >= 0.90f)
+        assertTrue("Chrono ACTION should stay moderate/low (${chrono["ACTION"]})", chrono["ACTION"]!! <= 0.45f)
+
+        // Tetris (Puzzle)
+        val tetris = axisMap(
+            GameDossier.computeGameDna(
+                genre = "Puzzle",
+                modes = "Single-player, multiplayer",
+                title = "Tetris",
+                summary = "A falling-block tile-matching puzzle game focused on high score mastery.",
+                systemId = "gb",
+            ),
+        )
+        assertTrue("Tetris SKILL should be >= 0.94", tetris["SKILL"]!! >= 0.94f)
+        assertTrue("Tetris REPLAY should be >= 0.95", tetris["REPLAY"]!! >= 0.95f)
+        assertTrue("Tetris RPG should be <= 0.12", tetris["RPG"]!! <= 0.12f)
+        assertTrue("Tetris ADVENTURE should be <= 0.15", tetris["ADVENTURE"]!! <= 0.15f)
+
+        // Sub-franchise disambiguation in local fallback
+        assertEquals("Racing · Arcade", GameDossier.guessGenreFromTitle("Mario Kart 64", "n64"))
+        assertEquals("Puzzle · Strategy", GameDossier.guessGenreFromTitle("Dr. Mario", "nes"))
+        assertEquals("Role-Playing", GameDossier.guessGenreFromTitle("Super Mario RPG", "snes"))
+        assertEquals("Platformer", GameDossier.guessGenreFromTitle("Super Mario Bros.", "nes"))
+
+        // Castlevania: Symphony of the Night hybrid Metroidvania RPG
+        val sotn = axisMap(
+            GameDossier.computeGameDna(
+                genre = "Action-adventure",
+                modes = "Single-player",
+                title = "Castlevania: Symphony of the Night",
+                summary = "An interconnected non-linear exploration game with experience points and inventory.",
+                systemId = "ps1",
+            ),
+        )
+        assertTrue("SotN ADVENTURE >= 0.90", sotn["ADVENTURE"]!! >= 0.90f)
+        assertTrue("SotN RPG >= 0.80", sotn["RPG"]!! >= 0.80f)
+
+        // Verify schema v2 caches are invalidated by v3
+        val staleV2 = JSONObject(GameDossier.localFallback(Game("id1", "Super Mario Bros. (USA).nes", "nes", "tree", "doc", 40976L)).toJson().toString())
+            .put("schemaVersion", 2)
+        assertNull("Stale v2 cache should be invalidated by v3", GameDossier.fromJson(staleV2))
+    }
 }

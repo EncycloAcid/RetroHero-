@@ -1638,11 +1638,11 @@ private fun M3GenreRadarCard(
             }
         }
 
-        // Radar chart + 5 crisp labels
+        // Radar chart + 5 crisp labeled vertices with exact percentage readouts
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(228.dp),
+                .height(254.dp),
             contentAlignment = Alignment.Center,
         ) {
             val webColor = cs.outlineVariant.copy(alpha = 0.55f)
@@ -1650,7 +1650,7 @@ private fun M3GenreRadarCard(
             val strokeColor = cs.primary
             val dotBg = cs.surfaceContainerHigh
 
-            Canvas(Modifier.size(172.dp)) {
+            Canvas(Modifier.size(168.dp)) {
                 val cx = size.width / 2f
                 val cy = size.height / 2f
                 val maxR = size.minDimension * 0.48f
@@ -1706,38 +1706,39 @@ private fun M3GenreRadarCard(
                 }
             }
 
-            // Positioned axis labels around the pentagon
+            // Positioned axis labels + live percentage values around all 5 vertices
             if (safeAxes.size == 5) {
-                Text(
-                    safeAxes[0].label,
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp),
-                    color = cs.onSurfaceVariant,
-                    modifier = Modifier.align(Alignment.TopCenter),
-                )
-                Text(
-                    safeAxes[1].label,
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp),
-                    color = cs.onSurfaceVariant,
-                    modifier = Modifier.align(Alignment.CenterEnd).padding(end = 6.dp, bottom = 30.dp),
-                )
-                Text(
-                    safeAxes[2].label,
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp),
-                    color = cs.onSurfaceVariant,
-                    modifier = Modifier.align(Alignment.BottomEnd).padding(end = 28.dp, bottom = 4.dp),
-                )
-                Text(
-                    safeAxes[3].label,
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp),
-                    color = cs.onSurfaceVariant,
-                    modifier = Modifier.align(Alignment.BottomStart).padding(start = 28.dp, bottom = 4.dp),
-                )
-                Text(
-                    safeAxes[4].label,
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.6.sp),
-                    color = cs.onSurfaceVariant,
-                    modifier = Modifier.align(Alignment.CenterStart).padding(start = 10.dp, bottom = 30.dp),
-                )
+                @Composable
+                fun VertexLabel(axis: GameDossier.RadarAxis, align: Alignment.Horizontal, mod: Modifier) {
+                    val pct = (axis.value * 100f).toInt().coerceIn(0, 100)
+                    Column(modifier = mod, horizontalAlignment = align) {
+                        Text(
+                            text = axis.label,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 9.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 0.6.sp,
+                            ),
+                            color = cs.onSurfaceVariant,
+                            maxLines = 1,
+                        )
+                        Text(
+                            text = "$pct%",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Black,
+                            ),
+                            color = if (pct >= 70) cs.primary else cs.onSurface,
+                            maxLines = 1,
+                        )
+                    }
+                }
+
+                VertexLabel(safeAxes[0], Alignment.CenterHorizontally, Modifier.align(Alignment.TopCenter))
+                VertexLabel(safeAxes[1], Alignment.End, Modifier.align(Alignment.CenterEnd).padding(end = 4.dp, bottom = 28.dp))
+                VertexLabel(safeAxes[2], Alignment.End, Modifier.align(Alignment.BottomEnd).padding(end = 20.dp, bottom = 2.dp))
+                VertexLabel(safeAxes[3], Alignment.Start, Modifier.align(Alignment.BottomStart).padding(start = 20.dp, bottom = 2.dp))
+                VertexLabel(safeAxes[4], Alignment.Start, Modifier.align(Alignment.CenterStart).padding(start = 4.dp, bottom = 28.dp))
             }
         }
     }
