@@ -169,6 +169,9 @@ internal fun M3SettingsPage(
     showPerfHud: Boolean = false,
     onSetRunAhead: (Int) -> Unit = {},
     onSetShowPerfHud: (Boolean) -> Unit = {},
+    launchboxStatus: com.retrohero.app.data.LaunchBoxDbStatus = com.retrohero.app.data.LaunchBoxDbStatus(false),
+    launchboxSyncProgress: String? = null,
+    onSyncLaunchBox: () -> Unit = {},
 ) {
     var subPage by rememberSaveable { mutableStateOf(SettingsSubPage.Root) }
 
@@ -746,9 +749,14 @@ internal fun M3SettingsPage(
 
             // 6. Backup, Restore & Direct Downloads
             item(key = "m3_set_backup") {
+                val lbSubtitle = when {
+                    launchboxSyncProgress != null -> launchboxSyncProgress
+                    launchboxStatus.synced -> "${launchboxStatus.gameCount} games indexed offline · Tap to refresh Metadata.zip"
+                    else -> "Live GamesDB active · Tap to cache full Metadata.zip offline"
+                }
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = "Backup & downloads",
+                        text = "Backup, metadata & downloads",
                         style = MaterialTheme.typography.titleSmall,
                         color = cs.primary,
                         modifier = Modifier.padding(horizontal = 8.dp),
@@ -756,7 +764,18 @@ internal fun M3SettingsPage(
                     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         M3SegmentedItem(
                             index = 0,
-                            count = 3,
+                            count = 4,
+                            icon = Icons.Rounded.AutoAwesome,
+                            badgePolygon = MaterialShapes.Sunny,
+                            badgeContainer = cs.primaryContainer,
+                            badgeContent = cs.onPrimaryContainer,
+                            title = "LaunchBox GamesDB metadata",
+                            subtitle = lbSubtitle,
+                            onClick = if (launchboxSyncProgress == null) onSyncLaunchBox else null,
+                        )
+                        M3SegmentedItem(
+                            index = 1,
+                            count = 4,
                             icon = Icons.Rounded.Backup,
                             badgePolygon = MaterialShapes.Cookie9Sided,
                             badgeContainer = cs.primaryContainer,
@@ -766,8 +785,8 @@ internal fun M3SettingsPage(
                             onClick = onBackup,
                         )
                         M3SegmentedItem(
-                            index = 1,
-                            count = 3,
+                            index = 2,
+                            count = 4,
                             icon = Icons.Rounded.Restore,
                             badgePolygon = MaterialShapes.Clover4Leaf,
                             badgeContainer = cs.secondaryContainer,
@@ -777,8 +796,8 @@ internal fun M3SettingsPage(
                             onClick = onRestore,
                         )
                         M3SegmentedItem(
-                            index = 2,
-                            count = 3,
+                            index = 3,
+                            count = 4,
                             icon = Icons.Rounded.Link,
                             badgePolygon = MaterialShapes.Cookie6Sided,
                             badgeContainer = cs.tertiaryContainer,

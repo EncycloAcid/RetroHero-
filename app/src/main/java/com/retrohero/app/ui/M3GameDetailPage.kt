@@ -413,19 +413,35 @@ internal fun M3GameDetailPage(
         if (milestones.isEmpty()) 0 else (unlockedCount * 100) / milestones.size
     }
 
-    val slides = remember(game.id, screenshots, dossier.heroImageUrl) {
+    val slides = remember(game.id, screenshots, dossier.heroImageUrl, dossier.boxArtUrl, dossier.titleScreenUrl, dossier.screenshotUrls) {
         buildList {
-            if (game.gameplaySnapUrls.isNotEmpty()) {
+            if (dossier.screenshotUrls.isNotEmpty()) {
+                dossier.screenshotUrls.forEachIndexed { i, url ->
+                    val label = if (dossier.screenshotUrls.size == 1) "Gameplay" else "Gameplay ${i + 1}"
+                    add(GallerySlide("lb_shot_$i", label, listOf(url) + game.gameplaySnapUrls + game.boxArtUrls))
+                }
+            } else if (game.gameplaySnapUrls.isNotEmpty()) {
                 add(GallerySlide("snap", "Gameplay", game.gameplaySnapUrls + game.titleScreenUrls + game.boxArtUrls))
             }
-            if (game.titleScreenUrls.isNotEmpty()) {
-                add(GallerySlide("title", "Title screen", game.titleScreenUrls + game.boxArtUrls))
+            val titleSources = buildList<Any> {
+                dossier.titleScreenUrl?.let { add(it) }
+                addAll(game.titleScreenUrls)
+                dossier.boxArtUrl?.let { add(it) }
+                addAll(game.boxArtUrls)
             }
-            if (game.boxArtUrls.isNotEmpty()) {
-                add(GallerySlide("box", "Box art", game.boxArtUrls))
+            if (titleSources.isNotEmpty()) {
+                add(GallerySlide("title", "Title screen", titleSources))
             }
-            dossier.heroImageUrl?.let { wikiImg ->
-                add(GallerySlide("wiki", "Editorial", listOf(wikiImg) + game.artUrls))
+            val boxSources = buildList<Any> {
+                dossier.boxArtUrl?.let { add(it) }
+                addAll(game.boxArtUrls)
+            }
+            if (boxSources.isNotEmpty()) {
+                add(GallerySlide("box", "Box art", boxSources))
+            }
+            val heroUrl = dossier.heroImageUrl
+            if (heroUrl != null && heroUrl != dossier.boxArtUrl) {
+                add(GallerySlide("hero_art", "Key art", listOf(heroUrl) + game.artUrls))
             }
             screenshots.forEachIndexed { i, shot ->
                 add(GallerySlide("shot_${shot.absolutePath}", "Capture ${i + 1}", listOf(shot), userShotFile = shot))
@@ -470,10 +486,11 @@ internal fun M3GameDetailPage(
                         .height(336.dp)
                         .clipToBounds(),
                 ) {
-                    // Storefront key-art backdrop (prefers retail key/box art or editorial hero, then title/gameplay)
-                    val heroSources = remember(game.id, dossier.heroImageUrl) {
+                    // Storefront key-art backdrop (LaunchBox 1920x1080 Fanart/Banner -> LaunchBox Box -> libretro)
+                    val heroSources = remember(game.id, dossier.heroImageUrl, dossier.boxArtUrl) {
                         buildList<Any> {
                             dossier.heroImageUrl?.let { add(it) }
+                            dossier.boxArtUrl?.let { add(it) }
                             addAll(game.boxArtUrls.take(2))
                             addAll(game.titleScreenUrls.take(2))
                             addAll(game.gameplaySnapUrls.take(2))
@@ -498,7 +515,7 @@ internal fun M3GameDetailPage(
                             ),
                     )
 
-                    // Bottom hero lockup: Uncropped Retail Box Art + Title + Developer/Year + Tagline
+                    // Bottom hero lockup: Uncropped Retail Box Art (prefers LaunchBox Box - Front) + Title
                     Row(
                         Modifier
                             .align(Alignment.BottomStart)
@@ -507,17 +524,28 @@ internal fun M3GameDetailPage(
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                         verticalAlignment = Alignment.Bottom,
                     ) {
-                        M3GameCover(
-                            game = game,
-                            showTitle = false,
-                            fitCover = true,
-                            modifier = Modifier
-                                .width(96.dp)
-                                .aspectRatio(0.86f)
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(cs.surfaceContainerHighest)
-                                .border(1.5.dp, cs.outlineVariant.copy(alpha = 0.55f), RoundedCornerShape(20.dp)),
-                        )
+                        val coverMod = Modifier
+                            .width(96.dp)
+                            .aspectRatio(0.86f)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(cs.surfaceContainerHighest)
+                            .border(1.5.dp, cs.outlineVariant.copy(alpha = 0.55f), RoundedCornerShape(20.dp))
+                        val lbBox = dossier.boxArtUrl
+                        if (lbBox != null) {
+                            M3FallbackArtFrame(
+                                game = game,
+                                sources = listOf(lbBox) + game.boxArtUrls,
+                                storefrontFit = true,
+                                modifier = coverMod,
+                            )
+                        } else {
+                            M3GameCover(
+                                game = game,
+                                showTitle = false,
+                                fitCover = true,
+                                modifier = coverMod,
+                            )
+                        }
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(
                                 text = game.title,
@@ -1306,6 +1334,10 @@ internal fun M3GameDetailPage(
                         add("RELEASE DATE" to dossier.releaseDate)
                         add("GENRE" to dossier.genre)
                         add("MODES" to dossier.modes)
+                        if (dossier.esrbRating.isNotBlank()) add("ESRB RATING" to dossier.esrbRating)
+                        dossier.communityRating?.let { rating ->
+                            add("COMMUNITY RATING" to String.format(java.util.Locale.US, "★ %.1f / 5.0", rating))
+                        }
                         add("PLATFORM" to (game.system?.name ?: game.systemId.uppercase()))
                         add("ROM FILE" to "${game.extension.uppercase()} · ${formatFileSizeShort(game.size)}")
                     }

@@ -125,6 +125,8 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
     val raUnofficial by vm.raUnofficial.collectAsStateWithLifecycle()
     val raNotifications by vm.raNotifications.collectAsStateWithLifecycle()
     val raAuthState by vm.raAuth.collectAsStateWithLifecycle()
+    val launchboxStatus by vm.launchboxStatus.collectAsStateWithLifecycle()
+    val launchboxSyncProgress by vm.launchboxSyncProgress.collectAsStateWithLifecycle()
 
     var autoSave by remember { mutableStateOf(vm.settings.autoSave) }
     var haptics by remember { mutableStateOf(vm.settings.haptics) }
@@ -339,6 +341,9 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
             vm.deletePatch(g, patch.id)
             patchesVersion++
         },
+        launchboxStatus = launchboxStatus,
+        launchboxSyncProgress = launchboxSyncProgress,
+        onSyncLaunchBox = vm::syncLaunchBoxDatabase,
     )
 
     if (raSignInOpen) {

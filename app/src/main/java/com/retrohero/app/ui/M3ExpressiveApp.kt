@@ -166,6 +166,9 @@ fun M3ExpressiveAppView(
     onPlayWithPatch: (Game, com.retrohero.app.data.RomPatch) -> Unit = { _, _ -> },
     onTogglePatchSeparateSave: (Game, com.retrohero.app.data.RomPatch, Boolean) -> Unit = { _, _, _ -> },
     onDeletePatch: (Game, com.retrohero.app.data.RomPatch) -> Unit = { _, _ -> },
+    launchboxStatus: com.retrohero.app.data.LaunchBoxDbStatus = com.retrohero.app.data.LaunchBoxDbStatus(false),
+    launchboxSyncProgress: String? = null,
+    onSyncLaunchBox: () -> Unit = {},
     initialTab: Int = 0,
 ) {
     val cs = MaterialTheme.colorScheme
@@ -333,6 +336,9 @@ fun M3ExpressiveAppView(
                                 showPerfHud = showPerfHud,
                                 onSetRunAhead = onSetRunAhead,
                                 onSetShowPerfHud = onSetShowPerfHud,
+                                launchboxStatus = launchboxStatus,
+                                launchboxSyncProgress = launchboxSyncProgress,
+                                onSyncLaunchBox = onSyncLaunchBox,
                             )
                         }
                     }

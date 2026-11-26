@@ -46,6 +46,29 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     suspend fun loadDossier(game: Game, forceRefresh: Boolean = false): GameDossier =
         metadataRepo.load(game, forceRefresh)
 
+    private val _launchboxStatus = MutableStateFlow(metadataRepo.launchboxDbStatus())
+    val launchboxStatus: StateFlow<com.retrohero.app.data.LaunchBoxDbStatus> = _launchboxStatus
+
+    private val _launchboxSyncProgress = MutableStateFlow<String?>(null)
+    val launchboxSyncProgress: StateFlow<String?> = _launchboxSyncProgress
+
+    fun syncLaunchBoxDatabase() {
+        if (_launchboxSyncProgress.value != null) return
+        _launchboxSyncProgress.value = "Connecting to LaunchBox GamesDB…"
+        viewModelScope.launch {
+            runCatching {
+                metadataRepo.syncLaunchBoxDatabase { msg -> _launchboxSyncProgress.value = msg }
+            }.onSuccess { status ->
+                _launchboxStatus.value = status
+                _launchboxSyncProgress.value = null
+                say("Synced ${status.gameCount} LaunchBox games across ${status.platformCount} consoles")
+            }.onFailure { err ->
+                _launchboxSyncProgress.value = null
+                say(err.message ?: "Couldn't download LaunchBox Metadata.zip")
+            }
+        }
+    }
+
     // ---- RetroAchievements ----
     val raProfile = settings.raProfile
     val raHardcore = settings.raHardcore
