@@ -186,7 +186,7 @@ class EmulatorActivity : ComponentActivity() {
     private lateinit var audioHaptics: AudioHapticsEngine
     private var activeCoreId: String = ""
     private var preparedSave: com.retrohero.app.data.SavePortability.PreparedSave? = null
-    private var padSkin: PadSkin = Looks.Console
+    private var padSkin by mutableStateOf(Looks.Console)
     private var currentCoreId: String = ""
     private var challengeBanner by mutableStateOf<String?>(null)
     private var deltaSkinsForSystem: List<DeltaSkin> = emptyList()
@@ -1474,6 +1474,7 @@ class EmulatorActivity : ComponentActivity() {
                         accent = com.retrohero.app.ui.components.Ascend.accent,
                         onAccent = com.retrohero.app.ui.components.Ascend.onAccent,
                         systemName = system.name,
+                        systemId = system.id,
                     )
                     else -> null
                 }
@@ -1510,6 +1511,22 @@ class EmulatorActivity : ComponentActivity() {
                         onPress = { if (settings.haptics) view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP) },
                     )
                 }
+            } else if (landscape && shellStyle != null && showPad) {
+                LandscapeConsoleShell(
+                    style = shellStyle,
+                    fastForwardActive = fastForwardToggle || fastForwardHeld,
+                    sustainedCount = sustainedCount,
+                    gameContent = { GameView() },
+                    padContent = {
+                        if (phase is Phase.Running) {
+                            Pad(
+                                landscape = true,
+                                modifier = Modifier.fillMaxSize().safeDrawingPadding(),
+                                onSustainedChanged = { sustainedCount = it.size },
+                            )
+                        }
+                    },
+                )
             } else if (landscape) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { GameView() }
                 if (showPad && phase is Phase.Running) {
@@ -2328,8 +2345,15 @@ class EmulatorActivity : ComponentActivity() {
             }
 
             // Live Gameplay Toggles (harmonized with Material 3 Expressive surfaces)
-            val switchCount = if (deltaSkinsForSystem.isNotEmpty()) 8 else 7
-            SegmentedGroup(null, switchCount) {
+            val consoleSkinSummary = remember(activeDeltaSkin, padSkin, system.id, system.shortName, system.color) {
+                activeDeltaSkin?.let { "${it.name} · Delta skin" }
+                    ?: when (padSkin.id) {
+                        Looks.Console.id -> "Authentic ${system.shortName} · ${ConsoleStyles.forSystem(system.id, system.color).bezelWordmark}"
+                        Looks.Instrument.id -> "RetroHero Deck · ${system.shortName}"
+                        else -> "${padSkin.name} · ${system.shortName}"
+                    }
+            }
+            SegmentedGroup(null, 8) {
                 MenuSwitch(shapes(0), Icons.Default.FastForward, "Fast forward", "${settings.fastForwardSpeed.toInt()}× speed", fastForwardToggle) {
                     fastForwardToggle = it
                     if (it && slowMotion) {
@@ -2382,16 +2406,14 @@ class EmulatorActivity : ComponentActivity() {
                     settings.audioHaptics = it
                     if (!it) audioHaptics.cancel()
                 }
-                if (deltaSkinsForSystem.isNotEmpty()) {
-                    SegmentedListItem(
-                        onClick = { navigate("skin") },
-                        shapes = shapes(7),
-                        colors = segmentColors(),
-                        leadingContent = { ShapeIcon(Icons.Default.AspectRatio) },
-                        supportingContent = { Text(activeDeltaSkin?.name ?: "Built-in RetroHero pad") },
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) { Text("Delta skin") }
-                }
+                SegmentedListItem(
+                    onClick = { navigate("skin") },
+                    shapes = shapes(7),
+                    colors = segmentColors(),
+                    leadingContent = { ShapeIcon(Icons.Default.AspectRatio) },
+                    supportingContent = { Text(consoleSkinSummary, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) { Text("Display & shell skin") }
             }
         }
     }
@@ -2511,29 +2533,58 @@ class EmulatorActivity : ComponentActivity() {
 
     @Composable
     private fun DeltaSkinPage(back: () -> Unit) {
-        val options: List<DeltaSkin?> = listOf(null) + deltaSkinsForSystem
-        Column {
-            PageHeader("Delta skin", back)
-            SegmentedGroup(null, options.size) {
-                options.forEachIndexed { i, skin ->
-                    val selected = activeDeltaSkin?.identifier == skin?.identifier
+        val authenticStyle = remember(system.id, system.color) { ConsoleStyles.forSystem(system.id, system.color) }
+        val builtInSkins = Looks.skins
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            PageHeader("${system.shortName} display skin", back)
+            SegmentedGroup("Built-in shells for ${system.name}", builtInSkins.size) {
+                builtInSkins.forEachIndexed { i, skin ->
+                    val selected = activeDeltaSkin == null && padSkin.id == skin.id
+                    val title = when (skin.id) {
+                        Looks.Console.id -> "Authentic ${system.shortName}"
+                        Looks.Instrument.id -> "RetroHero Deck (${system.shortName})"
+                        else -> skin.name
+                    }
+                    val subtitle = when (skin.id) {
+                        Looks.Console.id -> "${authenticStyle.bezelWordmark} · ${authenticStyle.bezelSubtitle}".trimEnd(' ', '·')
+                        Looks.Instrument.id -> "Tactile hardware shell branded for ${system.shortName}"
+                        else -> "Translucent ${skin.name.lowercase()} touch overlay"
+                    }
                     SegmentedListItem(
                         onClick = {
-                            activeDeltaSkin = skin
-                            settings.setDeltaSkinFor(system.id, skin?.identifier)
+                            activeDeltaSkin = null
+                            settings.setDeltaSkinFor(system.id, null)
+                            padSkin = skin
+                            settings.padSkin = skin.id
                             setMenu(false)
                             back()
                         },
                         shapes = shapes(i),
                         colors = segmentColors(),
-                        leadingContent = {
-                            RadioButton(selected = selected, onClick = null)
-                        },
-                        supportingContent = {
-                            Text(if (skin == null) "Use RetroHero's built-in touch pad" else skin.identifier, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        },
+                        leadingContent = { RadioButton(selected = selected, onClick = null) },
+                        supportingContent = { Text(subtitle, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         verticalAlignment = Alignment.CenterVertically,
-                    ) { Text(skin?.name ?: "Built-in controls") }
+                    ) { Text(title) }
+                }
+            }
+            if (deltaSkinsForSystem.isNotEmpty()) {
+                SegmentedGroup("Imported ${system.shortName} Delta skins", deltaSkinsForSystem.size) {
+                    deltaSkinsForSystem.forEachIndexed { i, skin ->
+                        val selected = activeDeltaSkin?.identifier == skin.identifier
+                        SegmentedListItem(
+                            onClick = {
+                                activeDeltaSkin = skin
+                                settings.setDeltaSkinFor(system.id, skin.identifier)
+                                setMenu(false)
+                                back()
+                            },
+                            shapes = shapes(i),
+                            colors = segmentColors(),
+                            leadingContent = { RadioButton(selected = selected, onClick = null) },
+                            supportingContent = { Text(skin.identifier, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) { Text(skin.name) }
+                    }
                 }
             }
         }

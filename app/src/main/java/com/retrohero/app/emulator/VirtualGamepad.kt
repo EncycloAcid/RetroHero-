@@ -301,7 +301,8 @@ fun VirtualGamepad(
                 dark = com.retrohero.app.ui.theme.Tone.isDark,
                 accent = com.retrohero.app.ui.components.Ascend.accent,
                 onAccent = com.retrohero.app.ui.components.Ascend.onAccent,
-                systemName = systemId.ifEmpty { "RETROHERO" },
+                systemName = com.retrohero.app.data.Systems.get(systemId)?.name ?: systemId.ifEmpty { "RETROHERO" },
+                systemId = systemId,
             )
             else -> null
         }
