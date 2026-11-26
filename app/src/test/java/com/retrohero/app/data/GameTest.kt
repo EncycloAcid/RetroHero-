@@ -52,8 +52,10 @@ class GameTest {
     fun builtInCoresAndEmbeddedCartridgesAreValid() {
         val hb16 = Systems.all.firstOrNull { it.id == "herobox16" }
         val chip8 = Systems.all.firstOrNull { it.id == "chip8" }
+        val nes = Systems.all.firstOrNull { it.id == "nes" }
         assertTrue(hb16 != null && hb16.cores.firstOrNull()?.builtIn == true)
         assertTrue(chip8 != null && chip8.cores.firstOrNull()?.builtIn == true)
+        assertTrue(nes != null && nes.cores.firstOrNull()?.id == "retrohero_nes" && nes.cores.firstOrNull()?.builtIn == true)
         val embedded = Homebrew.catalog.filter { it.embeddedBytes != null }
         assertTrue("Expected at least 4 instant built-in games", embedded.size >= 4)
         val hbxGames = embedded.filter { it.systemId == "herobox16" }

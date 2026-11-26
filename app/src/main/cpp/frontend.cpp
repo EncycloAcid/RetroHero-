@@ -79,6 +79,8 @@ bool Frontend::loadCore(const std::string &corePath, const std::string &systemDi
         core_ = builtin::heroBox16Api();
     } else if (corePath == "builtin://retrohero_chip8" || corePath.find("retrohero_chip8") != std::string::npos) {
         core_ = builtin::chip8Api();
+    } else if (corePath == "builtin://retrohero_nes" || corePath.find("retrohero_nes") != std::string::npos) {
+        core_ = builtin::heroNesApi();
     } else {
         void *h = dlopen(corePath.c_str(), RTLD_NOW | RTLD_LOCAL);
         if (!h) {

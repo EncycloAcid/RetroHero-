@@ -11,7 +11,8 @@ add_library(retrohero SHARED
         video_output.cpp
         hw_renderer.cpp
         builtin_herobox16.cpp
-        builtin_chip8.cpp)
+        builtin_chip8.cpp
+        builtin_nes.cpp)
 
 target_include_directories(retrohero PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/libretro)
 target_compile_options(retrohero PRIVATE -O3 -ffast-math -fno-rtti -Wall -Wextra -Wno-unused-parameter)
