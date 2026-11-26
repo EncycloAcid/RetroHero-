@@ -120,6 +120,23 @@ class GamePrefs(context: Context, sharpDefault: Boolean) {
     fun setStateCore(gameId: String, slot: Int, coreId: String) =
         prefs.edit { putString("state_core_${gameId.hashCode()}_$slot", coreId) }
 
+    /** Nintendo DS screen layout remembered per game + orientation, falling back to the last DS choice. */
+    fun dsLayout(gameId: String, landscape: Boolean): DsScreenLayout {
+        val o = if (landscape) "land" else "port"
+        return DsScreenLayout.fromId(prefs.getString("ds_layout_${gameId.hashCode()}_$o", null))
+            ?: DsScreenLayout.fromId(prefs.getString("ds_layout_last_$o", null))
+            ?: DsDualScreen.defaultLayout(landscape)
+    }
+
+    fun setDsLayout(gameId: String, landscape: Boolean, layout: DsScreenLayout) = prefs.edit {
+        val o = if (landscape) "land" else "port"
+        putString("ds_layout_${gameId.hashCode()}_$o", layout.id)
+        putString("ds_layout_last_$o", layout.id)
+    }
+
+    fun dsSwapped(gameId: String): Boolean = prefs.getBoolean("ds_swap_${gameId.hashCode()}", false)
+    fun setDsSwapped(gameId: String, swapped: Boolean) = prefs.edit { putBoolean("ds_swap_${gameId.hashCode()}", swapped) }
+
     companion object {
         const val FILE = "game_prefs"
     }

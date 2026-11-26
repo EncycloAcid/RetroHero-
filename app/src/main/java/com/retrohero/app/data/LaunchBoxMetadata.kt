@@ -42,13 +42,19 @@ data class LaunchBoxGameRecord(
     val images: List<LaunchBoxImage> = emptyList(),
 )
 
-/** Storefront-ready media URLs selected from a [LaunchBoxGameRecord]. */
+/** Storefront & 3D physical case/media URLs selected from a [LaunchBoxGameRecord]. */
 data class LaunchBoxStorefrontMedia(
     val heroBannerUrl: String?,
     val boxArtUrl: String?,
     val clearLogoUrl: String?,
     val titleScreenUrl: String?,
     val screenshotUrls: List<String>,
+    val boxBackUrl: String? = null,
+    val boxSpineUrl: String? = null,
+    val boxFullUrl: String? = null,
+    val cartFrontUrl: String? = null,
+    val cartBackUrl: String? = null,
+    val discUrl: String? = null,
 )
 
 /** Status of the optional local offline LaunchBox `Metadata.zip` database index. */
@@ -178,6 +184,34 @@ object LaunchBoxMetadata {
         "Amazon Poster",
     )
 
+    private val BOX_BACK_PRIORITY = listOf(
+        "Box - Back",
+        "Box - Back - Reconstructed",
+        "Fanart - Box - Back",
+    )
+
+    private val BOX_SPINE_PRIORITY = listOf(
+        "Box - Spine",
+    )
+
+    private val BOX_FULL_PRIORITY = listOf(
+        "Box - Full",
+    )
+
+    private val CART_FRONT_PRIORITY = listOf(
+        "Cart - Front",
+        "Cart - 3D",
+    )
+
+    private val CART_BACK_PRIORITY = listOf(
+        "Cart - Back",
+    )
+
+    private val DISC_PRIORITY = listOf(
+        "Disc",
+        "Fanart - Disc",
+    )
+
     private val HERO_BANNER_PRIORITY = listOf(
         "Fanart - Background",
         "Banner",
@@ -196,7 +230,7 @@ object LaunchBoxMetadata {
         }
     }
 
-    /** Picks the best storefront hero banner, front box art, clear logo, title screen, and gameplay screenshots. */
+    /** Picks the best storefront hero banner, 3D case faces (front/back/spine/full), cart/disc scans, and screenshots. */
     fun selectStorefrontMedia(images: List<LaunchBoxImage>, romBaseName: String = ""): LaunchBoxStorefrontMedia {
         if (images.isEmpty()) {
             return LaunchBoxStorefrontMedia(null, null, null, null, emptyList())
@@ -218,6 +252,12 @@ object LaunchBoxMetadata {
         }
 
         val boxArt = pickBest(BOX_FRONT_PRIORITY)
+        val boxBack = pickBest(BOX_BACK_PRIORITY)
+        val boxSpine = pickBest(BOX_SPINE_PRIORITY)
+        val boxFull = pickBest(BOX_FULL_PRIORITY)
+        val cartFront = pickBest(CART_FRONT_PRIORITY)
+        val cartBack = pickBest(CART_BACK_PRIORITY)
+        val disc = pickBest(DISC_PRIORITY)
         val heroBanner = pickBest(HERO_BANNER_PRIORITY) ?: boxArt
         val clearLogo = pickBest(listOf("Clear Logo"))
         val titleScreen = pickBest(listOf("Screenshot - Game Title"))
@@ -239,6 +279,12 @@ object LaunchBoxMetadata {
             clearLogoUrl = clearLogo,
             titleScreenUrl = titleScreen,
             screenshotUrls = (gameplay + extraScreens).distinct().take(6),
+            boxBackUrl = boxBack,
+            boxSpineUrl = boxSpine,
+            boxFullUrl = boxFull,
+            cartFrontUrl = cartFront,
+            cartBackUrl = cartBack,
+            discUrl = disc,
         )
     }
 
@@ -306,6 +352,12 @@ object LaunchBoxMetadata {
             seriesName = resolvedSeries.seriesName,
             relatedGames = resolvedSeries.entries,
             boxArtUrl = media.boxArtUrl,
+            boxBackUrl = media.boxBackUrl,
+            boxSpineUrl = media.boxSpineUrl,
+            boxFullUrl = media.boxFullUrl,
+            cartFrontUrl = media.cartFrontUrl,
+            cartBackUrl = media.cartBackUrl,
+            discUrl = media.discUrl,
             clearLogoUrl = media.clearLogoUrl,
             titleScreenUrl = media.titleScreenUrl,
             screenshotUrls = media.screenshotUrls,
@@ -542,8 +594,8 @@ object LaunchBoxMetadata {
                         },
                         onImage = { id, imgObj ->
                             if (id in gamesById) {
-                                val list = imagesById.getOrPut(id) { ArrayList(6) }
-                                if (list.size < 16) list += imgObj
+                                val list = imagesById.getOrPut(id) { ArrayList(10) }
+                                if (list.size < 32) list += imgObj
                             }
                         },
                     )
@@ -688,6 +740,10 @@ object LaunchBoxMetadata {
     private fun isUsefulImageType(type: String): Boolean =
         type in setOf(
             "Box - Front", "Box - Front - Reconstructed", "Fanart - Box - Front", "Box - 3D",
+            "Box - Back", "Box - Back - Reconstructed", "Fanart - Box - Back",
+            "Box - Spine", "Box - Full",
+            "Cart - Front", "Cart - 3D", "Cart - Back",
+            "Disc", "Fanart - Disc",
             "Fanart - Background", "Banner", "Clear Logo",
             "Screenshot - Gameplay", "Screenshot - Game Title",
             "Screenshot - Game Select", "Screenshot - High Scores",
@@ -777,7 +833,17 @@ object LaunchBoxMetadata {
 
         val detailHtml = fetchHtml("$GAMESDB_BASE_URL${bestHit.detailPath}") ?: return null
         var record = parseDetailsHtml(detailHtml, bestHit)
-        if (record.images.size < 2) {
+        // LaunchBox's /games/details/ tab usually shows only Box - Front + featured art;
+        // fetch /games/images/ as well so 3D Box - Back, Box - Spine, Box - Full, Cart & Disc scans load!
+        val has3dCaseAndMedia = record.images.any {
+            it.type.startsWith("Box - Back", ignoreCase = true) ||
+                it.type.equals("Box - Spine", ignoreCase = true) ||
+                it.type.equals("Box - Full", ignoreCase = true)
+        } && record.images.any {
+            it.type.startsWith("Cart -", ignoreCase = true) ||
+                it.type.contains("Disc", ignoreCase = true)
+        }
+        if (!has3dCaseAndMedia) {
             val imagesPath = bestHit.detailPath.replace("/games/details/", "/games/images/")
             val imagesHtml = fetchHtml("$GAMESDB_BASE_URL$imagesPath")
             if (imagesHtml != null) {
@@ -907,22 +973,57 @@ object LaunchBoxMetadata {
     internal fun parseImagesFromHtml(html: String): List<LaunchBoxImage> {
         val results = ArrayList<LaunchBoxImage>()
         val seen = HashSet<String>()
+        val coveredRanges = ArrayList<IntRange>()
 
-        // Match image tags and anchor links pointing to images.launchbox-app.com along with own alt/title or nearby type labels
-        val matches = Regex(
-            """(?is)<(?:a|img)[^>]+(?:href|src|data-src)=["'](https?://images\.launchbox-app\.com/[^"'\s)]+)["'][^>]*>""",
+        // Pass 1: Full-resolution <a href="https://images.launchbox-app.com/...">...</a> gallery cards
+        val anchorMatches = Regex(
+            """(?is)(<a\b[^>]+href=["'](https?://images\.launchbox-app\.com/[^"'\s)]+)["'][^>]*>)([\s\S]{0,600}?</a>)""",
         ).findAll(html).toList()
 
-        for (i in matches.indices) {
-            val m = matches[i]
+        for (i in anchorMatches.indices) {
+            val m = anchorMatches[i]
+            val fullUrl = m.groupValues[2].substringBefore('?')
+            coveredRanges += m.range
+            // Mark any nested thumbnail <img src="..."> inside this <a>...</a> as seen so it isn't duplicated
+            Regex("""(?is)(?:src|data-src)=["'](https?://images\.launchbox-app\.com/[^"'\s)]+)["']""")
+                .findAll(m.groupValues[3])
+                .forEach { seen += it.groupValues[1].substringBefore('?') }
+            if (!seen.add(fullUrl)) continue
+
+            val attrLabels = Regex("""(?i)(?:alt|title|data-title|data-type|aria-label)=["']([^"']+)["']""")
+                .findAll(m.value)
+                .joinToString(" ") { it.groupValues[1] }
+            val innerText = stripTags(m.groupValues[3])
+            val prevEnd = if (i > 0) anchorMatches[i - 1].range.last + 1 else (m.range.first - 140).coerceAtLeast(0)
+            val nextStart = if (i < anchorMatches.lastIndex) anchorMatches[i + 1].range.first else (m.range.last + 160).coerceAtMost(html.length)
+            val localAfter = stripTags(html.substring((m.range.last + 1).coerceAtMost(html.length), nextStart.coerceAtMost(m.range.last + 160)))
+            val localBefore = stripTags(html.substring(prevEnd.coerceAtLeast(m.range.first - 140), m.range.first))
+
+            val detectedType = detectImageTypeOrNull(attrLabels)
+                ?: detectImageTypeOrNull(innerText)
+                ?: detectImageTypeOrNull("$localAfter $localBefore")
+                ?: "Box - Front"
+            val detectedRegion = detectRegion(attrLabels)
+                .ifBlank { detectRegion(innerText) }
+                .ifBlank { detectRegion("$localAfter $localBefore") }
+            results += LaunchBoxImage(url = fullUrl, type = detectedType, region = detectedRegion)
+        }
+
+        // Pass 2: Standalone <img src="https://images.launchbox-app.com/..."> tags outside gallery anchors
+        val imgMatches = Regex(
+            """(?is)<img\b[^>]+(?:src|data-src)=["'](https?://images\.launchbox-app\.com/[^"'\s)]+)["'][^>]*>""",
+        ).findAll(html).filter { m -> coveredRanges.none { m.range.first in it } }.toList()
+
+        for (i in imgMatches.indices) {
+            val m = imgMatches[i]
             val cleanUrl = m.groupValues[1].substringBefore('?')
             if (!seen.add(cleanUrl)) continue
             val tag = m.value
             val alt = Regex("""(?i)(?:alt|title|data-title|data-type)=["']([^"']+)["']""")
                 .find(tag)?.groupValues?.get(1).orEmpty()
 
-            val prevEnd = if (i > 0) matches[i - 1].range.last + 1 else (m.range.first - 140).coerceAtLeast(0)
-            val nextStart = if (i < matches.lastIndex) matches[i + 1].range.first else (m.range.last + 140).coerceAtMost(html.length)
+            val prevEnd = if (i > 0) imgMatches[i - 1].range.last + 1 else (m.range.first - 140).coerceAtLeast(0)
+            val nextStart = if (i < imgMatches.lastIndex) imgMatches[i + 1].range.first else (m.range.last + 140).coerceAtMost(html.length)
             val localBefore = stripTags(html.substring(prevEnd.coerceAtLeast(m.range.first - 140), m.range.first))
             val localAfter = stripTags(html.substring((m.range.last + 1).coerceAtMost(html.length), nextStart.coerceAtMost(m.range.last + 140)))
 
@@ -941,7 +1042,12 @@ object LaunchBoxMetadata {
             "Fanart - Background",
             "Box - Front - Reconstructed",
             "Fanart - Box - Front",
+            "Box - Back - Reconstructed",
+            "Fanart - Box - Back",
             "Box - Front",
+            "Box - Back",
+            "Box - Spine",
+            "Box - Full",
             "Box - 3D",
             "Clear Logo",
             "Screenshot - Game Title",
@@ -951,6 +1057,9 @@ object LaunchBoxMetadata {
             "Arcade - Marquee",
             "Banner",
             "Cart - Front",
+            "Cart - Back",
+            "Cart - 3D",
+            "Fanart - Disc",
             "Disc",
         )
         return orderedTypes.firstOrNull { text.contains(it, ignoreCase = true) }

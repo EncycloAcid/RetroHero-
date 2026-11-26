@@ -175,8 +175,19 @@ fun VirtualGamepad(
     smartTouch: SmartTouchConfig = SmartTouchConfig(),
     oneHandedPortrait: Boolean = false,
     onSustainedChanged: (Set<Int>) -> Unit = {},
+    /**
+     * On-screen rectangle (root coordinates) of the emulated touch screen picture. When set together
+     * with [onTouchScreen], any finger that lands on the picture without hitting a control becomes a
+     * stylus — even though this full-screen pad overlay sits on top of the game surface.
+     */
+    touchScreenRect: Rect? = null,
+    touchScreenContentScale: Float = 1f,
+    onTouchScreen: ((x: Float, y: Float, down: Boolean) -> Unit)? = null,
 ) {
     val regions = remember { Regions() }
+    val latestTouchRect = androidx.compose.runtime.rememberUpdatedState(touchScreenRect)
+    val latestTouchScale = androidx.compose.runtime.rememberUpdatedState(touchScreenContentScale)
+    val latestOnTouch = androidx.compose.runtime.rememberUpdatedState(onTouchScreen)
     var pressed by remember { mutableStateOf(emptySet<Int>()) }
     var sustained by remember { mutableStateOf(emptySet<Int>()) }
     var holdArmed by remember { mutableStateOf(false) }
@@ -194,6 +205,7 @@ fun VirtualGamepad(
             .pointerInput(layout, edit != null, landscape, oneHandedPortrait) {
                 if (edit != null) return@pointerInput
                 val slop = 10.dp.toPx()
+                var stylusId: androidx.compose.ui.input.pointer.PointerId? = null
                 awaitPointerEventScope {
                     while (true) {
                         val event = awaitPointerEvent()
@@ -204,19 +216,51 @@ fun VirtualGamepad(
                                 SmartTouch.FaceHitCircle(r.id, r.rect.center, minOf(r.rect.width, r.rect.height) * 0.5f)
                             } else null
                         }
+                        val touchRect = latestTouchRect.value
+                        val touchCb = latestOnTouch.value
                         for (change in event.changes) {
+                            // DS / touch-screen stylus passthrough
+                            if (stylusId != null && change.id == stylusId) {
+                                val p = change.position + origin
+                                if (change.pressed && touchRect != null && touchCb != null) {
+                                    val (sx, sy) = DsDualScreen.toPointerClamped(
+                                        p.x, p.y, touchRect.left, touchRect.top, touchRect.width, touchRect.height,
+                                        latestTouchScale.value,
+                                    )
+                                    touchCb(sx, sy, true)
+                                } else {
+                                    touchCb?.invoke(0f, 0f, false)
+                                    stylusId = null
+                                }
+                                change.consume()
+                                continue
+                            }
                             if (!change.pressed) continue
                             val p = change.position + origin
+                            val hit = HashSet<Int>()
                             if (faceCircles.isNotEmpty()) {
-                                now += SmartTouch.resolveFaceChord(p, faceCircles, cfg.thumbChordZones, slop)
+                                hit += SmartTouch.resolveFaceChord(p, faceCircles, cfg.thumbChordZones, slop)
                             }
                             for (region in regions.map.values) {
                                 when (region) {
-                                    is Region.Buttons -> if (region.rect.inflate(slop).contains(p)) now += region.ids
+                                    is Region.Buttons -> if (region.rect.inflate(slop).contains(p)) hit += region.ids
                                     is Region.FaceButton -> Unit // handled above with thumb-roll chord zones
-                                    is Region.Dpad -> if (region.rect.inflate(slop * 2).contains(p)) now += dpadDirections(region.rect, p)
+                                    is Region.Dpad -> if (region.rect.inflate(slop * 2).contains(p)) hit += dpadDirections(region.rect, p)
                                 }
                             }
+                            if (hit.isEmpty() && stylusId == null && !change.previousPressed &&
+                                touchRect != null && touchCb != null && touchRect.contains(p)
+                            ) {
+                                val ptr = DsDualScreen.toPointer(
+                                    p.x, p.y, touchRect.left, touchRect.top, touchRect.width, touchRect.height,
+                                    latestTouchScale.value,
+                                )
+                                if (ptr != null) {
+                                    stylusId = change.id
+                                    touchCb(ptr.first, ptr.second, true)
+                                }
+                            }
+                            now += hit
                             change.consume()
                         }
                         if (now != pressed) {

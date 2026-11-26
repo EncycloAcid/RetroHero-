@@ -139,6 +139,7 @@ import com.retrohero.app.ui.components.M3ConnectedButtonGroup
 import com.retrohero.app.ui.components.M3ConsoleImage
 import com.retrohero.app.ui.components.M3ExpressiveSpring
 import com.retrohero.app.ui.components.M3GameCover
+import com.retrohero.app.ui.components.M3PhysicalBoxViewerSection
 import com.retrohero.app.ui.components.M3ShapeBadge
 import com.retrohero.app.ui.components.M3SplitButton
 import com.retrohero.app.ui.components.M3WavyBar
@@ -413,7 +414,17 @@ internal fun M3GameDetailPage(
         if (milestones.isEmpty()) 0 else (unlockedCount * 100) / milestones.size
     }
 
-    val slides = remember(game.id, screenshots, dossier.heroImageUrl, dossier.boxArtUrl, dossier.titleScreenUrl, dossier.screenshotUrls) {
+    val slides = remember(
+        game.id,
+        screenshots,
+        dossier.heroImageUrl,
+        dossier.boxArtUrl,
+        dossier.boxBackUrl,
+        dossier.cartFrontUrl,
+        dossier.discUrl,
+        dossier.titleScreenUrl,
+        dossier.screenshotUrls,
+    ) {
         buildList {
             if (dossier.screenshotUrls.isNotEmpty()) {
                 dossier.screenshotUrls.forEachIndexed { i, url ->
@@ -437,7 +448,16 @@ internal fun M3GameDetailPage(
                 addAll(game.boxArtUrls)
             }
             if (boxSources.isNotEmpty()) {
-                add(GallerySlide("box", "Box art", boxSources))
+                add(GallerySlide("box", "Box front", boxSources))
+            }
+            dossier.boxBackUrl?.let { backUrl ->
+                add(GallerySlide("box_back", "Box back", listOf(backUrl)))
+            }
+            dossier.cartFrontUrl?.let { cartUrl ->
+                add(GallerySlide("cart_front", "Cartridge", listOf(cartUrl)))
+            }
+            dossier.discUrl?.let { discUrl ->
+                add(GallerySlide("disc_art", "Disc", listOf(discUrl)))
             }
             val heroUrl = dossier.heroImageUrl
             if (heroUrl != null && heroUrl != dossier.boxArtUrl) {
@@ -450,6 +470,7 @@ internal fun M3GameDetailPage(
     }
     var selectedSlideIdx by remember(game.id) { mutableIntStateOf(0) }
     var lightboxSlideIdx by remember(game.id) { mutableStateOf<Int?>(null) }
+    var open3dInspectorNonce by remember(game.id) { mutableIntStateOf(0) }
     val activeSlide = slides.getOrNull(selectedSlideIdx) ?: slides.firstOrNull()
 
     val listState = rememberLazyListState()
@@ -515,7 +536,7 @@ internal fun M3GameDetailPage(
                             ),
                     )
 
-                    // Bottom hero lockup: Uncropped Retail Box Art (prefers LaunchBox Box - Front) + Title
+                    // Bottom hero lockup: Uncropped Retail Box Art (tap to launch 3D Box & Media Inspector!) + Title
                     Row(
                         Modifier
                             .align(Alignment.BottomStart)
@@ -530,6 +551,10 @@ internal fun M3GameDetailPage(
                             .clip(RoundedCornerShape(20.dp))
                             .background(cs.surfaceContainerHighest)
                             .border(1.5.dp, cs.outlineVariant.copy(alpha = 0.55f), RoundedCornerShape(20.dp))
+                            .clickable {
+                                view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                open3dInspectorNonce++
+                            }
                         val lbBox = dossier.boxArtUrl
                         if (lbBox != null) {
                             M3FallbackArtFrame(
@@ -1275,6 +1300,15 @@ internal fun M3GameDetailPage(
                         }
                     }
                 }
+            }
+
+            // 4B. LAUNCHBOX-STYLE INTERACTIVE 3D RETAIL BOX, SPINE & CARTRIDGE/DISC SPIN VIEWER
+            item(key = "detail_3d_box_viewer") {
+                M3PhysicalBoxViewerSection(
+                    game = game,
+                    dossier = dossier,
+                    openInspectorTrigger = open3dInspectorNonce,
+                )
             }
 
             // 5. GAME INFO & CREDITS DOSSIER (Hydra-style key-value rows)

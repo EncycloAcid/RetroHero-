@@ -203,6 +203,7 @@ fun HandheldShell(
     fastForwardActive: Boolean = false,
     sustainedCount: Int = 0,
     ambilight: AmbilightState = AmbilightState.Off,
+    padHeightFraction: Float = 0.47f,
     modifier: Modifier = Modifier,
     gameContent: @Composable () -> Unit,
     padContent: @Composable () -> Unit,
@@ -506,7 +507,7 @@ fun HandheldShell(
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .fillMaxHeight(0.47f),
+                    .fillMaxHeight(padHeightFraction.coerceIn(0.32f, 0.55f)),
             ) {
                 padContent()
             }

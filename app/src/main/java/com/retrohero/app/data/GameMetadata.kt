@@ -34,6 +34,12 @@ data class GameDossier(
     val seriesName: String = "",
     val relatedGames: List<RelatedGame> = emptyList(),
     val boxArtUrl: String? = null,
+    val boxBackUrl: String? = null,
+    val boxSpineUrl: String? = null,
+    val boxFullUrl: String? = null,
+    val cartFrontUrl: String? = null,
+    val cartBackUrl: String? = null,
+    val discUrl: String? = null,
     val clearLogoUrl: String? = null,
     val titleScreenUrl: String? = null,
     val screenshotUrls: List<String> = emptyList(),
@@ -60,6 +66,12 @@ data class GameDossier(
         .put("isLive", isLive)
         .put("seriesName", seriesName)
         .put("boxArtUrl", boxArtUrl ?: JSONObject.NULL)
+        .put("boxBackUrl", boxBackUrl ?: JSONObject.NULL)
+        .put("boxSpineUrl", boxSpineUrl ?: JSONObject.NULL)
+        .put("boxFullUrl", boxFullUrl ?: JSONObject.NULL)
+        .put("cartFrontUrl", cartFrontUrl ?: JSONObject.NULL)
+        .put("cartBackUrl", cartBackUrl ?: JSONObject.NULL)
+        .put("discUrl", discUrl ?: JSONObject.NULL)
         .put("clearLogoUrl", clearLogoUrl ?: JSONObject.NULL)
         .put("titleScreenUrl", titleScreenUrl ?: JSONObject.NULL)
         .put("screenshotUrls", JSONArray().apply { screenshotUrls.forEach { put(it) } })
@@ -87,7 +99,7 @@ data class GameDossier(
         )
 
     companion object {
-        const val CACHE_SCHEMA_VERSION = 5
+        const val CACHE_SCHEMA_VERSION = 6
 
         fun fromJson(o: JSONObject): GameDossier? {
             if (o.optInt("schemaVersion", 1) < CACHE_SCHEMA_VERSION) return null
@@ -143,6 +155,12 @@ data class GameDossier(
                 seriesName = o.optString("seriesName"),
                 relatedGames = related,
                 boxArtUrl = optUrl("boxArtUrl"),
+                boxBackUrl = optUrl("boxBackUrl"),
+                boxSpineUrl = optUrl("boxSpineUrl"),
+                boxFullUrl = optUrl("boxFullUrl"),
+                cartFrontUrl = optUrl("cartFrontUrl"),
+                cartBackUrl = optUrl("cartBackUrl"),
+                discUrl = optUrl("discUrl"),
                 clearLogoUrl = optUrl("clearLogoUrl"),
                 titleScreenUrl = optUrl("titleScreenUrl"),
                 screenshotUrls = shots,

@@ -15,11 +15,18 @@ import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.OpenWith
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.EmojiEvents
+import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Public
+import androidx.compose.material.icons.rounded.SwapVert
 import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.rounded.Translate
+import androidx.compose.material.icons.rounded.ViewAgenda
 import androidx.compose.material.icons.rounded.Wifi
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.runtime.collectAsState
@@ -214,6 +221,17 @@ class EmulatorActivity : ComponentActivity() {
     private var perfActiveRa by mutableIntStateOf(0)
     private var aspect by mutableFloatStateOf(4f / 3f)
     private var frameSize by mutableStateOf(IntSize.Zero)
+
+    // Nintendo DS dual-screen usability
+    private var dsLayout by mutableStateOf(DsScreenLayout.STACKED)
+    private var dsSwapped by mutableStateOf(false)
+    private var dsLidClosed by mutableStateOf(false)
+    private var dsMicHeld by mutableStateOf(false)
+    private var dsLayoutMenuOpen by mutableStateOf(false)
+    private var dsLayoutAppliedFor: Boolean? = null
+
+    /** Root-space bounds of the visible game picture (for stylus passthrough under the overlay pad). */
+    private var gamePictureRect by mutableStateOf<androidx.compose.ui.geometry.Rect?>(null)
     private var filter by mutableIntStateOf(0)
     private var integerScale by mutableStateOf(false)
     private var rewindOn by mutableStateOf(false)
@@ -529,6 +547,13 @@ class EmulatorActivity : ComponentActivity() {
             prof.coreOptions.forEach { (k, v) -> NativeBridge.setOption(k, v) }
             com.retrohero.app.data.GraphicsCoreOptions.optionsFor(coreId, gfx).forEach { (k, v) -> NativeBridge.setOption(k, v) }
             optionsStore.load().forEach { (k, v) -> NativeBridge.setOption(k, v) }
+            if (DsDualScreen.isDs(system.id)) {
+                val land = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+                dsLayout = gamePrefs.dsLayout(game.id, land)
+                dsSwapped = gamePrefs.dsSwapped(game.id)
+                dsLayoutAppliedFor = land
+                DsDualScreen.coreOptions(coreId, dsLayout, dsSwapped).forEach { (k, v) -> NativeBridge.setOption(k, v) }
+            }
             if (!NativeBridge.loadCore(corePath, paths.system.absolutePath, paths.saves.absolutePath)) {
                 return@withContext NativeBridge.getLastError()
             }
@@ -619,6 +644,53 @@ class EmulatorActivity : ComponentActivity() {
         NativeBridge.setFilter(filter)
         NativeBridge.setColorProfile(colorProfile)
         prof.coreOptions.forEach { (k, v) -> NativeBridge.setOption(k, v) }
+    }
+
+    private fun applyDsLayout(newLayout: DsScreenLayout, swapped: Boolean, landscape: Boolean, persist: Boolean = true) {
+        if (!DsDualScreen.isDs(system.id)) return
+        dsLayout = newLayout
+        dsSwapped = swapped
+        dsLayoutAppliedFor = landscape
+        if (persist) {
+            gamePrefs.setDsLayout(game.id, landscape, newLayout)
+            gamePrefs.setDsSwapped(game.id, swapped)
+        }
+        DsDualScreen.coreOptions(activeCoreId, newLayout, swapped).forEach { (k, v) ->
+            NativeBridge.setOption(k, v)
+        }
+        // Poll geometry right away so the viewport snaps to the new layout's aspect ratio promptly.
+        lifecycleScope.launch {
+            delay(80)
+            aspect = NativeBridge.getAspectRatio().takeIf { it > 0.1f } ?: aspect
+            delay(180)
+            aspect = NativeBridge.getAspectRatio().takeIf { it > 0.1f } ?: aspect
+        }
+    }
+
+    private fun holdDsMic(held: Boolean) {
+        if (!DsDualScreen.isDs(system.id)) return
+        val micId = DsDualScreen.hardwareButtons(activeCoreId).mic ?: return
+        dsMicHeld = held
+        NativeBridge.setButton(0, micId, held)
+    }
+
+    private fun toggleDsLid() {
+        if (!DsDualScreen.isDs(system.id)) return
+        val hw = DsDualScreen.hardwareButtons(activeCoreId)
+        if (hw.lid.isEmpty()) return
+        val nextClosed = !dsLidClosed
+        dsLidClosed = nextClosed
+        if (hw.lidIsToggle) {
+            // Pulse the core's lid-toggle combo briefly so face buttons aren't left held down.
+            lifecycleScope.launch {
+                hw.lid.forEach { NativeBridge.setButton(0, it, true) }
+                delay(120)
+                hw.lid.forEach { NativeBridge.setButton(0, it, false) }
+            }
+        } else {
+            hw.lid.forEach { NativeBridge.setButton(0, it, nextClosed) }
+        }
+        toast(if (nextClosed) "DS lid closed" else "DS lid opened")
     }
 
     private fun setColorMatrix(profile: Int) {
@@ -1549,7 +1621,15 @@ class EmulatorActivity : ComponentActivity() {
             }
         }
 
+        LaunchedEffect(phase, landscape) {
+            if (phase is Phase.Running && DsDualScreen.isDs(system.id) && dsLayoutAppliedFor != landscape) {
+                val target = gamePrefs.dsLayout(game.id, landscape)
+                applyDsLayout(target, dsSwapped, landscape, persist = false)
+            }
+        }
+
         padLandscape = landscape
+        val isDs = DsDualScreen.isDs(system.id)
         BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
             val density = LocalDensity.current
             val containerW = with(density) { maxWidth.toPx() }
@@ -1561,6 +1641,10 @@ class EmulatorActivity : ComponentActivity() {
             val deltaRep = if (showPad && !editingPad && skin != null) {
                 skin.representations.pick(landscape = landscape, tablet = tablet, tallPhone = tallPhone)
             } else null
+
+            val dsLandscapeInset = if (isDs && landscape && showPad) {
+                maxWidth * DsDualScreen.landscapeSideInsetFraction(dsLayout)
+            } else 0.dp
 
             val shellStyle = remember(padSkin, system.id, system.color, Tone.isDark) {
                 when (padSkin.faces) {
@@ -1613,7 +1697,11 @@ class EmulatorActivity : ComponentActivity() {
                     fastForwardActive = fastForwardToggle || fastForwardHeld,
                     sustainedCount = sustainedCount,
                     ambilight = ambilightState,
-                    gameContent = { GameView() },
+                    gameContent = {
+                        Box(Modifier.fillMaxSize().padding(horizontal = dsLandscapeInset), contentAlignment = Alignment.Center) {
+                            GameView()
+                        }
+                    },
                     padContent = {
                         if (phase is Phase.Running) {
                             Pad(
@@ -1626,7 +1714,10 @@ class EmulatorActivity : ComponentActivity() {
                 )
             } else if (landscape) {
                 AmbilightBackdropHalo(ambilight = ambilightState, landscape = true)
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { GameView() }
+                Box(
+                    Modifier.fillMaxSize().padding(horizontal = dsLandscapeInset),
+                    contentAlignment = Alignment.Center,
+                ) { GameView() }
                 if (showPad && phase is Phase.Running) {
                     Pad(
                         landscape = true,
@@ -1641,6 +1732,7 @@ class EmulatorActivity : ComponentActivity() {
                     fastForwardActive = fastForwardToggle || fastForwardHeld,
                     sustainedCount = sustainedCount,
                     ambilight = ambilightState,
+                    padHeightFraction = if (isDs) DsDualScreen.PORTRAIT_PAD_FRACTION else 0.47f,
                     gameContent = { GameView() },
                     padContent = {
                         if (phase is Phase.Running) {
@@ -1660,7 +1752,9 @@ class EmulatorActivity : ComponentActivity() {
                     if (showPad && phase is Phase.Running) {
                         Pad(
                             landscape = false,
-                            modifier = Modifier.fillMaxWidth().fillMaxHeight(0.45f),
+                            modifier = Modifier.fillMaxWidth().fillMaxHeight(
+                                if (isDs) DsDualScreen.PORTRAIT_PAD_FRACTION else 0.45f,
+                            ),
                             onSustainedChanged = { sustainedCount = it.size },
                         )
                     }
@@ -1740,6 +1834,16 @@ class EmulatorActivity : ComponentActivity() {
                 }
             }
             if (discPickerOpen && discCount > 1 && !menuOpen) QuickDiscSwapSheet()
+            if (isDs && phase is Phase.Running && !menuOpen && !editingPad && !pocketGuideOpen) {
+                DsQuickBar(
+                    landscape = landscape,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .safeDrawingPadding()
+                        .padding(top = 10.dp, end = 12.dp),
+                )
+            }
+            if (dsLayoutMenuOpen && isDs && !menuOpen) DsLayoutSheet(landscape = landscape)
             val npState by netplaySession.state.collectAsState()
             if (!menuOpen && !pocketGuideOpen && translateState is TranslateState.Idle && phase is Phase.Running) {
                 Column(
@@ -2033,6 +2137,9 @@ class EmulatorActivity : ComponentActivity() {
             smartTouch = smartTouch,
             oneHandedPortrait = oneHanded,
             onSustainedChanged = onSustainedChanged,
+            touchScreenRect = if (system.touchScreen) gamePictureRect else null,
+            touchScreenContentScale = if (graphicsConfig.cropOverscan) 1.06f else 1f,
+            onTouchScreen = if (system.touchScreen) { x, y, down -> NativeBridge.setPointer(x, y, down) } else null,
         )
     }
 
@@ -2057,7 +2164,11 @@ class EmulatorActivity : ComponentActivity() {
                 size != null -> size
                 else -> Modifier.aspectRatio(effectiveAspect)
             }
-            Box(surfaceMod.clip(RoundedCornerShape(0.dp))) {
+            Box(
+                surfaceMod
+                    .clip(RoundedCornerShape(0.dp))
+                    .onGloballyPositioned { coords -> gamePictureRect = coords.boundsInRoot() },
+            ) {
                 GameSurface(
                     Modifier
                         .fillMaxSize()
@@ -2106,8 +2217,16 @@ class EmulatorActivity : ComponentActivity() {
     }
 
     private fun onScreenTouch(v: View, e: MotionEvent): Boolean {
-        val x = e.x / v.width * 2f - 1f
-        val y = e.y / v.height * 2f - 1f
+        val scale = if (graphicsConfig.cropOverscan) 1.06f else 1f
+        val (x, y) = DsDualScreen.toPointerClamped(
+            px = e.x,
+            py = e.y,
+            left = 0f,
+            top = 0f,
+            width = v.width.toFloat(),
+            height = v.height.toFloat(),
+            contentScale = scale,
+        )
         val down = e.actionMasked != MotionEvent.ACTION_UP && e.actionMasked != MotionEvent.ACTION_CANCEL
         NativeBridge.setPointer(x, y, down)
         return true
@@ -2301,6 +2420,201 @@ class EmulatorActivity : ComponentActivity() {
     }
 
     @Composable
+    private fun DsQuickBar(landscape: Boolean, modifier: Modifier = Modifier) {
+        val cs = MaterialTheme.colorScheme
+        val hw = remember(activeCoreId) { DsDualScreen.hardwareButtons(activeCoreId) }
+        val view = androidx.compose.ui.platform.LocalView.current
+        Row(
+            modifier
+                .clip(RoundedCornerShape(50))
+                .background(Color.Black.copy(alpha = 0.70f))
+                .padding(horizontal = 6.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            // Layout picker pill
+            Row(
+                Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(Color.White.copy(alpha = 0.12f))
+                    .clickable {
+                        if (settings.haptics) view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                        dsLayoutMenuOpen = true
+                    }
+                    .padding(horizontal = 9.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Icon(
+                    Icons.Rounded.ViewAgenda,
+                    contentDescription = "DS screen layout",
+                    tint = cs.primary,
+                    modifier = Modifier.size(14.dp),
+                )
+                Text(
+                    text = dsLayout.shortLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White,
+                    maxLines = 1,
+                )
+            }
+            // 1-tap swap top/bottom or big/small screens
+            Box(
+                Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(if (dsSwapped) cs.primary.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.10f))
+                    .clickable {
+                        if (settings.haptics) view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                        applyDsLayout(dsLayout, !dsSwapped, landscape)
+                    }
+                    .padding(horizontal = 8.dp, vertical = 5.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Rounded.SwapVert,
+                    contentDescription = "Swap DS screens",
+                    tint = if (dsSwapped) cs.onPrimary else Color.White,
+                    modifier = Modifier.size(15.dp),
+                )
+            }
+            // Hold-to-blow microphone button (for Zelda, Mario Kart DS, Nintendogs, etc.)
+            if (hw.mic != null) {
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(if (dsMicHeld) cs.tertiary.copy(alpha = 0.92f) else Color.White.copy(alpha = 0.10f))
+                        .pointerInput(activeCoreId) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val ev = awaitPointerEvent()
+                                    val anyDown = ev.changes.any { it.pressed }
+                                    if (anyDown != dsMicHeld) {
+                                        if (anyDown && settings.haptics) {
+                                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                                        }
+                                        holdDsMic(anyDown)
+                                    }
+                                    ev.changes.forEach { it.consume() }
+                                }
+                            }
+                        }
+                        .padding(horizontal = 8.dp, vertical = 5.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Rounded.Mic,
+                        contentDescription = "Hold to blow into DS mic",
+                        tint = if (dsMicHeld) cs.onTertiary else Color.White,
+                        modifier = Modifier.size(15.dp),
+                    )
+                }
+            }
+            // Close / Open DS hinge lid button
+            if (hw.lid.isNotEmpty()) {
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(if (dsLidClosed) cs.secondary.copy(alpha = 0.90f) else Color.White.copy(alpha = 0.10f))
+                        .clickable {
+                            if (settings.haptics) view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                            toggleDsLid()
+                        }
+                        .padding(horizontal = 8.dp, vertical = 5.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Rounded.Bedtime,
+                        contentDescription = if (dsLidClosed) "Open DS lid" else "Close DS lid",
+                        tint = if (dsLidClosed) cs.onSecondary else Color.White,
+                        modifier = Modifier.size(15.dp),
+                    )
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun DsLayoutSheet(landscape: Boolean) {
+        val cs = MaterialTheme.colorScheme
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.56f))
+                .clickable(interactionSource = null, indication = null) { dsLayoutMenuOpen = false }
+                .safeDrawingPadding(),
+            contentAlignment = Alignment.Center,
+        ) {
+            Surface(
+                shape = MaterialTheme.shapes.extraLarge,
+                color = cs.surfaceContainer,
+                modifier = Modifier
+                    .padding(20.dp)
+                    .widthIn(max = 420.dp)
+                    .clickable(interactionSource = null, indication = null) {},
+            ) {
+                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        ShapeIcon(Icons.Rounded.ViewAgenda)
+                        Column(Modifier.weight(1f)) {
+                            Text("Nintendo DS Screens", style = MaterialTheme.typography.titleLarge)
+                            Text(
+                                "Saved per game for ${if (landscape) "landscape" else "portrait"} · tap any screen to use stylus",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = cs.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    DsScreenLayout.entries.forEach { preset ->
+                        val selected = preset == dsLayout
+                        Surface(
+                            onClick = {
+                                applyDsLayout(preset, dsSwapped, landscape)
+                                dsLayoutMenuOpen = false
+                            },
+                            shape = RoundedCornerShape(16.dp),
+                            color = if (selected) cs.primaryContainer else cs.surfaceContainerHigh,
+                            contentColor = if (selected) cs.onPrimaryContainer else cs.onSurface,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Row(
+                                Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text(preset.label, style = MaterialTheme.typography.titleSmall)
+                                if (selected) {
+                                    Icon(Icons.Default.Check, null, Modifier.size(18.dp))
+                                }
+                            }
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilledTonalButton(
+                            onClick = { applyDsLayout(dsLayout, !dsSwapped, landscape) },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Icon(Icons.Rounded.SwapVert, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(if (dsSwapped) "Swapped" else "Swap")
+                        }
+                        FilledTonalButton(
+                            onClick = {
+                                toggleDsLid()
+                                dsLayoutMenuOpen = false
+                            },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Icon(Icons.Rounded.Bedtime, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(if (dsLidClosed) "Open lid" else "Close lid")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
     private fun MainMenuPage(navigate: (String) -> Unit) {
         val cs = MaterialTheme.colorScheme
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -2360,6 +2674,54 @@ class EmulatorActivity : ComponentActivity() {
                     shapes = IconButtonDefaults.shapes(),
                     modifier = Modifier.size(52.dp),
                 ) { Icon(Icons.AutoMirrored.Filled.ExitToApp, "Quit game") }
+            }
+
+            if (DsDualScreen.isDs(system.id)) {
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = cs.surfaceContainerHigh,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Icon(Icons.Rounded.ViewAgenda, null, tint = cs.primary, modifier = Modifier.size(16.dp))
+                                Text("DS Screens", style = MaterialTheme.typography.titleSmall)
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                FilterChip(
+                                    selected = dsSwapped,
+                                    onClick = { applyDsLayout(dsLayout, !dsSwapped, padLandscape) },
+                                    label = { Text("Swap", style = MaterialTheme.typography.labelSmall) },
+                                )
+                                FilterChip(
+                                    selected = dsLidClosed,
+                                    onClick = { toggleDsLid() },
+                                    label = { Text(if (dsLidClosed) "Lid closed" else "Lid", style = MaterialTheme.typography.labelSmall) },
+                                )
+                            }
+                        }
+                        Row(
+                            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            DsScreenLayout.entries.forEach { preset ->
+                                FilterChip(
+                                    selected = dsLayout == preset,
+                                    onClick = { applyDsLayout(preset, dsSwapped, padLandscape) },
+                                    label = { Text(preset.shortLabel, style = MaterialTheme.typography.labelSmall) },
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
             if (discCount > 1) {

@@ -70,6 +70,24 @@ class LaunchBoxMetadataTest {
                 <Type>Screenshot - Gameplay</Type>
                 <Region>North America</Region>
               </GameImage>
+              <GameImage>
+                <DatabaseID>12440</DatabaseID>
+                <FileName>box-back-platinum-na.jpg</FileName>
+                <Type>Box - Back</Type>
+                <Region>North America</Region>
+              </GameImage>
+              <GameImage>
+                <DatabaseID>12440</DatabaseID>
+                <FileName>box-spine-platinum-na.jpg</FileName>
+                <Type>Box - Spine</Type>
+                <Region>North America</Region>
+              </GameImage>
+              <GameImage>
+                <DatabaseID>12440</DatabaseID>
+                <FileName>cart-front-platinum-na.png</FileName>
+                <Type>Cart - Front</Type>
+                <Region>North America</Region>
+              </GameImage>
             </LaunchBox>
         """.trimIndent()
 
@@ -109,16 +127,22 @@ class LaunchBoxMetadataTest {
                 "https://images.launchbox-app.com/box-platinum-na.jpg",
                 dossier.boxArtUrl,
             )
+            assertEquals("https://images.launchbox-app.com/box-back-platinum-na.jpg", dossier.boxBackUrl)
+            assertEquals("https://images.launchbox-app.com/box-spine-platinum-na.jpg", dossier.boxSpineUrl)
+            assertEquals("https://images.launchbox-app.com/cart-front-platinum-na.png", dossier.cartFrontUrl)
             assertEquals("https://images.launchbox-app.com/title-platinum.png", dossier.titleScreenUrl)
             assertEquals(listOf("https://images.launchbox-app.com/shot1-platinum.png"), dossier.screenshotUrls)
 
-            // Verify schema v5 round-trip & v4 invalidation
-            val staleV4 = JSONObject(dossier.toJson().toString()).put("schemaVersion", 4)
-            assertNull("v4 cached Wikipedia dossier must invalidate so LaunchBox v5 loads", GameDossier.fromJson(staleV4))
+            // Verify schema v6 round-trip & v5 invalidation so 3D box/cart scans populate automatically
+            val staleV5 = JSONObject(dossier.toJson().toString()).put("schemaVersion", 5)
+            assertNull("v5 cached dossier must invalidate so v6 3D box & cart scans load", GameDossier.fromJson(staleV5))
             val rt = GameDossier.fromJson(dossier.toJson())
             assertNotNull(rt)
             assertEquals("LaunchBox", rt!!.sourceLabel)
             assertEquals(dossier.boxArtUrl, rt.boxArtUrl)
+            assertEquals(dossier.boxBackUrl, rt.boxBackUrl)
+            assertEquals(dossier.boxSpineUrl, rt.boxSpineUrl)
+            assertEquals(dossier.cartFrontUrl, rt.cartFrontUrl)
             assertEquals(dossier.screenshotUrls, rt.screenshotUrls)
             assertEquals("E - Everyone", rt.esrbRating)
         } finally {
@@ -165,7 +189,18 @@ class LaunchBoxMetadataTest {
                 <tr><td>ESRB</td><td>E - Everyone</td></tr>
               </table>
               <div>
-                <a href="https://images.launchbox-app.com/smw-box-front.jpg" title="Super Mario World - Box - Front (North America)">Box</a>
+                <a href="https://images.launchbox-app.com/smw-box-front-full.jpg" data-title="Super Mario World - Box - Front (North America)">
+                  <img src="https://images.launchbox-app.com/r_400/smw-box-front-thumb.jpg" alt="" />
+                </a>
+                <a href="https://images.launchbox-app.com/smw-box-back-full.jpg" data-title="Super Mario World - Box - Back (North America)">
+                  <img src="https://images.launchbox-app.com/r_400/smw-box-back-thumb.jpg" alt="" />
+                </a>
+                <a href="https://images.launchbox-app.com/smw-box-spine.jpg" data-title="Super Mario World - Box - Spine (North America)">
+                  <img src="https://images.launchbox-app.com/r_400/smw-box-spine-thumb.jpg" alt="" />
+                </a>
+                <a href="https://images.launchbox-app.com/smw-cart-front.png" data-title="Super Mario World - Cart - Front (North America)">
+                  <img src="https://images.launchbox-app.com/r_400/smw-cart-thumb.png" alt="" />
+                </a>
                 <img src="https://images.launchbox-app.com/smw-fanart-bg.jpg" alt="Super Mario World - Fanart - Background" />
                 <img src="https://images.launchbox-app.com/smw-gameplay-1.png" alt="Super Mario World - Screenshot - Gameplay" />
               </div>
@@ -180,11 +215,14 @@ class LaunchBoxMetadataTest {
         assertEquals(listOf("Platform"), rec.genres)
         assertEquals(2, rec.maxPlayers)
         assertEquals("E - Everyone", rec.esrb)
-        assertEquals(3, rec.images.size)
+        assertEquals("Nested thumbnail <img> inside <a href> must not duplicate full-res images", 6, rec.images.size)
 
         val media = LaunchBoxMetadata.selectStorefrontMedia(rec.images, "Super Mario World (USA)")
         assertEquals("https://images.launchbox-app.com/smw-fanart-bg.jpg", media.heroBannerUrl)
-        assertEquals("https://images.launchbox-app.com/smw-box-front.jpg", media.boxArtUrl)
+        assertEquals("https://images.launchbox-app.com/smw-box-front-full.jpg", media.boxArtUrl)
+        assertEquals("https://images.launchbox-app.com/smw-box-back-full.jpg", media.boxBackUrl)
+        assertEquals("https://images.launchbox-app.com/smw-box-spine.jpg", media.boxSpineUrl)
+        assertEquals("https://images.launchbox-app.com/smw-cart-front.png", media.cartFrontUrl)
         assertEquals(listOf("https://images.launchbox-app.com/smw-gameplay-1.png"), media.screenshotUrls)
     }
 
