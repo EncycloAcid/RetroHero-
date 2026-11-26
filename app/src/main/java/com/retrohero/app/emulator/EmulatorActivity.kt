@@ -175,6 +175,8 @@ class EmulatorActivity : ComponentActivity() {
     private lateinit var gamePrefs: GamePrefs
     private lateinit var padLayouts: PadLayouts
     private lateinit var audioHaptics: AudioHapticsEngine
+    private var activeCoreId: String = ""
+    private var preparedSave: com.retrohero.app.data.SavePortability.PreparedSave? = null
     private var padSkin: PadSkin = Looks.Console
     private var currentCoreId: String = ""
     private var challengeBanner by mutableStateOf<String?>(null)
@@ -300,12 +302,16 @@ class EmulatorActivity : ComponentActivity() {
     }
 
     private suspend fun boot(coreId: String, corePath: String, romPath: String) {
+        activeCoreId = coreId
         val externalState = intent.getStringExtra(EXTRA_STATE_PATH)?.let(::File)?.takeIf { it.isFile }
         val requested = if (intent.hasExtra(EXTRA_LOAD_SLOT)) intent.getIntExtra(EXTRA_LOAD_SLOT, AppPaths.AUTO_SLOT) else null
         raSessionHardcore = settings.raProfile.value != null && settings.raHardcore.value &&
             externalState == null && requested == null && cheats.none { it.enabled }
+        var bootNotice: String? = null
         val error = withContext(Dispatchers.IO) {
-            val sramFile = paths.migrateLegacyDiscSave(game)
+            val prep = com.retrohero.app.data.SavePortability.prepareForCore(game, coreId, paths)
+            preparedSave = prep
+            if (prep.converted && prep.note.isNotBlank()) bootNotice = prep.note
             val savedDisc = gamePrefs.lastDisc(game.id)
             if (savedDisc > 0) NativeBridge.setInitialDisc(savedDisc)
             com.retrohero.app.data.CoreTuning.defaultsFor(coreId).forEach { (k, v) -> NativeBridge.setOption(k, v) }
@@ -313,17 +319,29 @@ class EmulatorActivity : ComponentActivity() {
             if (!NativeBridge.loadCore(corePath, paths.system.absolutePath, paths.saves.absolutePath)) {
                 return@withContext NativeBridge.getLastError()
             }
-            if (!NativeBridge.loadGame(romPath, sramFile.absolutePath)) {
+            if (!NativeBridge.loadGame(romPath, prep.activeFile.absolutePath)) {
                 return@withContext NativeBridge.getLastError()
             }
-            val resume = when {
-                externalState != null -> externalState
-                raSessionHardcore -> null // Hardcore mode starts cleanly from boot
-                requested != null -> paths.stateFile(game, requested)
-                settings.autoSave -> paths.stateFile(game, AppPaths.AUTO_SLOT)
-                else -> null
+            if (externalState != null) {
+                NativeBridge.loadState(externalState.absolutePath)
+            } else {
+                val resumeSlot = when {
+                    raSessionHardcore -> null // Hardcore mode starts cleanly from boot
+                    requested != null -> requested
+                    settings.autoSave -> AppPaths.AUTO_SLOT
+                    else -> null
+                }
+                val resume = resumeSlot?.let { paths.stateFile(game, it) }
+                if (resumeSlot != null && resume != null && resume.exists()) {
+                    val savedByCore = gamePrefs.stateCore(game.id, resumeSlot)
+                    if (savedByCore != null && savedByCore != coreId) {
+                        val coreName = system.cores.firstOrNull { it.id == coreId }?.displayName ?: coreId
+                        bootNotice = "Switched to $coreName · Battery save carried over cleanly"
+                    } else {
+                        NativeBridge.loadState(resume.absolutePath)
+                    }
+                }
             }
-            if (resume != null && resume.exists()) NativeBridge.loadState(resume.absolutePath)
             null
         }
         if (error != null) {
@@ -343,8 +361,22 @@ class EmulatorActivity : ComponentActivity() {
         NativeBridge.start()
         started = true
         phase = Phase.Running
+        bootNotice?.let { toast(it) }
         startClock()
         startRetroAchievements(romPath)
+    }
+
+    /** Atomically flushes the core's SRAM and commits canonicalized bytes into the universal .srm save. */
+    private fun flushCanonicalSram(cleanupTemp: Boolean = false) {
+        val prep = preparedSave ?: return
+        NativeBridge.saveSram(prep.activeFile.absolutePath)
+        com.retrohero.app.data.SavePortability.commitFromCore(
+            activeFile = prep.activeFile,
+            canonicalFile = prep.canonicalFile,
+            systemId = system.id,
+            coreId = activeCoreId,
+            cleanupTemp = cleanupTemp,
+        )
     }
 
     private fun refreshDiscState() {
@@ -373,7 +405,7 @@ class EmulatorActivity : ComponentActivity() {
         swappingDisc = true
         lifecycleScope.launch {
             val ok = withContext(Dispatchers.IO) {
-                NativeBridge.saveSram(paths.saveRam(game).absolutePath)
+                flushCanonicalSram()
                 NativeBridge.swapDisc(targetIndex)
             }
             swappingDisc = false
@@ -684,7 +716,7 @@ class EmulatorActivity : ComponentActivity() {
             audioHaptics.cancel()
             NativeBridge.setPaused(true)
             NativeBridge.setRewinding(false)
-            NativeBridge.saveSram(paths.saveRam(game).absolutePath)
+            flushCanonicalSram()
             stopClock()
         }
     }
@@ -721,8 +753,23 @@ class EmulatorActivity : ComponentActivity() {
         stopClock()
         shutDown = true
         NativeBridge.setPaused(true)
-        if (settings.autoSave) NativeBridge.saveState(paths.stateFile(game, AppPaths.AUTO_SLOT).absolutePath)
-        NativeBridge.shutdown(paths.saveRam(game).absolutePath)
+        if (settings.autoSave) {
+            if (NativeBridge.saveState(paths.stateFile(game, AppPaths.AUTO_SLOT).absolutePath)) {
+                gamePrefs.setStateCore(game.id, AppPaths.AUTO_SLOT, activeCoreId)
+            }
+        }
+        val prep = preparedSave
+        val rawPath = prep?.activeFile?.absolutePath ?: paths.saveRam(game).absolutePath
+        NativeBridge.shutdown(rawPath)
+        if (prep != null) {
+            com.retrohero.app.data.SavePortability.commitFromCore(
+                activeFile = prep.activeFile,
+                canonicalFile = prep.canonicalFile,
+                systemId = system.id,
+                coreId = activeCoreId,
+                cleanupTemp = true,
+            )
+        }
     }
 
     override fun onDestroy() {
@@ -772,12 +819,20 @@ class EmulatorActivity : ComponentActivity() {
             DeltaAction.QUICK_SAVE -> if (pressed) {
                 val file = paths.stateFile(game, AppPaths.QUICK_SLOT)
                 val ok = NativeBridge.saveState(file.absolutePath)
-                toast(if (ok) "Quick saved" else NativeBridge.getLastError().ifEmpty { "Quick save failed" })
+                if (ok) {
+                    gamePrefs.setStateCore(game.id, AppPaths.QUICK_SLOT, activeCoreId)
+                    flushCanonicalSram()
+                }
+                toast(if (ok) "Quick saved · Battery save synced" else NativeBridge.getLastError().ifEmpty { "Quick save failed" })
             }
             DeltaAction.QUICK_LOAD -> if (pressed) {
                 val file = paths.stateFile(game, AppPaths.QUICK_SLOT)
+                val savedBy = gamePrefs.stateCore(game.id, AppPaths.QUICK_SLOT)
                 if (!file.exists()) {
                     toast("No quick save yet")
+                } else if (savedBy != null && savedBy != activeCoreId) {
+                    val name = system.cores.firstOrNull { it.id == savedBy }?.displayName ?: savedBy
+                    toast("Quick save was created on $name — use in-game battery save or switch back")
                 } else {
                     val ok = NativeBridge.loadState(file.absolutePath)
                     if (ok) demoteRaHardcore("save state loaded")
@@ -1577,12 +1632,37 @@ class EmulatorActivity : ComponentActivity() {
                     val file = paths.stateFile(game, slot)
                     val exists = file.exists()
                     val label = if (slot == AppPaths.AUTO_SLOT) "Auto-save" else "Slot $slot"
+                    val savedCoreId = if (exists) gamePrefs.stateCore(game.id, slot) else null
+                    val coreMismatch = !saving && exists && savedCoreId != null && savedCoreId != activeCoreId
+                    val savedCoreName = savedCoreId?.let { cid ->
+                        system.cores.firstOrNull { it.id == cid }?.displayName ?: cid
+                    }
+                    val subtitle = when {
+                        !exists -> "Empty"
+                        coreMismatch -> "Saved on $savedCoreName · switch core to load"
+                        else -> fmt.format(Date(file.lastModified()))
+                    }
                     SegmentedListItem(
                         onClick = {
-                            val ok = if (saving) NativeBridge.saveState(file.absolutePath) else NativeBridge.loadState(file.absolutePath)
+                            if (coreMismatch) {
+                                toast("Created on $savedCoreName — switch back to load this state, or use your portable battery save")
+                                return@SegmentedListItem
+                            }
+                            val ok = if (saving) {
+                                val saved = NativeBridge.saveState(file.absolutePath)
+                                if (saved) {
+                                    gamePrefs.setStateCore(game.id, slot, activeCoreId)
+                                    flushCanonicalSram()
+                                }
+                                saved
+                            } else {
+                                val loaded = NativeBridge.loadState(file.absolutePath)
+                                if (loaded) demoteRaHardcore("save state loaded")
+                                loaded
+                            }
                             toast(
                                 when {
-                                    ok && saving -> "Saved to $label"
+                                    ok && saving -> "Saved to $label · Battery save synced"
                                     ok -> "Loaded $label"
                                     else -> NativeBridge.getLastError().ifEmpty { "Failed" }
                                 },
@@ -1599,7 +1679,7 @@ class EmulatorActivity : ComponentActivity() {
                                 null,
                             )
                         },
-                        supportingContent = { Text(if (exists) fmt.format(Date(file.lastModified())) else "Empty") },
+                        supportingContent = { Text(subtitle, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         verticalAlignment = Alignment.CenterVertically,
                     ) { Text(label) }
                 }

@@ -1474,7 +1474,37 @@ internal fun M3GameDetailPage(
                     val totalEngines = cores.size + installedExternalEmulators.size
                     if (totalEngines > 1 || supportedExternal.isNotEmpty()) {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("Emulator engine", style = MaterialTheme.typography.titleSmall, color = cs.primary)
+                            Row(
+                                Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text("Emulator engine", style = MaterialTheme.typography.titleSmall, color = cs.primary)
+                                if (cores.size > 1) {
+                                    Row(
+                                        Modifier
+                                            .clip(CircleShape)
+                                            .background(cs.primaryContainer.copy(alpha = 0.72f))
+                                            .padding(horizontal = 9.dp, vertical = 3.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    ) {
+                                        Icon(Icons.Rounded.Verified, null, tint = cs.onPrimaryContainer, modifier = Modifier.size(12.dp))
+                                        Text(
+                                            text = "Universal Save",
+                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
+                                            color = cs.onPrimaryContainer,
+                                        )
+                                    }
+                                }
+                            }
+                            if (cores.size > 1) {
+                                Text(
+                                    text = "Battery saves auto-convert & stay portable when switching cores.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = cs.onSurfaceVariant,
+                                )
+                            }
                             if (totalEngines > 0) {
                                 Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                     cores.forEachIndexed { idx, core ->
