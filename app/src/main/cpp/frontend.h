@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "audio_output.h"
+#include "hw_renderer.h"
 #include "libretro.h"
 #include "video_output.h"
 
@@ -85,6 +86,11 @@ public:
     void setAnalog(unsigned port, unsigned index, unsigned axis, int16_t value);
     void setPointer(int16_t x, int16_t y, bool pressed);
 
+    void setWindow(ANativeWindow *window);
+    void setFilter(int filter);
+    void frameSize(unsigned &width, unsigned &height);
+    bool grabArgb(std::vector<uint32_t> &out, unsigned &width, unsigned &height);
+
     float aspectRatio() const { return aspect_.load(); }
     std::string lastError();
 
@@ -97,6 +103,8 @@ private:
     void setError(const std::string &msg);
     bool environment(unsigned cmd, void *data);
     void setVariables(const retro_variable *vars);
+    void setCoreOptionsV1(const retro_core_option_definition *defs);
+    void setCoreOptionsV2(const retro_core_option_v2_definition *defs);
     void updateAvInfo(const retro_system_av_info &info);
     void runFrameLocked();
     void pushRewindLocked();
@@ -110,6 +118,8 @@ private:
     static void inputPollCb();
     static int16_t inputStateCb(unsigned port, unsigned device, unsigned index, unsigned id);
     static void logCb(enum retro_log_level level, const char *fmt, ...);
+    static uintptr_t hwGetFramebufferCb();
+    static retro_proc_address_t hwGetProcAddressCb(const char *sym);
 
     CoreApi core_;
     std::mutex coreMutex_;  // guards every call into the core
@@ -128,6 +138,15 @@ private:
 
     retro_frame_time_callback frameTimeCb_{};
     bool hasFrameTimeCb_ = false;
+
+    // Hardware rendering state (EGL/GLES3)
+    std::atomic<bool> hwRenderEnabled_{false};
+    bool hwContextReady_ = false;
+    retro_hw_render_callback hwRenderCb_{};
+    std::atomic<unsigned> maxVideoW_{640};
+    std::atomic<unsigned> maxVideoH_{480};
+    std::string pendingStatePath_;
+    HwRenderer hw_;
 
     std::atomic<double> fps_{60.0};
     std::atomic<float> aspect_{4.0f / 3.0f};

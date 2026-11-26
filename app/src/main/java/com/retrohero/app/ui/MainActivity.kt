@@ -16,6 +16,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -129,6 +130,7 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
     var fastForward by remember { mutableFloatStateOf(vm.settings.fastForwardSpeed) }
     var homebrewOpen by rememberSaveable { mutableStateOf(false) }
     var toastMessage by remember { mutableStateOf<AppViewModel.Message?>(null) }
+    var engineVersion by remember { mutableIntStateOf(0) }
 
     LifecycleResumeEffect(Unit) {
         vm.refreshStats()
@@ -218,7 +220,17 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
             artVersion
             vm.screenshots(g)
         },
-        currentCoreFor = { g -> g.system?.let { vm.settings.coreFor(it) } },
+        currentCoreFor = { g ->
+            @Suppress("UNUSED_EXPRESSION")
+            engineVersion
+            g.system?.let { vm.settings.coreFor(it) }
+        },
+        installedExternalEmulatorsFor = { g -> vm.installedExternalEmulators(g) },
+        selectedExternalEmulatorFor = { g ->
+            @Suppress("UNUSED_EXPRESSION")
+            engineVersion
+            vm.selectedExternalEmulator(g)
+        },
         cachedDossierFor = { g -> vm.cachedDossier(g) },
         loadDossierFor = { g, force -> vm.loadDossier(g, force) },
         toastMessage = toastMessage,
@@ -227,7 +239,14 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
         onShufflePlay = { vm.playRandom() },
         onToggleFavorite = { g -> vm.toggleFavorite(g) },
         onSetShelfStatus = { g, status -> vm.setShelfStatus(g, status) },
-        onSelectCore = { g, core -> g.system?.let { vm.setCore(it, core) } },
+        onSelectCore = { g, core ->
+            g.system?.let { vm.setCore(it, core) }
+            engineVersion++
+        },
+        onSelectExternalEmulator = { g, ext ->
+            g.system?.let { vm.setExternalEmulator(it, ext) }
+            engineVersion++
+        },
         onUseScreenshotAsCover = { g, shot -> vm.useAsCover(g, shot) },
         onClearCover = { g -> vm.clearCover(g) },
         onDeleteGame = { g -> vm.deleteGame(g) },

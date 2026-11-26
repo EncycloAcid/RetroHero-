@@ -97,6 +97,8 @@ import androidx.graphics.shapes.RoundedPolygon
 import coil.compose.AsyncImage
 import com.retrohero.app.data.AppPaths
 import com.retrohero.app.data.CoreInfo
+import com.retrohero.app.data.ExternalEmulator
+import com.retrohero.app.data.ExternalEmulators
 import com.retrohero.app.data.Game
 import com.retrohero.app.data.GameDossier
 import com.retrohero.app.data.PlayStat
@@ -267,6 +269,8 @@ internal fun M3GameDetailPage(
     saveSlots: List<Pair<Int, Long>>,
     currentCore: CoreInfo?,
     coreInstalled: Boolean = true,
+    installedExternalEmulators: List<ExternalEmulator> = emptyList(),
+    selectedExternalEmulator: ExternalEmulator? = null,
     screenshots: List<File> = emptyList(),
     initialDossier: GameDossier? = null,
     loadDossier: (suspend (Game, Boolean) -> GameDossier)? = null,
@@ -274,6 +278,7 @@ internal fun M3GameDetailPage(
     onToggleFavorite: () -> Unit,
     onPlay: (Int?) -> Unit,
     onSelectCore: (CoreInfo) -> Unit,
+    onSelectExternalEmulator: (ExternalEmulator) -> Unit = {},
     onUseScreenshotAsCover: (File) -> Unit = {},
     onClearCover: () -> Unit = {},
     onDelete: (() -> Unit)?,
@@ -1058,32 +1063,85 @@ internal fun M3GameDetailPage(
                         )
                     }
 
-                    if (cores.size > 1) {
+                    val supportedExternal = remember(game.systemId) { ExternalEmulators.forSystem(game.systemId) }
+                    val totalEngines = cores.size + installedExternalEmulators.size
+                    if (totalEngines > 1 || supportedExternal.isNotEmpty()) {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("Emulator core", style = MaterialTheme.typography.titleSmall, color = cs.primary)
-                            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                cores.forEachIndexed { idx, core ->
-                                    val selected = core.id == currentCore?.id
-                                    Row(
-                                        Modifier
-                                            .fillMaxWidth()
-                                            .clip(m3SegmentedShape(idx, cores.size))
-                                            .background(if (selected) cs.primaryContainer else cs.surfaceContainerHigh)
-                                            .clickable { onSelectCore(core) }
-                                            .padding(horizontal = 16.dp, vertical = 13.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        Text(
-                                            text = core.displayName,
-                                            style = MaterialTheme.typography.titleSmall,
-                                            color = if (selected) cs.onPrimaryContainer else cs.onSurface,
-                                        )
-                                        if (selected) {
-                                            Icon(Icons.Rounded.Check, null, tint = cs.onPrimaryContainer, modifier = Modifier.size(18.dp))
+                            Text("Emulator engine", style = MaterialTheme.typography.titleSmall, color = cs.primary)
+                            if (totalEngines > 0) {
+                                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                    cores.forEachIndexed { idx, core ->
+                                        val selected = selectedExternalEmulator == null && core.id == currentCore?.id
+                                        Row(
+                                            Modifier
+                                                .fillMaxWidth()
+                                                .clip(m3SegmentedShape(idx, totalEngines))
+                                                .background(if (selected) cs.primaryContainer else cs.surfaceContainerHigh)
+                                                .clickable { onSelectCore(core) }
+                                                .padding(horizontal = 16.dp, vertical = 13.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            Column(Modifier.weight(1f)) {
+                                                Text(
+                                                    text = core.displayName,
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    color = if (selected) cs.onPrimaryContainer else cs.onSurface,
+                                                )
+                                                Text(
+                                                    text = "Built-in RetroHero core",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = (if (selected) cs.onPrimaryContainer else cs.onSurfaceVariant).copy(alpha = 0.78f),
+                                                )
+                                            }
+                                            if (selected) {
+                                                Icon(Icons.Rounded.Check, null, tint = cs.onPrimaryContainer, modifier = Modifier.size(18.dp))
+                                            }
+                                        }
+                                    }
+                                    installedExternalEmulators.forEachIndexed { eIdx, ext ->
+                                        val rowIdx = cores.size + eIdx
+                                        val selected = selectedExternalEmulator?.id == ext.id
+                                        Row(
+                                            Modifier
+                                                .fillMaxWidth()
+                                                .clip(m3SegmentedShape(rowIdx, totalEngines))
+                                                .background(if (selected) cs.tertiaryContainer else cs.surfaceContainerHigh)
+                                                .clickable { onSelectExternalEmulator(ext) }
+                                                .padding(horizontal = 16.dp, vertical = 13.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically,
+                                        ) {
+                                            Column(Modifier.weight(1f)) {
+                                                Text(
+                                                    text = ext.name,
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    color = if (selected) cs.onTertiaryContainer else cs.onSurface,
+                                                )
+                                                Text(
+                                                    text = ext.badge,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = (if (selected) cs.onTertiaryContainer else cs.onSurfaceVariant).copy(alpha = 0.80f),
+                                                )
+                                            }
+                                            if (selected) {
+                                                Icon(Icons.Rounded.Check, null, tint = cs.onTertiaryContainer, modifier = Modifier.size(18.dp))
+                                            }
                                         }
                                     }
                                 }
+                            }
+                            if (installedExternalEmulators.isEmpty() && supportedExternal.isNotEmpty()) {
+                                val names = supportedExternal.take(3).joinToString(" · ") { it.name }
+                                Text(
+                                    text = if (cores.isEmpty()) {
+                                        "Standalone mobile engine required: install $names to launch directly."
+                                    } else {
+                                        "Tip: Also supports $names for native standalone performance if installed."
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = cs.onSurfaceVariant,
+                                )
                             }
                         }
                     }

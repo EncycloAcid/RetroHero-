@@ -64,7 +64,8 @@ class CoreManager(private val context: Context, private val paths: AppPaths) {
         val target = downloadedFile(coreId)
         val tmp = File(paths.cores, "$coreId.download")
         try {
-            val url = URL("$BUILDBOT/${abi()}/${coreId}_libretro_android.so.zip")
+            val archive = Systems.coreById(coreId)?.archiveFileName() ?: "${coreId}_libretro_android.so.zip"
+            val url = URL("$BUILDBOT/${abi()}/$archive")
             val conn = (url.openConnection() as HttpURLConnection).apply {
                 connectTimeout = 15_000
                 readTimeout = 30_000

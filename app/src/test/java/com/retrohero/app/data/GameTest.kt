@@ -23,9 +23,13 @@ class GameTest {
     }
 
     @Test
-    fun everySystemHasACoreAndUniqueId() {
-        assertTrue(Systems.all.size >= 45)
-        assertTrue(Systems.all.all { it.cores.isNotEmpty() })
+    fun everySystemHasACoreOrStandaloneEngineAndUniqueId() {
+        assertTrue(Systems.all.size >= 60)
+        assertTrue(
+            Systems.all.all {
+                it.cores.isNotEmpty() || ExternalEmulators.forSystem(it.id).isNotEmpty()
+            },
+        )
         assertEquals(Systems.all.size, Systems.all.map { it.id }.toSet().size)
     }
 
@@ -33,9 +37,10 @@ class GameTest {
     fun unambiguousExtensionsMapToOneSystem() {
         val uniqueExts = listOf(
             "nes", "sfc", "n64", "z64", "v64", "gba", "gb", "gbc", "nds", "3ds",
-            "gcm", "rvz", "wbfs", "min", "sg", "32x", "cdi", "gdi", "cso", "elf",
-            "pce", "lnx", "a26", "a52", "a78", "j64", "col", "int", "vec", "o2",
-            "mx1", "d64", "adf", "dosz", "scummvm", "p8", "tic",
+            "gcm", "rvz", "wbfs", "wua", "nsp", "xci", "vpk", "min", "mgw", "sg",
+            "32x", "cdi", "gdi", "cso", "elf", "pce", "sgx", "lnx", "a26", "a52",
+            "a78", "j64", "col", "int", "vec", "o2", "sv", "chf", "tzx", "cdt",
+            "st", "hdm", "fdi", "jar", "mx1", "d64", "adf", "dosz", "scummvm", "p8", "tic",
         )
         for (ext in uniqueExts) {
             assertEquals(ext, 1, Systems.all.count { ext in it.extensions })

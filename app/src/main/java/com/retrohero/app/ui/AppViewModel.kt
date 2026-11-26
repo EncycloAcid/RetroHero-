@@ -432,10 +432,44 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun gamesFor(system: GameSystem) = games.value.filter { it.systemId == system.id }
 
+    fun installedExternalEmulators(game: Game): List<com.retrohero.app.data.ExternalEmulator> =
+        com.retrohero.app.data.ExternalEmulators.installedForSystem(app, game.systemId)
+
+    fun selectedExternalEmulator(game: Game): com.retrohero.app.data.ExternalEmulator? {
+        val system = game.system ?: return null
+        val installed = installedExternalEmulators(game)
+        if (installed.isEmpty()) return null
+        val chosenId = settings.externalEmulatorFor(system)
+        if (chosenId != null) return installed.firstOrNull { it.id == chosenId }
+        return if (system.cores.isEmpty()) installed.first() else null
+    }
+
+    fun setExternalEmulator(system: GameSystem, emulator: com.retrohero.app.data.ExternalEmulator) {
+        settings.setExternalEmulatorFor(system, emulator.id)
+        say("Using ${emulator.name} for ${system.shortName}")
+    }
+
     /** Starts [game]; with [slot] or [statePath], resumes from that save state instead of the auto-save. */
     fun play(game: Game, slot: Int? = null, statePath: String? = null, challengeTitle: String? = null) {
         val system = game.system ?: return
+        val external = selectedExternalEmulator(game)
+        if (external != null && statePath == null) {
+            val intent = com.retrohero.app.data.ExternalEmulators.launchIntent(app, external, game)
+            if (intent != null) {
+                settings.markPlayed(game.id)
+                viewModelScope.launch { _launchIntents.send(intent) }
+                return
+            }
+        }
         val core = settings.coreFor(system)
+        if (core == null) {
+            val options = com.retrohero.app.data.ExternalEmulators.forSystem(system.id).joinToString(", ") { it.name }
+            _launch.value = LaunchState.Error(
+                if (options.isNotEmpty()) "${system.name} runs on mobile via standalone emulators. Install $options on your device to launch ${game.title} directly from RetroHero."
+                else "No compatible mobile core is available for ${system.name} yet.",
+            )
+            return
+        }
         if (app.cores.isInstalled(core.id)) prepareAndLaunch(game, core, slot, statePath, challengeTitle)
         else _launch.value = LaunchState.NeedsCore(game, core, slot)
     }

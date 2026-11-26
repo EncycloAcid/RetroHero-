@@ -173,12 +173,17 @@ bool Frontend::loadGame(const std::string &romPath, const std::string &sramPath)
 void Frontend::updateAvInfo(const retro_system_av_info &av) {
     if (av.timing.fps > 1.0) fps_ = av.timing.fps;
     if (av.timing.sample_rate > 1.0) audio_.setInputRate(av.timing.sample_rate);
+    if (av.geometry.max_width > 0) maxVideoW_ = av.geometry.max_width;
+    else if (av.geometry.base_width > 0) maxVideoW_ = av.geometry.base_width;
+    if (av.geometry.max_height > 0) maxVideoH_ = av.geometry.max_height;
+    else if (av.geometry.base_height > 0) maxVideoH_ = av.geometry.base_height;
     float ar = av.geometry.aspect_ratio;
     if (ar <= 0.0f && av.geometry.base_height > 0)
         ar = static_cast<float>(av.geometry.base_width) / av.geometry.base_height;
     if (ar > 0.0f) aspect_ = ar;
-    LOGI("AV info: %ux%u fps=%.3f rate=%.1f aspect=%.3f", av.geometry.base_width,
-         av.geometry.base_height, av.timing.fps, av.timing.sample_rate, ar);
+    LOGI("AV info: %ux%u (max %ux%u) fps=%.3f rate=%.1f aspect=%.3f", av.geometry.base_width,
+         av.geometry.base_height, av.geometry.max_width, av.geometry.max_height,
+         av.timing.fps, av.timing.sample_rate, ar);
 }
 
 void Frontend::start() {
@@ -189,6 +194,36 @@ void Frontend::start() {
 }
 
 void Frontend::runLoop() {
+    if (hwRenderEnabled_.load()) {
+        unsigned reqMaj = hwRenderCb_.version_major;
+        unsigned reqMin = hwRenderCb_.version_minor;
+        if (hwRenderCb_.context_type == RETRO_HW_CONTEXT_OPENGLES2) {
+            reqMaj = 2;
+            reqMin = 0;
+        } else if (reqMaj == 0) {
+            reqMaj = 3;
+            reqMin = 0;
+        }
+        if (hw_.initContext(reqMaj, reqMin, hwRenderCb_.depth, hwRenderCb_.stencil)) {
+            std::lock_guard<std::mutex> lk(coreMutex_);
+            hw_.beginFrame(maxVideoW_.load(), maxVideoH_.load());
+            hwContextReady_ = true;
+            if (hwRenderCb_.context_reset) {
+                LOGI("Calling core HW context_reset()");
+                hwRenderCb_.context_reset();
+            }
+            if (!pendingStatePath_.empty()) {
+                std::vector<uint8_t> buf;
+                if (readFile(pendingStatePath_, buf)) {
+                    core_.unserialize(buf.data(), buf.size());
+                }
+                pendingStatePath_.clear();
+            }
+        } else {
+            LOGE("HwRenderer initContext failed; hardware core cannot render");
+        }
+    }
+
     using clock = std::chrono::steady_clock;
     auto next = clock::now();
     auto lastFrame = clock::now();
@@ -201,6 +236,9 @@ void Frontend::runLoop() {
         }
         {
             std::lock_guard<std::mutex> lk(coreMutex_);
+            if (hwContextReady_) {
+                hw_.beginFrame(maxVideoW_.load(), maxVideoH_.load());
+            }
             if (hasFrameTimeCb_ && frameTimeCb_.callback) {
                 auto now = clock::now();
                 auto usec = std::chrono::duration_cast<std::chrono::microseconds>(now - lastFrame).count();
@@ -224,6 +262,15 @@ void Frontend::runLoop() {
         } else if (next > now) {
             std::this_thread::sleep_until(next);
         }
+    }
+
+    if (hwContextReady_) {
+        std::lock_guard<std::mutex> lk(coreMutex_);
+        if (hwRenderCb_.context_destroy) {
+            hwRenderCb_.context_destroy();
+        }
+        hwContextReady_ = false;
+        hw_.destroyContext();
     }
 }
 
@@ -343,6 +390,10 @@ bool Frontend::saveState(const std::string &path) {
 bool Frontend::loadState(const std::string &path) {
     std::lock_guard<std::mutex> lk(coreMutex_);
     if (!gameLoaded_) return false;
+    if (hwRenderEnabled_.load() && !hwContextReady_) {
+        pendingStatePath_ = path;
+        return true;
+    }
     std::vector<uint8_t> buf;
     if (!readFile(path, buf)) return false;
     if (!core_.unserialize(buf.data(), buf.size())) {
@@ -374,6 +425,36 @@ void Frontend::shutdown(const std::string &sramPath) {
     coreInitialized_ = false;
     // The core library is intentionally not dlclose()d: many cores do not
     // tolerate being unloaded, and the game process exits right after.
+}
+
+void Frontend::setWindow(ANativeWindow *window) {
+    if (hwRenderEnabled_.load()) {
+        video_.setWindow(nullptr);
+        hw_.setWindow(window);
+    } else if (!gameLoaded_) {
+        // Surface often attaches before loadGame() reveals whether the core uses HW rendering.
+        if (window) ANativeWindow_acquire(window);
+        hw_.setWindow(window);
+        video_.setWindow(window);
+    } else {
+        hw_.setWindow(nullptr);
+        video_.setWindow(window);
+    }
+}
+
+void Frontend::setFilter(int filter) {
+    hw_.setFilter(filter);
+    video_.setFilter(filter);
+}
+
+void Frontend::frameSize(unsigned &width, unsigned &height) {
+    if (hwRenderEnabled_.load()) hw_.frameSize(width, height);
+    else video_.frameSize(width, height);
+}
+
+bool Frontend::grabArgb(std::vector<uint32_t> &out, unsigned &width, unsigned &height) {
+    if (hwRenderEnabled_.load()) return hw_.grabArgb(out, width, height);
+    return video_.grabArgb(out, width, height);
 }
 
 void Frontend::setOptionOverride(const std::string &key, const std::string &value) {
@@ -418,6 +499,50 @@ void Frontend::setVariables(const retro_variable *vars) {
     }
 }
 
+void Frontend::setCoreOptionsV1(const retro_core_option_definition *defs) {
+    std::lock_guard<std::mutex> lk(optionsMutex_);
+    options_.clear();
+    for (const retro_core_option_definition *d = defs; d && d->key; d++) {
+        CoreOption opt;
+        opt.key = d->key;
+        opt.description = d->desc ? d->desc : d->key;
+        for (size_t i = 0; i < RETRO_NUM_CORE_OPTION_VALUES_MAX && d->values[i].value; i++) {
+            opt.values.emplace_back(d->values[i].value);
+        }
+        auto it = overrides_.find(opt.key);
+        if (it != overrides_.end()) {
+            opt.current = it->second;
+        } else if (d->default_value && d->default_value[0]) {
+            opt.current = d->default_value;
+        } else {
+            opt.current = opt.values.empty() ? "" : opt.values.front();
+        }
+        options_.push_back(std::move(opt));
+    }
+}
+
+void Frontend::setCoreOptionsV2(const retro_core_option_v2_definition *defs) {
+    std::lock_guard<std::mutex> lk(optionsMutex_);
+    options_.clear();
+    for (const retro_core_option_v2_definition *d = defs; d && d->key; d++) {
+        CoreOption opt;
+        opt.key = d->key;
+        opt.description = d->desc ? d->desc : d->key;
+        for (size_t i = 0; i < RETRO_NUM_CORE_OPTION_VALUES_MAX && d->values[i].value; i++) {
+            opt.values.emplace_back(d->values[i].value);
+        }
+        auto it = overrides_.find(opt.key);
+        if (it != overrides_.end()) {
+            opt.current = it->second;
+        } else if (d->default_value && d->default_value[0]) {
+            opt.current = d->default_value;
+        } else {
+            opt.current = opt.values.empty() ? "" : opt.values.front();
+        }
+        options_.push_back(std::move(opt));
+    }
+}
+
 void Frontend::setButton(unsigned port, unsigned id, bool pressed) {
     if (port >= 4 || id >= 32) return;
     if (pressed)
@@ -440,6 +565,12 @@ void Frontend::setPointer(int16_t x, int16_t y, bool pressed) {
 // ---- libretro callbacks -------------------------------------------------
 
 bool Frontend::envCb(unsigned cmd, void *data) { return get().environment(cmd, data); }
+
+uintptr_t Frontend::hwGetFramebufferCb() { return get().hw_.currentFramebuffer(); }
+
+retro_proc_address_t Frontend::hwGetProcAddressCb(const char *sym) {
+    return reinterpret_cast<retro_proc_address_t>(eglGetProcAddress(sym));
+}
 
 bool Frontend::environment(unsigned cmd, void *data) {
     switch (cmd) {
@@ -465,12 +596,29 @@ bool Frontend::environment(unsigned cmd, void *data) {
         case RETRO_ENVIRONMENT_GET_INPUT_BITMASKS:
             return true;
         case RETRO_ENVIRONMENT_GET_CORE_OPTIONS_VERSION:
-            // Version 0: cores fall back to the simple SET_VARIABLES interface.
-            *static_cast<unsigned *>(data) = 0;
+            *static_cast<unsigned *>(data) = 2;
             return true;
         case RETRO_ENVIRONMENT_SET_VARIABLES:
             setVariables(static_cast<const retro_variable *>(data));
             return true;
+        case RETRO_ENVIRONMENT_SET_CORE_OPTIONS:
+            setCoreOptionsV1(static_cast<const retro_core_option_definition *>(data));
+            return true;
+        case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_INTL: {
+            auto *intl = static_cast<const retro_core_options_intl *>(data);
+            if (intl && intl->us) setCoreOptionsV1(intl->us);
+            return true;
+        }
+        case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2: {
+            auto *v2 = static_cast<const retro_core_options_v2 *>(data);
+            if (v2 && v2->definitions) setCoreOptionsV2(v2->definitions);
+            return true;
+        }
+        case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_V2_INTL: {
+            auto *intl = static_cast<const retro_core_options_v2_intl *>(data);
+            if (intl && intl->us && intl->us->definitions) setCoreOptionsV2(intl->us->definitions);
+            return true;
+        }
         case RETRO_ENVIRONMENT_GET_VARIABLE: {
             auto *var = static_cast<retro_variable *>(data);
             if (!var || !var->key) return false;
@@ -481,6 +629,11 @@ bool Frontend::environment(unsigned cmd, void *data) {
                     return true;
                 }
             }
+            auto it = overrides_.find(var->key);
+            if (it != overrides_.end()) {
+                var->value = it->second.c_str();
+                return true;
+            }
             var->value = nullptr;
             return false;
         }
@@ -488,6 +641,7 @@ bool Frontend::environment(unsigned cmd, void *data) {
             *static_cast<bool *>(data) = optionsDirty_.exchange(false);
             return true;
         case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_DISPLAY:
+        case RETRO_ENVIRONMENT_SET_CORE_OPTIONS_UPDATE_DISPLAY_CALLBACK:
             return true;
         case RETRO_ENVIRONMENT_GET_LANGUAGE:
             *static_cast<unsigned *>(data) = RETRO_LANGUAGE_ENGLISH;
@@ -497,6 +651,8 @@ bool Frontend::environment(unsigned cmd, void *data) {
             return true;
         case RETRO_ENVIRONMENT_SET_GEOMETRY: {
             auto *geom = static_cast<const retro_game_geometry *>(data);
+            if (geom->max_width > 0) maxVideoW_ = geom->max_width;
+            if (geom->max_height > 0) maxVideoH_ = geom->max_height;
             float ar = geom->aspect_ratio;
             if (ar <= 0.0f && geom->base_height > 0)
                 ar = static_cast<float>(geom->base_width) / geom->base_height;
@@ -521,6 +677,31 @@ bool Frontend::environment(unsigned cmd, void *data) {
             if (msg && msg->msg) LOGI("Core message: %s", msg->msg);
             return true;
         }
+        case RETRO_ENVIRONMENT_GET_PREFERRED_HW_RENDER:
+            *static_cast<unsigned *>(data) = RETRO_HW_CONTEXT_OPENGLES3;
+            return true;
+        case RETRO_ENVIRONMENT_SET_HW_RENDER: {
+            auto *cb = static_cast<retro_hw_render_callback *>(data);
+            if (!cb) return false;
+            switch (cb->context_type) {
+                case RETRO_HW_CONTEXT_OPENGLES2:
+                case RETRO_HW_CONTEXT_OPENGLES3:
+                case RETRO_HW_CONTEXT_OPENGLES_VERSION:
+                case RETRO_HW_CONTEXT_OPENGL:
+                case RETRO_HW_CONTEXT_OPENGL_CORE:
+                    cb->get_current_framebuffer = &Frontend::hwGetFramebufferCb;
+                    cb->get_proc_address = &Frontend::hwGetProcAddressCb;
+                    hwRenderCb_ = *cb;
+                    hwRenderEnabled_ = true;
+                    LOGI("Enabled EGL/GLES HW rendering (type=%d ver=%u.%u depth=%d stencil=%d)",
+                         cb->context_type, cb->version_major, cb->version_minor,
+                         cb->depth ? 1 : 0, cb->stencil ? 1 : 0);
+                    return true;
+                default:
+                    LOGW("Unsupported HW render context_type=%d", cb->context_type);
+                    return false;
+            }
+        }
         case RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME:
         case RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL:
         case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS:
@@ -531,18 +712,20 @@ bool Frontend::environment(unsigned cmd, void *data) {
         case RETRO_ENVIRONMENT_SET_CONTENT_INFO_OVERRIDE:
         case RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS:
             return true;
-        case RETRO_ENVIRONMENT_SET_HW_RENDER:
-            // Only software-rendered cores are supported for now.
-            LOGW("Core requested hardware rendering, which is not supported yet");
-            return false;
         default:
             return false;
     }
 }
 
 void Frontend::videoCb(const void *data, unsigned w, unsigned h, size_t pitch) {
-    if (!data || data == RETRO_HW_FRAME_BUFFER_VALID) return;
+    if (!data) return;
     Frontend &f = get();
+    if (data == RETRO_HW_FRAME_BUFFER_VALID) {
+        if (f.hwRenderEnabled_.load()) {
+            f.hw_.presentFrame(w, h, f.hwRenderCb_.bottom_left_origin);
+        }
+        return;
+    }
     f.video_.present(data, w, h, pitch, f.pixelFormat_);
 }
 

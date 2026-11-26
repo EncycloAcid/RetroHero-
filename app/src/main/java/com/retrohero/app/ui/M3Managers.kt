@@ -267,7 +267,14 @@ internal fun M3CoreManagerPage(
                             ) {
                                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        Text(core.displayName, style = MaterialTheme.typography.titleSmall.copy(fontSize = 15.sp), color = cs.onSurface, maxLines = 1)
+                                        Text(
+                                            text = core.displayName,
+                                            style = MaterialTheme.typography.titleSmall.copy(fontSize = 15.sp),
+                                            color = cs.onSurface,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f, fill = false),
+                                        )
                                         if (core.id in neededIds && state !is CoreState.Installed) {
                                             Box(
                                                 Modifier
@@ -275,7 +282,13 @@ internal fun M3CoreManagerPage(
                                                     .background(cs.tertiaryContainer)
                                                     .padding(horizontal = 7.dp, vertical = 2.dp),
                                             ) {
-                                                Text("Needed", style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp), color = cs.onTertiaryContainer)
+                                                Text(
+                                                    text = "Needed",
+                                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp),
+                                                    color = cs.onTertiaryContainer,
+                                                    maxLines = 1,
+                                                    softWrap = false,
+                                                )
                                             }
                                         }
                                     }

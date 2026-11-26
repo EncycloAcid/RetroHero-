@@ -41,7 +41,11 @@ data class CoreInfo(
     val id: String,          // libretro core name, e.g. "snes9x"
     val displayName: String,
     val license: String,
-)
+    /** Override buildbot archive filename when it differs from "<id>_libretro_android.so.zip". */
+    val archiveName: String? = null,
+) {
+    fun archiveFileName(): String = archiveName ?: "${id}_libretro_android.so.zip"
+}
 
 /** A BIOS file a core may need. [md5] identifies the known good dump (null = any file accepted). */
 data class BiosFile(val fileName: String, val description: String, val required: Boolean, val md5: String? = null)
@@ -71,29 +75,40 @@ private object Cores {
     val nestopia = CoreInfo("nestopia", "Nestopia UE", "GPLv2")
     val snes9x = CoreInfo("snes9x", "Snes9x", "Non-commercial")
     val bsnes = CoreInfo("bsnes", "bsnes", "GPLv3")
-    val mupen64 = CoreInfo("mupen64plus_next_gles3", "Mupen64Plus-Next", "GPLv2")
+    val mupen64 = CoreInfo("mupen64plus_next_gles3", "Mupen64Plus-Next (GLES3)", "GPLv2")
     val parallelN64 = CoreInfo("parallel_n64", "ParaLLEl N64", "GPLv2")
     val gambatte = CoreInfo("gambatte", "Gambatte", "GPLv2")
     val sameboy = CoreInfo("sameboy", "SameBoy", "MIT")
     val mgba = CoreInfo("mgba", "mGBA", "MPLv2.0")
+    val gpsp = CoreInfo("gpsp", "gpSP (Fast ARM JIT)", "GPLv2")
     val vbaNext = CoreInfo("vba_next", "VBA Next", "GPLv2")
+    val melondsDs = CoreInfo("melondsds", "melonDS DS", "GPLv3")
     val desmume = CoreInfo("desmume", "DeSmuME", "GPLv2")
     val melonds = CoreInfo("melonds", "melonDS", "GPLv3")
-    val citra = CoreInfo("citra", "Citra", "GPLv2")
-    val dolphin = CoreInfo("dolphin", "Dolphin", "GPLv2+")
+    val azahar = CoreInfo("azahar", "Azahar 3DS (GLES3)", "GPLv2+", archiveName = "azahar_libretro.so.zip")
+    val citra = CoreInfo("citra", "Citra (GLES3)", "GPLv2")
+    val dolphin = CoreInfo("dolphin", "Dolphin (GLES3)", "GPLv2+")
     val pokemini = CoreInfo("pokemini", "PokeMini", "GPLv3")
     val vb = CoreInfo("mednafen_vb", "Beetle VB", "GPLv2")
+    val gw = CoreInfo("gw", "GW (Game & Watch)", "Zlib")
     val gpgx = CoreInfo("genesis_plus_gx", "Genesis Plus GX", "Non-commercial")
+    val gpgxWide = CoreInfo("genesis_plus_gx_wide", "Genesis Plus GX Wide", "Non-commercial")
     val picodrive = CoreInfo("picodrive", "PicoDrive", "Non-commercial")
     val gearsystem = CoreInfo("gearsystem", "Gearsystem", "GPLv3")
-    val yabasanshiro = CoreInfo("yabasanshiro", "YabaSanshiro", "GPLv2")
+    val yabasanshiro = CoreInfo("yabasanshiro", "YabaSanshiro (GLES3)", "GPLv2")
+    val ymir = CoreInfo("ymir", "Ymir Saturn", "GPLv3")
     val beetleSaturn = CoreInfo("mednafen_saturn", "Beetle Saturn", "GPLv2")
-    val flycast = CoreInfo("flycast", "Flycast", "GPLv2")
+    val flycast = CoreInfo("flycast", "Flycast (GLES3)", "GPLv2")
+    val parallelDc = CoreInfo("parallel_dc", "ParaLLEl DC", "GPLv2")
     val pcsx = CoreInfo("pcsx_rearmed", "PCSX ReARMed", "GPLv2")
-    val swanstation = CoreInfo("swanstation", "SwanStation", "GPLv3")
-    val ppsspp = CoreInfo("ppsspp", "PPSSPP", "GPLv2+")
-    val playPs2 = CoreInfo("play", "Play!", "BSD-2-Clause")
+    val swanstation = CoreInfo("swanstation", "SwanStation (HD GLES3)", "GPLv3")
+    val beetlePsxHw = CoreInfo("mednafen_psx_hw", "Beetle PSX HW (GLES3)", "GPLv2")
+    val ppsspp = CoreInfo("ppsspp", "PPSSPP (GLES3)", "GPLv2+")
+    val lrps2 = CoreInfo("pcsx2", "LRPS2 / PCSX2 (GLES3)", "GPLv3")
+    val playPs2 = CoreInfo("play", "Play! (HLE · No BIOS)", "BSD-2-Clause")
     val pce = CoreInfo("mednafen_pce_fast", "Beetle PCE Fast", "GPLv2")
+    val supergrafx = CoreInfo("mednafen_supergrafx", "Beetle SuperGrafx", "GPLv2")
+    val pcfx = CoreInfo("mednafen_pcfx", "Beetle PC-FX", "GPLv2")
     val ngp = CoreInfo("mednafen_ngp", "Beetle NeoPop", "GPLv2")
     val neocd = CoreInfo("neocd", "NeoCD", "GPLv3")
     val wswan = CoreInfo("mednafen_wswan", "Beetle WonderSwan", "GPLv2")
@@ -107,16 +122,26 @@ private object Cores {
     val vecx = CoreInfo("vecx", "vecx", "GPLv3")
     val o2em = CoreInfo("o2em", "O2EM", "Artistic")
     val opera = CoreInfo("opera", "Opera (3DO)", "GPLv2+")
+    val sameCdi = CoreInfo("same_cdi", "SAME CDi", "BSD-3-Clause")
+    val potator = CoreInfo("potator", "Potator (Supervision)", "MIT")
+    val freechaf = CoreInfo("freechaf", "FreeChaF (Channel F)", "GPLv3")
     val fmsx = CoreInfo("fmsx", "fMSX", "Non-commercial")
     val bluemsx = CoreInfo("bluemsx", "blueMSX", "GPLv2")
     val viceC64 = CoreInfo("vice_x64", "VICE x64", "GPLv2")
     val puae = CoreInfo("puae", "PUAE (Amiga)", "GPLv2")
+    val fuse = CoreInfo("fuse", "Fuse (ZX Spectrum)", "GPLv2")
+    val cap32 = CoreInfo("cap32", "Caprice32 (Amstrad CPC)", "GPLv2")
+    val hatari = CoreInfo("hatari", "Hatari (Atari ST)", "GPLv2")
+    val px68k = CoreInfo("px68k", "PX68k (Sharp X68000)", "GPLv2")
+    val np2kai = CoreInfo("np2kai", "Neko Project II Kai (PC-98)", "MIT")
     val dosboxPure = CoreInfo("dosbox_pure", "DOSBox-Pure", "GPLv2")
     val scummvm = CoreInfo("scummvm", "ScummVM", "GPLv3+")
+    val squirreljme = CoreInfo("squirreljme", "SquirrelJME (Java J2ME)", "GPLv3")
     val fake08 = CoreInfo("fake08", "Fake-08 (PICO-8)", "MIT")
     val tic80 = CoreInfo("tic80", "TIC-80", "MIT")
     val fbneo = CoreInfo("fbneo", "FinalBurn Neo", "Non-commercial")
     val mame2003 = CoreInfo("mame2003_plus", "MAME 2003-Plus", "MAME (non-commercial)")
+    val mame2016 = CoreInfo("mame2016", "MAME 2016", "GPLv2")
 }
 
 private object Layouts {
@@ -277,7 +302,7 @@ object Systems {
         GameSystem(
             id = "gba", name = "Game Boy Advance", shortName = "GBA", manufacturer = "Nintendo",
             extensions = setOf("gba"),
-            cores = listOf(Cores.mgba, Cores.vbaNext),
+            cores = listOf(Cores.mgba, Cores.gpsp, Cores.vbaNext),
             thumbnailDb = "Nintendo - Game Boy Advance",
             layout = Layouts.gba, color = Color(0xFF5C6BC0),
             folderHints = setOf("gba", "gameboyadvance"),
@@ -286,7 +311,7 @@ object Systems {
         GameSystem(
             id = "nds", name = "Nintendo DS", shortName = "NDS", manufacturer = "Nintendo",
             extensions = setOf("nds"),
-            cores = listOf(Cores.desmume, Cores.melonds),
+            cores = listOf(Cores.melondsDs, Cores.desmume, Cores.melonds),
             thumbnailDb = "Nintendo - Nintendo DS",
             layout = Layouts.nds, color = Color(0xFF90A4AE),
             folderHints = setOf("nds", "ds", "nintendods"),
@@ -300,7 +325,7 @@ object Systems {
         GameSystem(
             id = "3ds", name = "Nintendo 3DS", shortName = "3DS", manufacturer = "Nintendo",
             extensions = setOf("3ds", "3dsx", "cci", "cia", "cxi"),
-            cores = listOf(Cores.citra),
+            cores = listOf(Cores.azahar, Cores.citra),
             thumbnailDb = "Nintendo - Nintendo 3DS",
             layout = Layouts.n3ds, color = Color(0xFFE53935),
             folderHints = setOf("3ds", "n3ds", "nintendo 3ds", "nintendo3ds"),
@@ -323,6 +348,24 @@ object Systems {
             folderHints = setOf("wii", "nintendo wii"),
         ),
         GameSystem(
+            id = "wiiu", name = "Nintendo Wii U", shortName = "Wii U", manufacturer = "Nintendo",
+            extensions = setOf("wua", "wud", "wux", "rpx"),
+            cores = emptyList(),
+            thumbnailDb = "Nintendo - Wii U",
+            layout = Layouts.n3ds, color = Color(0xFF009AC7),
+            folderHints = setOf("wiiu", "wii u", "nintendo wii u"),
+            touchScreen = true,
+        ),
+        GameSystem(
+            id = "switch", name = "Nintendo Switch", shortName = "Switch", manufacturer = "Nintendo",
+            extensions = setOf("nsp", "xci", "nca"),
+            cores = emptyList(),
+            thumbnailDb = "Nintendo - Switch",
+            layout = Layouts.n3ds, color = Color(0xFFE60012),
+            folderHints = setOf("switch", "nsw", "nintendo switch"),
+            touchScreen = true,
+        ),
+        GameSystem(
             id = "vb", name = "Virtual Boy", shortName = "VB", manufacturer = "Nintendo",
             extensions = setOf("vb", "vboy"),
             cores = listOf(Cores.vb),
@@ -338,12 +381,20 @@ object Systems {
             layout = Layouts.gb, color = Color(0xFFFBC02D),
             folderHints = setOf("pokemini", "pokemon mini", "pokemonmini"),
         ),
+        GameSystem(
+            id = "gw", name = "Nintendo Game & Watch", shortName = "G&W", manufacturer = "Nintendo",
+            extensions = setOf("mgw"),
+            cores = listOf(Cores.gw),
+            thumbnailDb = "Handheld Electronic Game",
+            layout = Layouts.gb, color = Color(0xFFB71C1C),
+            folderHints = setOf("gw", "gameandwatch", "game & watch"),
+        ),
 
         // ---- Sega -------------------------------------------------------------------------------
         GameSystem(
             id = "genesis", name = "Sega Genesis / Mega Drive", shortName = "Genesis", manufacturer = "Sega",
             extensions = setOf("md", "gen", "smd", "68k", "sgd", "bin"),
-            cores = listOf(Cores.gpgx, Cores.picodrive),
+            cores = listOf(Cores.gpgx, Cores.gpgxWide, Cores.picodrive),
             thumbnailDb = "Sega - Mega Drive - Genesis",
             layout = Layouts.genesis, color = Color(0xFF1E88E5),
             folderHints = setOf("genesis", "megadrive", "mega drive", "md"),
@@ -396,7 +447,7 @@ object Systems {
         GameSystem(
             id = "saturn", name = "Sega Saturn", shortName = "Saturn", manufacturer = "Sega",
             extensions = setOf("mds", "ccd", "cue", "chd", "iso"),
-            cores = listOf(Cores.yabasanshiro, Cores.beetleSaturn),
+            cores = listOf(Cores.yabasanshiro, Cores.ymir, Cores.beetleSaturn),
             thumbnailDb = "Sega - Saturn",
             layout = Layouts.saturn, color = Color(0xFF283593),
             folderHints = setOf("saturn", "sega saturn", "ss"),
@@ -408,18 +459,28 @@ object Systems {
         GameSystem(
             id = "dreamcast", name = "Sega Dreamcast", shortName = "Dreamcast", manufacturer = "Sega",
             extensions = setOf("cdi", "gdi", "chd", "cue", "m3u"),
-            cores = listOf(Cores.flycast),
+            cores = listOf(Cores.flycast, Cores.parallelDc),
             thumbnailDb = "Sega - Dreamcast",
             layout = Layouts.snes, color = Color(0xFFFF6D00),
             folderHints = setOf("dreamcast", "dc", "sega dreamcast"),
             bios = listOf(BiosFile("dc_boot.bin", "Dreamcast BIOS (optional, Flycast includes HLE)", false, md5 = "e10c53c2f8b90bab96ead2d368858623")),
+        ),
+        GameSystem(
+            id = "naomi", name = "Sega NAOMI / Atomiswave", shortName = "NAOMI", manufacturer = "Sega",
+            extensions = setOf("lst", "dat", "zip", "chd"),
+            cores = listOf(Cores.flycast),
+            thumbnailDb = "Sega - Naomi",
+            layout = Layouts.arcade, color = Color(0xFFFF8F00),
+            folderHints = setOf("naomi", "atomiswave", "sega naomi"),
+            bios = listOf(BiosFile("naomi.zip", "Sega NAOMI Arcade BIOS set", false)),
+            keepZipped = true,
         ),
 
         // ---- Sony -------------------------------------------------------------------------------
         GameSystem(
             id = "psx", name = "Sony PlayStation", shortName = "PS1", manufacturer = "Sony",
             extensions = setOf("cue", "chd", "pbp", "m3u", "bin", "img", "iso"),
-            cores = listOf(Cores.pcsx, Cores.swanstation),
+            cores = listOf(Cores.pcsx, Cores.swanstation, Cores.beetlePsxHw),
             thumbnailDb = "Sony - PlayStation",
             layout = Layouts.psx, color = Color(0xFF9E9E9E),
             folderHints = setOf("psx", "ps1", "playstation"),
@@ -439,21 +500,43 @@ object Systems {
         ),
         GameSystem(
             id = "ps2", name = "Sony PlayStation 2", shortName = "PS2", manufacturer = "Sony",
-            extensions = setOf("elf", "iso", "chd", "bin"),
-            cores = listOf(Cores.playPs2),
+            extensions = setOf("iso", "chd", "gz", "bin", "elf"),
+            cores = listOf(Cores.lrps2, Cores.playPs2),
             thumbnailDb = "Sony - PlayStation 2",
             layout = Layouts.psx, color = Color(0xFF1565C0),
             folderHints = setOf("ps2", "playstation 2", "playstation2"),
+            bios = listOf(
+                BiosFile("scph39001.bin", "PS2 BIOS (USA v7.0) — recommended for LRPS2/PCSX2", false, md5 = "d5ce2c7d119f563ce04bc04dbc3a323e"),
+                BiosFile("scph70012.bin", "PS2 Slim BIOS (USA)", false),
+                BiosFile("scph50004.bin", "PS2 BIOS (Europe)", false),
+            ),
+        ),
+        GameSystem(
+            id = "psvita", name = "Sony PlayStation Vita", shortName = "PS Vita", manufacturer = "Sony",
+            extensions = setOf("vpk"),
+            cores = emptyList(),
+            thumbnailDb = "Sony - PlayStation Vita",
+            layout = Layouts.psx, color = Color(0xFF003791),
+            folderHints = setOf("psvita", "vita", "playstation vita"),
+            touchScreen = true,
         ),
 
         // ---- NEC --------------------------------------------------------------------------------
         GameSystem(
             id = "pce", name = "PC Engine / TurboGrafx-16", shortName = "PCE", manufacturer = "NEC",
-            extensions = setOf("pce", "sgx"),
+            extensions = setOf("pce"),
             cores = listOf(Cores.pce),
             thumbnailDb = "NEC - PC Engine - TurboGrafx 16",
             layout = Layouts.pce, color = Color(0xFFF4511E),
             folderHints = setOf("pce", "pcengine", "tg16", "turbografx"),
+        ),
+        GameSystem(
+            id = "supergrafx", name = "PC Engine SuperGrafx", shortName = "SuperGrafx", manufacturer = "NEC",
+            extensions = setOf("sgx"),
+            cores = listOf(Cores.supergrafx, Cores.pce),
+            thumbnailDb = "NEC - PC Engine SuperGrafx",
+            layout = Layouts.pce, color = Color(0xFFD84315),
+            folderHints = setOf("supergrafx", "sgx"),
         ),
         GameSystem(
             id = "pcecd", name = "PC Engine CD / TurboGrafx-CD", shortName = "PCE-CD", manufacturer = "NEC",
@@ -463,6 +546,15 @@ object Systems {
             layout = Layouts.pce, color = Color(0xFFBF360C),
             folderHints = setOf("pcecd", "pce-cd", "tgcd", "turbografxcd", "turbografx-cd"),
             bios = listOf(BiosFile("syscard3.pce", "Super CD-ROM² System Card 3", true, md5 = "38179df8f4ac870017db21ebcbf53114")),
+        ),
+        GameSystem(
+            id = "pcfx", name = "NEC PC-FX", shortName = "PC-FX", manufacturer = "NEC",
+            extensions = setOf("cue", "chd", "ccd"),
+            cores = listOf(Cores.pcfx),
+            thumbnailDb = "NEC - PC-FX",
+            layout = Layouts.snes, color = Color(0xFF6A1B9A),
+            folderHints = setOf("pcfx", "pc-fx", "nec pc-fx"),
+            bios = listOf(BiosFile("pcfx.rom", "NEC PC-FX BIOS", true, md5 = "08e36edbea28a017f79f8d4f7ff9b6d7")),
         ),
 
         // ---- SNK & Bandai -----------------------------------------------------------------------
@@ -642,23 +734,110 @@ object Systems {
             folderHints = setOf("tic80", "tic-80"),
         ),
         GameSystem(
-            id = "arcade", name = "Arcade", shortName = "Arcade", manufacturer = "Various",
+            id = "neogeo", name = "SNK Neo Geo AES / MVS", shortName = "Neo Geo", manufacturer = "SNK",
             extensions = setOf("zip", "7z"),
             cores = listOf(Cores.fbneo, Cores.mame2003),
+            thumbnailDb = "SNK - Neo Geo",
+            layout = Layouts.arcade, color = Color(0xFFFFB300),
+            folderHints = setOf("neogeo", "neo geo", "aes", "mvs"),
+            bios = listOf(BiosFile("neogeo.zip", "Neo Geo AES/MVS BIOS set", false)),
+            keepZipped = true,
+        ),
+        GameSystem(
+            id = "cdi", name = "Philips CD-i", shortName = "CD-i", manufacturer = "Philips",
+            extensions = setOf("chd", "cue", "iso"),
+            cores = listOf(Cores.sameCdi),
+            thumbnailDb = "Philips - CD-i",
+            layout = Layouts.nes, color = Color(0xFF1E88E5),
+            folderHints = setOf("cdi", "cd-i", "philips cdi"),
+            bios = listOf(BiosFile("cdimono1.zip", "Philips CD-i Mono-I BIOS set", true)),
+        ),
+        GameSystem(
+            id = "supervision", name = "Watara Supervision", shortName = "Supervision", manufacturer = "Watara",
+            extensions = setOf("sv"),
+            cores = listOf(Cores.potator),
+            thumbnailDb = "Watara - Supervision",
+            layout = Layouts.gb, color = Color(0xFF546E7A),
+            folderHints = setOf("supervision", "watara"),
+        ),
+        GameSystem(
+            id = "channelf", name = "Fairchild Channel F", shortName = "Channel F", manufacturer = "Fairchild",
+            extensions = setOf("chf"),
+            cores = listOf(Cores.freechaf),
+            thumbnailDb = "Fairchild - Channel F",
+            layout = Layouts.atari2600, color = Color(0xFF6D4C41),
+            folderHints = setOf("channelf", "channel f", "fairchild"),
+        ),
+        GameSystem(
+            id = "zxspectrum", name = "Sinclair ZX Spectrum", shortName = "ZX Spectrum", manufacturer = "Sinclair",
+            extensions = setOf("tzx", "tap", "z80", "rzx", "sna"),
+            cores = listOf(Cores.fuse),
+            thumbnailDb = "Sinclair - ZX Spectrum",
+            layout = Layouts.atari2600, color = Color(0xFFE53935),
+            folderHints = setOf("zxspectrum", "zx", "spectrum"),
+        ),
+        GameSystem(
+            id = "amstradcpc", name = "Amstrad CPC", shortName = "CPC", manufacturer = "Amstrad",
+            extensions = setOf("cdt", "cpr", "voc", "dsk"),
+            cores = listOf(Cores.cap32),
+            thumbnailDb = "Amstrad - CPC",
+            layout = Layouts.nes, color = Color(0xFF43A047),
+            folderHints = setOf("amstradcpc", "amstrad", "cpc"),
+        ),
+        GameSystem(
+            id = "atarist", name = "Atari ST", shortName = "Atari ST", manufacturer = "Atari",
+            extensions = setOf("st", "msa", "stx", "dim"),
+            cores = listOf(Cores.hatari),
+            thumbnailDb = "Atari - ST",
+            layout = Layouts.nes, color = Color(0xFF78909C),
+            folderHints = setOf("atarist", "atari st"),
+        ),
+        GameSystem(
+            id = "x68000", name = "Sharp X68000", shortName = "X68000", manufacturer = "Sharp",
+            extensions = setOf("hdm", "2hd", "xdf", "dim", "hdf"),
+            cores = listOf(Cores.px68k),
+            thumbnailDb = "Sharp - X68000",
+            layout = Layouts.nes, color = Color(0xFF37474F),
+            folderHints = setOf("x68000", "x68k", "sharp x68000"),
+        ),
+        GameSystem(
+            id = "pc98", name = "NEC PC-98", shortName = "PC-98", manufacturer = "NEC",
+            extensions = setOf("fdi", "hdi", "nhd", "d88", "d98", "thd"),
+            cores = listOf(Cores.np2kai),
+            thumbnailDb = "NEC - PC-98",
+            layout = Layouts.nes, color = Color(0xFF0277BD),
+            folderHints = setOf("pc98", "pc-98", "nec pc-98"),
+        ),
+        GameSystem(
+            id = "j2me", name = "Java ME (J2ME Mobile)", shortName = "J2ME", manufacturer = "Sun / Oracle",
+            extensions = setOf("jar"),
+            cores = listOf(Cores.squirreljme),
+            thumbnailDb = "Java - J2ME",
+            layout = Layouts.snes, color = Color(0xFFEF6C00),
+            folderHints = setOf("j2me", "java", "javame"),
+            touchScreen = true,
+        ),
+        GameSystem(
+            id = "arcade", name = "Arcade", shortName = "Arcade", manufacturer = "Various",
+            extensions = setOf("zip", "7z"),
+            cores = listOf(Cores.fbneo, Cores.mame2003, Cores.mame2016),
             thumbnailDb = "FBNeo - Arcade Games",
             layout = Layouts.arcade, color = Color(0xFFFFD600),
-            folderHints = setOf("arcade", "mame", "fbneo", "fba", "neogeo", "cps1", "cps2", "cps3"),
+            folderHints = setOf("arcade", "mame", "fbneo", "fba", "cps1", "cps2", "cps3"),
             bios = listOf(BiosFile("neogeo.zip", "Neo Geo BIOS set (for Neo Geo games)", false)),
             keepZipped = true,
         ),
     )
 
     private val byId = all.associateBy { it.id }
+    private val coresById = all.flatMap { it.cores }.distinctBy { it.id }.associateBy { it.id }
 
     fun get(id: String): GameSystem? = byId[id]
+
+    fun coreById(id: String): CoreInfo? = coresById[id]
 
     fun allCores(): List<Pair<CoreInfo, List<GameSystem>>> =
         all.flatMap { s -> s.cores.map { it to s } }
             .groupBy({ it.first.id }, { it.second })
-            .map { (id, systems) -> all.flatMap { it.cores }.first { it.id == id } to systems }
+            .map { (id, systems) -> coresById[id]!! to systems }
 }
