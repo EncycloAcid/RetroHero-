@@ -40,11 +40,32 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Decode persistent signing keystore
+        env:
+          KEYSTORE_B64: ${{ secrets.RETROHERO_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            KS_PATH="${RUNNER_TEMP}/retrohero-signing.jks"
+            printf '%s' "$KEYSTORE_B64" | base64 -d > "$KS_PATH"
+            echo "RETROHERO_KEYSTORE_PATH=$KS_PATH" >> "$GITHUB_ENV"
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "ERROR: RETROHERO_KEYSTORE_B64 secret is required for tagged releases so APKs can update in-place."
+            exit 1
+          fi
+
       - name: Make gradlew executable
         run: chmod +x gradlew
 
       - name: Build Debug & Release APKs
+        env:
+          RETROHERO_STORE_PASSWORD: ${{ secrets.RETROHERO_STORE_PASSWORD }}
+          RETROHERO_KEY_ALIAS: ${{ secrets.RETROHERO_KEY_ALIAS }}
+          RETROHERO_KEY_PASSWORD: ${{ secrets.RETROHERO_KEY_PASSWORD }}
         run: ./gradlew assembleDebug assembleRelease
+
+      - name: Verify APK signing certificate
+        run: |
+          keytool -printcert -jarfile app/build/outputs/apk/release/app-release.apk | grep -E "Owner:|SHA256:" || true
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
