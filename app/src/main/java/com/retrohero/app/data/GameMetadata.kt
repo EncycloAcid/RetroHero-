@@ -68,7 +68,7 @@ data class GameDossier(
         )
 
     companion object {
-        const val CACHE_SCHEMA_VERSION = 2
+        const val CACHE_SCHEMA_VERSION = 3
 
         fun fromJson(o: JSONObject): GameDossier? {
             if (o.optInt("schemaVersion", 1) < CACHE_SCHEMA_VERSION) return null
@@ -246,7 +246,13 @@ data class GameDossier(
                     ),
                 ),
                 promoQuote = "A CLASSIC OF THE ${sys?.shortName?.uppercase() ?: "RETRO"} ERA",
-                radarAxes = defaultRadar("$guessedGenre ${game.title} ${game.systemId}"),
+                radarAxes = computeGameDna(
+                    genre = guessedGenre,
+                    modes = "Single-player",
+                    title = game.title,
+                    summary = "",
+                    systemId = game.systemId,
+                ),
                 heroImageUrl = null,
                 sourceLabel = "Local Library",
                 isLive = false,
@@ -256,52 +262,126 @@ data class GameDossier(
         internal fun guessGenreFromTitle(title: String, systemId: String): String {
             val t = title.lowercase()
             return when {
-                listOf("mario", "sonic", "kirby", "donkey kong", "celeste", "rayman", "crash", "megaman", "mega man", "castlevania", "metroid").any { it in t } -> "Action · Platformer"
-                listOf("zelda", "chrono", "final fantasy", "pokemon", "pokémon", "persona", "dragon quest", "earthbound", "mother", "golden sun", "fire emblem", "tactics").any { it in t } -> "Role-Playing · Adventure"
-                listOf("kart", "racing", "gran turismo", "f-zero", "need for speed", "wipeout", "burnout", "ridge racer").any { it in t } -> "Racing · Arcade"
-                listOf("street fighter", "mortal kombat", "tekken", "smash", "king of fighters", "marvel", "soulcalibur").any { it in t } -> "Fighting · Arcade"
-                listOf("tetris", "puyo", "puzzle", "dr. mario", "lumines", "columns", "picross").any { it in t } -> "Puzzle · Strategy"
-                listOf("star fox", "gradius", "contra", "metal slug", "doom", "quake", "galaga", "r-type", "ikaruga").any { it in t } -> "Shooter · Action"
-                listOf("nba", "nfl", "fifa", "tony hawk", "golf", "tennis", "baseball", "wwe", "skate").any { it in t } -> "Sports · Arcade"
+                // Check specific sub-franchises BEFORE broad series names like "mario"
+                listOf("mario kart", "kart", "f-zero", "gran turismo", "need for speed", "wipeout", "burnout", "ridge racer", "outrun", "daytona", "racing").any { it in t } -> "Racing · Arcade"
+                listOf("dr. mario", "dr mario", "tetris", "puyo", "puzzle", "lumines", "columns", "picross", "bust-a-move", "arkanoid").any { it in t } -> "Puzzle · Strategy"
+                listOf("mario rpg", "paper mario", "mario & luigi", "mario and luigi", "chrono", "final fantasy", "pokemon", "pokémon", "persona", "dragon quest", "earthbound", "mother", "golden sun", "fire emblem", "tactics", "phantasy star", "breath of fire", "xenogears", "suikoden").any { it in t } -> "Role-Playing"
+                listOf("mario tennis", "mario golf", "mario strikers", "nba", "nfl", "fifa", "tony hawk", "golf", "tennis", "baseball", "wwe", "punch-out", "tecmo bowl").any { it in t } -> "Sports · Arcade"
+                listOf("zelda", "metroid", "castlevania", "tomb raider", "resident evil", "silent hill", "metal gear", "okami", "banjo").any { it in t } -> "Action-Adventure"
+                listOf("street fighter", "mortal kombat", "tekken", "smash", "king of fighters", "fatal fury", "samurai shodown", "marvel vs", "soulcalibur", "guilty gear").any { it in t } -> "Fighting · Arcade"
+                listOf("star fox", "gradius", "contra", "metal slug", "doom", "quake", "galaga", "r-type", "ikaruga", "galaxian", "space invaders", "goldeneye").any { it in t } -> "Shooter · Action"
+                listOf("mario", "sonic", "kirby", "donkey kong", "celeste", "rayman", "crash", "megaman", "mega man", "yoshi", "wario", "spyro", "klonoa", "shantae").any { it in t } -> "Platformer"
                 systemId in setOf("arcade", "neogeo") -> "Arcade · Action"
-                else -> "Classic Action · Adventure"
+                else -> "Action · Adventure"
             }
         }
 
-        internal fun defaultRadar(hints: String): List<RadarAxis> {
-            val h = hints.lowercase()
-            var action = 0.56f
-            var adventure = 0.52f
-            var rpg = 0.34f
-            var skill = 0.62f
-            var replay = 0.68f
+        private data class DnaProfile(
+            val action: Float,
+            val adventure: Float,
+            val skill: Float,
+            val replay: Float,
+            val rpg: Float,
+        )
 
-            if (listOf("action", "shooter", "beat", "hack", "fight", "combat", "contra", "metal", "doom").any { it in h }) {
-                action = 0.92f; skill = 0.84f
+        private fun hasAnyWord(text: String, words: List<String>): Boolean =
+            words.any { w -> Regex("""\b${Regex.escape(w)}\b""", RegexOption.IGNORE_CASE).containsMatchIn(text) }
+
+        /**
+         * Computes accurate, weighted 5-axis Game DNA from authoritative genre + modes + title + summary.
+         * Uses whole-word matching and multi-genre blending so accidental substrings in summaries
+         * (e.g. "simple", "similar", "adventure", "arcade") never corrupt a game's true profile.
+         */
+        internal fun computeGameDna(
+            genre: String,
+            modes: String,
+            title: String,
+            summary: String,
+            systemId: String = "",
+        ): List<RadarAxis> {
+            val g = genre.lowercase()
+            val t = title.lowercase()
+            val m = modes.lowercase()
+            val s = summary.lowercase()
+
+            val matched = mutableListOf<DnaProfile>()
+
+            val isActionRpg = hasAnyWord(g, listOf("action role-playing", "action rpg", "arpg"))
+            val isRpg = !isActionRpg && hasAnyWord(g, listOf("role-playing", "rpg", "jrpg", "tactical role-playing", "monster-taming", "roguelike", "dungeon crawl"))
+            val isActionAdv = hasAnyWord(g, listOf("action-adventure", "metroidvania", "survival horror", "stealth"))
+            val isPlatformer = hasAnyWord(g, listOf("platform", "platformer", "side-scrolling platform", "2d platform", "3d platform"))
+            val isShooter = hasAnyWord(g, listOf("shooter", "shoot 'em up", "shoot em up", "first-person shooter", "third-person shooter", "run and gun", "light gun", "scrolling shooter", "bullet hell"))
+            val isFighting = hasAnyWord(g, listOf("fighting", "beat 'em up", "beat em up", "brawler", "martial arts", "hack and slash"))
+            val isRacing = hasAnyWord(g, listOf("racing", "kart racing", "driving", "vehicular combat", "motorsport"))
+            val isSports = hasAnyWord(g, listOf("sports", "sport", "basketball", "football", "soccer", "baseball", "tennis", "golf", "skateboarding", "wrestling", "boxing"))
+            val isPuzzle = hasAnyWord(g, listOf("puzzle", "falling block", "tile-matching", "rhythm", "music", "maze", "pinball"))
+            val isStrategy = hasAnyWord(g, listOf("strategy", "real-time strategy", "turn-based strategy", "turn-based tactics", "tactical", "simulation", "city-building", "management"))
+            val isPureAdv = !isActionAdv && hasAnyWord(g, listOf("graphic adventure", "point-and-click", "visual novel", "interactive fiction", "adventure"))
+            val isArcadeAction = hasAnyWord(g, listOf("arcade", "action", "party", "minigame"))
+
+            if (isActionRpg)  matched += DnaProfile(action = 0.80f, adventure = 0.90f, skill = 0.78f, replay = 0.82f, rpg = 0.92f)
+            if (isRpg)        matched += DnaProfile(action = 0.34f, adventure = 0.90f, skill = 0.66f, replay = 0.84f, rpg = 0.96f)
+            if (isActionAdv)  matched += DnaProfile(action = 0.78f, adventure = 0.94f, skill = 0.76f, replay = 0.74f, rpg = 0.48f)
+            if (isPlatformer) matched += DnaProfile(action = 0.86f, adventure = 0.62f, skill = 0.88f, replay = 0.88f, rpg = 0.10f)
+            if (isShooter)    matched += DnaProfile(action = 0.95f, adventure = 0.34f, skill = 0.92f, replay = 0.86f, rpg = 0.08f)
+            if (isFighting)   matched += DnaProfile(action = 0.95f, adventure = 0.20f, skill = 0.95f, replay = 0.92f, rpg = 0.08f)
+            if (isRacing)     matched += DnaProfile(action = 0.88f, adventure = 0.18f, skill = 0.86f, replay = 0.94f, rpg = 0.08f)
+            if (isSports)     matched += DnaProfile(action = 0.82f, adventure = 0.14f, skill = 0.84f, replay = 0.92f, rpg = 0.12f)
+            if (isPuzzle)     matched += DnaProfile(action = 0.36f, adventure = 0.12f, skill = 0.94f, replay = 0.95f, rpg = 0.08f)
+            if (isStrategy)   matched += DnaProfile(action = 0.30f, adventure = 0.52f, skill = 0.92f, replay = 0.88f, rpg = 0.68f)
+            if (isPureAdv)    matched += DnaProfile(action = 0.26f, adventure = 0.94f, skill = 0.54f, replay = 0.64f, rpg = 0.40f)
+            // Only add generic Arcade/Action when no more specific action genre already matched
+            if (isArcadeAction && matched.isEmpty()) {
+                matched += DnaProfile(action = 0.88f, adventure = 0.30f, skill = 0.84f, replay = 0.90f, rpg = 0.10f)
             }
-            if (listOf("platform", "mario", "sonic", "kirby", "celeste", "donkey", "metroid", "castlevania").any { it in h }) {
-                action = 0.85f; skill = 0.88f; replay = 0.86f; adventure = 0.68f
+
+            // Fallback to title classification only if genre gave no matches
+            if (matched.isEmpty()) {
+                val inferred = guessGenreFromTitle(title, systemId)
+                if (!inferred.equals(genre, ignoreCase = true)) {
+                    return computeGameDna(inferred, modes, title, summary, systemId)
+                }
+                matched += DnaProfile(action = 0.72f, adventure = 0.58f, skill = 0.70f, replay = 0.74f, rpg = 0.20f)
             }
-            if (listOf("rpg", "role-playing", "chrono", "fantasy", "pokemon", "pokémon", "persona", "tactics", "emblem").any { it in h }) {
-                rpg = 0.94f; adventure = 0.90f; replay = 0.80f; action = 0.48f
+
+            // Average all matched primary genre archetypes
+            var action = matched.map { it.action }.average().toFloat()
+            var adventure = matched.map { it.adventure }.average().toFloat()
+            var skill = matched.map { it.skill }.average().toFloat()
+            var replay = matched.map { it.replay }.average().toFloat()
+            var rpg = matched.map { it.rpg }.average().toFloat()
+
+            // Careful, capped refinements from modes & summary (never overrides primary genre!)
+            if (hasAnyWord(m, listOf("multiplayer", "co-op", "cooperative", "competitive", "two-player", "2-player", "4-player"))) {
+                replay += 0.06f
             }
-            if (listOf("adventure", "zelda", "exploration", "metroidvania", "survival").any { it in h }) {
-                adventure = 0.92f; action = 0.74f; rpg = 0.62f
+            if (hasAnyWord(s, listOf("open world", "dungeon", "dungeons", "quest", "quests", "exploration", "interconnected", "non-linear"))) {
+                adventure += 0.08f
             }
-            if (listOf("puzzle", "strategy", "tactical", "tetris", "chess", "sim").any { it in h }) {
-                skill = 0.90f; replay = 0.92f; rpg = 0.55f; action = 0.36f
+            if (hasAnyWord(s, listOf("experience points", "level up", "leveling", "turn-based", "party members", "hit points", "inventory", "magic spells"))) {
+                rpg += 0.16f
             }
-            if (listOf("racing", "kart", "sport", "arcade", "fighting", "smash").any { it in h }) {
-                action = 0.88f; skill = 0.86f; replay = 0.94f; rpg = 0.24f; adventure = 0.32f
+            if (hasAnyWord(s, listOf("high score", "combo", "combos", "speedrun", "time limit", "bosses", "boss"))) {
+                skill += 0.03f
+                replay += 0.03f
             }
+            // Specific iconic hybrid nuances (Metroidvania RPGs like Symphony of the Night / Aria of Sorrow)
+            if (listOf("symphony of the night", "aria of sorrow", "dawn of sorrow", "circle of the moon", "harmony of dissonance", "order of ecclesia", "portrait of ruin").any { it in t }) {
+                adventure = maxOf(adventure, 0.92f)
+                rpg = maxOf(rpg, 0.84f)
+            }
+
             return listOf(
-                RadarAxis("ADVENTURE", adventure.coerceIn(0.2f, 0.98f)),
-                RadarAxis("ACTION", action.coerceIn(0.2f, 0.98f)),
-                RadarAxis("SKILL", skill.coerceIn(0.2f, 0.98f)),
-                RadarAxis("REPLAY", replay.coerceIn(0.2f, 0.98f)),
-                RadarAxis("RPG", rpg.coerceIn(0.2f, 0.98f)),
+                RadarAxis("ADVENTURE", adventure.coerceIn(0.08f, 0.98f)),
+                RadarAxis("ACTION", action.coerceIn(0.08f, 0.98f)),
+                RadarAxis("SKILL", skill.coerceIn(0.08f, 0.98f)),
+                RadarAxis("REPLAY", replay.coerceIn(0.08f, 0.98f)),
+                RadarAxis("RPG", rpg.coerceIn(0.06f, 0.98f)),
             )
         }
+
+        internal fun defaultRadar(hints: String): List<RadarAxis> =
+            computeGameDna(genre = hints, modes = "", title = hints, summary = "", systemId = "")
     }
 }
 
@@ -635,7 +715,13 @@ class GameMetadataRepository(private val cacheDir: File) {
             val (introSummary, sections) = parseExtractSections(extract, game.title, fallback)
             val tagline = buildCleanTagline(introSummary, fallback.tagline)
             val quote = buildPromoQuote(game.title, releaseYear, genre, sysName)
-            val radar = GameDossier.defaultRadar("$genre $modes $introSummary ${game.title}")
+            val radar = GameDossier.computeGameDna(
+                genre = genre,
+                modes = modes,
+                title = game.title,
+                summary = introSummary,
+                systemId = game.systemId,
+            )
 
             return GameDossier(
                 title = game.title,
