@@ -29,7 +29,16 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.unit.IntOffset
 import kotlin.math.roundToInt
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.IconButton
 import com.retrohero.app.data.Cheat
+import com.retrohero.app.data.CheatFinder
+import com.retrohero.app.data.CheatPackMatch
 import com.retrohero.app.data.Cheats
 import com.retrohero.app.data.DeltaAction
 import com.retrohero.app.data.DeltaSkin
@@ -210,6 +219,12 @@ class EmulatorActivity : ComponentActivity() {
     private var rewindOn by mutableStateOf(false)
     private var cheats by mutableStateOf<List<Cheat>>(emptyList())
     private var cheatsSupported by mutableStateOf(false)
+    private var cheatSearching by mutableStateOf(false)
+    private var cheatSearchSource by mutableStateOf<String?>(null)
+    private var cheatSearchError by mutableStateOf<String?>(null)
+    private var cheatAlternatePacks by mutableStateOf<List<CheatPackMatch>>(emptyList())
+    private var activeCheatPack by mutableStateOf<CheatPackMatch?>(null)
+    private var cheatAutoTried by mutableStateOf(false)
     private var flash by mutableIntStateOf(0)
     /** Touch-control editing: null when not editing. */
     private var editingPad by mutableStateOf(false)
@@ -868,6 +883,56 @@ class EmulatorActivity : ComponentActivity() {
         cheats = list
         Cheats.save(paths.cheatsFile(game), list)
         applyCheats()
+    }
+
+    private fun autoFindCheats(silentIfNone: Boolean = false) {
+        if (cheatSearching) return
+        cheatAutoTried = true
+        cheatSearching = true
+        cheatSearchError = null
+        lifecycleScope.launch {
+            val result = CheatFinder.autoFind(game, paths.cheats)
+            cheatSearching = false
+            cheatAlternatePacks = result.alternatePacks
+            if (result.cheats.isNotEmpty()) {
+                val merged = CheatFinder.merge(cheats, result.cheats)
+                val added = (merged.size - cheats.size).coerceAtLeast(0)
+                cheats = merged
+                Cheats.save(paths.cheatsFile(game), merged)
+                activeCheatPack = result.activePack
+                cheatSearchSource = result.sourceLabel
+                cheatSearchError = null
+                val msg = if (added > 0) "Found $added cheat${if (added == 1) "" else "s"} for ${game.title}"
+                else "All ${result.cheats.size} cheats already loaded"
+                toast(msg)
+            } else {
+                cheatSearchError = result.error
+                if (!silentIfNone && result.error != null) {
+                    toast("No cheat pack found for ${game.title}")
+                }
+            }
+        }
+    }
+
+    private fun selectCheatPack(pack: CheatPackMatch) {
+        if (cheatSearching || activeCheatPack?.fileName == pack.fileName) return
+        cheatSearching = true
+        cheatSearchError = null
+        lifecycleScope.launch {
+            val loaded = CheatFinder.loadPack(pack)
+            cheatSearching = false
+            if (loaded.isNotEmpty()) {
+                val keepEnabled = cheats.filter { it.enabled }
+                val merged = CheatFinder.merge(keepEnabled, loaded)
+                cheats = merged
+                Cheats.save(paths.cheatsFile(game), merged)
+                activeCheatPack = pack
+                cheatSearchSource = "${pack.fileName.removeSuffix(".cht")} · libretro-database"
+                toast("Loaded ${loaded.size} cheats (${pack.displayLabel})")
+            } else {
+                toast("Couldn't load ${pack.displayLabel}")
+            }
+        }
     }
 
     private fun setScreen(newFilter: Int = filter, integer: Boolean = integerScale) {
@@ -3097,53 +3162,251 @@ class EmulatorActivity : ComponentActivity() {
 
     @Composable
     private fun CheatsPage(back: () -> Unit) {
+        val cs = MaterialTheme.colorScheme
         var adding by remember { mutableStateOf(false) }
         var deleting by remember { mutableStateOf<Cheat?>(null) }
-        Column {
+        var query by remember { mutableStateOf("") }
+        var filterTab by remember { mutableStateOf("all") } // "all", "popular", "active"
+        var visibleLimit by remember { mutableIntStateOf(50) }
+
+        LaunchedEffect(cheatsSupported) {
+            if (cheatsSupported && cheats.isEmpty() && !cheatAutoTried && !cheatSearching) {
+                autoFindCheats(silentIfNone = true)
+            }
+        }
+
+        val indexedCheats = remember(cheats, query, filterTab) {
+            val q = query.trim().lowercase()
+            cheats.mapIndexed { idx, c -> idx to c }
+                .filter { (_, c) ->
+                    val tabOk = when (filterTab) {
+                        "active" -> c.enabled
+                        "popular" -> CheatFinder.isPopularCheat(c.name) || c.enabled
+                        else -> true
+                    }
+                    val queryOk = q.isEmpty() ||
+                        c.name.lowercase().contains(q) ||
+                        c.code.lowercase().contains(q)
+                    tabOk && queryOk
+                }
+                .sortedByDescending { (_, c) -> c.enabled }
+        }
+        val activeCount = remember(cheats) { cheats.count { it.enabled } }
+        val popularCount = remember(cheats) { cheats.count { CheatFinder.isPopularCheat(it.name) } }
+
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             PageHeader("Cheats", back)
             when {
                 !cheatsSupported -> Text(
-                    "This emulator doesn't support cheat codes.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    "This emulator core doesn't support cheat codes.",
+                    color = cs.onSurfaceVariant,
                     modifier = Modifier.fillMaxWidth().padding(24.dp),
                     textAlign = TextAlign.Center,
                 )
                 else -> {
-                    if (cheats.isEmpty()) {
-                        Text(
-                            "No codes yet. Add Game Genie, Action Replay or GameShark codes for this game.",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 16.dp),
-                            textAlign = TextAlign.Center,
-                        )
-                    } else {
-                        SegmentedGroup(null, cheats.size) {
-                            cheats.forEachIndexed { i, cheat ->
-                                SegmentedListItem(
-                                    onClick = { updateCheats(cheats.toMutableList().also { it[i] = cheat.copy(enabled = !cheat.enabled) }) },
-                                    onLongClick = { deleting = cheat },
-                                    shapes = shapes(i),
-                                    colors = segmentColors(),
-                                    supportingContent = { Text(cheat.code, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                                    trailingContent = {
-                                        MonoSwitch(cheat.enabled, { on -> updateCheats(cheats.toMutableList().also { it[i] = cheat.copy(enabled = on) }) })
-                                    },
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) { Text(cheat.name) }
+                    // Primary actions: Auto-find cheats + Add manual code
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Button(
+                            onClick = { autoFindCheats(silentIfNone = false) },
+                            enabled = !cheatSearching,
+                            shapes = ButtonDefaults.shapes(),
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Icon(Icons.Rounded.AutoAwesome, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(if (cheatSearching) "Searching…" else "Auto-find")
+                        }
+                        FilledTonalButton(
+                            onClick = { adding = true },
+                            shapes = ButtonDefaults.shapes(),
+                        ) {
+                            Icon(Icons.Default.Add, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Add code")
+                        }
+                    }
+
+                    if (cheatSearching) {
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = cs.surfaceContainerHigh,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Row(
+                                Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                ContainedLoadingIndicator(Modifier.size(34.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text("Finding cheats for ${game.title}…", style = MaterialTheme.typography.titleSmall)
+                                    Text(
+                                        "Checking libretro-database & offline classics",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = cs.onSurfaceVariant,
+                                    )
+                                }
                             }
                         }
+                    }
+
+                    cheatSearchSource?.let { src ->
                         Text(
-                            "Hold a code to delete it.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 8.dp, start = 4.dp),
+                            text = "Matched: $src",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = cs.primary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(horizontal = 4.dp),
                         )
                     }
-                    Spacer(Modifier.height(12.dp))
-                    Button(onClick = { adding = true }, shapes = ButtonDefaults.shapes(), modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Default.Add, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Add code")
+
+                    cheatSearchError?.let { err ->
+                        if (cheats.isEmpty() && !cheatSearching) {
+                            Text(
+                                text = err,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = cs.onSurfaceVariant,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp),
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                    }
+
+                    // Alternate .cht packs (e.g., Game Genie / Action Replay / GameShark / Code Breaker)
+                    if (cheatAlternatePacks.size > 1) {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            cheatAlternatePacks.forEach { pack ->
+                                val selected = activeCheatPack?.fileName == pack.fileName
+                                FilterChip(
+                                    selected = selected,
+                                    onClick = { selectCheatPack(pack) },
+                                    label = { Text(pack.displayLabel, maxLines = 1) },
+                                )
+                            }
+                        }
+                    }
+
+                    if (cheats.isEmpty() && !cheatSearching) {
+                        Text(
+                            "Tap Auto-find to discover Game Genie, Action Replay, GameShark or Code Breaker codes for this game.",
+                            color = cs.onSurfaceVariant,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
+                            textAlign = TextAlign.Center,
+                        )
+                    } else if (cheats.isNotEmpty()) {
+                        // Search + filter bar when a cheat pack has more than a handful of entries
+                        if (cheats.size > 5) {
+                            OutlinedTextField(
+                                value = query,
+                                onValueChange = {
+                                    query = it
+                                    visibleLimit = 50
+                                },
+                                placeholder = { Text("Search ${cheats.size} cheats (lives, health, coins…)") },
+                                leadingIcon = { Icon(Icons.Rounded.Search, null, modifier = Modifier.size(18.dp)) },
+                                trailingIcon = if (query.isNotEmpty()) {
+                                    {
+                                        IconButton(onClick = { query = "" }) {
+                                            Icon(Icons.Rounded.Close, "Clear", modifier = Modifier.size(18.dp))
+                                        }
+                                    }
+                                } else null,
+                                singleLine = true,
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                FilterChip(
+                                    selected = filterTab == "all",
+                                    onClick = { filterTab = "all"; visibleLimit = 50 },
+                                    label = { Text("All (${cheats.size})") },
+                                )
+                                if (popularCount > 0) {
+                                    FilterChip(
+                                        selected = filterTab == "popular",
+                                        onClick = { filterTab = "popular"; visibleLimit = 50 },
+                                        label = { Text("Popular ($popularCount)") },
+                                    )
+                                }
+                                FilterChip(
+                                    selected = filterTab == "active",
+                                    onClick = { filterTab = "active"; visibleLimit = 50 },
+                                    label = { Text("Active ($activeCount)") },
+                                )
+                                if (activeCount > 0) {
+                                    TextButton(onClick = {
+                                        updateCheats(cheats.map { it.copy(enabled = false) })
+                                        toast("All cheats disabled")
+                                    }) { Text("Disable all") }
+                                }
+                            }
+                        }
+
+                        val shown = indexedCheats.take(visibleLimit)
+                        if (shown.isEmpty()) {
+                            Text(
+                                if (filterTab == "active") "No active cheats yet. Flip any switch to enable a code."
+                                else "No cheats match “$query”.",
+                                color = cs.onSurfaceVariant,
+                                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                textAlign = TextAlign.Center,
+                            )
+                        } else {
+                            SegmentedGroup(null, shown.size) {
+                                shown.forEachIndexed { rowIdx, (origIndex, cheat) ->
+                                    SegmentedListItem(
+                                        onClick = {
+                                            updateCheats(cheats.toMutableList().also {
+                                                it[origIndex] = cheat.copy(enabled = !cheat.enabled)
+                                            })
+                                        },
+                                        onLongClick = { deleting = cheat },
+                                        shapes = shapes(rowIdx),
+                                        colors = segmentColors(),
+                                        supportingContent = { Text(cheat.code, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                        trailingContent = {
+                                            MonoSwitch(cheat.enabled, { on ->
+                                                updateCheats(cheats.toMutableList().also {
+                                                    it[origIndex] = cheat.copy(enabled = on)
+                                                })
+                                            })
+                                        },
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) { Text(cheat.name, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+                                }
+                            }
+                            if (indexedCheats.size > shown.size) {
+                                val remaining = indexedCheats.size - shown.size
+                                FilledTonalButton(
+                                    onClick = { visibleLimit += 50 },
+                                    shapes = ButtonDefaults.shapes(),
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Text("Show more (${remaining} remaining)")
+                                }
+                            }
+                            Text(
+                                "Hold any code to delete it · Auto-found cheats start off so Hardcore achievements stay safe.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = cs.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 2.dp, start = 4.dp),
+                            )
+                        }
                     }
                 }
             }

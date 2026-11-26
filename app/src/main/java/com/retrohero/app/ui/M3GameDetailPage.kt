@@ -61,11 +61,23 @@ import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.SportsEsports
 import androidx.compose.material.icons.rounded.Verified
 import androidx.compose.material.icons.rounded.Wallpaper
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Code
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -73,6 +85,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -88,6 +101,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -98,6 +112,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.graphics.shapes.RoundedPolygon
 import coil.compose.AsyncImage
+import com.retrohero.app.data.Cheat
+import com.retrohero.app.data.CheatFinder
+import com.retrohero.app.data.CheatPackMatch
+import com.retrohero.app.data.Cheats
+import kotlinx.coroutines.launch
 import com.retrohero.app.data.AppPaths
 import com.retrohero.app.data.CoreInfo
 import com.retrohero.app.data.ExternalEmulator
@@ -307,9 +326,47 @@ internal fun M3GameDetailPage(
 ) {
     val cs = MaterialTheme.colorScheme
     val view = LocalView.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val appPaths = remember(context) { AppPaths(context) }
     val cores = game.system?.cores.orEmpty()
     val hasAutoSave = saveSlots.any { it.first == AppPaths.AUTO_SLOT }
     val sysPoly = game.system?.polygon ?: MaterialShapes.Cookie6Sided
+
+    var savedCheats by remember(game.id) { mutableStateOf(Cheats.load(appPaths.cheatsFile(game))) }
+    var findingCheats by remember(game.id) { mutableStateOf(false) }
+    var cheatSource by remember(game.id) { mutableStateOf<String?>(null) }
+    var cheatError by remember(game.id) { mutableStateOf<String?>(null) }
+    var cheatPacks by remember(game.id) { mutableStateOf<List<CheatPackMatch>>(emptyList()) }
+    var activeCheatPack by remember(game.id) { mutableStateOf<CheatPackMatch?>(null) }
+    var showCheatsSheet by remember(game.id) { mutableStateOf(false) }
+
+    fun persistCheats(updated: List<Cheat>) {
+        savedCheats = updated
+        Cheats.save(appPaths.cheatsFile(game), updated)
+    }
+
+    fun triggerAutoFindCheats(openSheetOnSuccess: Boolean = true) {
+        if (findingCheats) return
+        findingCheats = true
+        cheatError = null
+        scope.launch {
+            val res = CheatFinder.autoFind(game, appPaths.cheats)
+            findingCheats = false
+            cheatPacks = res.alternatePacks
+            if (res.cheats.isNotEmpty()) {
+                val merged = CheatFinder.merge(savedCheats, res.cheats)
+                persistCheats(merged)
+                activeCheatPack = res.activePack
+                cheatSource = res.sourceLabel
+                cheatError = null
+                if (openSheetOnSuccess) showCheatsSheet = true
+            } else {
+                cheatError = res.error
+                if (openSheetOnSuccess) showCheatsSheet = true
+            }
+        }
+    }
 
     var dossier by remember(game.id) {
         mutableStateOf(initialDossier ?: GameDossier.localFallback(game))
@@ -868,6 +925,100 @@ internal fun M3GameDetailPage(
                                 }
                             }
                         }
+                    }
+                }
+            }
+
+            // 2e. AUTO-FIND CHEATS STRIP
+            item(key = "detail_cheats_strip") {
+                val activeCheats = remember(savedCheats) { savedCheats.count { it.enabled } }
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(cs.surfaceContainerLow)
+                        .clickable {
+                            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                            if (savedCheats.isEmpty() && !findingCheats) {
+                                triggerAutoFindCheats(openSheetOnSuccess = true)
+                            } else {
+                                showCheatsSheet = true
+                            }
+                        }
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Box(
+                        Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(if (activeCheats > 0) cs.primaryContainer else cs.secondaryContainer),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (findingCheats) {
+                            CircularProgressIndicator(
+                                strokeWidth = 2.dp,
+                                color = cs.onSecondaryContainer,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        } else {
+                            Icon(
+                                Icons.Rounded.Code,
+                                contentDescription = null,
+                                tint = if (activeCheats > 0) cs.onPrimaryContainer else cs.onSecondaryContainer,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                        Text(
+                            text = when {
+                                findingCheats -> "Finding cheats for ${game.title}…"
+                                savedCheats.isNotEmpty() -> "Cheats (${savedCheats.size} ready${if (activeCheats > 0) " · $activeCheats active" else ""})"
+                                else -> "Auto-find cheats"
+                            },
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold),
+                            color = cs.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = when {
+                                cheatSource != null -> cheatSource!!
+                                savedCheats.isNotEmpty() -> "Tap to search & toggle codes before launching"
+                                else -> "Game Genie, Action Replay, GameShark & Code Breaker codes"
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = cs.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    Row(
+                        Modifier
+                            .clip(CircleShape)
+                            .background(cs.primaryContainer)
+                            .clickable(enabled = !findingCheats) {
+                                view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                triggerAutoFindCheats(openSheetOnSuccess = true)
+                            }
+                            .padding(horizontal = 11.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Icon(
+                            Icons.Rounded.AutoAwesome,
+                            contentDescription = null,
+                            tint = cs.onPrimaryContainer,
+                            modifier = Modifier.size(14.dp),
+                        )
+                        Text(
+                            text = if (savedCheats.isEmpty()) "Find" else "Browse",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                            color = cs.onPrimaryContainer,
+                        )
                     }
                 }
             }
@@ -2011,6 +2162,252 @@ internal fun M3GameDetailPage(
                     tint = if (isFavorite) cs.onTertiaryContainer else cs.onSurface,
                     modifier = Modifier.size(20.dp),
                 )
+            }
+        }
+    }
+
+    if (showCheatsSheet) {
+        M3GameCheatsSheet(
+            game = game,
+            cheats = savedCheats,
+            searching = findingCheats,
+            sourceLabel = cheatSource,
+            errorMessage = cheatError,
+            packs = cheatPacks,
+            activePack = activeCheatPack,
+            onAutoFind = { triggerAutoFindCheats(openSheetOnSuccess = true) },
+            onSelectPack = { pack ->
+                if (!findingCheats && activeCheatPack?.fileName != pack.fileName) {
+                    findingCheats = true
+                    scope.launch {
+                        val loaded = CheatFinder.loadPack(pack)
+                        findingCheats = false
+                        if (loaded.isNotEmpty()) {
+                            val merged = CheatFinder.merge(savedCheats.filter { it.enabled }, loaded)
+                            persistCheats(merged)
+                            activeCheatPack = pack
+                            cheatSource = "${pack.fileName.removeSuffix(".cht")} · libretro-database"
+                        }
+                    }
+                }
+            },
+            onToggleCheat = { index, enabled ->
+                if (index in savedCheats.indices) {
+                    persistCheats(savedCheats.toMutableList().also { it[index] = it[index].copy(enabled = enabled) })
+                }
+            },
+            onDisableAll = {
+                persistCheats(savedCheats.map { it.copy(enabled = false) })
+            },
+            onDismiss = { showCheatsSheet = false },
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun M3GameCheatsSheet(
+    game: Game,
+    cheats: List<Cheat>,
+    searching: Boolean,
+    sourceLabel: String?,
+    errorMessage: String?,
+    packs: List<CheatPackMatch>,
+    activePack: CheatPackMatch?,
+    onAutoFind: () -> Unit,
+    onSelectPack: (CheatPackMatch) -> Unit,
+    onToggleCheat: (Int, Boolean) -> Unit,
+    onDisableAll: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    var query by remember { mutableStateOf("") }
+    var tab by remember { mutableStateOf("all") }
+    val filtered = remember(cheats, query, tab) {
+        val q = query.trim().lowercase()
+        cheats.mapIndexed { idx, c -> idx to c }
+            .filter { (_, c) ->
+                val tabOk = when (tab) {
+                    "active" -> c.enabled
+                    "popular" -> CheatFinder.isPopularCheat(c.name) || c.enabled
+                    else -> true
+                }
+                val qOk = q.isEmpty() || c.name.lowercase().contains(q) || c.code.lowercase().contains(q)
+                tabOk && qOk
+            }
+            .sortedByDescending { (_, c) -> c.enabled }
+    }
+    val activeCount = remember(cheats) { cheats.count { it.enabled } }
+    val popularCount = remember(cheats) { cheats.count { CheatFinder.isPopularCheat(it.name) } }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = cs.surfaceContainerLow,
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = "${game.title} Cheats",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                        color = cs.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (sourceLabel != null) {
+                        Text(
+                            text = sourceLabel,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = cs.primary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                Spacer(Modifier.width(8.dp))
+                Row(
+                    Modifier
+                        .clip(CircleShape)
+                        .background(cs.primaryContainer)
+                        .clickable(enabled = !searching) { onAutoFind() }
+                        .padding(horizontal = 12.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                ) {
+                    if (searching) {
+                        CircularProgressIndicator(strokeWidth = 2.dp, color = cs.onPrimaryContainer, modifier = Modifier.size(14.dp))
+                    } else {
+                        Icon(Icons.Rounded.AutoAwesome, null, tint = cs.onPrimaryContainer, modifier = Modifier.size(15.dp))
+                    }
+                    Text(
+                        text = if (searching) "Searching…" else "Auto-find",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        color = cs.onPrimaryContainer,
+                    )
+                }
+            }
+
+            if (packs.size > 1) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    packs.forEach { pack ->
+                        FilterChip(
+                            selected = activePack?.fileName == pack.fileName,
+                            onClick = { onSelectPack(pack) },
+                            label = { Text(pack.displayLabel, maxLines = 1) },
+                        )
+                    }
+                }
+            }
+
+            if (cheats.size > 5) {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    placeholder = { Text("Search ${cheats.size} cheats…") },
+                    leadingIcon = { Icon(Icons.Rounded.Search, null, modifier = Modifier.size(18.dp)) },
+                    trailingIcon = if (query.isNotEmpty()) {
+                        { IconButton(onClick = { query = "" }) { Icon(Icons.Rounded.Close, "Clear", modifier = Modifier.size(18.dp)) } }
+                    } else null,
+                    singleLine = true,
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    FilterChip(selected = tab == "all", onClick = { tab = "all" }, label = { Text("All (${cheats.size})") })
+                    if (popularCount > 0) {
+                        FilterChip(selected = tab == "popular", onClick = { tab = "popular" }, label = { Text("Popular ($popularCount)") })
+                    }
+                    FilterChip(selected = tab == "active", onClick = { tab = "active" }, label = { Text("Active ($activeCount)") })
+                    if (activeCount > 0) {
+                        TextButton(onClick = onDisableAll) { Text("Disable all") }
+                    }
+                }
+            }
+
+            when {
+                searching && cheats.isEmpty() -> {
+                    Row(
+                        Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.5.dp)
+                        Spacer(Modifier.width(12.dp))
+                        Text("Searching libretro-database…", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                    }
+                }
+                filtered.isEmpty() -> {
+                    Text(
+                        text = errorMessage ?: if (tab == "active") "No active cheats yet." else "No cheats found matching your filter.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = cs.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp),
+                    )
+                }
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(360.dp),
+                        verticalArrangement = Arrangement.spacedBy(3.dp),
+                    ) {
+                        itemsIndexed(filtered, key = { _, pair -> "${pair.first}_${pair.second.code}" }) { rowIdx, (origIdx, cheat) ->
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clip(m3SegmentedShape(rowIdx, filtered.size))
+                                    .background(if (cheat.enabled) cs.primaryContainer.copy(alpha = 0.55f) else cs.surfaceContainerHigh)
+                                    .clickable { onToggleCheat(origIdx, !cheat.enabled) }
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        text = cheat.name,
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                        color = cs.onSurface,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Text(
+                                        text = cheat.code,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = cs.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                                Switch(
+                                    checked = cheat.enabled,
+                                    onCheckedChange = { onToggleCheat(origIdx, it) },
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }
