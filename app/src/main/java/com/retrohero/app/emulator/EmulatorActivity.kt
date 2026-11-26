@@ -261,6 +261,10 @@ class EmulatorActivity : ComponentActivity() {
     private var liveTranslateJob: kotlinx.coroutines.Job? = null
     private var pocketGuideOpen by mutableStateOf(false)
     private var pocketNotes by mutableStateOf("")
+    private var browserOpen by mutableStateOf(false)
+    private var browserLastUrl by mutableStateOf<String?>(null)
+    private var browserBookmarkedUrl by mutableStateOf<String?>(null)
+    private var browserWebView: android.webkit.WebView? = null
 
     // #9 Playable Challenge Snapshots (Evolving Moment Capsules + Input Ghost + Win Conditions)
     private var challengeRecording by mutableStateOf(false)
@@ -386,6 +390,9 @@ class EmulatorActivity : ComponentActivity() {
         )
         cheats = Cheats.load(paths.cheatsFile(game))
         pocketNotes = runCatching { paths.notesFile(game).takeIf { it.exists() }?.readText().orEmpty() }.getOrDefault("")
+        browserBookmarkedUrl = runCatching {
+            paths.browserBookmarkFile(game).takeIf { it.exists() }?.readText()?.trim()?.takeIf { it.isNotBlank() }
+        }.getOrNull()
         input.onRewind = { held -> if (rewindOn) NativeBridge.setRewinding(held) }
         input.rewindKeyEnabled = system.id != "psx"
         input.onFastForward = { held -> fastForwardHeld = held; applyFastForward() }
@@ -401,6 +408,10 @@ class EmulatorActivity : ComponentActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 when {
+                    browserOpen -> {
+                        if (browserWebView?.canGoBack() == true) browserWebView?.goBack()
+                        else closeInGameBrowser()
+                    }
                     pocketGuideOpen -> closePocketGuide()
                     discPickerOpen -> discPickerOpen = false
                     translateState !is TranslateState.Idle -> dismissTranslate()
@@ -1111,6 +1122,7 @@ class EmulatorActivity : ComponentActivity() {
 
     private fun openPocketGuide() {
         menuOpen = false
+        browserOpen = false
         if (started) NativeBridge.setPaused(true)
         stopClock()
         pocketGuideOpen = true
@@ -1118,10 +1130,37 @@ class EmulatorActivity : ComponentActivity() {
 
     private fun closePocketGuide() {
         pocketGuideOpen = false
-        if (started && !shutDown && !menuOpen && !editingPad && translateState is TranslateState.Idle) {
+        if (started && !shutDown && !menuOpen && !editingPad && !browserOpen && translateState is TranslateState.Idle) {
             NativeBridge.setPaused(false)
             startClock()
         }
+    }
+
+    private fun openInGameBrowser() {
+        menuOpen = false
+        pocketGuideOpen = false
+        if (started) NativeBridge.setPaused(true)
+        stopClock()
+        browserOpen = true
+    }
+
+    private fun closeInGameBrowser() {
+        browserOpen = false
+        if (started && !shutDown && !menuOpen && !editingPad && !pocketGuideOpen && translateState is TranslateState.Idle) {
+            NativeBridge.setPaused(false)
+            startClock()
+        }
+    }
+
+    private fun saveBrowserBookmark(url: String?) {
+        browserBookmarkedUrl = url
+        lifecycleScope.launch(Dispatchers.IO) {
+            val f = paths.browserBookmarkFile(game)
+            runCatching {
+                if (url.isNullOrBlank()) f.delete() else f.writeText(url)
+            }
+        }
+        toast(if (url.isNullOrBlank()) "Removed pinned guide" else "Pinned walkthrough for ${game.title}")
     }
 
     private fun savePocketNotes(text: String) {
@@ -1143,6 +1182,8 @@ class EmulatorActivity : ComponentActivity() {
         // Resume gameplay cleanly when activating Live In-Place Overlay!
         translateState = TranslateState.Idle
         menuOpen = false
+        pocketGuideOpen = false
+        browserOpen = false
         if (started && !shutDown) {
             NativeBridge.setPaused(false)
             startClock()
@@ -1151,7 +1192,7 @@ class EmulatorActivity : ComponentActivity() {
         liveTranslateJob = lifecycleScope.launch(Dispatchers.Default) {
             var lastSig = 0L
             while (liveTranslateOn && !shutDown) {
-                if (!menuOpen && !pocketGuideOpen && translateState is TranslateState.Idle) {
+                if (!menuOpen && !pocketGuideOpen && !browserOpen && translateState is TranslateState.Idle) {
                     val raw = NativeBridge.grabFrame()
                     val sig = frameDialogueSignature(raw)
                     if (sig != 0L && sig != lastSig) {
@@ -1205,7 +1246,7 @@ class EmulatorActivity : ComponentActivity() {
 
     private fun dismissTranslate() {
         translateState = TranslateState.Idle
-        if (started && !shutDown && !menuOpen && !editingPad && !pocketGuideOpen) {
+        if (started && !shutDown && !menuOpen && !editingPad && !pocketGuideOpen && !browserOpen) {
             NativeBridge.setPaused(false)
             startClock()
         }
@@ -1230,7 +1271,7 @@ class EmulatorActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (started && !shutDown && !menuOpen && !editingPad && !pocketGuideOpen && translateState is TranslateState.Idle) {
+        if (started && !shutDown && !menuOpen && !editingPad && !pocketGuideOpen && !browserOpen && translateState is TranslateState.Idle) {
             applyDisplaySyncLock()
             startVsyncFeed()
             syncGyroSteering()
@@ -1619,7 +1660,22 @@ class EmulatorActivity : ComponentActivity() {
                     raData = raSessionGame,
                     raHardcore = raSessionHardcore,
                     onSaveNotes = ::savePocketNotes,
+                    onOpenWebBrowser = ::openInGameBrowser,
                     onDismiss = ::closePocketGuide,
+                )
+            }
+            if (browserOpen) {
+                val startUrl = browserLastUrl
+                    ?: browserBookmarkedUrl
+                    ?: InGameBrowserUrls.defaultUrlFor(game)
+                InGameBrowserOverlay(
+                    game = game,
+                    initialUrl = startUrl,
+                    bookmarkedUrl = browserBookmarkedUrl,
+                    onUrlChanged = { browserLastUrl = it },
+                    onBookmarkUrl = ::saveBrowserBookmark,
+                    onWebViewReady = { browserWebView = it },
+                    onDismiss = ::closeInGameBrowser,
                 )
             }
             if (translateState !is TranslateState.Idle) {
@@ -2154,7 +2210,10 @@ class EmulatorActivity : ComponentActivity() {
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 ActionTile(Icons.Default.Code, "Pocket Guide", Modifier.weight(1f)) { openPocketGuide() }
-                ActionTile(Icons.Default.Gamepad, "Netplay", Modifier.weight(1f)) { navigate("netplay") }
+                ActionTile(Icons.Default.Tv, "Guide Browser", Modifier.weight(1f)) { openInGameBrowser() }
+            }
+            ActionTile(Icons.Default.Gamepad, "Rollback Netplay (QR / 6-Digit Room)", Modifier.fillMaxWidth()) {
+                navigate("netplay")
             }
             val switchCount = if (deltaSkinsForSystem.isNotEmpty()) 9 else 8
             SegmentedGroup(null, switchCount) {

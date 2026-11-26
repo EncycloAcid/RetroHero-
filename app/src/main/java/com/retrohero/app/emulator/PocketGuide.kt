@@ -386,6 +386,7 @@ fun PocketGuideDrawer(
     raData: RaGameData?,
     raHardcore: Boolean,
     onSaveNotes: (String) -> Unit,
+    onOpenWebBrowser: () -> Unit = {},
     onDismiss: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
@@ -447,6 +448,22 @@ fun PocketGuideDrawer(
                             color = cs.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    Box(
+                        Modifier
+                            .clip(CircleShape)
+                            .background(cs.tertiaryContainer)
+                            .clickable {
+                                onSaveNotes(notes)
+                                onOpenWebBrowser()
+                            }
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                    ) {
+                        Text(
+                            "Web",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.ExtraBold),
+                            color = cs.onTertiaryContainer,
                         )
                     }
                     IconButton(onClick = {
