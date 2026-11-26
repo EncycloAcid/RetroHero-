@@ -30,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Casino
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CloudDownload
 import androidx.compose.material.icons.rounded.CreateNewFolder
@@ -38,7 +39,9 @@ import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Memory
+import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.SportsEsports
 import androidx.compose.material3.AlertDialog
@@ -61,12 +64,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.retrohero.app.data.AppPaths
 import com.retrohero.app.data.CoreInfo
 import com.retrohero.app.data.Downloader
@@ -83,9 +88,26 @@ import com.retrohero.app.ui.components.M3SplitButton
 import com.retrohero.app.ui.components.M3WavyBar
 import com.retrohero.app.ui.components.m3SegmentedShape
 import com.retrohero.app.ui.theme.polygon
+import java.io.File
 
 private val M3ShelfIds = listOf("playing", "completed", "backlog")
 private val M3ShelfLabels = listOf("Playing", "Completed", "Backlog")
+
+private fun formatRelativeTimestamp(epochMs: Long): String {
+    if (epochMs <= 0L) return ""
+    val diffMs = (System.currentTimeMillis() - epochMs).coerceAtLeast(0L)
+    val mins = diffMs / 60_000L
+    val hours = mins / 60L
+    val days = hours / 24L
+    return when {
+        mins < 1L -> "just now"
+        mins < 60L -> "${mins}m ago"
+        hours < 24L -> "${hours}h ago"
+        days == 1L -> "yesterday"
+        days < 30L -> "${days}d ago"
+        else -> "${days / 30L}mo ago"
+    }
+}
 
 @Composable
 internal fun M3GameDetailSheet(
@@ -95,10 +117,14 @@ internal fun M3GameDetailSheet(
     shelfStatus: String,
     saveSlots: List<Pair<Int, Long>>,
     currentCore: CoreInfo?,
+    coreInstalled: Boolean = true,
+    screenshots: List<File> = emptyList(),
     onSetShelfStatus: (String) -> Unit,
     onToggleFavorite: () -> Unit,
     onPlay: (Int?) -> Unit,
     onSelectCore: (CoreInfo) -> Unit,
+    onUseScreenshotAsCover: (File) -> Unit = {},
+    onClearCover: () -> Unit = {},
     onDelete: (() -> Unit)?,
     onDismiss: () -> Unit,
 ) {
@@ -144,7 +170,7 @@ internal fun M3GameDetailSheet(
                 }
             }
 
-            // Cover + Title + Expressive System Shape Pill
+            // Cover + Title + Expressive System Shape Pill + Core Readiness Pill
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -158,23 +184,51 @@ internal fun M3GameDetailSheet(
                         .aspectRatio(0.84f)
                         .clip(RoundedCornerShape(24.dp)),
                 )
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                     Row(
-                        Modifier
-                            .clip(CircleShape)
-                            .background(cs.secondaryContainer)
-                            .padding(start = 5.dp, end = 10.dp, top = 4.dp, bottom = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        M3ShapeBadge(polygon = sysPoly, containerColor = cs.primary, size = 20.dp) {
-                            Icon(Icons.Rounded.SportsEsports, null, tint = cs.onPrimary, modifier = Modifier.size(11.dp))
+                        Row(
+                            Modifier
+                                .clip(CircleShape)
+                                .background(cs.secondaryContainer)
+                                .padding(start = 5.dp, end = 10.dp, top = 4.dp, bottom = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            M3ShapeBadge(polygon = sysPoly, containerColor = cs.primary, size = 20.dp) {
+                                Icon(Icons.Rounded.SportsEsports, null, tint = cs.onPrimary, modifier = Modifier.size(11.dp))
+                            }
+                            Text(
+                                text = (game.system?.shortName ?: game.systemId).uppercase(),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = cs.onSecondaryContainer,
+                            )
                         }
-                        Text(
-                            text = (game.system?.shortName ?: game.systemId).uppercase(),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = cs.onSecondaryContainer,
-                        )
+                        if (currentCore != null) {
+                            Row(
+                                Modifier
+                                    .clip(CircleShape)
+                                    .background(if (coreInstalled) cs.primaryContainer else cs.tertiaryContainer)
+                                    .padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            ) {
+                                Icon(
+                                    if (coreInstalled) Icons.Rounded.CheckCircle else Icons.Rounded.CloudDownload,
+                                    null,
+                                    tint = if (coreInstalled) cs.onPrimaryContainer else cs.onTertiaryContainer,
+                                    modifier = Modifier.size(12.dp),
+                                )
+                                Text(
+                                    text = if (coreInstalled) "Ready" else "Auto-core",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                    color = if (coreInstalled) cs.onPrimaryContainer else cs.onTertiaryContainer,
+                                    maxLines = 1,
+                                )
+                            }
+                        }
                     }
                     Text(
                         text = game.title,
@@ -186,9 +240,12 @@ internal fun M3GameDetailSheet(
                     val meta = if (stat != null && stat.seconds > 0) {
                         "${PlayTime.format(stat.seconds)} · ${stat.sessions} ${if (stat.sessions == 1) "session" else "sessions"}"
                     } else {
-                        game.system?.name ?: "Ready to play"
+                        currentCore?.let {
+                            if (coreInstalled) "${it.displayName} · Instant launch"
+                            else "Installs ${it.displayName} on tap"
+                        } ?: game.system?.name ?: "Ready to play"
                     }
-                    Text(text = meta, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1)
+                    Text(text = meta, style = MaterialTheme.typography.bodySmall, color = cs.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
 
@@ -210,22 +267,83 @@ internal fun M3GameDetailSheet(
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Save states", style = MaterialTheme.typography.titleSmall, color = cs.primary)
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(saveSlots, key = { it.first }) { (slot, _) ->
+                        items(saveSlots, key = { it.first }) { (slot, timestamp) ->
+                            val rel = remember(timestamp) { formatRelativeTimestamp(timestamp) }
+                            val baseLabel = if (slot == AppPaths.AUTO_SLOT) "Auto-save" else "Slot $slot"
                             Row(
                                 Modifier
-                                    .height(40.dp)
+                                    .height(42.dp)
                                     .clip(CircleShape)
-                                    .background(cs.secondaryContainer)
+                                    .background(if (slot == AppPaths.AUTO_SLOT) cs.primaryContainer else cs.secondaryContainer)
                                     .clickable { onPlay(slot) }
                                     .padding(horizontal = 14.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
-                                Icon(Icons.Rounded.Save, null, tint = cs.onSecondaryContainer, modifier = Modifier.size(16.dp))
+                                Icon(
+                                    Icons.Rounded.Save,
+                                    null,
+                                    tint = if (slot == AppPaths.AUTO_SLOT) cs.onPrimaryContainer else cs.onSecondaryContainer,
+                                    modifier = Modifier.size(16.dp),
+                                )
                                 Text(
-                                    text = if (slot == AppPaths.AUTO_SLOT) "Auto-save" else "Slot $slot",
+                                    text = if (rel.isNotEmpty()) "$baseLabel · $rel" else baseLabel,
                                     style = MaterialTheme.typography.labelLarge.copy(fontSize = 13.sp),
-                                    color = cs.onSecondaryContainer,
+                                    color = if (slot == AppPaths.AUTO_SLOT) cs.onPrimaryContainer else cs.onSecondaryContainer,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (screenshots.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Icon(Icons.Rounded.PhotoLibrary, null, tint = cs.primary, modifier = Modifier.size(16.dp))
+                            Text("Captured moments", style = MaterialTheme.typography.titleSmall, color = cs.primary)
+                        }
+                        Row(
+                            Modifier
+                                .clip(CircleShape)
+                                .background(cs.surfaceContainerHighest)
+                                .clickable(onClick = onClearCover)
+                                .padding(horizontal = 10.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Icon(Icons.Rounded.RestartAlt, null, tint = cs.onSurfaceVariant, modifier = Modifier.size(13.dp))
+                            Text("Reset cover", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+                        }
+                    }
+                    Text(
+                        text = "Tap any screenshot to use it as cover art",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = cs.onSurfaceVariant,
+                    )
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        items(screenshots, key = { it.absolutePath }) { shot ->
+                            Box(
+                                Modifier
+                                    .width(124.dp)
+                                    .aspectRatio(4f / 3f)
+                                    .clip(RoundedCornerShape(18.dp))
+                                    .background(cs.surfaceContainerHighest)
+                                    .clickable { onUseScreenshotAsCover(shot) },
+                            ) {
+                                AsyncImage(
+                                    model = shot,
+                                    contentDescription = "Use screenshot as cover",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize(),
                                 )
                             }
                         }
@@ -634,3 +752,36 @@ internal fun M3DownloadDialog(
         )
     }
 }
+
+@Composable
+internal fun M3BackupDialog(
+    state: AppViewModel.BackupState,
+    onDismiss: () -> Unit,
+) {
+    when (state) {
+        AppViewModel.BackupState.Working -> AlertDialog(
+            onDismissRequest = {},
+            title = { Text("Working on backup") },
+            text = {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.6.dp)
+                    Text("Packaging saves, settings & firmware…")
+                }
+            },
+            confirmButton = {},
+        )
+        is AppViewModel.BackupState.Done -> AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("All set") },
+            text = { Text(state.message) },
+            confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+        )
+        is AppViewModel.BackupState.Failed -> AlertDialog(
+            onDismissRequest = onDismiss,
+            title = { Text("Backup issue") },
+            text = { Text(state.message) },
+            confirmButton = { TextButton(onClick = onDismiss) { Text("OK") } },
+        )
+    }
+}
+

@@ -15,6 +15,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import com.retrohero.app.data.AppPaths
+import com.retrohero.app.data.BiosManager
+import com.retrohero.app.data.CoreManager.CoreState
 import com.retrohero.app.data.Game
 import com.retrohero.app.data.PlayStat
 import com.retrohero.app.ui.theme.RetroHeroTheme
@@ -75,6 +77,7 @@ class LauncherScreenshotTest {
     @Test
     fun pureM3ExpressiveScreensAndFlow() {
         val games = sampleGames()
+        val now = System.currentTimeMillis()
         var shelfStatuses by mutableStateOf(
             mapOf(
                 games[0].id to "playing",
@@ -85,6 +88,18 @@ class LauncherScreenshotTest {
         )
         var favs by mutableStateOf(setOf(games[0].id, games[1].id, games[3].id))
         var played: Game? = null
+        val sampleCoreStates = mapOf(
+            "pcsx_rearmed" to CoreState.Installed(bundled = true, sizeBytes = 4_800_000L),
+            "mgba" to CoreState.Installed(bundled = true, sizeBytes = 2_400_000L),
+            "snes9x" to CoreState.Installed(bundled = true, sizeBytes = 3_100_000L),
+            "gambatte" to CoreState.Installed(bundled = true, sizeBytes = 900_000L),
+            "fceumm" to CoreState.Installed(bundled = true, sizeBytes = 1_100_000L),
+            "genesis_plus_gx" to CoreState.Installed(bundled = true, sizeBytes = 2_200_000L),
+            "dolphin" to CoreState.NotInstalled,
+            "mupen64plus_next_gles3" to CoreState.NotInstalled,
+            "ppsspp" to CoreState.NotInstalled,
+            "melonds" to CoreState.NotInstalled,
+        )
 
         compose.setContent {
             RetroHeroTheme(dynamicColor = false) {
@@ -93,14 +108,30 @@ class LauncherScreenshotTest {
                     recents = games.take(5),
                     favoriteIds = favs,
                     stats = mapOf(
-                        games[0].id to PlayStat(seconds = 9_400, sessions = 7, lastPlayed = 2000L),
-                        games[1].id to PlayStat(seconds = 4_800, sessions = 4, lastPlayed = 1500L),
-                        games[2].id to PlayStat(seconds = 3_100, sessions = 2, lastPlayed = 1000L),
+                        games[0].id to PlayStat(seconds = 9_400, sessions = 7, lastPlayed = now - 120_000L),
+                        games[1].id to PlayStat(seconds = 4_800, sessions = 4, lastPlayed = now - 3_600_000L),
+                        games[2].id to PlayStat(seconds = 3_100, sessions = 2, lastPlayed = now - 86_400_000L),
                     ),
                     shelfStatuses = shelfStatuses,
-                    foldersCount = 2,
+                    folders = setOf(
+                        "content://com.android.externalstorage.documents/tree/primary%3ARoms",
+                        "content://com.android.externalstorage.documents/tree/primary%3ADownloads%2FClassics",
+                    ),
+                    coreStates = sampleCoreStates,
+                    biosStatusOf = { file ->
+                        when (file.fileName) {
+                            "scph5501.bin" -> BiosManager.Status.Verified
+                            "gba_bios.bin" -> BiosManager.Status.Unverified
+                            else -> BiosManager.Status.Missing
+                        }
+                    },
                     saveSlotsFor = { g ->
-                        if (g.id == games[0].id) listOf(AppPaths.AUTO_SLOT to 2000L, 1 to 1500L) else emptyList()
+                        if (g.id == games[0].id) {
+                            listOf(
+                                AppPaths.AUTO_SLOT to (now - 180_000L),
+                                1 to (now - 86_400_000L),
+                            )
+                        } else emptyList()
                     },
                     onPlay = { g, _ -> played = g },
                     onToggleFavorite = { g -> favs = if (g.id in favs) favs - g.id else favs + g.id },
@@ -111,17 +142,18 @@ class LauncherScreenshotTest {
             }
         }
 
-        // 1. Pure M3 Expressive Home (Berry Violet Dark)
+        // 1. Pure M3 Expressive Home (Berry Violet Dark) + Smart Core Readiness Banner
         compose.mainClock.advanceTimeBy(950)
         compose.onNodeWithText("CONTINUE PLAYING").assertIsDisplayed()
-        compose.onNodeWithText("Jump back in").assertIsDisplayed()
+        compose.onNodeWithText("4 cores needed").assertIsDisplayed()
         save("m3e_home_dark")
 
-        // 2. Open Pure M3E Game Detail Sheet (with spatial depth pullback behind sheet!)
+        // 2. Open Pure M3E Game Detail Sheet (with Core Readiness badge & relative save timestamps!)
         compose.onNodeWithContentDescription("Details for Chrono Symphony").performClick()
         compose.mainClock.advanceTimeBy(950)
         compose.waitForIdle()
         compose.onNodeWithText("Shelf status").assertIsDisplayed()
+        compose.onNodeWithText("Ready").assertIsDisplayed()
         save("m3e_detail_sheet")
 
         compose.onNodeWithText("Resume game").performClick()
@@ -129,14 +161,15 @@ class LauncherScreenshotTest {
         compose.waitForIdle()
         assertEquals(games[0].id, played?.id)
 
-        // 3. Games Tab (56dp M3 SearchBar + Console Polygons + Connected Group + Tonal Cards)
+        // 3. Games Tab (1-Tap Sort Pill + 56dp M3 SearchBar + Console Polygons + Editorial Grid)
         compose.onNodeWithContentDescription("Games").performClick()
         compose.mainClock.advanceTimeBy(950)
         compose.waitForIdle()
         compose.onAllNodesWithText("Games").onFirst().assertIsDisplayed()
+        compose.onNodeWithText("A–Z").assertIsDisplayed()
         save("m3e_games_dark")
 
-        // 4. Settings Tab (Morphing Tri-tone Material You Swatches + 2x2 Tonal Hub + Android 16 Segmented Cards)
+        // 4. Settings Tab (Super-Emulator Control Deck)
         compose.onNodeWithContentDescription("Settings").performClick()
         compose.mainClock.advanceTimeBy(950)
         compose.waitForIdle()
@@ -144,7 +177,19 @@ class LauncherScreenshotTest {
         compose.onNodeWithText("Theme & color").assertIsDisplayed()
         save("m3e_settings_dark")
 
-        // 5. Switch to Pixel Sage + Light Mode & capture pure M3E Light Home
+        // 5. Open Core Manager sub-page and capture
+        compose.onNodeWithText("Emulator cores").performClick()
+        compose.mainClock.advanceTimeBy(950)
+        compose.waitForIdle()
+        compose.onNodeWithText("Emulator cores").assertIsDisplayed()
+        save("m3e_cores_dark")
+
+        // Navigate back to Settings root
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.mainClock.advanceTimeBy(600)
+        compose.waitForIdle()
+
+        // 6. Switch to Pixel Sage + Light Mode & capture pure M3E Light Home
         compose.onNodeWithText("Sage").performClick()
         compose.onNodeWithText("Light").performClick()
         compose.mainClock.advanceTimeBy(600)

@@ -51,11 +51,14 @@ import androidx.compose.material.icons.outlined.LightMode
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Casino
 import androidx.compose.material.icons.rounded.CreateNewFolder
+import androidx.compose.material.icons.rounded.DownloadForOffline
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.SportsEsports
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -110,6 +113,10 @@ internal fun M3HomePage(
     stats: Map<String, PlayStat>,
     shelfStatuses: Map<String, String>,
     scanning: Boolean,
+    scanProgress: String,
+    missingCoresCount: Int,
+    installingCores: Boolean,
+    onInstallMissingCores: () -> Unit,
     onPlay: (Game) -> Unit,
     onOpenDetail: (Game) -> Unit,
     onSelectConsole: (String?) -> Unit,
@@ -234,6 +241,78 @@ internal fun M3HomePage(
                                 .size(22.dp)
                                 .graphicsLayer { rotationZ = -themeSpin },
                         )
+                    }
+                }
+            }
+        }
+
+        if (scanning) {
+            item(key = "m3_home_scanning") {
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(cs.secondaryContainer)
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = scanProgress.ifBlank { "Scanning ROM folders…" },
+                        style = MaterialTheme.typography.labelLarge,
+                        color = cs.onSecondaryContainer,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+            }
+        }
+
+        if (games.isNotEmpty() && missingCoresCount > 0) {
+            item(key = "m3_home_cores_ready") {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(cs.secondaryContainer)
+                        .padding(horizontal = 14.dp, vertical = 11.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    M3ShapeBadge(polygon = MaterialShapes.Sunny, containerColor = cs.primary, size = 36.dp) {
+                        Icon(Icons.Rounded.DownloadForOffline, null, tint = cs.onPrimary, modifier = Modifier.size(19.dp))
+                    }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                        Text(
+                            text = "$missingCoresCount ${if (missingCoresCount == 1) "core" else "cores"} needed",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = cs.onSecondaryContainer,
+                        )
+                        Text(
+                            text = "One-tap setup for instant launch",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = cs.onSecondaryContainer.copy(alpha = 0.78f),
+                            maxLines = 1,
+                        )
+                    }
+                    Row(
+                        Modifier
+                            .height(36.dp)
+                            .clip(CircleShape)
+                            .background(cs.primary)
+                            .clickable(enabled = !installingCores, onClick = onInstallMissingCores)
+                            .padding(horizontal = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(7.dp),
+                    ) {
+                        if (installingCores) {
+                            CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp, color = cs.onPrimary)
+                            Text("Installing…", style = MaterialTheme.typography.labelMedium, color = cs.onPrimary)
+                        } else {
+                            Text("Install all", style = MaterialTheme.typography.labelMedium, color = cs.onPrimary)
+                        }
                     }
                 }
             }
@@ -969,9 +1048,10 @@ private fun M3EmptyStateCard(
     modifier: Modifier = Modifier,
 ) {
     val cs = MaterialTheme.colorScheme
+    val reduced = LocalReducedMotion.current
     val spin by rememberInfiniteTransition(label = "m3EmptySpin").animateFloat(
         initialValue = 0f,
-        targetValue = 360f,
+        targetValue = if (reduced) 0f else 360f,
         animationSpec = infiniteRepeatable(tween(22_000, easing = LinearEasing), RepeatMode.Restart),
         label = "m3EmptyAngle",
     )
@@ -983,7 +1063,7 @@ private fun M3EmptyStateCard(
             .fillMaxWidth()
             .clip(shape)
             .background(cs.surfaceContainerHigh)
-            .padding(horizontal = 24.dp, vertical = 34.dp),
+            .padding(horizontal = 24.dp, vertical = 32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
@@ -1011,6 +1091,35 @@ private fun M3EmptyStateCard(
                 color = cs.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
+        }
+
+        // Beginner-friendly 3-step quick-start strip
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(22.dp))
+                .background(cs.surfaceContainerHighest)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            listOf("1. Add ROMs", "2. Auto cores", "3. Play").forEachIndexed { idx, step ->
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .clip(CircleShape)
+                        .background(if (idx == 0) cs.primaryContainer else cs.surfaceContainerHigh)
+                        .padding(vertical = 6.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = step,
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = if (idx == 0) cs.onPrimaryContainer else cs.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
+            }
         }
 
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
