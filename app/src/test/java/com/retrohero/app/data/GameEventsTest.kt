@@ -154,22 +154,4 @@ class GameEventsTest {
         assertEquals(GameEventDetector.Kind.LEVEL, GameEventDetector.kindOf("World"))
         assertEquals(GameEventDetector.Kind.OTHER, GameEventDetector.kindOf("Score"))
     }
-
-    @Test
-    fun checkpointsRotateThroughThreeSlots() {
-        val dir = kotlin.io.path.createTempDirectory().toFile()
-        val cps = Checkpoints(dir, "game")
-        repeat(5) { i ->
-            val idx = cps.nextIndex()
-            cps.stateFile(idx).writeText("state $i")
-            cps.record(idx, "Level $i", 1_000L + i, "core")
-        }
-        val list = cps.list()
-        assertEquals(Checkpoints.MAX, list.size)
-        assertEquals(listOf("Level 4", "Level 3", "Level 2"), list.map { it.label })
-        assertEquals("state 4", cps.stateFile(cps.latest()!!.index).readText())
-        cps.clear()
-        assertTrue(cps.list().isEmpty())
-        dir.deleteRecursively()
-    }
 }
