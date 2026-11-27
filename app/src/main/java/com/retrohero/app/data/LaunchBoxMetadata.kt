@@ -871,8 +871,11 @@ object LaunchBoxMetadata {
             val block = m.groupValues[3]
             val h3 = Regex("""<h3[^>]*>([\s\S]*?)</h3>""", RegexOption.IGNORE_CASE)
                 .find(block)?.groupValues?.get(1)?.let(::stripTags).orEmpty()
-            val h4 = Regex("""<h4[^>]*>([\s\S]*?)</h4>""", RegexOption.IGNORE_CASE)
-                .find(block)?.groupValues?.get(1)?.let(::stripTags).orEmpty()
+            // The results card puts the platform in an <h4> (older pages) or a <p> under the <h3> title.
+            val h4 = (
+                Regex("""<h4[^>]*>([\s\S]*?)</h4>""", RegexOption.IGNORE_CASE).find(block)
+                    ?: Regex("""</h3>\s*<p[^>]*>([\s\S]*?)</p>""", RegexOption.IGNORE_CASE).find(block)
+                )?.groupValues?.get(1)?.let(::stripTags).orEmpty()
             val textLines = stripTags(block)
                 .split('\n')
                 .map { it.trim() }

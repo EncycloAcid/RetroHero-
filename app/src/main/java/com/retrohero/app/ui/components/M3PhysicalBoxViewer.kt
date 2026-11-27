@@ -117,6 +117,7 @@ import coil.request.ImageRequest
 import coil.request.SuccessResult
 import coil.size.Scale
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import com.retrohero.app.data.Box3dMath
 import com.retrohero.app.data.BoxFaceId
@@ -3434,6 +3435,9 @@ private object ShelfCaseCache {
 }
 
 private const val SHELF_SPINE_WIDTH_PX = 64
+
+/** At most two LaunchBox lookups at a time from the shelf, so a big library doesn't flood it. */
+private val shelfLookupGate = kotlinx.coroutines.sync.Semaphore(2)
 private const val SHELF_COVER_PX = 220
 
 /**
@@ -3448,6 +3452,8 @@ internal fun rememberShelfCaseArt(
     game: Game,
     spec: PhysicalMediaSpec,
     dossierFor: (Game) -> GameDossier?,
+    /** Looks the game up on LaunchBox (as its game page does) when nothing is cached yet. */
+    loadDossier: (suspend (Game) -> GameDossier)? = null,
 ): ShelfCaseArt? {
     val context = LocalContext.current
     val paths = LocalArtPaths.current
@@ -3455,9 +3461,10 @@ internal fun rememberShelfCaseArt(
     val baseKey = "${game.id}|${spec.spineHeaderColor.toArgb()}|$artVersion"
     val state = androidx.compose.runtime.produceState(initialValue = ShelfCaseCache.get(baseKey), baseKey) {
         // Shows the last case at once, then re-checks: the game page may have fetched real scans since.
-        val dossier = withContext(Dispatchers.IO) { dossierFor(game) } ?: GameDossier.localFallback(game)
-        val key = "$baseKey|${dossier.boxSpineUrl}|${dossier.boxFullUrl}|${dossier.boxArtUrl}|${dossier.title}|${dossier.publisher}"
-        ShelfCaseCache.get(key)?.let { value = it; return@produceState }
+        val cached = withContext(Dispatchers.IO) { dossierFor(game) }
+        var dossier = cached ?: GameDossier.localFallback(game)
+        fun keyFor(d: GameDossier) = "$baseKey|${d.boxSpineUrl}|${d.boxFullUrl}|${d.boxArtUrl}|${d.title}|${d.publisher}"
+        ShelfCaseCache.get(keyFor(dossier))?.let { value = it }
 
         suspend fun load(src: Any?, max: Int): Bitmap? {
             if (src == null) return null
@@ -3511,10 +3518,6 @@ internal fun rememberShelfCaseArt(
 
         val sources = artSources(game, paths)
         val localCovers = sources.filterIsInstance<java.io.File>()
-        val onlineCovers = buildList<Any> {
-            dossier.boxArtUrl?.let { add(it) }
-            sources.forEach { if (it !is java.io.File && it !in this) add(it) }
-        }
 
         // 1. Right away, from what's on the phone: a 3D case with your own cover (if any) and the
         //    same generated spine the game page would show. No waiting on the network.
@@ -3525,8 +3528,20 @@ internal fun rememberShelfCaseArt(
         }
         if (value == null) value = build(cover, null, null).also { ShelfCaseCache.put(baseKey, it) }
 
-        // 2. Then online art in the 3D viewer's order: cover (if none yet), LaunchBox spine, full wrap.
+        // 2. Never looked up: fetch the game's LaunchBox record, as its game page would, to get the
+        //    real Box - Spine / Box - Full / Box - Front scans.
+        if (cached == null && loadDossier != null) {
+            shelfLookupGate.withPermit { runCatching { loadDossier(game) }.getOrNull() }?.let { dossier = it }
+        }
+        val key = keyFor(dossier)
+        ShelfCaseCache.get(key)?.let { value = it; return@produceState }
+
+        // 3. Then online art in the 3D viewer's order: cover (if none yet), LaunchBox spine, full wrap.
         if (cover == null) {
+            val onlineCovers = buildList<Any> {
+                dossier.boxArtUrl?.let { add(it) }
+                sources.forEach { if (it !is java.io.File && it !in this) add(it) }
+            }
             for (src in onlineCovers) {
                 cover = load(src, 720)
                 if (cover != null) break

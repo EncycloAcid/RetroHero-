@@ -241,4 +241,41 @@ class LaunchBoxMetadataTest {
             )
         }
     }
+
+    /** Markup as LaunchBox GamesDB serves it today (search card: title in <h3>, platform in <p>). */
+    @Test
+    fun parsesTodaysSearchCardsAndSkipsRomHacks() {
+        val searchHtml = """
+            <div class="games-grid-card"> <a class="list-item link-no-underline" href="/games/details/133532-super-metroid-90">
+              <div class="gameCard"><div class="cardImgPart"><img src="https://images.launchbox-app.com/a.jpg" alt="Super Metroid 90&#xB0;" /></div>
+              <div class="cardContent"><div class="cardHeading"><div class="cardTitle"> <h3>Super Metroid 90&#xB0;</h3> <p>Super Nintendo Entertainment System</p> </div></div></div></div></a></div>
+            <div class="games-grid-card"> <a class="list-item link-no-underline" href="/games/details/283-super-metroid">
+              <div class="gameCard"><div class="cardImgPart"><img src="https://images.launchbox-app.com/b.jpg" alt="Super Metroid" /></div>
+              <div class="cardContent"><div class="cardHeading"><div class="cardTitle"> <h3>Super Metroid</h3> <p>Super Nintendo Entertainment System</p> </div></div></div></div></a></div>
+        """.trimIndent()
+        val hits = LaunchBoxMetadata.parseSearchResultsHtml(searchHtml)
+        assertEquals("Super Nintendo Entertainment System", hits.first { it.databaseId == "283" }.platform)
+        val picked = LaunchBoxMetadata.pickBestSearchHit("Super Metroid", LaunchBoxMetadata.platformNamesFor("snes"), hits)
+        assertEquals("283", picked!!.databaseId)
+    }
+
+    /** The /games/images/ gallery labels every scan as "<Game> - <Type> Image (<Region>)". */
+    @Test
+    fun readsRealSpineScansFromTheImagesPageAndPrefersNorthAmerica() {
+        fun card(file: String, type: String, region: String) = """
+            <a b-x style="text-decoration: none !important;" href="https://images.launchbox-app.com/$file.png" data-gameimageid="1" data-toggle="lightbox" data-gallery="gallery" data-title="Super Metroid - $type Image ($region)" data-footer="800 x 1100 PNG, 1 MB</br><a data-gameimageid='1' class='edit-image' href='javascript:'>Edit Image</a>">
+              <div class="img-container"><img class="imageCard" src="https://images.launchbox-app.com/thumb-$file.png" alt="Super Metroid - $type Image" />
+              <div class="imgCardText"><p>$type ($region) - 800 x 1100</p></div></div></a>
+        """
+        val html = card("front-jp", "Box - Front", "Japan") + card("front-na", "Box - Front", "North America") +
+            card("spine-jp", "Box - Spine", "Japan") + card("spine-na", "Box - Spine", "North America") +
+            card("back-na", "Box - Back", "North America") + card("cart-na", "Cart - Front", "North America")
+        val images = LaunchBoxMetadata.parseImagesFromHtml(html)
+        assertEquals("Box - Spine", images.first { it.url.endsWith("spine-na.png") }.type)
+        val media = LaunchBoxMetadata.selectStorefrontMedia(images, "Super Metroid (USA, Europe)")
+        assertTrue(media.boxSpineUrl!!.endsWith("spine-na.png"))
+        assertTrue(media.boxArtUrl!!.endsWith("front-na.png"))
+        assertTrue(media.boxBackUrl!!.endsWith("back-na.png"))
+        assertTrue(media.cartFrontUrl!!.endsWith("cart-na.png"))
+    }
 }

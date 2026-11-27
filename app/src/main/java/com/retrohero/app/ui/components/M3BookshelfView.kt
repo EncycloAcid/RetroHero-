@@ -296,6 +296,7 @@ fun M3BookshelfSection(
                             game = game,
                             pulled = isPulled,
                             dossierFor = dossierFor,
+                            loadDossier = loadDossier,
                             onClick = {
                                 view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                                 pulledGameId = if (isPulled) null else game.id
@@ -336,12 +337,13 @@ private fun ShelfSpineCase(
     pulled: Boolean,
     onClick: () -> Unit,
     dossierFor: (Game) -> GameDossier?,
+    loadDossier: (suspend (Game) -> GameDossier)?,
 ) {
     val dims = remember(game.systemId) { ShelfLayoutMath.spineDimensions(game.systemId) }
     // Same spec (and accent) as the game page's 3D viewer, so the case is the same model.
     val viewerAccent = game.system?.color ?: MaterialTheme.colorScheme.primary
     val viewerSpec = remember(game.systemId, viewerAccent) { PhysicalMediaSpec.forSystem(game.systemId, viewerAccent) }
-    val art = rememberShelfCaseArt(game, viewerSpec, dossierFor)
+    val art = rememberShelfCaseArt(game, viewerSpec, dossierFor, loadDossier)
 
     val yaw by animateFloatAsState(
         targetValue = if (pulled) ShelfLayoutMath.PULLED_YAW else ShelfLayoutMath.SPINE_YAW,
