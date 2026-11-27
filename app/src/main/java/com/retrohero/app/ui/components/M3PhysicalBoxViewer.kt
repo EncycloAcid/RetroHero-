@@ -3435,21 +3435,7 @@ internal fun rememberShelfCaseArt(
             }.getOrNull()?.takeIf { it.width >= 16 && it.height >= 16 }
         }
 
-        val sources = artSources(game, paths)
-        val coverCandidates = buildList<Any> {
-            sources.filterIsInstance<java.io.File>().forEach { add(it) }
-            dossier.boxArtUrl?.let { add(it) }
-            sources.forEach { if (it !in this) add(it) }
-        }
-        var cover: Bitmap? = null
-        for (src in coverCandidates) {
-            cover = load(src, 720)
-            if (cover != null) break
-        }
-        val loadedSpine = load(dossier.boxSpineUrl, 900)
-        val loadedFull = if (loadedSpine == null) load(dossier.boxFullUrl, 1400) else null
-
-        val art = withContext(Dispatchers.Default) {
+        suspend fun build(cover: Bitmap?, loadedSpine: Bitmap?, loadedFull: Bitmap?): ShelfCaseArt = withContext(Dispatchers.Default) {
             val sliced = loadedFull?.let {
                 PhysicalMediaSpec.sliceFullBoxCover(it, (spec.caseStyle.depthRatio * 0.55f).coerceIn(0.05f, 0.14f))
             }
@@ -3463,8 +3449,7 @@ internal fun rememberShelfCaseArt(
             val spineH = (SHELF_SPINE_WIDTH_PX * spineFull.height.toFloat() / spineFull.width).toInt().coerceIn(SHELF_SPINE_WIDTH_PX, 900)
             val spineSmall = Bitmap.createScaledBitmap(spineFull, SHELF_SPINE_WIDTH_PX, spineH, true)
             val frontSmall = if (front != null) {
-                val fw = SHELF_COVER_PX
-                Bitmap.createScaledBitmap(front, fw, (fw / aspect).toInt().coerceAtLeast(16), true)
+                Bitmap.createScaledBitmap(front, SHELF_COVER_PX, (SHELF_COVER_PX / aspect).toInt().coerceAtLeast(16), true)
             } else {
                 // No cover: a plain face in the spine's body color (only a sliver ever shows on the shelf).
                 val body = spineSmall.getPixel(spineSmall.width / 2, spineSmall.height / 2)
@@ -3485,6 +3470,33 @@ internal fun rememberShelfCaseArt(
                 boxAspect = aspect,
             )
         }
+
+        val sources = artSources(game, paths)
+        val localCovers = sources.filterIsInstance<java.io.File>()
+        val onlineCovers = buildList<Any> {
+            dossier.boxArtUrl?.let { add(it) }
+            sources.forEach { if (it !is java.io.File && it !in this) add(it) }
+        }
+
+        // 1. Right away, from what's on the phone: a 3D case with your own cover (if any) and the
+        //    same generated spine the game page would show. No waiting on the network.
+        var cover: Bitmap? = null
+        for (src in localCovers) {
+            cover = load(src, 720)
+            if (cover != null) break
+        }
+        if (value == null) value = build(cover, null, null).also { ShelfCaseCache.put(baseKey, it) }
+
+        // 2. Then online art in the 3D viewer's order: cover (if none yet), LaunchBox spine, full wrap.
+        if (cover == null) {
+            for (src in onlineCovers) {
+                cover = load(src, 720)
+                if (cover != null) break
+            }
+        }
+        val loadedSpine = load(dossier.boxSpineUrl, 900)
+        val loadedFull = if (loadedSpine == null) load(dossier.boxFullUrl, 1400) else null
+        val art = build(cover, loadedSpine, loadedFull)
         ShelfCaseCache.put(key, art)
         ShelfCaseCache.put(baseKey, art)
         value = art

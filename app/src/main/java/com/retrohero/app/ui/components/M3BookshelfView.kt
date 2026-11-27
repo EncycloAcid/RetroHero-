@@ -95,9 +95,16 @@ data class SpineDimensions(
 )
 
 object ShelfLayoutMath {
-    /** Spine-fit framing for the shared 3D renderer: case half-height and center, as fractions of the slot height. */
-    const val SPINE_FIT_HALF_HEIGHT = 0.46f
-    const val SPINE_FIT_CENTER = 0.5f
+    /**
+     * Spine-fit framing for the shared 3D renderer, as fractions of the slot height: the case fills
+     * 94% of its slot and its base sits on the slot's bottom edge (the shelf), with headroom above
+     * for the top face seen from slightly above.
+     */
+    const val SPINE_FIT_HALF_HEIGHT = 0.47f
+    const val SPINE_FIT_CENTER = 0.525f
+
+    /** Slot height that makes a case of [caseHeightDp] stand exactly that tall on the shelf. */
+    fun slotHeightDp(caseHeightDp: Float): Float = caseHeightDp / (2f * SPINE_FIT_HALF_HEIGHT)
 
     /** Shelf cases face the room spine-first, the same angle as the game page's "Spine" view. */
     const val SPINE_YAW = 88f
@@ -116,9 +123,9 @@ object ShelfLayoutMath {
         return w.toFloat() / h
     }
 
-    /** How wide a shelf slot must be for the 3D case standing at [yawDeg], with a little air either side. */
-    fun spineSlotWidthDp(spec: PhysicalMediaSpec, boxAspect: Float, heightDp: Float, yawDeg: Float = SPINE_YAW): Float {
-        val halfH = heightDp * SPINE_FIT_HALF_HEIGHT
+    /** How wide a shelf slot must be for a case [caseHeightDp] tall standing at [yawDeg], with a little air either side. */
+    fun spineSlotWidthDp(spec: PhysicalMediaSpec, boxAspect: Float, caseHeightDp: Float, yawDeg: Float = SPINE_YAW): Float {
+        val halfH = caseHeightDp / 2f
         val halfW = halfH * boxAspect
         val halfD = maxOf(halfW, halfH) * spec.caseStyle.depthRatio
         val rad = Math.toRadians(yawDeg.toDouble())
@@ -126,23 +133,47 @@ object ShelfLayoutMath {
         return projected * 1.08f + 4f
     }
 
+    /** Real retail case heights in millimetres (North American releases), standing upright. */
+    fun caseHeightMm(systemId: String): Float = when (systemId.lowercase()) {
+        "nes" -> 180f
+        "snes", "vb" -> 133f
+        "n64" -> 131f
+        "gb", "gbc" -> 116f
+        "gba" -> 125f
+        "nds", "3ds" -> 136f
+        "switch" -> 170f
+        "psp" -> 178f
+        "gc", "wii", "wiiu", "ps2" -> 190f
+        "genesis", "32x", "sms" -> 190f
+        "sg1000" -> 180f
+        "gg" -> 142f
+        "segacd", "saturn" -> 220f
+        "psx", "dreamcast" -> 125f
+        else -> when (PhysicalMediaSpec.forSystem(systemId).caseStyle) {
+            RetailCaseStyle.CARDBOARD_VERTICAL -> 180f
+            RetailCaseStyle.CARDBOARD_LANDSCAPE -> 133f
+            RetailCaseStyle.CARDBOARD_SQUARE -> 120f
+            RetailCaseStyle.CLAMSHELL_PLASTIC -> 190f
+            RetailCaseStyle.JEWEL_CASE_CD -> 125f
+            RetailCaseStyle.KEEP_CASE_DVD -> 190f
+            RetailCaseStyle.HANDHELD_SNAP_CASE -> 136f
+            RetailCaseStyle.ARCADE_SHOCKBOX -> 205f
+        }
+    }
+
+    /** One scale for every case, so they stand at their true relative sizes (220 mm fills the row). */
+    const val DP_PER_MM = 0.80f
+
     /**
-     * Maps each console's [RetailCaseStyle] to distinct, authentic physical spine proportions
-     * so PS1 jewel cases, SNES cardboard boxes, Genesis clamshells, and DS snap cases look
-     * unmistakably distinct standing side-by-side on the shelf.
+     * Each console's case as it stands on the shelf: its true height, and the thickness of its spine
+     * in the same 3D model the game page uses (depth relative to the case's long side).
      */
     fun spineDimensions(systemId: String): SpineDimensions {
         val spec = PhysicalMediaSpec.forSystem(systemId)
-        return when (spec.caseStyle) {
-            RetailCaseStyle.JEWEL_CASE_CD -> SpineDimensions(widthDp = 30f, heightDp = 128f, topBevelDp = 5f)
-            RetailCaseStyle.HANDHELD_SNAP_CASE -> SpineDimensions(widthDp = 32f, heightDp = 124f, topBevelDp = 5f)
-            RetailCaseStyle.CARDBOARD_SQUARE -> SpineDimensions(widthDp = 34f, heightDp = 126f, topBevelDp = 6f)
-            RetailCaseStyle.CARDBOARD_LANDSCAPE -> SpineDimensions(widthDp = 38f, heightDp = 136f, topBevelDp = 6f)
-            RetailCaseStyle.CARDBOARD_VERTICAL -> SpineDimensions(widthDp = 36f, heightDp = 152f, topBevelDp = 6f)
-            RetailCaseStyle.CLAMSHELL_PLASTIC -> SpineDimensions(widthDp = 40f, heightDp = 158f, topBevelDp = 7f)
-            RetailCaseStyle.KEEP_CASE_DVD -> SpineDimensions(widthDp = 34f, heightDp = 164f, topBevelDp = 6f)
-            RetailCaseStyle.ARCADE_SHOCKBOX -> SpineDimensions(widthDp = 44f, heightDp = 166f, topBevelDp = 7f)
-        }
+        val heightDp = caseHeightMm(systemId) * DP_PER_MM
+        val aspect = proceduralFrontAspect(spec)
+        val depthDp = heightDp * maxOf(aspect, 1f) * spec.caseStyle.depthRatio
+        return SpineDimensions(widthDp = depthDp, heightDp = heightDp, topBevelDp = 5f)
     }
 
     /** Chunks a game list into clean physical shelf rows (default 8 cases per shelf). */
@@ -261,9 +292,12 @@ fun M3BookshelfSection(
                         .fillMaxWidth()
                         .horizontalScroll(rememberScrollState())
                         .padding(horizontal = 22.dp)
-                        .height(186.dp),
+                        // Tall enough for this shelf's tallest case at its true size, plus room to lift one out.
+                        .height(
+                            (rowGames.maxOf { ShelfLayoutMath.slotHeightDp(ShelfLayoutMath.spineDimensions(it.systemId).heightDp) } + 18f).dp,
+                        ),
                     verticalAlignment = Alignment.Bottom,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    horizontalArrangement = Arrangement.spacedBy(1.dp),
                 ) {
                     rowGames.forEach { game ->
                         val isPulled = game.id == pulledGameId
@@ -336,7 +370,7 @@ private fun ShelfSpineCase(
         Modifier
             .offset(y = liftY)
             .width(slotW.dp)
-            .height(dims.heightDp.dp)
+            .height(ShelfLayoutMath.slotHeightDp(dims.heightDp).dp)
             .semantics {
                 contentDescription = game.title
                 selected = pulled
@@ -371,7 +405,7 @@ private fun FlatSpinePlaceholder(game: Game, spec: PhysicalMediaSpec, modifier: 
     val shape = RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp, bottomStart = 2.dp, bottomEnd = 2.dp)
     Box(
         modifier
-            .padding(vertical = (dims.heightDp * (0.5f - ShelfLayoutMath.SPINE_FIT_HALF_HEIGHT)).dp, horizontal = 2.dp)
+            .padding(top = (ShelfLayoutMath.slotHeightDp(dims.heightDp) - dims.heightDp).dp, start = 2.dp, end = 2.dp)
             .clip(shape)
             .background(baseColor),
         contentAlignment = Alignment.Center,
@@ -384,7 +418,7 @@ private fun FlatSpinePlaceholder(game: Game, spec: PhysicalMediaSpec, modifier: 
             softWrap = false,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier
-                .requiredWidth((dims.heightDp - 36f).dp)
+                .requiredWidth((dims.heightDp - 24f).dp)
                 .rotate(90f),
         )
     }
