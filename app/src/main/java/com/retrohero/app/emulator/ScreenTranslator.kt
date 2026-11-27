@@ -185,29 +185,10 @@ object ScreenTranslator {
             return@withContext TranslateState.Error("Invalid game frame.")
         }
         onStatus("Reading on-screen text…")
-        val base = Bitmap.createBitmap(rawFrame, 2, w, w, h, Bitmap.Config.ARGB_8888)
-        // Integer upscale 3× with nearest-neighbor so low-res pixel fonts are legible to ML Kit OCR.
-        val scale = (900 / maxOf(w, h)).coerceIn(2, 4)
-        val upscaled = Bitmap.createScaledBitmap(base, w * scale, h * scale, false)
-        val imgW = upscaled.width
-        val imgH = upscaled.height
-
-        val recognizer = TextRecognition.getClient(JapaneseTextRecognizerOptions.Builder().build())
         val recognized = try {
-            val visionText = recognizer.process(InputImage.fromBitmap(upscaled, 0)).awaitTask()
-            visionText.textBlocks.mapNotNull { b ->
-                val cleaned = b.text.replace('\n', ' ').trim()
-                val box: Rect = b.boundingBox ?: return@mapNotNull null
-                if (cleaned.isEmpty()) return@mapNotNull null
-                RecognizedBlock(
-                    text = cleaned,
-                    bounds = NormalizedRect.fromPixelBounds(box.left, box.top, box.right, box.bottom, imgW, imgH),
-                )
-            }
+            recognizeBlocks(rawFrame)
         } catch (t: Throwable) {
             return@withContext TranslateState.Error("OCR failed: ${t.message ?: "unknown error"}")
-        } finally {
-            recognizer.close()
         }
 
         val merged = mergeDialogueBlocks(recognized)
@@ -233,6 +214,45 @@ object ScreenTranslator {
             TranslateState.Error("Translation failed: ${t.message ?: "check connection for first-time model download"}")
         } finally {
             translator.close()
+        }
+    }
+
+    /**
+     * OCR only: the text blocks on a raw libretro frame, with nearby lines merged into dialogue
+     * boxes. Empty when the frame is invalid or has no text. Throws if ML Kit fails.
+     */
+    suspend fun recognizeRawFrame(rawFrame: IntArray?): List<RecognizedBlock> = withContext(Dispatchers.Default) {
+        if (rawFrame == null || rawFrame.size < 3) return@withContext emptyList()
+        val w = rawFrame[0]
+        val h = rawFrame[1]
+        if (w <= 0 || h <= 0 || rawFrame.size < 2 + w * h) return@withContext emptyList()
+        mergeDialogueBlocks(recognizeBlocks(rawFrame))
+    }
+
+    private suspend fun recognizeBlocks(rawFrame: IntArray): List<RecognizedBlock> {
+        val w = rawFrame[0]
+        val h = rawFrame[1]
+        val base = Bitmap.createBitmap(rawFrame, 2, w, w, h, Bitmap.Config.ARGB_8888)
+        // Integer upscale 3× with nearest-neighbor so low-res pixel fonts are legible to ML Kit OCR.
+        val scale = (900 / maxOf(w, h)).coerceIn(2, 4)
+        val upscaled = Bitmap.createScaledBitmap(base, w * scale, h * scale, false)
+        val imgW = upscaled.width
+        val imgH = upscaled.height
+
+        val recognizer = TextRecognition.getClient(JapaneseTextRecognizerOptions.Builder().build())
+        return try {
+            val visionText = recognizer.process(InputImage.fromBitmap(upscaled, 0)).awaitTask()
+            visionText.textBlocks.mapNotNull { b ->
+                val cleaned = b.text.replace('\n', ' ').trim()
+                val box: Rect = b.boundingBox ?: return@mapNotNull null
+                if (cleaned.isEmpty()) return@mapNotNull null
+                RecognizedBlock(
+                    text = cleaned,
+                    bounds = NormalizedRect.fromPixelBounds(box.left, box.top, box.right, box.bottom, imgW, imgH),
+                )
+            }
+        } finally {
+            recognizer.close()
         }
     }
 

@@ -2,6 +2,7 @@ package com.retrohero.app.ui
 
 import android.app.ActivityOptions
 import android.content.Intent
+import android.nfc.NfcAdapter
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -27,9 +28,14 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import com.retrohero.app.R
 import com.retrohero.app.data.CrashReporter
+import com.retrohero.app.data.NfcCartridge
 import com.retrohero.app.data.DeltaSkins
 import com.retrohero.app.ui.components.LocalArtPaths
 import com.retrohero.app.ui.components.LocalArtVersion
@@ -57,7 +63,26 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch(Dispatchers.IO) {
             DeltaSkins.installBundledDefaults(this@MainActivity, vm.paths.deltaSkins, vm.settings)
         }
-        if (savedInstanceState == null) handleIncomingDeltaSkin(intent)
+        if (savedInstanceState == null) handleIncoming(intent)
+        // NFC reader mode only while a "write to tag" is waiting; Android turns it off on pause.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                vm.nfcWrite.map { it is AppViewModel.NfcWrite.Waiting }.distinctUntilChanged().collect { waiting ->
+                    val nfc = NfcAdapter.getDefaultAdapter(this@MainActivity) ?: return@collect
+                    if (waiting) {
+                        nfc.enableReaderMode(
+                            this@MainActivity,
+                            { tag -> vm.onNfcTag(tag) },
+                            NfcAdapter.FLAG_READER_NFC_A or NfcAdapter.FLAG_READER_NFC_B or
+                                NfcAdapter.FLAG_READER_NFC_F or NfcAdapter.FLAG_READER_NFC_V,
+                            null,
+                        )
+                    } else {
+                        nfc.disableReaderMode(this@MainActivity)
+                    }
+                }
+            }
+        }
         setContent {
             val dynamicColor by vm.dynamicColor.collectAsStateWithLifecycle()
             RetroHeroTheme(dynamicColor = dynamicColor) {
@@ -78,6 +103,26 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIncoming(intent)
+    }
+
+    private fun handleIncoming(intent: Intent?) {
+        if (handleGameLink(intent)) return
+        handleIncomingDeltaSkin(intent)
+    }
+
+    /** An NFC cartridge tag or a retrohero://play link: launch that game. */
+    private fun handleGameLink(intent: Intent?): Boolean {
+        val action = intent?.action ?: return false
+        if (action != NfcAdapter.ACTION_NDEF_DISCOVERED && action != Intent.ACTION_VIEW) return false
+        val link = NfcCartridge.parse(intent.data?.toString()) ?: return false
+        vm.playFromLink(link)
+        return true
     }
 
     private fun handleIncomingDeltaSkin(intent: Intent?) {
@@ -315,6 +360,12 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
         },
         onRestore = { restorePicker.launch(arrayOf("application/zip", "*/*")) },
         onOpenCrashReports = { crashDialog = false },
+        onWriteNfcTag = NfcAdapter.getDefaultAdapter(context)?.let { nfc ->
+            { game: com.retrohero.app.data.Game ->
+                if (!nfc.isEnabled) vm.say("Turn on NFC in your phone's settings first")
+                else vm.startNfcWrite(game)
+            }
+        },
         crashReportCount = crashReportCount,
         onDownloadCore = vm::downloadCore,
         onDownloadAllNeededCores = vm::downloadCores,
@@ -371,6 +422,11 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
                 raSignInOpen = false
             },
         )
+    }
+
+    val nfcWrite by vm.nfcWrite.collectAsStateWithLifecycle()
+    nfcWrite?.let { state ->
+        NfcWriteDialog(state = state, onRetry = { vm.startNfcWrite(state.game) }, onDismiss = vm::dismissNfcWrite)
     }
 
     crashDialog?.let { afterCrash ->

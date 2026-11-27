@@ -41,6 +41,7 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.Nfc
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.ViewInAr
 import androidx.compose.material.icons.rounded.CameraAlt
@@ -321,6 +322,7 @@ internal fun M3GameDetailPage(
     onUseScreenshotAsCover: (File) -> Unit = {},
     onClearCover: () -> Unit = {},
     onDelete: (() -> Unit)?,
+    onWriteNfcTag: (() -> Unit)? = null,
     patches: List<com.retrohero.app.data.RomPatch> = emptyList(),
     onAttachPatch: () -> Unit = {},
     onPlayWithPatch: (com.retrohero.app.data.RomPatch) -> Unit = {},
@@ -2127,6 +2129,23 @@ internal fun M3GameDetailPage(
                                     color = cs.onSurfaceVariant,
                                 )
                             }
+                        }
+                    }
+
+                    if (onWriteNfcTag != null) {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(50.dp)
+                                .clip(CircleShape)
+                                .background(cs.secondaryContainer)
+                                .clickable(onClickLabel = "Write ${game.title} to an NFC tag", onClick = onWriteNfcTag),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                        ) {
+                            Icon(Icons.Rounded.Nfc, null, tint = cs.onSecondaryContainer, modifier = Modifier.size(19.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Write to NFC tag", style = MaterialTheme.typography.labelLarge, color = cs.onSecondaryContainer)
                         }
                     }
 

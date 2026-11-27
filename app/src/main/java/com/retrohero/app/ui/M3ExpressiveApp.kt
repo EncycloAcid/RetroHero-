@@ -146,6 +146,7 @@ fun M3ExpressiveAppView(
     onRestore: () -> Unit = {},
     onOpenCrashReports: () -> Unit = {},
     crashReportCount: Int = 0,
+    onWriteNfcTag: ((Game) -> Unit)? = null,
     onDownloadCore: (CoreInfo) -> Unit = {},
     onDownloadAllNeededCores: (List<CoreInfo>) -> Unit = {},
     onDeleteCore: (CoreInfo) -> Unit = {},
@@ -494,6 +495,7 @@ fun M3ExpressiveAppView(
                     onSelectExternalEmulator = { ext -> onSelectExternalEmulator(game, ext) },
                     onUseScreenshotAsCover = { shot -> onUseScreenshotAsCover(game, shot) },
                     onClearCover = { onClearCover(game) },
+                    onWriteNfcTag = onWriteNfcTag?.let { write -> { write(game) } },
                     onDelete = onDeleteGame?.let { del ->
                         {
                             detailGameId = null

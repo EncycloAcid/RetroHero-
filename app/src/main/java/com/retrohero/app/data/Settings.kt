@@ -135,6 +135,11 @@ class Settings(context: Context) {
         get() = prefs.getString("translate_source_lang", "ja") ?: "ja"
         set(v) = prefs.edit { putString("translate_source_lang", v) }
 
+    /** Save a checkpoint automatically when a new level or boss fight starts (needs game events). */
+    var smartCheckpoints: Boolean
+        get() = prefs.getBoolean("smart_checkpoints", true)
+        set(v) = prefs.edit { putBoolean("smart_checkpoints", v) }
+
     private val _reducedMotion = MutableStateFlow(prefs.getBoolean("reduced_motion", false))
     /** Fewer and calmer animations: no tilt, no spinning, instant transitions where possible. */
     val reducedMotion: StateFlow<Boolean> = _reducedMotion

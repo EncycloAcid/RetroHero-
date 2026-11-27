@@ -17,7 +17,10 @@ import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.EmojiEvents
+import androidx.compose.material.icons.rounded.Flag
 import androidx.compose.material.icons.rounded.Loop
+import androidx.compose.material.icons.rounded.RecordVoiceOver
+import androidx.compose.material.icons.rounded.Replay
 import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Repeat
@@ -309,6 +312,24 @@ class EmulatorActivity : ComponentActivity() {
     private var pinnedGuideNote by mutableStateOf<String?>(null)
     private var practiceState by mutableStateOf(PracticeLoopState())
     private var practiceSheetOpen by mutableStateOf(false)
+
+    // Game events from RetroAchievements Rich Presence → smart checkpoints (see data/GameEvents.kt)
+    @Volatile private var gameEvents: com.retrohero.app.data.GameEventDetector? = null
+    @Volatile private var rewindHeld = false
+    private var gameEventsStatus by mutableStateOf(GameEventsStatus.NOT_SIGNED_IN)
+    private val gameEventLog = androidx.compose.runtime.mutableStateListOf<com.retrohero.app.data.GameEvent>()
+    private var gameEventsSheetOpen by mutableStateOf(false)
+    private var presenceText by mutableStateOf("")
+    private var presenceValues by mutableStateOf<List<com.retrohero.app.data.RichPresence.Value>>(emptyList())
+    private var deathRetry by mutableStateOf<com.retrohero.app.data.Checkpoints.Entry?>(null)
+    private var checkpointList by mutableStateOf<List<com.retrohero.app.data.Checkpoints.Entry>>(emptyList())
+    private var lastCheckpointAtMs = 0L
+    private var smartCheckpointsOn by mutableStateOf(true)
+    private lateinit var checkpoints: com.retrohero.app.data.Checkpoints
+
+    // Read on-screen text aloud (see ReadAloud.kt)
+    private var narrator: GameNarrator? = null
+    private var readAloudOn by mutableStateOf(false)
     private var practiceGhostMask by mutableIntStateOf(0)
     private var practiceRunStartedAtMs: Long = 0L
     private val practiceCurrentGhost = mutableListOf<GhostSample>()
@@ -405,6 +426,13 @@ class EmulatorActivity : ComponentActivity() {
         )
         paths = AppPaths(this)
         settings = Settings(this)
+        checkpoints = com.retrohero.app.data.Checkpoints(File(paths.states, system.id), game.baseName)
+        smartCheckpointsOn = settings.smartCheckpoints
+        gameEventsStatus = if (settings.raProfile.value == null) GameEventsStatus.NOT_SIGNED_IN else GameEventsStatus.LOADING
+        lifecycleScope.launch(Dispatchers.IO) {
+            val list = checkpoints.list()
+            withContext(Dispatchers.Main) { checkpointList = list }
+        }
         audioHaptics = AudioHapticsEngine(this)
         audioHapticsOn = settings.audioHaptics
         translateLang = TranslateSourceLang.fromCode(settings.translateSourceLang)
@@ -469,7 +497,7 @@ class EmulatorActivity : ComponentActivity() {
         browserBookmarkedUrl = runCatching {
             paths.browserBookmarkFile(game).takeIf { it.exists() }?.readText()?.trim()?.takeIf { it.isNotBlank() }
         }.getOrNull()
-        input.onRewind = { held -> if (rewindOn) NativeBridge.setRewinding(held) }
+        input.onRewind = { held -> if (rewindOn) setRewindingTracked(held) }
         input.rewindKeyEnabled = system.id != "psx"
         input.onFastForward = { held -> fastForwardHeld = held; applyFastForward() }
         input.onMenu = { if (phase is Phase.Running) setMenu(!menuOpen) }
@@ -603,7 +631,7 @@ class EmulatorActivity : ComponentActivity() {
                 return@withContext NativeBridge.getLastError()
             }
             if (externalState != null) {
-                NativeBridge.loadState(externalState.absolutePath)
+                loadStateTracked(externalState.absolutePath)
             } else {
                 val resumeSlot = when {
                     raSessionHardcore -> null // Hardcore mode starts cleanly from boot
@@ -618,7 +646,7 @@ class EmulatorActivity : ComponentActivity() {
                         val coreName = system.cores.firstOrNull { it.id == coreId }?.displayName ?: coreId
                         bootNotice = "Switched to $coreName · Battery save carried over cleanly"
                     } else {
-                        NativeBridge.loadState(resume.absolutePath)
+                        loadStateTracked(resume.absolutePath)
                     }
                 }
             }
@@ -852,9 +880,112 @@ class EmulatorActivity : ComponentActivity() {
         }
     }
 
+    /** Loading a state, resetting or rewinding makes RAM jump; don't read that as game events. */
+    private fun quietGameEvents() {
+        val det = gameEvents ?: return
+        synchronized(det) { det.quiet(SystemClock.elapsedRealtime()) }
+    }
+
+    private fun loadStateTracked(path: String): Boolean =
+        NativeBridge.loadState(path).also {
+            quietGameEvents()
+            deathRetry = null
+        }
+
+    private fun resetTracked() {
+        NativeBridge.reset()
+        quietGameEvents()
+    }
+
+    private fun setRewindingTracked(rewinding: Boolean) {
+        rewindHeld = rewinding
+        NativeBridge.setRewinding(rewinding)
+        quietGameEvents()
+    }
+
+    private fun onGameEvents(events: List<com.retrohero.app.data.GameEvent>) {
+        gameEventLog.addAll(events)
+        while (gameEventLog.size > 60) gameEventLog.removeAt(0)
+        val checkpointsAllowed = smartCheckpointsOn && !raSessionHardcore
+        for (e in events) {
+            when (e) {
+                is com.retrohero.app.data.GameEvent.LevelChanged ->
+                    if (checkpointsAllowed) saveCheckpoint(e.to.ifBlank { e.name })
+                is com.retrohero.app.data.GameEvent.BossStarted ->
+                    if (checkpointsAllowed) saveCheckpoint(("Boss · " + e.scene).take(60))
+                is com.retrohero.app.data.GameEvent.Died ->
+                    if (checkpointsAllowed) checkpointList.firstOrNull()?.let(::showDeathRetry)
+                else -> Unit
+            }
+        }
+    }
+
+    private fun saveCheckpoint(label: String) {
+        val now = SystemClock.elapsedRealtime()
+        if (!started || shutDown || now - lastCheckpointAtMs < 8_000L) return
+        lastCheckpointAtMs = now
+        val core = activeCoreId
+        lifecycleScope.launch(Dispatchers.IO) {
+            val idx = checkpoints.nextIndex()
+            if (NativeBridge.saveState(checkpoints.stateFile(idx).absolutePath)) {
+                checkpoints.record(idx, label, System.currentTimeMillis(), core)
+                val list = checkpoints.list()
+                withContext(Dispatchers.Main) { checkpointList = list }
+            }
+        }
+    }
+
+    private fun showDeathRetry(cp: com.retrohero.app.data.Checkpoints.Entry) {
+        deathRetry = cp
+        lifecycleScope.launch {
+            delay(9_000L)
+            if (deathRetry == cp) deathRetry = null
+        }
+    }
+
+    private fun loadCheckpoint(cp: com.retrohero.app.data.Checkpoints.Entry) {
+        deathRetry = null
+        if (cp.coreId.isNotEmpty() && cp.coreId != activeCoreId) {
+            toast("That checkpoint was made with a different core")
+            return
+        }
+        val ok = loadStateTracked(checkpoints.stateFile(cp.index).absolutePath)
+        if (ok) demoteRaHardcore("checkpoint loaded")
+        toast(if (ok) "Back to checkpoint: ${cp.label}" else NativeBridge.getLastError().ifEmpty { "Couldn't load checkpoint" })
+    }
+
+    private fun toggleReadAloud(on: Boolean) {
+        readAloudOn = on
+        if (!on) {
+            narrator?.stop()
+            toast("Read aloud off")
+            return
+        }
+        val n = narrator ?: GameNarrator(this, lifecycleScope).also { narrator = it }
+        setMenu(false)
+        n.say("Reading on-screen text aloud")
+        n.start(
+            grabFrame = { if (started && !shutDown) NativeBridge.grabFrame() else null },
+            // While live translation runs, it hands the narrator English text instead.
+            paused = {
+                menuOpen || pocketGuideOpen || browserOpen || editingPad || liveTranslateOn ||
+                    translateState !is TranslateState.Idle
+            },
+        )
+        lifecycleScope.launch {
+            delay(2_000L)
+            if (readAloudOn && !n.available) {
+                toast("No text-to-speech voice is installed on this device")
+                readAloudOn = false
+                n.stop()
+            }
+        }
+    }
+
     private fun demoteRaHardcore(reason: String) {
         if (!raSessionHardcore) return
         raSessionHardcore = false
+        if (gameEventsStatus == GameEventsStatus.HARDCORE) gameEventsStatus = GameEventsStatus.ACTIVE
         toast("RetroAchievements: switched to Softcore ($reason)")
     }
 
@@ -865,17 +996,18 @@ class EmulatorActivity : ComponentActivity() {
         val raRepo = com.retrohero.app.data.RetroAchievementsRepository(this, File(filesDir, "ra_cache"))
         raJob?.cancel()
         raJob = lifecycleScope.launch(Dispatchers.IO) {
+            val noData: () -> Unit = { gameEventsStatus = GameEventsStatus.NO_DATA }
             val hash = com.retrohero.app.data.RetroAchievementsHasher.hashFile(File(romPath), system.id)
-                ?: return@launch
+                ?: return@launch noData()
             val gameId = com.retrohero.app.data.RetroAchievementsApi.lookupGameId(hash)
-                ?: return@launch
+                ?: return@launch noData()
             val data = com.retrohero.app.data.RetroAchievementsApi.fetchPatchAndUnlocks(
                 profile = profile,
                 gameId = gameId,
                 romHash = hash,
                 hardcore = raSessionHardcore,
                 includeUnofficial = includeUnofficial,
-            ) ?: return@launch
+            ) ?: return@launch noData()
 
             com.retrohero.app.data.RetroAchievementsApi.startSession(profile, gameId, raSessionHardcore, hash)
             withContext(Dispatchers.Main) {
@@ -897,7 +1029,15 @@ class EmulatorActivity : ComponentActivity() {
             val triggers = data.achievements
                 .filter { !it.unlocked }
                 .mapNotNull { com.retrohero.app.data.RaLogicEvaluator.compile(it) }
-            if (triggers.isEmpty()) return@launch
+            val detector = com.retrohero.app.data.RichPresence.parse(data.richPresencePatch)
+                ?.let { com.retrohero.app.data.GameEventDetector(it, system.id) }
+            gameEvents = detector
+            gameEventsStatus = when {
+                detector == null -> GameEventsStatus.NO_DATA
+                raSessionHardcore -> GameEventsStatus.HARDCORE
+                else -> GameEventsStatus.ACTIVE
+            }
+            if (triggers.isEmpty() && detector == null) return@launch
 
             var lastPingMs = SystemClock.elapsedRealtime()
             while (started && !shutDown) {
@@ -920,6 +1060,15 @@ class EmulatorActivity : ComponentActivity() {
                                 }
                                 raRepo.markUnlockedLocally(game, ach.id, hc)
                                 withContext(Dispatchers.Main) {
+                                    onGameEvents(
+                                        listOf(
+                                            com.retrohero.app.data.GameEvent.AchievementUnlocked(
+                                                SystemClock.elapsedRealtime(),
+                                                ach.title,
+                                                milestone = ach.type == "progression" || ach.type == "win_condition",
+                                            ),
+                                        ),
+                                    )
                                     raSessionGame = raSessionGame?.let { cur ->
                                         cur.copy(
                                             achievements = cur.achievements.map { item ->
@@ -943,10 +1092,32 @@ class EmulatorActivity : ComponentActivity() {
                             }
                         }
                     }
+                    if (detector != null && (sysRam != null || saveRam != null)) {
+                        val tick = SystemClock.elapsedRealtime()
+                        val evs = synchronized(detector) {
+                            if (rewindHeld) {
+                                detector.quiet(tick)
+                                emptyList()
+                            } else {
+                                detector.update(sysRam, saveRam, tick)
+                            }
+                        }
+                        val text = detector.currentText
+                        val vals = detector.currentValues
+                        if (evs.isNotEmpty() || text != presenceText || vals != presenceValues) {
+                            withContext(Dispatchers.Main) {
+                                presenceText = text
+                                presenceValues = vals
+                                if (evs.isNotEmpty()) onGameEvents(evs)
+                            }
+                        }
+                    }
                     val now = SystemClock.elapsedRealtime()
                     if (now - lastPingMs >= 120_000L) {
                         lastPingMs = now
-                        com.retrohero.app.data.RetroAchievementsApi.ping(profile, gameId, "Playing ${game.title} on RetroHero")
+                        // Share the live Rich Presence ("World 1-2 · 3 lives") when the game has it.
+                        val presence = detector?.currentText?.takeIf { it.isNotBlank() } ?: "Playing ${game.title} on RetroHero"
+                        com.retrohero.app.data.RetroAchievementsApi.ping(profile, gameId, presence)
                     }
                 }
                 delay(66L) // ~15 Hz RAM evaluation
@@ -1289,7 +1460,7 @@ class EmulatorActivity : ComponentActivity() {
             }
             val moment = extracted.getOrNull() ?: return@launch
             val loaded = withContext(Dispatchers.IO) {
-                NativeBridge.loadState(moment.stateFile.absolutePath)
+                loadStateTracked(moment.stateFile.absolutePath)
             }
             if (!loaded) {
                 toast("This .rhclip belongs to a different core or game revision")
@@ -1318,7 +1489,7 @@ class EmulatorActivity : ComponentActivity() {
     private fun retryActiveChallenge() {
         val stateF = activeChallengeStateFile ?: return
         lifecycleScope.launch {
-            val ok = withContext(Dispatchers.IO) { NativeBridge.loadState(stateF.absolutePath) }
+            val ok = withContext(Dispatchers.IO) { loadStateTracked(stateF.absolutePath) }
             if (ok) {
                 challengeCleared = false
                 challengeClearedTimeMs = null
@@ -1415,7 +1586,7 @@ class EmulatorActivity : ComponentActivity() {
             toast("Drop a Loop Anchor first")
             return
         }
-        if (NativeBridge.loadState(anchorFile.absolutePath)) {
+        if (loadStateTracked(anchorFile.absolutePath)) {
             practiceCurrentGhost.clear()
             practiceGhostMask = 0
             practiceRunStartedAtMs = System.currentTimeMillis()
@@ -1498,7 +1669,7 @@ class EmulatorActivity : ComponentActivity() {
         setMenu(false)
         lifecycleScope.launch {
             delay(420L)
-            NativeBridge.reset()
+            resetTracked()
             triggerWarmupSequence(playChime = false)
             toast("Cartridge blown & reseated!")
         }
@@ -1611,6 +1782,7 @@ class EmulatorActivity : ComponentActivity() {
                             liveTranslateScanning = false
                             if (res is TranslateState.Ready) {
                                 liveTranslateBlocks = res.blocks
+                                if (readAloudOn) narrator?.speakNew(res.blocks.sortedBy { it.bounds.top }.map { it.translated })
                             }
                         }
                     }
@@ -1649,6 +1821,9 @@ class EmulatorActivity : ComponentActivity() {
                     if (translateState is TranslateState.Working) translateState = TranslateState.Working(status)
                 }
             }
+            (translateState as? TranslateState.Ready)?.let { ready ->
+                if (readAloudOn) narrator?.speakNew(ready.blocks.sortedBy { it.bounds.top }.map { it.translated })
+            }
         }
     }
 
@@ -1671,7 +1846,7 @@ class EmulatorActivity : ComponentActivity() {
         if (started && !shutDown) {
             audioHaptics.cancel()
             NativeBridge.setPaused(true)
-            NativeBridge.setRewinding(false)
+            setRewindingTracked(false)
             flushCanonicalSram()
             stopClock()
         }
@@ -1710,6 +1885,9 @@ class EmulatorActivity : ComponentActivity() {
         liveTranslateOn = false
         liveTranslateJob?.cancel()
         liveTranslateJob = null
+        narrator?.shutdown()
+        narrator = null
+        readAloudOn = false
         netplaySession.stop()
         stopVsyncFeed()
         gyroController?.stop()
@@ -1781,7 +1959,7 @@ class EmulatorActivity : ComponentActivity() {
                 fastForwardToggle = !fastForwardToggle
                 applyFastForward()
             }
-            DeltaAction.REWIND_HOLD -> if (rewindOn) NativeBridge.setRewinding(pressed)
+            DeltaAction.REWIND_HOLD -> if (rewindOn) setRewindingTracked(pressed)
             DeltaAction.QUICK_SAVE -> if (pressed) {
                 val file = paths.stateFile(game, AppPaths.QUICK_SLOT)
                 val ok = NativeBridge.saveState(file.absolutePath)
@@ -1800,7 +1978,7 @@ class EmulatorActivity : ComponentActivity() {
                     val name = system.cores.firstOrNull { it.id == savedBy }?.displayName ?: savedBy
                     toast("Quick save was created on $name — use in-game battery save or switch back")
                 } else {
-                    val ok = NativeBridge.loadState(file.absolutePath)
+                    val ok = loadStateTracked(file.absolutePath)
                     if (ok) demoteRaHardcore("save state loaded")
                     toast(if (ok) "Quick loaded" else NativeBridge.getLastError().ifEmpty { "Quick load failed" })
                 }
@@ -2205,6 +2383,38 @@ class EmulatorActivity : ComponentActivity() {
                         .padding(top = if (isDs || discCount > 1) 54.dp else 18.dp),
                 )
             }
+            if (gameEventsSheetOpen && !menuOpen) {
+                GameEventsSheet(
+                    status = gameEventsStatus,
+                    presenceText = presenceText,
+                    values = presenceValues,
+                    events = gameEventLog,
+                    checkpoints = checkpointList,
+                    smartCheckpoints = smartCheckpointsOn,
+                    onSetSmartCheckpoints = { on ->
+                        settings.smartCheckpoints = on
+                        smartCheckpointsOn = on
+                    },
+                    onLoadCheckpoint = { cp ->
+                        gameEventsSheetOpen = false
+                        loadCheckpoint(cp)
+                    },
+                    onDismiss = { gameEventsSheetOpen = false },
+                )
+            }
+            deathRetry?.let { cp ->
+                if (!menuOpen) {
+                    DeathRetryChip(
+                        checkpoint = cp,
+                        onRetry = { loadCheckpoint(cp) },
+                        onDismiss = { deathRetry = null },
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .safeDrawingPadding()
+                            .padding(top = 64.dp, start = 16.dp, end = 16.dp),
+                    )
+                }
+            }
             if (practiceSheetOpen && !menuOpen) {
                 PracticeLoopSheet(
                     state = practiceState,
@@ -2541,7 +2751,7 @@ class EmulatorActivity : ComponentActivity() {
             accent = system.color,
             skin = padSkin,
             systemId = system.id,
-            onRewind = if (rewindOn) { held -> NativeBridge.setRewinding(held) } else null,
+            onRewind = if (rewindOn) { held -> setRewindingTracked(held) } else null,
             adjust = remember(editingPad, landscape) { padLayouts.get(system.id, landscape) },
             edit = if (editingPad) {
                 PadEditState(
@@ -3098,7 +3308,7 @@ class EmulatorActivity : ComponentActivity() {
                 }
                 FilledTonalIconButton(
                     onClick = {
-                        NativeBridge.reset()
+                        resetTracked()
                         setMenu(false)
                     },
                     shapes = IconButtonDefaults.shapes(),
@@ -3238,6 +3448,38 @@ class EmulatorActivity : ComponentActivity() {
                     CompactMenuTile(Icons.Default.OpenWith, "Edit pad", Modifier.weight(1f)) { startPadEdit() }
                     CompactMenuTile(Icons.Rounded.TouchApp, "Smart Touch", Modifier.weight(1f)) { navigate("smart_touch") }
                     CompactMenuTile(Icons.Default.Tune, "Options", Modifier.weight(1f)) { navigate("options") }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    CompactMenuTile(
+                        Icons.Rounded.RecordVoiceOver,
+                        if (readAloudOn) "Reading" else "Read aloud",
+                        Modifier.weight(1f),
+                        active = readAloudOn,
+                        accent = true,
+                    ) { toggleReadAloud(!readAloudOn) }
+                    CompactMenuTile(
+                        Icons.Rounded.Replay,
+                        "Checkpoint",
+                        Modifier.weight(1f),
+                        active = checkpointList.isNotEmpty(),
+                    ) {
+                        val cp = checkpointList.firstOrNull()
+                        if (cp == null) {
+                            toast(if (gameEventsStatus == GameEventsStatus.ACTIVE) "No checkpoints yet" else "Checkpoints need game events · see Events")
+                        } else {
+                            setMenu(false)
+                            loadCheckpoint(cp)
+                        }
+                    }
+                    CompactMenuTile(
+                        Icons.Rounded.Flag,
+                        "Events",
+                        Modifier.weight(1f),
+                        active = gameEventsStatus == GameEventsStatus.ACTIVE,
+                    ) {
+                        setMenu(false)
+                        gameEventsSheetOpen = true
+                    }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     CompactMenuTile(
@@ -3660,7 +3902,7 @@ class EmulatorActivity : ComponentActivity() {
                                 }
                                 saved
                             } else {
-                                val loaded = NativeBridge.loadState(file.absolutePath)
+                                val loaded = loadStateTracked(file.absolutePath)
                                 if (loaded) demoteRaHardcore("save state loaded")
                                 loaded
                             }

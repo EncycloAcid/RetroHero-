@@ -206,7 +206,7 @@ object RaLogicEvaluator {
         }
     }
 
-    private fun parseOperand(raw: String): Operand? {
+    internal fun parseOperand(raw: String): Operand? {
         var s = raw.trim()
         if (s.isEmpty()) return null
         var type = OpType.MEM
@@ -259,6 +259,18 @@ object RaLogicEvaluator {
     /** Steps a single [Trigger] one frame against live RAM. Returns true the moment it unlocks! */
     fun step(trigger: Trigger, systemId: String, sysRam: ByteArray?, saveRam: ByteArray?): Boolean {
         if (trigger.triggered) return false
+        if (test(trigger, systemId, sysRam, saveRam)) {
+            trigger.triggered = true
+            return true
+        }
+        return false
+    }
+
+    /**
+     * Evaluates [trigger] for this frame without latching, so it can be true one frame and false
+     * the next. Used for Rich Presence display conditions and game-event detection.
+     */
+    fun test(trigger: Trigger, systemId: String, sysRam: ByteArray?, saveRam: ByteArray?): Boolean {
         if (sysRam == null && saveRam == null) return false
 
         // First frame initializes delta/prior baselines without firing spurious delta triggers
@@ -289,11 +301,7 @@ object RaLogicEvaluator {
             return false
         }
 
-        if (coreResult.passed && !coreResult.paused && altPassed) {
-            trigger.triggered = true
-            return true
-        }
-        return false
+        return coreResult.passed && !coreResult.paused && altPassed
     }
 
     private data class GroupResult(val passed: Boolean, val paused: Boolean, val reset: Boolean)
@@ -395,7 +403,7 @@ object RaLogicEvaluator {
         op.current = v; op.delta = v; op.prior = v
     }
 
-    private fun readOperand(op: Operand, addrOffset: Long, systemId: String, sysRam: ByteArray?, saveRam: ByteArray?): Long {
+    internal fun readOperand(op: Operand, addrOffset: Long, systemId: String, sysRam: ByteArray?, saveRam: ByteArray?): Long {
         if (op.type == OpType.CONST) return op.value
         val now = readSized(systemId, op.value + addrOffset, op.size, sysRam, saveRam)
         val prev = op.current

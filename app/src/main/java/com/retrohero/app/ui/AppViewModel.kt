@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -604,6 +605,43 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         (listOf(AppPaths.AUTO_SLOT) + (1..4)).mapNotNull { slot ->
             app.paths.stateFile(game, slot).takeIf { it.exists() }?.let { slot to it.lastModified() }
         }.sortedByDescending { it.second }
+
+    /** Writing a game to an NFC tag: waiting for a tag, then done or failed. */
+    sealed interface NfcWrite {
+        val game: Game
+        data class Waiting(override val game: Game) : NfcWrite
+        data class Done(override val game: Game) : NfcWrite
+        data class Failed(override val game: Game, val message: String) : NfcWrite
+    }
+
+    private val _nfcWrite = MutableStateFlow<NfcWrite?>(null)
+    val nfcWrite: StateFlow<NfcWrite?> = _nfcWrite
+
+    fun startNfcWrite(game: Game) { _nfcWrite.value = NfcWrite.Waiting(game) }
+
+    fun dismissNfcWrite() { _nfcWrite.value = null }
+
+    /** Called from the NFC reader thread when a tag is held to the phone during a write. */
+    fun onNfcTag(tag: android.nfc.Tag) {
+        val waiting = _nfcWrite.value as? NfcWrite.Waiting ?: return
+        val result = com.retrohero.app.data.NfcCartridge.write(tag, com.retrohero.app.data.NfcCartridge.messageFor(waiting.game))
+        _nfcWrite.value = result.fold(
+            onSuccess = { NfcWrite.Done(waiting.game) },
+            onFailure = { NfcWrite.Failed(waiting.game, it.message ?: "Couldn't write the tag. Hold it still against the phone and try again.") },
+        )
+    }
+
+    /** Launches the game an NFC tag or retrohero:// link points to, once the library has loaded. */
+    fun playFromLink(link: com.retrohero.app.data.NfcCartridge.Link) {
+        viewModelScope.launch {
+            val list = kotlinx.coroutines.withTimeoutOrNull(8_000L) {
+                games.first { it.isNotEmpty() }
+            } ?: games.value
+            val game = com.retrohero.app.data.NfcCartridge.find(list, link)
+            if (game != null) play(game)
+            else say("“${link.title ?: "That game"}” isn't in your library. Add its folder in Settings, then tap the tag again.")
+        }
+    }
 
     /** "Gacha" pick: play a random game (optionally from one system), avoiding the last one played. */
     fun playRandom(systemId: String? = null) {
