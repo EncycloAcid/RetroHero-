@@ -3177,6 +3177,43 @@ internal fun buildProceduralDiscUndersideBitmap(spec: PhysicalMediaSpec): Bitmap
     for (r in listOf(0.20f, 0.29f, 0.38f, 0.45f, 0.49f)) {
         c.drawCircle(cx, cy, s * r, p)
     }
+
+    // Console-specific features, placed at their real radius (12 cm discs: 60 mm; GameCube: 40 mm).
+    val discRadiusMm = if (spec.mediaKind == PhysicalMediaKind.MINI_DISC_GC) 40f else 60f
+    fun mm(r: Float) = s * 0.495f * r / discRadiusMm
+    when (spec.systemId) {
+        "dreamcast" -> {
+            // GD-ROM: dark grey inner low-density area, a visible separator ring, then the light grey
+            // high-density area toward the edge (Redump wiki; dreamcast.wiki).
+            p.style = Paint.Style.FILL
+            p.color = AndroidColor.argb(70, 236, 238, 244)
+            c.drawCircle(cx, cy, mm(58.5f), p)
+            p.color = AndroidColor.argb(150, 70, 74, 84)
+            c.drawCircle(cx, cy, mm(33f), p)
+            p.style = Paint.Style.STROKE
+            p.strokeWidth = mm(1.6f)
+            p.color = AndroidColor.argb(200, 205, 210, 220)
+            c.drawCircle(cx, cy, mm(34f), p)
+        }
+        "gc", "wii", "wiiu" -> {
+            // Burst cutting area: the laser-cut barcode ring near the hole on every Nintendo disc
+            // (Wikipedia, Nintendo optical discs). Same physical radius on 8 cm and 12 cm discs.
+            p.style = Paint.Style.STROKE
+            val inner = mm(22.3f)
+            val outer = mm(23.5f)
+            p.strokeWidth = outer - inner
+            val rnd = java.util.Random(spec.systemId.hashCode().toLong())
+            var angle = 0f
+            while (angle < 360f) {
+                val bar = 0.6f + rnd.nextFloat() * 1.8f
+                p.color = AndroidColor.argb(150 + rnd.nextInt(80), 40, 42, 50)
+                c.drawArc(cx - (inner + outer) / 2f, cy - (inner + outer) / 2f, cx + (inner + outer) / 2f, cy + (inner + outer) / 2f, angle, bar, false, p)
+                angle += bar + 0.6f + rnd.nextFloat() * 2.2f
+            }
+        }
+    }
+    p.style = Paint.Style.STROKE
+
     // Inner silver mirror clamping ring + translucent acrylic hub bevel
     p.strokeWidth = s * 0.036f
     p.color = if (spec.blackDiscUnderside) AndroidColor.rgb(188, 196, 214) else AndroidColor.rgb(228, 233, 242)
