@@ -13,3 +13,4 @@ app/build/
 *.keystore
 *.jks
 out/
+.kotlin/
