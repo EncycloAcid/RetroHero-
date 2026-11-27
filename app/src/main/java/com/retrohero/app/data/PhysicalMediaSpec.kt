@@ -72,10 +72,10 @@ data class RealCaseDimensions(val widthMm: Float, val heightMm: Float, val depth
             "switch" -> RealCaseDimensions(104f, 170f, 10f, "Wikipedia, Keep case: Nintendo Switch 170x104x10 mm")
             "psp" -> RealCaseDimensions(99f, 168f, 14f, "Wikipedia, Keep case: PlayStation Portable 168x99x14 mm")
             "psvita" -> RealCaseDimensions(105f, 135f, 12f, "Wikipedia, Keep case: PlayStation Vita 135x105x12 mm")
-            "gc", "wii", "wiiu", "ps2" -> RealCaseDimensions(135f, 190f, 14f, KEEP_CASE)
-            "genesis", "32x", "sms", "sg1000" -> RealCaseDimensions(128f, 198f, 25f, "Genesis clamshell, ~128x197-200x25 mm (protector listings)")
+            "gc", "gamecube", "wii", "wiiu", "ps2" -> RealCaseDimensions(135f, 190f, 14f, KEEP_CASE)
+            "genesis", "md", "megadrive", "32x", "sms", "sg1000" -> RealCaseDimensions(128f, 198f, 25f, "Genesis clamshell, ~128x197-200x25 mm (protector listings)")
             "segacd", "saturn" -> RealCaseDimensions(144f, 206f, 21f, "Sega CD / Saturn NA case, 5 11/16 x 8 1/8 x 13/16 in (Sega-Age forum)")
-            "psx", "dreamcast" -> RealCaseDimensions(142f, 125f, 10.4f, JEWEL)
+            "psx", "ps1", "dreamcast", "dc" -> RealCaseDimensions(142f, 125f, 10.4f, JEWEL)
             else -> null
         }
     }
@@ -250,7 +250,7 @@ data class PhysicalMediaSpec(
                 spineHeaderColor = Color(0xFF1565C0),
                 customAspectOverride = 0.62f,
             )
-            "dreamcast" -> PhysicalMediaSpec(
+            "dreamcast", "dc" -> PhysicalMediaSpec(
                 systemId = systemId,
                 caseStyle = RetailCaseStyle.JEWEL_CASE_CD,
                 mediaKind = PhysicalMediaKind.OPTICAL_DISC,
@@ -260,7 +260,7 @@ data class PhysicalMediaSpec(
             )
 
             // Sony Systems
-            "psx" -> PhysicalMediaSpec(
+            "psx", "ps1" -> PhysicalMediaSpec(
                 systemId = systemId,
                 caseStyle = RetailCaseStyle.JEWEL_CASE_CD,
                 mediaKind = PhysicalMediaKind.OPTICAL_DISC,

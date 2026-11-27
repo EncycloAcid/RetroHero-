@@ -22,11 +22,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.Memory
-import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -41,16 +39,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalView
@@ -64,20 +55,25 @@ import com.retrohero.app.data.Game
 import com.retrohero.app.data.PhysicalMediaSpec
 import java.util.Locale
 import kotlin.math.PI
-import kotlin.math.cos
 import kotlin.math.sin
 
-/** Physical loading mechanism for each console family. */
+/** Authentic physical loading mechanism for each console family. */
 enum class ConsoleLoaderKind {
-    /** Classic top-loading cartridge slot (SNES, N64, Genesis, Game Boy, GBA, DS, 3DS, Switch). */
+    /** Classic top-loading home console cartridge slot (SNES, N64, Genesis). */
     CARTRIDGE_TOP_SLOT,
-    /** Iconic NES front-loading zero-insertion-force cartridge deck with flip door. */
+    /** Iconic NES front-loading flip-door + horizontal slide-in + ZIF press-down deck. */
     CARTRIDGE_FRONT_DECK,
-    /** Classic hinged top-lid optical disc bay (PS1, Dreamcast, GameCube, Saturn, Sega CD). */
+    /** Real handheld top-rear Slot-1 / Game Pak bay (NDS, 3DS, GB, GBC, GBA). */
+    HANDHELD_REAR_SLOT,
+    /** Nintendo Switch top-right hinged Game Card flap with Neon Blue/Red Joy-Cons. */
+    SWITCH_TOP_FLAP,
+    /** Classic hinged top-lid optical disc console (PS1, Dreamcast, GameCube, Saturn, Sega CD). */
     DISC_TOP_LID,
-    /** Motorized sliding disc tray / UMD carrier (PS2, Xbox, PSP). */
+    /** PlayStation 2 motorized extending front disc tray. */
     DISC_SLIDE_TRAY,
-    /** Glowing front slot-in optical drive (Wii, Wii U). */
+    /** PlayStation Portable rear hinged UMD clamshell hatch with silver chrome ring. */
+    DISC_REAR_UMD,
+    /** Upright Nintendo Wii / Wii U vertical glowing electric-blue slot-in optical drive. */
     DISC_SLOT_IN,
 }
 
@@ -102,45 +98,45 @@ data class ConsoleHardwareSpec(
                     systemId = id,
                     consoleLabel = "Nintendo Entertainment System",
                     loaderKind = ConsoleLoaderKind.CARTRIDGE_FRONT_DECK,
-                    bodyTop = Color(0xFFD6D4CE),
-                    bodyMid = Color(0xFFB5B3AD),
+                    bodyTop = Color(0xFFDFDDD6),
+                    bodyMid = Color(0xFFBDBBB3),
                     bodyDark = Color(0xFF424349),
-                    trimColor = Color(0xFF1D1E22),
+                    trimColor = Color(0xFF1A1B1F),
                     accentColor = Color(0xFFD62828),
-                    ledColor = Color(0xFFFF2E3A),
+                    ledColor = Color(0xFFFF2430),
                     insertVerb = "Sliding Game Pak into NES",
                 )
                 "snes" -> ConsoleHardwareSpec(
                     systemId = id,
                     consoleLabel = "Super Nintendo",
                     loaderKind = ConsoleLoaderKind.CARTRIDGE_TOP_SLOT,
-                    bodyTop = Color(0xFFD9D8DC),
-                    bodyMid = Color(0xFFB3B1BC),
-                    bodyDark = Color(0xFF777487),
+                    bodyTop = Color(0xFFE2E0E5),
+                    bodyMid = Color(0xFFB3AFBE),
+                    bodyDark = Color(0xFF6B6878),
                     trimColor = Color(0xFF8C7AE6),
-                    accentColor = Color(0xFF5D4EA8),
-                    ledColor = Color(0xFFFF3647),
+                    accentColor = Color(0xFF6D5AC2),
+                    ledColor = Color(0xFFFF2A3A),
                     insertVerb = "Inserting SNES Game Pak",
                 )
                 "n64" -> ConsoleHardwareSpec(
                     systemId = id,
                     consoleLabel = "Nintendo 64",
                     loaderKind = ConsoleLoaderKind.CARTRIDGE_TOP_SLOT,
-                    bodyTop = Color(0xFF43464F),
-                    bodyMid = Color(0xFF2B2E36),
-                    bodyDark = Color(0xFF17191E),
-                    trimColor = Color(0xFF585C68),
+                    bodyTop = Color(0xFF474B55),
+                    bodyMid = Color(0xFF282B33),
+                    bodyDark = Color(0xFF14161B),
+                    trimColor = Color(0xFF545864),
                     accentColor = Color(0xFFE53935),
-                    ledColor = Color(0xFFFF3344),
+                    ledColor = Color(0xFFFF2436),
                     insertVerb = "Inserting N64 Game Pak",
                 )
                 "gb" -> ConsoleHardwareSpec(
                     systemId = id,
                     consoleLabel = "Game Boy",
-                    loaderKind = ConsoleLoaderKind.CARTRIDGE_TOP_SLOT,
-                    bodyTop = Color(0xFFDAD7CC),
-                    bodyMid = Color(0xFFC0BCB0),
-                    bodyDark = Color(0xFF8B877C),
+                    loaderKind = ConsoleLoaderKind.HANDHELD_REAR_SLOT,
+                    bodyTop = Color(0xFFDDDAD0),
+                    bodyMid = Color(0xFFC2BEB2),
+                    bodyDark = Color(0xFF8F8B80),
                     trimColor = Color(0xFF7B1F5B),
                     accentColor = Color(0xFF9C2766),
                     ledColor = Color(0xFFFF3038),
@@ -149,10 +145,10 @@ data class ConsoleHardwareSpec(
                 "gbc" -> ConsoleHardwareSpec(
                     systemId = id,
                     consoleLabel = "Game Boy Color",
-                    loaderKind = ConsoleLoaderKind.CARTRIDGE_TOP_SLOT,
-                    bodyTop = Color(0xFF6B4FC7),
-                    bodyMid = Color(0xFF4F379E),
-                    bodyDark = Color(0xFF33226B),
+                    loaderKind = ConsoleLoaderKind.HANDHELD_REAR_SLOT,
+                    bodyTop = Color(0xFF7456D4),
+                    bodyMid = Color(0xFF5339A8),
+                    bodyDark = Color(0xFF342270),
                     trimColor = Color(0xFF232530),
                     accentColor = Color(0xFF8F74F0),
                     ledColor = Color(0xFFFF3846),
@@ -161,43 +157,43 @@ data class ConsoleHardwareSpec(
                 "gba" -> ConsoleHardwareSpec(
                     systemId = id,
                     consoleLabel = "Game Boy Advance",
-                    loaderKind = ConsoleLoaderKind.CARTRIDGE_TOP_SLOT,
-                    bodyTop = Color(0xFF5664B8),
-                    bodyMid = Color(0xFF3E4A94),
-                    bodyDark = Color(0xFF283066),
-                    trimColor = Color(0xFFC8CCD8),
+                    loaderKind = ConsoleLoaderKind.HANDHELD_REAR_SLOT,
+                    bodyTop = Color(0xFF5D6BC4),
+                    bodyMid = Color(0xFF414E9E),
+                    bodyDark = Color(0xFF2A326B),
+                    trimColor = Color(0xFFD0D4E0),
                     accentColor = Color(0xFF7986CB),
                     ledColor = Color(0xFF38E56B),
                     insertVerb = "Inserting GBA Game Pak",
                 )
                 "nds" -> ConsoleHardwareSpec(
                     systemId = id,
-                    consoleLabel = "Nintendo DS",
-                    loaderKind = ConsoleLoaderKind.CARTRIDGE_TOP_SLOT,
-                    bodyTop = Color(0xFFEAECEF),
-                    bodyMid = Color(0xFFCFD4DC),
-                    bodyDark = Color(0xFF939AA8),
+                    consoleLabel = "Nintendo DS Lite",
+                    loaderKind = ConsoleLoaderKind.HANDHELD_REAR_SLOT,
+                    bodyTop = Color(0xFFF0F2F6),
+                    bodyMid = Color(0xFFD6DBE4),
+                    bodyDark = Color(0xFF9EA5B4),
                     trimColor = Color(0xFF3D434F),
                     accentColor = Color(0xFF5294FF),
                     ledColor = Color(0xFF2EE87A),
-                    insertVerb = "Clicking DS Game Card",
+                    insertVerb = "Clicking DS Card into Slot-1",
                 )
                 "3ds" -> ConsoleHardwareSpec(
                     systemId = id,
                     consoleLabel = "Nintendo 3DS",
-                    loaderKind = ConsoleLoaderKind.CARTRIDGE_TOP_SLOT,
-                    bodyTop = Color(0xFF275B8C),
-                    bodyMid = Color(0xFF1A3F66),
-                    bodyDark = Color(0xFF102844),
+                    loaderKind = ConsoleLoaderKind.HANDHELD_REAR_SLOT,
+                    bodyTop = Color(0xFF2D6CA3),
+                    bodyMid = Color(0xFF1D4975),
+                    bodyDark = Color(0xFF102A48),
                     trimColor = Color(0xFF0E131B),
                     accentColor = Color(0xFF35B8FF),
                     ledColor = Color(0xFF2EE0FF),
-                    insertVerb = "Clicking 3DS Game Card",
+                    insertVerb = "Clicking 3DS Card into Slot-1",
                 )
                 "switch" -> ConsoleHardwareSpec(
                     systemId = id,
                     consoleLabel = "Nintendo Switch",
-                    loaderKind = ConsoleLoaderKind.CARTRIDGE_TOP_SLOT,
+                    loaderKind = ConsoleLoaderKind.SWITCH_TOP_FLAP,
                     bodyTop = Color(0xFF363A42),
                     bodyMid = Color(0xFF23262C),
                     bodyDark = Color(0xFF14161A),
@@ -210,25 +206,25 @@ data class ConsoleHardwareSpec(
                     systemId = id,
                     consoleLabel = "Sega Genesis",
                     loaderKind = ConsoleLoaderKind.CARTRIDGE_TOP_SLOT,
-                    bodyTop = Color(0xFF33363E),
-                    bodyMid = Color(0xFF1F2127),
-                    bodyDark = Color(0xFF101216),
+                    bodyTop = Color(0xFF2F323B),
+                    bodyMid = Color(0xFF1B1D23),
+                    bodyDark = Color(0xFF0E1014),
                     trimColor = Color(0xFF505562),
                     accentColor = Color(0xFFD62828),
-                    ledColor = Color(0xFFFF3636),
+                    ledColor = Color(0xFFFF2424),
                     insertVerb = "Inserting Sega Cartridge",
                 )
                 "psx", "ps1" -> ConsoleHardwareSpec(
                     systemId = id,
                     consoleLabel = "PlayStation",
                     loaderKind = ConsoleLoaderKind.DISC_TOP_LID,
-                    bodyTop = Color(0xFFC8CBD0),
-                    bodyMid = Color(0xFFA7ABB2),
-                    bodyDark = Color(0xFF7B7F88),
+                    bodyTop = Color(0xFFD0D3D8),
+                    bodyMid = Color(0xFFB1B5BC),
+                    bodyDark = Color(0xFF71757E),
                     trimColor = Color(0xFF343840),
                     accentColor = Color(0xFF3D68D8),
-                    ledColor = Color(0xFF34E86C),
-                    insertVerb = "Loading PlayStation Disc",
+                    ledColor = Color(0xFF30F06E),
+                    insertVerb = "Placing PlayStation Disc",
                 )
                 "ps2" -> ConsoleHardwareSpec(
                     systemId = id,
@@ -236,59 +232,59 @@ data class ConsoleHardwareSpec(
                     loaderKind = ConsoleLoaderKind.DISC_SLIDE_TRAY,
                     bodyTop = Color(0xFF2B2E36),
                     bodyMid = Color(0xFF1A1C22),
-                    bodyDark = Color(0xFF0E1014),
-                    trimColor = Color(0xFF3B6EFF),
+                    bodyDark = Color(0xFF0C0E12),
+                    trimColor = Color(0xFF2A66FF),
                     accentColor = Color(0xFF3B82F6),
-                    ledColor = Color(0xFF34E86C),
+                    ledColor = Color(0xFF2EE86C),
                     insertVerb = "Loading PS2 Disc Tray",
                 )
                 "psp" -> ConsoleHardwareSpec(
                     systemId = id,
                     consoleLabel = "PlayStation Portable",
-                    loaderKind = ConsoleLoaderKind.DISC_SLIDE_TRAY,
-                    bodyTop = Color(0xFF2C2E35),
-                    bodyMid = Color(0xFF1A1C21),
-                    bodyDark = Color(0xFF0D0E12),
-                    trimColor = Color(0xFF9EA4B0),
+                    loaderKind = ConsoleLoaderKind.DISC_REAR_UMD,
+                    bodyTop = Color(0xFF2E313A),
+                    bodyMid = Color(0xFF17191F),
+                    bodyDark = Color(0xFF0C0D12),
+                    trimColor = Color(0xFFB8C0D0),
                     accentColor = Color(0xFF8AA4FF),
-                    ledColor = Color(0xFF36E86E),
-                    insertVerb = "Closing PSP UMD Drive",
+                    ledColor = Color(0xFF34EB6E),
+                    insertVerb = "Sliding UMD into Rear Hatch",
                 )
                 "dc", "dreamcast" -> ConsoleHardwareSpec(
                     systemId = id,
                     consoleLabel = "Sega Dreamcast",
                     loaderKind = ConsoleLoaderKind.DISC_TOP_LID,
-                    bodyTop = Color(0xFFE7E8EC),
-                    bodyMid = Color(0xFFCBCED6),
-                    bodyDark = Color(0xFF9EA2AE),
+                    bodyTop = Color(0xFFF0F1F4),
+                    bodyMid = Color(0xFFD5D8E0),
+                    bodyDark = Color(0xFFA7ACB8),
                     trimColor = Color(0xFF8A909E),
                     accentColor = Color(0xFFFF6D28),
-                    ledColor = Color(0xFFFF6D28),
-                    insertVerb = "Loading Dreamcast GD-ROM",
+                    ledColor = Color(0xFFFF6D1F),
+                    insertVerb = "Placing Dreamcast GD-ROM",
                 )
                 "gc", "gamecube" -> ConsoleHardwareSpec(
                     systemId = id,
                     consoleLabel = "Nintendo GameCube",
                     loaderKind = ConsoleLoaderKind.DISC_TOP_LID,
-                    bodyTop = Color(0xFF6B5CC2),
-                    bodyMid = Color(0xFF4D3F9E),
-                    bodyDark = Color(0xFF332870),
-                    trimColor = Color(0xFF24242C),
+                    bodyTop = Color(0xFF6B5AC4),
+                    bodyMid = Color(0xFF4E3EA6),
+                    bodyDark = Color(0xFF332678),
+                    trimColor = Color(0xFFDBDCE2),
                     accentColor = Color(0xFF8B7CE8),
-                    ledColor = Color(0xFFFF8C24),
-                    insertVerb = "Loading GameCube Disc",
+                    ledColor = Color(0xFFFF8C1A),
+                    insertVerb = "Placing GameCube Disc",
                 )
                 "wii", "wiiu" -> ConsoleHardwareSpec(
                     systemId = id,
                     consoleLabel = if (id == "wiiu") "Nintendo Wii U" else "Nintendo Wii",
                     loaderKind = ConsoleLoaderKind.DISC_SLOT_IN,
-                    bodyTop = Color(0xFFECEFF4),
-                    bodyMid = Color(0xFFD5DAE2),
-                    bodyDark = Color(0xFF9DA5B2),
+                    bodyTop = Color(0xFFF6F8FC),
+                    bodyMid = Color(0xFFE3E7F0),
+                    bodyDark = Color(0xFFC5CCD8),
                     trimColor = Color(0xFF282D36),
-                    accentColor = Color(0xFF26B4FF),
+                    accentColor = Color(0xFF1EC8FF),
                     ledColor = Color(0xFF26C6FF),
-                    insertVerb = "Feeding Optical Disc",
+                    insertVerb = "Feeding Disc into Optical Slot",
                 )
                 "saturn", "segacd", "3do", "neogeocd" -> ConsoleHardwareSpec(
                     systemId = id,
@@ -305,7 +301,7 @@ data class ConsoleHardwareSpec(
                     trimColor = Color(0xFF565C6B),
                     accentColor = Color(0xFF3B82F6),
                     ledColor = Color(0xFF34E86C),
-                    insertVerb = "Loading Optical Disc",
+                    insertVerb = "Placing Optical Disc",
                 )
                 else -> ConsoleHardwareSpec(
                     systemId = id,
@@ -330,19 +326,21 @@ data class ConsoleHardwareSpec(
 
 /** Deterministic frame state computed from normalized timeline progress `0f..1f`. */
 data class ConsoleInsertionFrame(
-    /** Normalized vertical progress (`0f` hovering above console, `1f` fully seated inside slot/spindle). */
+    /** Normalized insertion progress (`0f` hovering outside console, `1f` fully seated inside). */
     val insertDepth: Float,
     /** Media 3D yaw in degrees. */
     val mediaYawDeg: Float,
-    /** Media 3D pitch in degrees (tilts flat for optical disc trays/lids). */
+    /** Media 3D pitch in degrees. */
     val mediaPitchDeg: Float,
     /** Continuous optical disc spin rotation in degrees once seated. */
     val discSpinDeg: Float,
-    /** Console lid/flap open fraction (`1f` fully open, `0f` shut). */
+    /** Console lid/door/flap open fraction (`1f` fully open, `0f` shut). */
     val lidOpen: Float,
-    /** Tray extension fraction for sliding trays (`1f` extended out, `0f` retracted). */
+    /** Motorized sliding tray extension fraction (`1f` extended out, `0f` retracted flush). */
     val trayOut: Float,
-    /** Subtle downward console bounce in dp when cartridge/disc clicks into place. */
+    /** NES ZIF press-down drop (`0f..1f`) or DS/Switch spring-click over-travel bounce (`0f..1f`). */
+    val latchMotion: Float,
+    /** Subtle downward console recoil in dp when cartridge/disc clicks into place. */
     val consoleBounceDp: Float,
     /** Console power LED glow intensity (`0f` off, `1f` bright powered on). */
     val ledGlow: Float,
@@ -373,30 +371,32 @@ object ConsoleInsertionMath {
     fun evaluate(progress: Float, spec: ConsoleHardwareSpec): ConsoleInsertionFrame {
         val p = clamp01(progress)
         return when (spec.loaderKind) {
-            ConsoleLoaderKind.CARTRIDGE_TOP_SLOT,
             ConsoleLoaderKind.CARTRIDGE_FRONT_DECK -> {
-                val alignT = easeOutCubic(p / 0.28f)
-                val plungeT = easeInOutCubic((p - 0.26f) / 0.44f)
-                val seated = p >= 0.68f
-                val bouncePhase = clamp01((p - 0.66f) / 0.16f)
-                val bounceDp = if (bouncePhase > 0f && bouncePhase < 1f) {
-                    sin(bouncePhase * PI).toFloat() * 5.5f
-                } else 0f
-                val ledGlow = smoothStep((p - 0.72f) / 0.18f)
-                val bootFlash = smoothStep((p - 0.88f) / 0.12f)
-                val flapOpen = if (p < 0.18f) smoothStep(p / 0.18f) else 1f - smoothStep((p - 0.72f) / 0.16f) * 0.45f
+                // Authentic 4-phase NES front-loader:
+                // 1) Flip door UP -> 2) Slide cart flat horizontally in -> 3) Press ZIF tray DOWN -> 4) Flip door SHUT!
+                val doorOpenT = smoothStep(p / 0.16f)
+                val slideInT = easeInOutCubic((p - 0.15f) / 0.37f)
+                val zifDropT = easeInOutCubic((p - 0.52f) / 0.18f)
+                val doorCloseT = smoothStep((p - 0.70f) / 0.16f)
+                val seated = p >= 0.66f
+                val bouncePhase = clamp01((p - 0.62f) / 0.14f)
+                val bounceDp = if (bouncePhase > 0f && bouncePhase < 1f) sin(bouncePhase * PI).toFloat() * 5.0f else 0f
+                val ledGlow = smoothStep((p - 0.78f) / 0.14f)
+                val bootFlash = smoothStep((p - 0.90f) / 0.10f)
                 val status = when {
-                    p < 0.30f -> spec.insertVerb + "…"
-                    p < 0.72f -> "Seating into ${spec.consoleLabel}…"
+                    p < 0.18f -> "Opening NES cartridge door…"
+                    p < 0.52f -> "Sliding Game Pak in…"
+                    p < 0.72f -> "Pressing down into ZIF deck…"
                     else -> "Powering on ${spec.consoleLabel}…"
                 }
                 ConsoleInsertionFrame(
-                    insertDepth = plungeT,
-                    mediaYawDeg = 22f * (1f - alignT),
-                    mediaPitchDeg = -6f + 16f * alignT,
+                    insertDepth = slideInT,
+                    mediaYawDeg = 10f * (1f - easeOutCubic(p / 0.22f)),
+                    mediaPitchDeg = -58f, // Paired with rotationZ = 180f so pins enter first & front label faces UP!
                     discSpinDeg = 0f,
-                    lidOpen = flapOpen,
+                    lidOpen = (doorOpenT * (1f - doorCloseT)).coerceIn(0f, 1f),
                     trayOut = 0f,
+                    latchMotion = zifDropT,
                     consoleBounceDp = bounceDp,
                     ledGlow = ledGlow,
                     bootFlash = bootFlash,
@@ -404,30 +404,120 @@ object ConsoleInsertionMath {
                     statusText = status,
                 )
             }
+
+            ConsoleLoaderKind.CARTRIDGE_TOP_SLOT -> {
+                val alignT = easeOutCubic(p / 0.24f)
+                val plungeT = easeInOutCubic((p - 0.22f) / 0.44f)
+                val seated = p >= 0.65f
+                val bouncePhase = clamp01((p - 0.63f) / 0.15f)
+                val bounceDp = if (bouncePhase > 0f && bouncePhase < 1f) sin(bouncePhase * PI).toFloat() * 5.5f else 0f
+                val ledGlow = smoothStep((p - 0.70f) / 0.18f)
+                val bootFlash = smoothStep((p - 0.88f) / 0.12f)
+                val status = when {
+                    p < 0.26f -> spec.insertVerb + "…"
+                    p < 0.70f -> "Seating into ${spec.consoleLabel}…"
+                    else -> "Powering on ${spec.consoleLabel}…"
+                }
+                ConsoleInsertionFrame(
+                    insertDepth = plungeT,
+                    mediaYawDeg = 20f * (1f - alignT),
+                    mediaPitchDeg = -5f + 15f * alignT,
+                    discSpinDeg = 0f,
+                    lidOpen = plungeT,
+                    trayOut = 0f,
+                    latchMotion = 0f,
+                    consoleBounceDp = bounceDp,
+                    ledGlow = ledGlow,
+                    bootFlash = bootFlash,
+                    seated = seated,
+                    statusText = status,
+                )
+            }
+
+            ConsoleLoaderKind.HANDHELD_REAR_SLOT -> {
+                val alignT = easeOutCubic(p / 0.22f)
+                val slideT = easeInOutCubic((p - 0.20f) / 0.42f)
+                // Authentic DS/3DS spring-loaded click over-travel & rebound flush into Slot-1!
+                val springPhase = clamp01((p - 0.60f) / 0.14f)
+                val springClick = if (springPhase > 0f && springPhase < 1f) sin(springPhase * PI).toFloat() else 0f
+                val seated = p >= 0.64f
+                val bounceDp = springClick * 4.5f
+                val ledGlow = smoothStep((p - 0.70f) / 0.18f)
+                val bootFlash = smoothStep((p - 0.88f) / 0.12f)
+                val status = when {
+                    p < 0.25f -> spec.insertVerb + "…"
+                    p < 0.70f -> "Clicking flush into ${spec.consoleLabel}…"
+                    else -> "Powering on ${spec.consoleLabel}…"
+                }
+                ConsoleInsertionFrame(
+                    insertDepth = slideT,
+                    mediaYawDeg = 16f * (1f - alignT),
+                    mediaPitchDeg = -4f + 10f * alignT,
+                    discSpinDeg = 0f,
+                    lidOpen = 1f,
+                    trayOut = 0f,
+                    latchMotion = springClick,
+                    consoleBounceDp = bounceDp,
+                    ledGlow = ledGlow,
+                    bootFlash = bootFlash,
+                    seated = seated,
+                    statusText = status,
+                )
+            }
+
+            ConsoleLoaderKind.SWITCH_TOP_FLAP -> {
+                val flapOpenT = smoothStep(p / 0.18f)
+                val dropT = easeInOutCubic((p - 0.18f) / 0.42f)
+                val springPhase = clamp01((p - 0.58f) / 0.12f)
+                val springClick = if (springPhase > 0f && springPhase < 1f) sin(springPhase * PI).toFloat() else 0f
+                val flapCloseT = smoothStep((p - 0.70f) / 0.15f)
+                val seated = p >= 0.60f
+                val ledGlow = smoothStep((p - 0.74f) / 0.16f)
+                val bootFlash = smoothStep((p - 0.89f) / 0.11f)
+                val status = when {
+                    p < 0.20f -> "Opening Game Card flap…"
+                    p < 0.68f -> "Clicking Switch Game Card…"
+                    else -> "Powering on ${spec.consoleLabel}…"
+                }
+                ConsoleInsertionFrame(
+                    insertDepth = dropT,
+                    mediaYawDeg = 12f * (1f - easeOutCubic(p / 0.24f)),
+                    mediaPitchDeg = 6f,
+                    discSpinDeg = 0f,
+                    lidOpen = (flapOpenT * (1f - flapCloseT)).coerceIn(0f, 1f),
+                    trayOut = 0f,
+                    latchMotion = springClick,
+                    consoleBounceDp = springClick * 3.5f,
+                    ledGlow = ledGlow,
+                    bootFlash = bootFlash,
+                    seated = seated,
+                    statusText = status,
+                )
+            }
+
             ConsoleLoaderKind.DISC_TOP_LID -> {
-                val dropT = easeInOutCubic((p - 0.10f) / 0.38f)
-                val seated = p >= 0.48f
-                val lidCloseT = smoothStep((p - 0.54f) / 0.24f)
-                val spinT = clamp01((p - 0.46f) / 0.54f)
+                val dropT = easeInOutCubic((p - 0.08f) / 0.38f)
+                val seated = p >= 0.46f
+                val lidCloseT = smoothStep((p - 0.52f) / 0.26f)
+                val spinT = clamp01((p - 0.44f) / 0.56f)
                 val spinDeg = spinT * spinT * 980f
-                val bouncePhase = clamp01((p - 0.46f) / 0.14f)
-                val bounceDp = if (bouncePhase > 0f && bouncePhase < 1f) {
-                    sin(bouncePhase * PI).toFloat() * 4.2f
-                } else 0f
+                val bouncePhase = clamp01((p - 0.44f) / 0.14f)
+                val bounceDp = if (bouncePhase > 0f && bouncePhase < 1f) sin(bouncePhase * PI).toFloat() * 4.2f else 0f
                 val ledGlow = smoothStep((p - 0.72f) / 0.18f)
                 val bootFlash = smoothStep((p - 0.88f) / 0.12f)
                 val status = when {
-                    p < 0.48f -> spec.insertVerb + "…"
+                    p < 0.46f -> spec.insertVerb + "…"
                     p < 0.76f -> "Closing lid & spinning up…"
                     else -> "Powering on ${spec.consoleLabel}…"
                 }
                 ConsoleInsertionFrame(
                     insertDepth = dropT,
-                    mediaYawDeg = 18f * (1f - easeOutCubic(p / 0.25f)),
-                    mediaPitchDeg = -8f + 56f * easeOutCubic(p / 0.36f),
+                    mediaYawDeg = 0f,
+                    mediaPitchDeg = 0f,
                     discSpinDeg = spinDeg,
                     lidOpen = 1f - lidCloseT,
                     trayOut = 0f,
+                    latchMotion = 0f,
                     consoleBounceDp = bounceDp,
                     ledGlow = ledGlow,
                     bootFlash = bootFlash,
@@ -435,25 +525,27 @@ object ConsoleInsertionMath {
                     statusText = status,
                 )
             }
+
             ConsoleLoaderKind.DISC_SLIDE_TRAY -> {
-                val dropT = easeInOutCubic((p - 0.08f) / 0.34f)
-                val seated = p >= 0.42f
-                val retractT = easeInOutCubic((p - 0.46f) / 0.30f)
-                val spinT = clamp01((p - 0.42f) / 0.58f)
+                val dropT = easeInOutCubic((p - 0.06f) / 0.34f)
+                val seated = p >= 0.40f
+                val retractT = easeInOutCubic((p - 0.44f) / 0.34f)
+                val spinT = clamp01((p - 0.40f) / 0.60f)
                 val ledGlow = smoothStep((p - 0.72f) / 0.18f)
                 val bootFlash = smoothStep((p - 0.88f) / 0.12f)
                 val status = when {
-                    p < 0.44f -> spec.insertVerb + "…"
-                    p < 0.76f -> "Retracting disc drive…"
+                    p < 0.42f -> spec.insertVerb + "…"
+                    p < 0.78f -> "Retracting motorized disc tray…"
                     else -> "Powering on ${spec.consoleLabel}…"
                 }
                 ConsoleInsertionFrame(
                     insertDepth = dropT,
-                    mediaYawDeg = 14f * (1f - easeOutCubic(p / 0.24f)),
-                    mediaPitchDeg = -6f + 52f * easeOutCubic(p / 0.32f),
-                    discSpinDeg = spinT * spinT * 840f,
+                    mediaYawDeg = 0f,
+                    mediaPitchDeg = 0f,
+                    discSpinDeg = spinT * spinT * 760f,
                     lidOpen = 0f,
                     trayOut = 1f - retractT,
+                    latchMotion = 0f,
                     consoleBounceDp = 0f,
                     ledGlow = ledGlow,
                     bootFlash = bootFlash,
@@ -461,23 +553,54 @@ object ConsoleInsertionMath {
                     statusText = status,
                 )
             }
+
+            ConsoleLoaderKind.DISC_REAR_UMD -> {
+                val slideT = easeInOutCubic((p - 0.10f) / 0.38f)
+                val seated = p >= 0.48f
+                val hatchCloseT = smoothStep((p - 0.52f) / 0.26f)
+                val bouncePhase = clamp01((p - 0.74f) / 0.12f)
+                val bounceDp = if (bouncePhase > 0f && bouncePhase < 1f) sin(bouncePhase * PI).toFloat() * 3.5f else 0f
+                val ledGlow = smoothStep((p - 0.74f) / 0.16f)
+                val bootFlash = smoothStep((p - 0.89f) / 0.11f)
+                val status = when {
+                    p < 0.48f -> spec.insertVerb + "…"
+                    p < 0.78f -> "Closing UMD hatch…"
+                    else -> "Powering on ${spec.consoleLabel}…"
+                }
+                ConsoleInsertionFrame(
+                    insertDepth = slideT,
+                    mediaYawDeg = 10f * (1f - easeOutCubic(p / 0.22f)),
+                    mediaPitchDeg = 4f,
+                    discSpinDeg = 0f,
+                    lidOpen = 1f - hatchCloseT,
+                    trayOut = 0f,
+                    latchMotion = 0f,
+                    consoleBounceDp = bounceDp,
+                    ledGlow = ledGlow,
+                    bootFlash = bootFlash,
+                    seated = seated,
+                    statusText = status,
+                )
+            }
+
             ConsoleLoaderKind.DISC_SLOT_IN -> {
-                val alignT = easeOutCubic(p / 0.24f)
-                val feedT = easeInOutCubic((p - 0.22f) / 0.48f)
-                val seated = p >= 0.68f
-                val ledGlow = smoothStep((p - 0.20f) / 0.55f)
+                val alignT = easeOutCubic(p / 0.18f)
+                val feedT = easeInOutCubic((p - 0.16f) / 0.56f)
+                val seated = p >= 0.70f
+                val ledGlow = smoothStep((p - 0.12f) / 0.55f)
                 val bootFlash = smoothStep((p - 0.88f) / 0.12f)
                 val status = when {
-                    p < 0.68f -> spec.insertVerb + "…"
+                    p < 0.70f -> spec.insertVerb + "…"
                     else -> "Reading disc · ${spec.consoleLabel}…"
                 }
                 ConsoleInsertionFrame(
                     insertDepth = feedT,
-                    mediaYawDeg = 16f * (1f - alignT),
-                    mediaPitchDeg = -4f + 22f * alignT,
-                    discSpinDeg = feedT * 260f,
+                    mediaYawDeg = -34f * alignT,
+                    mediaPitchDeg = 6f,
+                    discSpinDeg = feedT * 220f,
                     lidOpen = 1f,
                     trayOut = 0f,
+                    latchMotion = 0f,
                     consoleBounceDp = 0f,
                     ledGlow = ledGlow,
                     bootFlash = bootFlash,
@@ -491,8 +614,9 @@ object ConsoleInsertionMath {
 
 /**
  * Tactile fullscreen Console Media Insertion Ceremony triggered when pressing Play from a 3D model!
- * Animates the game's actual 3D Cartridge / Game Card / Optical Disc inserting into the matching
- * console hardware, clicks with haptics, lights the console power LED, and launches the emulator.
+ * Animates the game's actual 3D Cartridge / Game Card / Optical Disc inserting the exact physical
+ * way into the real matching console hardware, clicks with haptics, illuminates the Power LED,
+ * and launches the emulator.
  */
 @Composable
 internal fun M3ConsoleInsertionDialog(
@@ -523,7 +647,7 @@ internal fun M3ConsoleInsertionDialog(
         }
         progress.animateTo(
             targetValue = 1f,
-            animationSpec = tween(durationMillis = 1280, easing = LinearEasing),
+            animationSpec = tween(durationMillis = 1380, easing = LinearEasing),
         )
         finishAndLaunch()
     }
@@ -574,7 +698,7 @@ internal fun ConsoleInsertionStageContent(
             .fillMaxSize()
             .background(
                 Brush.radialGradient(
-                    0.0f to hwSpec.accentColor.copy(alpha = 0.22f + frame.ledGlow * 0.14f),
+                    0.0f to hwSpec.accentColor.copy(alpha = 0.20f + frame.ledGlow * 0.14f),
                     0.55f to Color(0xF511121A),
                     1.0f to Color(0xFA06070B),
                 ),
@@ -591,9 +715,9 @@ internal fun ConsoleInsertionStageContent(
                 .fillMaxWidth()
                 .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(18.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            // Top badge showing the hardware + game title
+            // Top badge showing the hardware system
             Row(
                 Modifier
                     .clip(CircleShape)
@@ -620,24 +744,61 @@ internal fun ConsoleInsertionStageContent(
                 )
             }
 
-            // Main 3D Media + Console Insertion Stage
+            // Main 3D Media + Authentic Console Hardware Insertion Stage (360dp tall)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(340.dp)
+                    .height(360.dp)
                     .offset(y = frame.consoleBounceDp.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                if (isDisc) {
-                    DiscConsoleInsertionStage(
+                when (hwSpec.loaderKind) {
+                    ConsoleLoaderKind.CARTRIDGE_FRONT_DECK -> NesFrontDeckInsertionStage(
+                        spec = spec,
+                        textures = textures,
+                        frame = frame,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    ConsoleLoaderKind.CARTRIDGE_TOP_SLOT -> CartridgeTopSlotInsertionStage(
                         spec = spec,
                         hwSpec = hwSpec,
                         textures = textures,
                         frame = frame,
                         modifier = Modifier.fillMaxSize(),
                     )
-                } else {
-                    CartridgeConsoleInsertionStage(
+                    ConsoleLoaderKind.HANDHELD_REAR_SLOT -> HandheldRearSlotInsertionStage(
+                        spec = spec,
+                        hwSpec = hwSpec,
+                        textures = textures,
+                        frame = frame,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    ConsoleLoaderKind.SWITCH_TOP_FLAP -> SwitchTopFlapInsertionStage(
+                        spec = spec,
+                        textures = textures,
+                        frame = frame,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    ConsoleLoaderKind.DISC_TOP_LID -> DiscTopLidInsertionStage(
+                        spec = spec,
+                        hwSpec = hwSpec,
+                        textures = textures,
+                        frame = frame,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    ConsoleLoaderKind.DISC_SLIDE_TRAY -> Ps2SlideTrayInsertionStage(
+                        spec = spec,
+                        textures = textures,
+                        frame = frame,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    ConsoleLoaderKind.DISC_REAR_UMD -> PspRearUmdInsertionStage(
+                        spec = spec,
+                        textures = textures,
+                        frame = frame,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                    ConsoleLoaderKind.DISC_SLOT_IN -> WiiVerticalSlotInsertionStage(
                         spec = spec,
                         hwSpec = hwSpec,
                         textures = textures,
@@ -709,22 +870,82 @@ internal fun ConsoleInsertionStageContent(
     }
 }
 
+// =================================================================================================
+// 1. NES Front-Loading Deck: Door flips UP -> Cart slides flat horizontally -> ZIF clicks DOWN -> Door shuts!
+// =================================================================================================
+
 @Composable
-private fun CartridgeConsoleInsertionStage(
+private fun NesFrontDeckInsertionStage(
+    spec: PhysicalMediaSpec,
+    textures: ResolvedPhysicalTextures,
+    frame: ConsoleInsertionFrame,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier, contentAlignment = Alignment.TopCenter) {
+        Canvas(Modifier.fillMaxSize()) { drawNesConsoleBack(frame) }
+
+        // Clipped cleanly at the top ceiling of the open NES front bay (145dp) so pins disappear inside!
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = 145.dp)
+                .clipToBounds(),
+            contentAlignment = Alignment.TopCenter,
+        ) {
+            val slideY = 48f + (-86f) * frame.insertDepth + frame.latchMotion * 14f
+            val scale = 1.02f - frame.insertDepth * 0.28f
+            val cartAlpha = if (frame.seated) (frame.lidOpen * 1.6f).coerceIn(0f, 1f) else 1f
+            Box(
+                modifier = Modifier
+                    .width(172.dp)
+                    .height(158.dp)
+                    .offset(x = (-55).dp, y = slideY.dp)
+                    .graphicsLayer {
+                        scaleX = scale
+                        scaleY = scale
+                        rotationZ = 180f // Pairs with pitchDeg = -58f: pins go IN first, grip faces you, label faces UP!
+                        alpha = cartAlpha
+                    },
+            ) {
+                Physical3dStageCanvas(
+                    subject = PhysicalViewerSubject.GAME_MEDIA,
+                    spec = spec,
+                    textures = textures,
+                    boxAspect = spec.mediaKind.defaultAspect,
+                    yawDeg = frame.mediaYawDeg,
+                    pitchDeg = frame.mediaPitchDeg,
+                    floorShadow = false,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+
+        Canvas(Modifier.fillMaxSize()) { drawNesConsoleFront(frame) }
+    }
+}
+
+// =================================================================================================
+// 2. Classic Top-Loading Home Consoles: SNES, Nintendo 64, Sega Genesis
+// =================================================================================================
+
+@Composable
+private fun CartridgeTopSlotInsertionStage(
     spec: PhysicalMediaSpec,
     hwSpec: ConsoleHardwareSpec,
     textures: ResolvedPhysicalTextures,
     frame: ConsoleInsertionFrame,
     modifier: Modifier = Modifier,
 ) {
-    val slotLipYDp = 216.dp
+    val slotLipYDp = 220.dp
     Box(modifier = modifier, contentAlignment = Alignment.TopCenter) {
-        // Layer 1: Console back chassis + open dark cartridge slot interior
         Canvas(Modifier.fillMaxSize()) {
-            drawCartridgeConsoleBack(hwSpec, frame)
+            when (hwSpec.systemId) {
+                "snes" -> drawSnesConsoleBack(frame)
+                "n64" -> drawN64ConsoleBack(frame)
+                else -> drawGenesisConsoleBack(frame)
+            }
         }
 
-        // Layer 2: The actual 3D Cartridge clipped cleanly at the console's front slot lip!
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -732,8 +953,8 @@ private fun CartridgeConsoleInsertionStage(
                 .clipToBounds(),
             contentAlignment = Alignment.TopCenter,
         ) {
-            val startY = 8f
-            val endY = 128f
+            val startY = 6f
+            val endY = 122f
             val yDp = startY + (endY - startY) * frame.insertDepth
             Physical3dStageCanvas(
                 subject = PhysicalViewerSubject.GAME_MEDIA,
@@ -744,74 +965,257 @@ private fun CartridgeConsoleInsertionStage(
                 pitchDeg = frame.mediaPitchDeg,
                 floorShadow = false,
                 modifier = Modifier
-                    .width(210.dp)
-                    .height(186.dp)
+                    .width(192.dp)
+                    .height(172.dp)
                     .offset(y = yDp.dp),
             )
         }
 
-        // Layer 3: Console front bezel overlapping the lower half of the cartridge + glowing Power LED!
         Canvas(Modifier.fillMaxSize()) {
-            drawCartridgeConsoleFrontLip(hwSpec, frame)
+            when (hwSpec.systemId) {
+                "snes" -> drawSnesConsoleFront(frame)
+                "n64" -> drawN64ConsoleFront(frame)
+                else -> drawGenesisConsoleFront(frame)
+            }
         }
     }
 }
 
+// =================================================================================================
+// 3. Real Handheld Top-Rear Slot: Nintendo DS Lite, 3DS, Game Boy DMG, GBC, Game Boy Advance
+// =================================================================================================
+
 @Composable
-private fun DiscConsoleInsertionStage(
+private fun HandheldRearSlotInsertionStage(
     spec: PhysicalMediaSpec,
     hwSpec: ConsoleHardwareSpec,
     textures: ResolvedPhysicalTextures,
     frame: ConsoleInsertionFrame,
     modifier: Modifier = Modifier,
 ) {
-    val isSlotIn = hwSpec.loaderKind == ConsoleLoaderKind.DISC_SLOT_IN
-    val isSlideTray = hwSpec.loaderKind == ConsoleLoaderKind.DISC_SLIDE_TRAY
+    val id = hwSpec.systemId
+    val isDsFamily = id == "nds" || id == "3ds"
+    val isGba = id == "gba"
+
+    val clipHeightDp = when {
+        isDsFamily -> 193.dp
+        isGba -> 195.dp
+        else -> 238.dp // DMG / GBC open-backed recessed rear pocket
+    }
+    val cartW = when {
+        isDsFamily -> 116.dp
+        isGba -> 150.dp
+        else -> 144.dp
+    }
+    val cartH = when {
+        isDsFamily -> 116.dp
+        isGba -> 104.dp
+        else -> 148.dp
+    }
+    val startY = when {
+        isDsFamily -> 8f
+        isGba -> 16f
+        else -> 12f
+    }
+    val endY = when {
+        isDsFamily -> 176f // Top edge rests cleanly flush in Slot-1 (spring-clicks down +5.5dp & rebounds!)
+        isGba -> 160f
+        else -> 148f // Flush with top of Game Boy / GBC rear bay
+    }
+    val springExtraY = if (isDsFamily) frame.latchMotion * 5.5f else 0f
 
     Box(modifier = modifier, contentAlignment = Alignment.TopCenter) {
-        // Layer 1: Console disc bay / sliding tray / open spindle hub
         Canvas(Modifier.fillMaxSize()) {
-            drawDiscConsoleBase(hwSpec, frame)
+            when {
+                isDsFamily -> drawNdsOr3dsConsoleBack(hwSpec, frame)
+                isGba -> drawGbaConsoleBack(hwSpec, frame)
+                else -> drawGameBoyConsoleBack(hwSpec, frame)
+            }
         }
 
-        // Layer 2: The actual 3D Optical Disc dropping onto the spindle or feeding into the slot!
-        val clipHeight = if (isSlotIn) 210.dp else 340.dp
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(clipHeight)
+                .height(clipHeightDp)
                 .clipToBounds(),
             contentAlignment = Alignment.TopCenter,
         ) {
-            val discSizeDp = 210f
-            // Bay center is at 340 * 0.67 = 227.8dp -> top offset to center a 210dp disc = 122.8dp!
-            val startY = if (isSlotIn) 8f else 6f
-            val endY = when {
-                isSlotIn -> 178f
-                isSlideTray -> 123f - (1f - frame.trayOut) * 28f
-                else -> 123f
+            val yDp = startY + (endY - startY) * frame.insertDepth + springExtraY
+            Physical3dStageCanvas(
+                subject = PhysicalViewerSubject.GAME_MEDIA,
+                spec = spec,
+                textures = textures,
+                boxAspect = spec.mediaKind.defaultAspect,
+                yawDeg = frame.mediaYawDeg,
+                pitchDeg = frame.mediaPitchDeg,
+                floorShadow = false,
+                modifier = Modifier
+                    .width(cartW)
+                    .height(cartH)
+                    .offset(y = yDp.dp),
+            )
+        }
+
+        Canvas(Modifier.fillMaxSize()) {
+            when {
+                isDsFamily -> drawNdsOr3dsConsoleFront(hwSpec, frame)
+                isGba -> drawGbaConsoleFront(hwSpec, frame)
+                else -> drawGameBoyConsoleFront(hwSpec, frame)
             }
-            val yDp = startY + (endY - startY) * frame.insertDepth
-            val discScaleX = when {
-                isSlotIn -> 0.86f
-                else -> 0.96f - frame.insertDepth * 0.04f
-            }
-            // Foreshorten vertically in the OUTER layer so the inner disc spins cleanly inside a flat horizontal oval!
-            val foreshortenY = when {
-                isSlotIn -> 1f
-                else -> (0.84f - frame.insertDepth * 0.31f).coerceIn(0.51f, 0.95f)
-            }
-            val discAlpha = when {
-                isSlideTray -> (0.25f + frame.trayOut * 0.75f).coerceIn(0f, 1f)
-                else -> 1f
-            }
+        }
+    }
+}
+
+// =================================================================================================
+// 4. Nintendo Switch: Top-Right Hinged Game Card Flap flanked by Neon Blue & Red Joy-Cons
+// =================================================================================================
+
+@Composable
+private fun SwitchTopFlapInsertionStage(
+    spec: PhysicalMediaSpec,
+    textures: ResolvedPhysicalTextures,
+    frame: ConsoleInsertionFrame,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier, contentAlignment = Alignment.TopCenter) {
+        Canvas(Modifier.fillMaxSize()) { drawSwitchConsoleBack(frame) }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(198.dp)
+                .clipToBounds(),
+            contentAlignment = Alignment.TopCenter,
+        ) {
+            val yDp = 24f + (186f - 24f) * frame.insertDepth + frame.latchMotion * 4.5f
+            Physical3dStageCanvas(
+                subject = PhysicalViewerSubject.GAME_MEDIA,
+                spec = spec,
+                textures = textures,
+                boxAspect = spec.mediaKind.defaultAspect,
+                yawDeg = frame.mediaYawDeg,
+                pitchDeg = frame.mediaPitchDeg,
+                floorShadow = false,
+                modifier = Modifier
+                    .width(68.dp)
+                    .height(86.dp)
+                    .offset(x = 58.dp, y = yDp.dp),
+            )
+        }
+
+        Canvas(Modifier.fillMaxSize()) { drawSwitchConsoleFront(frame) }
+    }
+}
+
+// =================================================================================================
+// 5. Top-Lid Optical Disc Consoles: PS1, GameCube (8cm Mini-DVD!), Dreamcast, Saturn
+// =================================================================================================
+
+@Composable
+private fun DiscTopLidInsertionStage(
+    spec: PhysicalMediaSpec,
+    hwSpec: ConsoleHardwareSpec,
+    textures: ResolvedPhysicalTextures,
+    frame: ConsoleInsertionFrame,
+    modifier: Modifier = Modifier,
+) {
+    val isGameCube = hwSpec.systemId == "gc" || hwSpec.systemId == "gamecube"
+    val isDreamcast = hwSpec.systemId == "dc" || hwSpec.systemId == "dreamcast"
+
+    val discSizeDp = when {
+        isGameCube -> 178f // Authentic 8cm Nintendo GameCube Mini-DVD filling the compact GameCube bay!
+        isDreamcast -> 218f
+        else -> 226f
+    }
+    val bayCyDp = when {
+        isGameCube -> 360f * 0.50f
+        isDreamcast -> 360f * 0.60f
+        else -> 360f * 0.61f
+    }
+    val startY = 4f
+    val endY = bayCyDp - discSizeDp * 0.5f
+    val yDp = startY + (endY - startY) * frame.insertDepth
+    val foreshortenY = (0.82f - frame.insertDepth * 0.32f).coerceIn(0.50f, 0.90f)
+    val discAlpha = if (frame.lidOpen < 0.42f) (frame.lidOpen / 0.42f).coerceIn(0f, 1f) else 1f
+
+    Box(modifier = modifier, contentAlignment = Alignment.TopCenter) {
+        Canvas(Modifier.fillMaxSize()) { drawTopLidConsoleBack(hwSpec, frame) }
+
+        Box(
+            modifier = Modifier
+                .size(discSizeDp.dp)
+                .offset(y = yDp.dp)
+                .graphicsLayer {
+                    scaleX = 0.96f - frame.insertDepth * 0.03f
+                    scaleY = (0.96f - frame.insertDepth * 0.03f) * foreshortenY
+                    alpha = discAlpha
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            Physical3dStageCanvas(
+                subject = PhysicalViewerSubject.GAME_MEDIA,
+                spec = spec,
+                textures = textures,
+                boxAspect = 1.0f,
+                yawDeg = 0f,
+                pitchDeg = 0f,
+                floorShadow = false,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { rotationZ = frame.discSpinDeg },
+            )
+        }
+
+        Canvas(Modifier.fillMaxSize()) { drawTopLidConsoleFront(hwSpec, frame) }
+    }
+}
+
+// =================================================================================================
+// 6. PlayStation 2: Motorized Front Disc Tray extending out & retracting straight into the Monolith!
+// =================================================================================================
+
+@Composable
+private fun Ps2SlideTrayInsertionStage(
+    spec: PhysicalMediaSpec,
+    textures: ResolvedPhysicalTextures,
+    frame: ConsoleInsertionFrame,
+    modifier: Modifier = Modifier,
+) {
+    val discSizeDp = 194f
+    // Extended tray oval center tracks directly with drawPs2ConsoleBack's trayTipY!
+    val trayBackY = 360f * 0.47f + 14f
+    val trayTipY = 360f * 0.47f + 28f + frame.trayOut * 84f
+    val trayCenterY = trayBackY + (trayTipY - trayBackY) * 0.54f
+    val seatedTopY = trayCenterY - discSizeDp * 0.5f
+    val yDp = 8f + (seatedTopY - 8f) * frame.insertDepth
+    val foreshortenY = (0.80f - frame.insertDepth * 0.34f).coerceIn(0.42f, 0.88f)
+    val discAlpha = (frame.trayOut * 1.4f).coerceIn(0f, 1f)
+
+    Box(modifier = modifier, contentAlignment = Alignment.TopCenter) {
+        Canvas(Modifier.fillMaxSize()) { drawPs2ConsoleBack(frame) }
+
+        // Once the disc rests on the tray, clip strictly below the PS2 drive mouth (172dp) so it
+        // physically disappears INSIDE the monolith as the motorized tray retracts!
+        val clipModifier = if (frame.seated) {
+            Modifier
+                .fillMaxSize()
+                .drawWithContent {
+                    clipRect(top = size.height * 0.475f) {
+                        this@drawWithContent.drawContent()
+                    }
+                }
+        } else {
+            Modifier.fillMaxSize()
+        }
+
+        Box(modifier = clipModifier, contentAlignment = Alignment.TopCenter) {
             Box(
                 modifier = Modifier
                     .size(discSizeDp.dp)
-                    .offset(y = yDp.dp)
+                    .offset(x = (-56).dp, y = yDp.dp)
                     .graphicsLayer {
-                        scaleX = discScaleX
-                        scaleY = discScaleX * foreshortenY
+                        scaleX = 0.94f
+                        scaleY = 0.94f * foreshortenY
                         alpha = discAlpha
                     },
                 contentAlignment = Alignment.Center,
@@ -821,368 +1225,117 @@ private fun DiscConsoleInsertionStage(
                     spec = spec,
                     textures = textures,
                     boxAspect = 1.0f,
-                    yawDeg = if (isSlotIn) frame.mediaYawDeg else 0f,
-                    pitchDeg = if (isSlotIn) frame.mediaPitchDeg else 0f,
+                    yawDeg = 0f,
+                    pitchDeg = 0f,
                     floorShadow = false,
                     modifier = Modifier
                         .fillMaxSize()
-                        .graphicsLayer {
-                            rotationZ = frame.discSpinDeg
-                        },
+                        .graphicsLayer { rotationZ = frame.discSpinDeg },
                 )
             }
         }
 
-        // Layer 3: Closing top lid / front slot-in chassis lip + glowing Power LED!
-        Canvas(Modifier.fillMaxSize()) {
-            drawDiscConsoleForeground(hwSpec, frame)
-        }
+        Canvas(Modifier.fillMaxSize()) { drawPs2ConsoleFront(frame) }
     }
 }
 
-private fun DrawScope.drawCartridgeConsoleBack(hwSpec: ConsoleHardwareSpec, frame: ConsoleInsertionFrame) {
-    val w = size.width
-    val h = size.height
-    val deckW = (w * 0.84f).coerceAtMost(320.dp.toPx())
-    val deckL = (w - deckW) * 0.5f
-    val deckR = deckL + deckW
-    val topY = h * 0.53f
-    val slotY = h * 0.635f
-    val bottomY = h * 0.91f
+// =================================================================================================
+// 7. PlayStation Portable (PSP): Rear Hinged Chrome-Ring UMD Clamshell Hatch!
+// =================================================================================================
 
-    // Grounded contact shadow beneath the console
-    drawOval(
-        brush = Brush.radialGradient(
-            0f to Color.Black.copy(alpha = 0.65f),
-            1f to Color.Transparent,
-            center = Offset(w * 0.5f, bottomY + 6.dp.toPx()),
-            radius = deckW * 0.60f,
-        ),
-        topLeft = Offset(deckL - 14.dp.toPx(), bottomY - 10.dp.toPx()),
-        size = Size(deckW + 28.dp.toPx(), 32.dp.toPx()),
-    )
+@Composable
+private fun PspRearUmdInsertionStage(
+    spec: PhysicalMediaSpec,
+    textures: ResolvedPhysicalTextures,
+    frame: ConsoleInsertionFrame,
+    modifier: Modifier = Modifier,
+) {
+    val umdSizeDp = 148f
+    val bayCyDp = 360f * 0.67f
+    val startY = 14f
+    val endY = bayCyDp - umdSizeDp * 0.5f
+    val yDp = startY + (endY - startY) * frame.insertDepth
+    val umdAlpha = if (frame.lidOpen < 0.35f) (frame.lidOpen / 0.35f).coerceIn(0f, 1f) else 1f
 
-    // Upper sculpted perspective top deck of the console
-    val topDeckPath = Path().apply {
-        moveTo(deckL + 18.dp.toPx(), topY)
-        lineTo(deckR - 18.dp.toPx(), topY)
-        lineTo(deckR, slotY + 12.dp.toPx())
-        lineTo(deckL, slotY + 12.dp.toPx())
-        close()
-    }
-    drawPath(
-        path = topDeckPath,
-        brush = Brush.verticalGradient(
-            0f to hwSpec.bodyTop,
-            1f to hwSpec.bodyMid,
-            startY = topY,
-            endY = slotY + 14.dp.toPx(),
-        ),
-    )
+    Box(modifier = modifier, contentAlignment = Alignment.TopCenter) {
+        Canvas(Modifier.fillMaxSize()) { drawPspConsoleBack(frame) }
 
-    // Deep dark recessed cartridge slot mouth
-    val slotW = deckW * 0.68f
-    val slotL = (w - slotW) * 0.5f
-    val slotH = 22.dp.toPx()
-    drawRoundRect(
-        color = Color(0xFF0A0B0E),
-        topLeft = Offset(slotL, slotY - slotH * 0.62f),
-        size = Size(slotW, slotH),
-        cornerRadius = CornerRadius(6.dp.toPx()),
-    )
-    // Inner dust-flap highlight
-    val flapH = (slotH * 0.36f * (1f - frame.lidOpen * 0.65f)).coerceAtLeast(2.dp.toPx())
-    drawRoundRect(
-        color = hwSpec.bodyDark.copy(alpha = 0.85f),
-        topLeft = Offset(slotL + 4.dp.toPx(), slotY - slotH * 0.56f),
-        size = Size(slotW - 8.dp.toPx(), flapH),
-        cornerRadius = CornerRadius(3.dp.toPx()),
-    )
-}
-
-private fun DrawScope.drawCartridgeConsoleFrontLip(hwSpec: ConsoleHardwareSpec, frame: ConsoleInsertionFrame) {
-    val w = size.width
-    val h = size.height
-    val deckW = (w * 0.84f).coerceAtMost(320.dp.toPx())
-    val deckL = (w - deckW) * 0.5f
-    val slotLipY = h * 0.635f
-    val frontH = h * 0.275f
-
-    // Front console fascia that masks the bottom of the cartridge as it plunges into the slot!
-    drawRoundRect(
-        brush = Brush.verticalGradient(
-            0f to hwSpec.bodyMid,
-            0.42f to hwSpec.bodyDark,
-            1f to Color(0xFF101218),
-            startY = slotLipY,
-            endY = slotLipY + frontH,
-        ),
-        topLeft = Offset(deckL, slotLipY),
-        size = Size(deckW, frontH),
-        cornerRadius = CornerRadius(18.dp.toPx()),
-    )
-
-    // Crisp catch-light bevel along the front slot lip
-    drawLine(
-        color = Color.White.copy(alpha = 0.34f),
-        start = Offset(deckL + 12.dp.toPx(), slotLipY + 1.2.dp.toPx()),
-        end = Offset(deckL + deckW - 12.dp.toPx(), slotLipY + 1.2.dp.toPx()),
-        strokeWidth = 1.6.dp.toPx(),
-    )
-
-    // Console signature trim stripe (NES black stripe, SNES purple switches, Switch red/blue accent)
-    drawRoundRect(
-        color = hwSpec.trimColor.copy(alpha = 0.82f),
-        topLeft = Offset(deckL + 18.dp.toPx(), slotLipY + frontH * 0.28f),
-        size = Size(deckW - 36.dp.toPx(), 6.dp.toPx()),
-        cornerRadius = CornerRadius(3.dp.toPx()),
-    )
-
-    // Power & Reset tactile buttons on the console fascia
-    val btnY = slotLipY + frontH * 0.58f
-    drawRoundRect(
-        color = hwSpec.accentColor.copy(alpha = 0.88f),
-        topLeft = Offset(deckL + 22.dp.toPx(), btnY),
-        size = Size(34.dp.toPx(), 13.dp.toPx()),
-        cornerRadius = CornerRadius(5.dp.toPx()),
-    )
-    drawRoundRect(
-        color = Color.White.copy(alpha = 0.22f),
-        topLeft = Offset(deckL + 64.dp.toPx(), btnY),
-        size = Size(28.dp.toPx(), 13.dp.toPx()),
-        cornerRadius = CornerRadius(5.dp.toPx()),
-    )
-
-    // Glowing Power LED on the right side of the console front panel!
-    val ledCenter = Offset(deckL + deckW - 28.dp.toPx(), btnY + 6.5.dp.toPx())
-    if (frame.ledGlow > 0.02f) {
-        drawCircle(
-            brush = Brush.radialGradient(
-                0f to hwSpec.ledColor.copy(alpha = 0.85f * frame.ledGlow),
-                0.5f to hwSpec.ledColor.copy(alpha = 0.28f * frame.ledGlow),
-                1f to Color.Transparent,
-                center = ledCenter,
-                radius = 24.dp.toPx(),
-            ),
-            radius = 24.dp.toPx(),
-            center = ledCenter,
-        )
-    }
-    drawCircle(
-        color = if (frame.ledGlow > 0.05f) {
-            hwSpec.ledColor.copy(alpha = (0.35f + frame.ledGlow * 0.65f).coerceIn(0f, 1f))
-        } else {
-            Color.Black.copy(alpha = 0.55f)
-        },
-        radius = 4.5.dp.toPx(),
-        center = ledCenter,
-    )
-}
-
-private fun DrawScope.drawDiscConsoleBase(hwSpec: ConsoleHardwareSpec, frame: ConsoleInsertionFrame) {
-    val w = size.width
-    val h = size.height
-    val cx = w * 0.5f
-    val deckW = (w * 0.84f).coerceAtMost(310.dp.toPx())
-    val deckL = cx - deckW * 0.5f
-
-    if (hwSpec.loaderKind == ConsoleLoaderKind.DISC_SLOT_IN) {
-        // Sleek glossy Wii / Wii U front drive bezel with glowing slot mouth
-        val bodyTop = h * 0.56f
-        val bodyH = h * 0.34f
-        drawRoundRect(
-            brush = Brush.verticalGradient(
-                0f to hwSpec.bodyTop,
-                0.55f to hwSpec.bodyMid,
-                1f to hwSpec.bodyDark,
-                startY = bodyTop,
-                endY = bodyTop + bodyH,
-            ),
-            topLeft = Offset(deckL, bodyTop),
-            size = Size(deckW, bodyH),
-            cornerRadius = CornerRadius(18.dp.toPx()),
-        )
-        // Glowing electric-blue optical disc slot
-        val slotW = deckW * 0.72f
-        val slotL = cx - slotW * 0.5f
-        val slotY = h * 0.61f
-        if (frame.ledGlow > 0.05f) {
-            drawRoundRect(
-                brush = Brush.horizontalGradient(
-                    0f to Color.Transparent,
-                    0.2f to hwSpec.ledColor.copy(alpha = 0.65f * frame.ledGlow),
-                    0.5f to hwSpec.ledColor.copy(alpha = 0.95f * frame.ledGlow),
-                    0.8f to hwSpec.ledColor.copy(alpha = 0.65f * frame.ledGlow),
-                    1f to Color.Transparent,
-                    startX = slotL - 12.dp.toPx(),
-                    endX = slotL + slotW + 12.dp.toPx(),
-                ),
-                topLeft = Offset(slotL - 8.dp.toPx(), slotY - 8.dp.toPx()),
-                size = Size(slotW + 16.dp.toPx(), 24.dp.toPx()),
-                cornerRadius = CornerRadius(12.dp.toPx()),
+        Box(
+            modifier = Modifier
+                .size(umdSizeDp.dp)
+                .offset(y = yDp.dp)
+                .graphicsLayer { alpha = umdAlpha },
+            contentAlignment = Alignment.Center,
+        ) {
+            Physical3dStageCanvas(
+                subject = PhysicalViewerSubject.GAME_MEDIA,
+                spec = spec,
+                textures = textures,
+                boxAspect = 1.0f,
+                yawDeg = frame.mediaYawDeg,
+                pitchDeg = frame.mediaPitchDeg,
+                floorShadow = false,
+                modifier = Modifier.fillMaxSize(),
             )
         }
-        drawRoundRect(
-            color = Color(0xFF0A0C10),
-            topLeft = Offset(slotL, slotY),
-            size = Size(slotW, 9.dp.toPx()),
-            cornerRadius = CornerRadius(4.5.dp.toPx()),
-        )
-        return
+
+        Canvas(Modifier.fillMaxSize()) { drawPspConsoleFront(frame) }
     }
-
-    // Classic Top-Lid (PS1, Dreamcast, GameCube, Saturn) or Sliding Tray (PS2, PSP)
-    val bayCy = h * 0.67f
-    val bodyTop = h * 0.48f
-    val bodyH = h * 0.42f
-
-    // Grounded contact shadow
-    drawOval(
-        brush = Brush.radialGradient(
-            0f to Color.Black.copy(alpha = 0.62f),
-            1f to Color.Transparent,
-            center = Offset(cx, bodyTop + bodyH + 6.dp.toPx()),
-            radius = deckW * 0.58f,
-        ),
-        topLeft = Offset(deckL - 10.dp.toPx(), bodyTop + bodyH - 8.dp.toPx()),
-        size = Size(deckW + 20.dp.toPx(), 28.dp.toPx()),
-    )
-
-    // Console top deck body
-    drawRoundRect(
-        brush = Brush.verticalGradient(
-            0f to hwSpec.bodyTop,
-            0.65f to hwSpec.bodyMid,
-            1f to hwSpec.bodyDark,
-            startY = bodyTop,
-            endY = bodyTop + bodyH,
-        ),
-        topLeft = Offset(deckL, bodyTop),
-        size = Size(deckW, bodyH),
-        cornerRadius = CornerRadius(22.dp.toPx()),
-    )
-
-    // Recessed circular disc bay + center spindle hub (in 3D oval perspective!)
-    val trayShiftY = if (hwSpec.loaderKind == ConsoleLoaderKind.DISC_SLIDE_TRAY) {
-        (frame.trayOut - 1f) * 28.dp.toPx()
-    } else 0f
-    val ovalRx = deckW * 0.34f
-    val ovalRy = ovalRx * 0.52f
-    val wellCenter = Offset(cx, bayCy + trayShiftY)
-    drawOval(
-        color = Color(0xFF14161D),
-        topLeft = Offset(wellCenter.x - ovalRx, wellCenter.y - ovalRy),
-        size = Size(ovalRx * 2f, ovalRy * 2f),
-    )
-    drawOval(
-        color = Color.White.copy(alpha = 0.14f),
-        topLeft = Offset(wellCenter.x - ovalRx, wellCenter.y - ovalRy),
-        size = Size(ovalRx * 2f, ovalRy * 2f),
-        style = Stroke(width = 1.6.dp.toPx()),
-    )
-    // Center spindle hub + laser sled glint
-    drawOval(
-        color = Color(0xFF3E434E),
-        topLeft = Offset(wellCenter.x - 14.dp.toPx(), wellCenter.y - 8.dp.toPx()),
-        size = Size(28.dp.toPx(), 16.dp.toPx()),
-    )
-    drawOval(
-        color = Color(0xFF9EA6B6),
-        topLeft = Offset(wellCenter.x - 6.dp.toPx(), wellCenter.y - 3.5.dp.toPx()),
-        size = Size(12.dp.toPx(), 7.dp.toPx()),
-    )
 }
 
-private fun DrawScope.drawDiscConsoleForeground(hwSpec: ConsoleHardwareSpec, frame: ConsoleInsertionFrame) {
-    val w = size.width
-    val h = size.height
-    val cx = w * 0.5f
-    val deckW = (w * 0.84f).coerceAtMost(310.dp.toPx())
-    val deckL = cx - deckW * 0.5f
+// =================================================================================================
+// 8. Nintendo Wii / Wii U: Upright Glossy Tower with Horizontal Feed into Vertical Electric-Blue Slot!
+// =================================================================================================
 
-    if (hwSpec.loaderKind == ConsoleLoaderKind.DISC_SLOT_IN) {
-        // Lower lip masking the disc once it slides inside the glowing slot
-        val lipY = h * 0.625f
-        val lipH = h * 0.28f
-        drawRoundRect(
-            brush = Brush.verticalGradient(
-                0f to hwSpec.bodyMid,
-                1f to hwSpec.bodyDark,
-                startY = lipY,
-                endY = lipY + lipH,
-            ),
-            topLeft = Offset(deckL, lipY),
-            size = Size(deckW, lipH),
-            cornerRadius = CornerRadius(18.dp.toPx()),
-        )
-        drawLine(
-            color = hwSpec.ledColor.copy(alpha = 0.35f + frame.ledGlow * 0.60f),
-            start = Offset(cx - deckW * 0.34f, lipY + 1.dp.toPx()),
-            end = Offset(cx + deckW * 0.34f, lipY + 1.dp.toPx()),
-            strokeWidth = 2.4.dp.toPx(),
-            cap = StrokeCap.Round,
-        )
-        return
-    }
+@Composable
+private fun WiiVerticalSlotInsertionStage(
+    spec: PhysicalMediaSpec,
+    hwSpec: ConsoleHardwareSpec,
+    textures: ResolvedPhysicalTextures,
+    frame: ConsoleInsertionFrame,
+    modifier: Modifier = Modifier,
+) {
+    val discSizeDp = 178f
+    // Glides horizontally from right (+96dp) straight LEFT into the vertical glowing blue slot (-66dp)!
+    val offsetX = 96f + (-162f) * frame.insertDepth
+    val discAlpha = (1f - ((frame.insertDepth - 0.85f) / 0.15f).coerceIn(0f, 1f))
 
-    val bayCy = h * 0.67f
-    val ovalRx = deckW * 0.35f
-    val ovalRy = ovalRx * 0.53f
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        Canvas(Modifier.fillMaxSize()) { drawWiiConsoleBack(hwSpec, frame) }
 
-    // Closing hinged circular console lid sweeping down over the spinning disc!
-    if (hwSpec.loaderKind == ConsoleLoaderKind.DISC_TOP_LID && frame.lidOpen < 0.98f) {
-        val closedFraction = (1f - frame.lidOpen).coerceIn(0f, 1f)
-        val lidTop = bayCy - ovalRy - (1f - closedFraction) * 86.dp.toPx()
-        val lidH = ovalRy * 2f * (0.35f + 0.65f * closedFraction)
-        drawOval(
-            brush = Brush.verticalGradient(
-                0f to hwSpec.bodyTop.copy(alpha = 0.25f + closedFraction * 0.73f),
-                1f to hwSpec.bodyMid.copy(alpha = 0.25f + closedFraction * 0.73f),
-                startY = lidTop,
-                endY = lidTop + lidH,
-            ),
-            topLeft = Offset(cx - ovalRx, lidTop),
-            size = Size(ovalRx * 2f, lidH),
-        )
-        drawOval(
-            color = Color.White.copy(alpha = 0.32f * closedFraction),
-            topLeft = Offset(cx - ovalRx, lidTop),
-            size = Size(ovalRx * 2f, lidH),
-            style = Stroke(width = 1.6.dp.toPx()),
-        )
-        // Center lid emblem badge ring
-        if (closedFraction > 0.45f) {
-            drawOval(
-                color = hwSpec.accentColor.copy(alpha = 0.45f * closedFraction),
-                topLeft = Offset(cx - 22.dp.toPx(), lidTop + lidH * 0.5f - 11.dp.toPx()),
-                size = Size(44.dp.toPx(), 22.dp.toPx()),
-                style = Stroke(width = 2.dp.toPx()),
-            )
+        // Clip cleanly at the vertical glowing blue slot (cx - 21dp) so the disc feeds DIRECTLY into the blue slit!
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .drawWithContent {
+                    clipRect(left = size.width * 0.5f - 21.dp.toPx()) {
+                        this@drawWithContent.drawContent()
+                    }
+                },
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(discSizeDp.dp)
+                    .offset(x = offsetX.dp, y = (-6).dp)
+                    .graphicsLayer { alpha = discAlpha },
+                contentAlignment = Alignment.Center,
+            ) {
+                Physical3dStageCanvas(
+                    subject = PhysicalViewerSubject.GAME_MEDIA,
+                    spec = spec,
+                    textures = textures,
+                    boxAspect = 1.0f,
+                    yawDeg = frame.mediaYawDeg,
+                    pitchDeg = frame.mediaPitchDeg,
+                    floorShadow = false,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { rotationZ = frame.discSpinDeg },
+                )
+            }
         }
-    }
 
-    // Power LED in the front-right corner of the disc console
-    val ledCenter = Offset(deckL + deckW - 26.dp.toPx(), h * 0.82f)
-    if (frame.ledGlow > 0.02f) {
-        drawCircle(
-            brush = Brush.radialGradient(
-                0f to hwSpec.ledColor.copy(alpha = 0.85f * frame.ledGlow),
-                0.55f to hwSpec.ledColor.copy(alpha = 0.28f * frame.ledGlow),
-                1f to Color.Transparent,
-                center = ledCenter,
-                radius = 22.dp.toPx(),
-            ),
-            radius = 22.dp.toPx(),
-            center = ledCenter,
-        )
+        Canvas(Modifier.fillMaxSize()) { drawWiiConsoleFront(hwSpec, frame) }
     }
-    drawCircle(
-        color = if (frame.ledGlow > 0.05f) {
-            hwSpec.ledColor.copy(alpha = (0.35f + frame.ledGlow * 0.65f).coerceIn(0f, 1f))
-        } else {
-            Color.Black.copy(alpha = 0.5f)
-        },
-        radius = 4.5.dp.toPx(),
-        center = ledCenter,
-    )
 }
