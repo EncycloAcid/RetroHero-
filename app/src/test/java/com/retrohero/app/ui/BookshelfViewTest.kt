@@ -78,7 +78,7 @@ class BookshelfViewTest {
         assertTrue(jewelSlot < snesSlot)
         assertTrue(ShelfLayoutMath.spineSlotWidthDp(snesBox, 1.38f, 130f, ShelfLayoutMath.PULLED_YAW) > snesSlot)
         // The generated spine texture has the spine face's exact shape.
-        assertEquals(snesBox.caseStyle.depthRatio * 1.38f, ShelfLayoutMath.spineFaceRatio(snesBox, 1.38f), 0.0001f)
+        assertEquals(snesBox.depthRatio * 1.38f, ShelfLayoutMath.spineFaceRatio(snesBox, 1.38f), 0.0001f)
 
         val chunked = ShelfLayoutMath.chunkIntoShelves(List(10) { fakeGame("g$it", "Game $it", "snes") }, perShelf = 8)
         assertEquals(listOf(8, 2), chunked.map { it.size })

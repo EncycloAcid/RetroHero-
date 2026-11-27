@@ -45,6 +45,42 @@ enum class PhysicalMediaKind(
     UMD_DISC("UMD Disc", isOpticalDisc = true, defaultAspect = 1.0f, thicknessRatio = 0.055f),
 }
 
+/**
+ * Measured size of a retail game case (North American release unless noted), standing upright:
+ * width × height × depth in millimetres. These drive the case's shape in 3D, its spine thickness
+ * and its height on the Physical Shelf.
+ */
+data class RealCaseDimensions(val widthMm: Float, val heightMm: Float, val depthMm: Float, val source: String) {
+    /** Front width / height. */
+    val aspect: Float get() = widthMm / heightMm
+    /** Depth relative to the case's long side, as the 3D model measures it. */
+    val depthRatio: Float get() = depthMm / maxOf(widthMm, heightMm)
+    /** Share of a LaunchBox `Box - Full` wraparound scan ([back | spine | front]) that is the spine. */
+    val wrapSpineFraction: Float get() = depthMm / (2f * widthMm + depthMm)
+
+    companion object {
+        private const val KEEP_CASE = "Wikipedia, Keep case (Wii/Wii U 190x135x14 mm); retail PS2 case listings"
+        private const val JEWEL = "Standard CD jewel case, 142x125x10.4 mm (orphiq, cdrom2go)"
+
+        /** Null for systems without a reliable measurement; those keep their case style's defaults. */
+        fun forSystem(systemId: String): RealCaseDimensions? = when (systemId.lowercase()) {
+            "nes" -> RealCaseDimensions(127f, 178f, 25f, "NES box protectors, 5 x 7 x 1 in (retroprotection, BOXPRO)")
+            "snes", "n64" -> RealCaseDimensions(179f, 126f, 27f, "SNES/N64 NA box, 7 1/16 x 4 14/16 x ~1 in (NintendoAge forum; Pacsam protectors)")
+            "gb", "gbc", "gba" -> RealCaseDimensions(127f, 127f, 25f, "Game Boy family box protectors, 5 x 5 x 1 in (BOXPRO, Bags Unlimited)")
+            "nds" -> RealCaseDimensions(122f, 135f, 15f, "Wikipedia, Keep case: Nintendo DS (NA/JP) 135x122x15 mm, black")
+            "3ds" -> RealCaseDimensions(122f, 135f, 12f, "Wikipedia, Keep case: Nintendo 3DS 135x122x12 mm, white")
+            "switch" -> RealCaseDimensions(104f, 170f, 10f, "Wikipedia, Keep case: Nintendo Switch 170x104x10 mm")
+            "psp" -> RealCaseDimensions(99f, 168f, 14f, "Wikipedia, Keep case: PlayStation Portable 168x99x14 mm")
+            "psvita" -> RealCaseDimensions(105f, 135f, 12f, "Wikipedia, Keep case: PlayStation Vita 135x105x12 mm")
+            "gc", "wii", "wiiu", "ps2" -> RealCaseDimensions(135f, 190f, 14f, KEEP_CASE)
+            "genesis", "32x", "sms", "sg1000" -> RealCaseDimensions(128f, 198f, 25f, "Genesis clamshell, ~128x197-200x25 mm (protector listings)")
+            "segacd", "saturn" -> RealCaseDimensions(144f, 206f, 21f, "Sega CD / Saturn NA case, 5 11/16 x 8 1/8 x 13/16 in (Sega-Age forum)")
+            "psx", "dreamcast" -> RealCaseDimensions(142f, 125f, 10.4f, JEWEL)
+            else -> null
+        }
+    }
+}
+
 /** Platform-specific physical case + cartridge/disc styling resolved for any RetroHero console. */
 data class PhysicalMediaSpec(
     val systemId: String,
@@ -57,7 +93,15 @@ data class PhysicalMediaSpec(
     val blackDiscUnderside: Boolean = false,
     val customAspectOverride: Float? = null,
 ) {
-    val defaultBoxAspect: Float get() = customAspectOverride ?: caseStyle.defaultAspect
+    /** Measured case size for this system, when known. */
+    val realDimensions: RealCaseDimensions? get() = RealCaseDimensions.forSystem(systemId)
+    /** Front width / height: measured when known, else the case style's typical shape. */
+    val defaultBoxAspect: Float get() = realDimensions?.aspect ?: customAspectOverride ?: caseStyle.defaultAspect
+    /** Case depth relative to its long side: measured when known, else the case style's typical depth. */
+    val depthRatio: Float get() = realDimensions?.depthRatio ?: caseStyle.depthRatio
+    /** Spine share of a LaunchBox `Box - Full` wraparound scan. */
+    val fullWrapSpineFraction: Float get() =
+        realDimensions?.wrapSpineFraction ?: (caseStyle.depthRatio * 0.55f).coerceIn(0.05f, 0.14f)
 
     companion object {
         fun forSystem(systemId: String, fallbackAccent: Color = Color(0xFF6750A4)): PhysicalMediaSpec = when (systemId) {
@@ -229,7 +273,8 @@ data class PhysicalMediaSpec(
                 systemId = systemId,
                 caseStyle = RetailCaseStyle.KEEP_CASE_DVD,
                 mediaKind = PhysicalMediaKind.OPTICAL_DISC,
-                casePlasticColor = Color(0xFF15203B),
+                // Black in North America; navy blue only in PAL regions from 2001 (Wikipedia, Keep case).
+                casePlasticColor = Color(0xFF16171B),
                 mediaShellColor = Color(0xFF1E3A8A),
                 spineHeaderColor = Color(0xFF0D47A1),
             )
@@ -317,7 +362,7 @@ data class PhysicalMediaSpec(
          */
         fun sliceFullBoxCover(full: Bitmap, spineFraction: Float = 0.075f): Triple<Bitmap, Bitmap, Bitmap>? {
             if (full.width < 64 || full.height < 64) return null
-            val clampedSpine = spineFraction.coerceIn(0.04f, 0.18f)
+            val clampedSpine = spineFraction.coerceIn(0.025f, 0.18f)
             val wing = (1f - clampedSpine) * 0.5f
             val backW = (full.width * wing).toInt().coerceAtLeast(16)
             val spineW = (full.width * clampedSpine).toInt().coerceAtLeast(8)

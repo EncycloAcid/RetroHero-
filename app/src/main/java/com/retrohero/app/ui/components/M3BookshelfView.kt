@@ -114,7 +114,7 @@ object ShelfLayoutMath {
 
     /** Width / height of a case's spine face in the 3D model (depth relative to the case's long side). */
     fun spineFaceRatio(spec: PhysicalMediaSpec, boxAspect: Float): Float =
-        (spec.caseStyle.depthRatio * maxOf(boxAspect, 1f)).coerceIn(0.05f, 0.4f)
+        (spec.depthRatio * maxOf(boxAspect, 1f)).coerceIn(0.05f, 0.4f)
 
     /** Aspect of the generated box front, which the 3D viewer uses when there's no real cover. */
     fun proceduralFrontAspect(spec: PhysicalMediaSpec): Float {
@@ -127,41 +127,32 @@ object ShelfLayoutMath {
     fun spineSlotWidthDp(spec: PhysicalMediaSpec, boxAspect: Float, caseHeightDp: Float, yawDeg: Float = SPINE_YAW): Float {
         val halfH = caseHeightDp / 2f
         val halfW = halfH * boxAspect
-        val halfD = maxOf(halfW, halfH) * spec.caseStyle.depthRatio
+        val halfD = maxOf(halfW, halfH) * spec.depthRatio
         val rad = Math.toRadians(yawDeg.toDouble())
         val projected = 2f * (halfD * kotlin.math.abs(kotlin.math.sin(rad)).toFloat() + halfW * kotlin.math.abs(kotlin.math.cos(rad)).toFloat())
         return projected + 2f
     }
 
-    /** Real retail case heights in millimetres (North American releases), standing upright. */
-    fun caseHeightMm(systemId: String): Float = when (systemId.lowercase()) {
-        "nes" -> 180f
-        "snes", "vb" -> 133f
-        "n64" -> 131f
-        "gb", "gbc" -> 116f
-        "gba" -> 125f
-        "nds", "3ds" -> 136f
-        "switch" -> 170f
-        "psp" -> 178f
-        "gc", "wii", "wiiu", "ps2" -> 190f
-        "genesis", "32x", "sms" -> 190f
-        "sg1000" -> 180f
-        "gg" -> 142f
-        "segacd", "saturn" -> 220f
-        "psx", "dreamcast" -> 125f
-        else -> when (PhysicalMediaSpec.forSystem(systemId).caseStyle) {
-            RetailCaseStyle.CARDBOARD_VERTICAL -> 180f
-            RetailCaseStyle.CARDBOARD_LANDSCAPE -> 133f
-            RetailCaseStyle.CARDBOARD_SQUARE -> 120f
-            RetailCaseStyle.CLAMSHELL_PLASTIC -> 190f
+    /**
+     * Real retail case height in millimetres, standing upright: measured (see [RealCaseDimensions]
+     * for sources) where known, otherwise a typical height for the case style.
+     */
+    fun caseHeightMm(systemId: String): Float {
+        val spec = PhysicalMediaSpec.forSystem(systemId)
+        spec.realDimensions?.let { return it.heightMm }
+        return when (spec.caseStyle) {
+            RetailCaseStyle.CARDBOARD_VERTICAL -> 178f
+            RetailCaseStyle.CARDBOARD_LANDSCAPE -> 126f
+            RetailCaseStyle.CARDBOARD_SQUARE -> 127f
+            RetailCaseStyle.CLAMSHELL_PLASTIC -> 198f
             RetailCaseStyle.JEWEL_CASE_CD -> 125f
             RetailCaseStyle.KEEP_CASE_DVD -> 190f
-            RetailCaseStyle.HANDHELD_SNAP_CASE -> 136f
+            RetailCaseStyle.HANDHELD_SNAP_CASE -> 135f
             RetailCaseStyle.ARCADE_SHOCKBOX -> 205f
         }
     }
 
-    /** One scale for every case, so they stand at their true relative sizes (220 mm fills the row). */
+    /** One scale for every case, so they stand at their true relative sizes. */
     const val DP_PER_MM = 0.80f
 
     /**
@@ -172,7 +163,7 @@ object ShelfLayoutMath {
         val spec = PhysicalMediaSpec.forSystem(systemId)
         val heightDp = caseHeightMm(systemId) * DP_PER_MM
         val aspect = proceduralFrontAspect(spec)
-        val depthDp = heightDp * maxOf(aspect, 1f) * spec.caseStyle.depthRatio
+        val depthDp = heightDp * maxOf(aspect, 1f) * spec.depthRatio
         return SpineDimensions(widthDp = depthDp, heightDp = heightDp, topBevelDp = 5f)
     }
 

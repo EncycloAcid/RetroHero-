@@ -1046,7 +1046,7 @@ internal fun Physical3dStageCanvas(
                 .coerceIn(0.62f, 1.65f)
         }
         val depthRatio = when {
-            subject == PhysicalViewerSubject.RETAIL_BOX -> spec.caseStyle.depthRatio
+            subject == PhysicalViewerSubject.RETAIL_BOX -> spec.depthRatio
             else -> spec.mediaKind.thicknessRatio
         }
 
@@ -2107,7 +2107,7 @@ internal fun rememberPhysicalTextures(
 
     // Support LaunchBox `Box - Full` wraparound sleeves when individual Back/Spine/Front scans are absent!
     val slicedFull = remember(loadedFull, spec.caseStyle) {
-        loadedFull?.let { PhysicalMediaSpec.sliceFullBoxCover(it, (spec.caseStyle.depthRatio * 0.55f).coerceIn(0.05f, 0.14f)) }
+        loadedFull?.let { PhysicalMediaSpec.sliceFullBoxCover(it, spec.fullWrapSpineFraction) }
     }
 
     val realFront = loadedFront ?: slicedFull?.third
@@ -2637,7 +2637,8 @@ internal fun buildProceduralSpineBitmap(
     fun inkOn(argb: Int) = if (luminance(argb) > 0.6f) AndroidColor.rgb(20, 22, 28) else AndroidColor.WHITE
 
     // Body: the cover's own colors when there's real art, else the shelf's per-game color.
-    val whiteCase = game.systemId.lowercase(Locale.US) in setOf("nds", "3ds")
+    // White/clear cases (3DS, Wii, PSP) get a white spine; the NA DS case is black (Wikipedia, Keep case).
+    val whiteCase = luminance(spec.casePlasticColor.toArgb()) > 0.75f
     val coverArgb = cover?.let { art ->
         runCatching {
             val small = Bitmap.createScaledBitmap(art, 96, (96f * art.height / art.width).toInt().coerceAtLeast(16), true)
@@ -3437,7 +3438,7 @@ internal fun rememberShelfCaseArt(
 
         suspend fun build(cover: Bitmap?, loadedSpine: Bitmap?, loadedFull: Bitmap?): ShelfCaseArt = withContext(Dispatchers.Default) {
             val sliced = loadedFull?.let {
-                PhysicalMediaSpec.sliceFullBoxCover(it, (spec.caseStyle.depthRatio * 0.55f).coerceIn(0.05f, 0.14f))
+                PhysicalMediaSpec.sliceFullBoxCover(it, spec.fullWrapSpineFraction)
             }
             val front = (cover?.let { trimTransparentBounds(it) }) ?: sliced?.third
             // Same aspect rules as the 3D viewer: the real front, else the generated front's shape.
