@@ -399,6 +399,10 @@ class EmulatorActivity : ComponentActivity() {
         challengeBanner = intent.getStringExtra(EXTRA_CHALLENGE_TITLE)?.takeIf { it.isNotBlank() }
         game = Game.fromJson(JSONObject(gameJson))
         system = game.system ?: run { finish(); return }
+        com.retrohero.app.data.CrashReporter.setBreadcrumb(
+            this,
+            "Game: ${game.title} (${game.fileName})\nSystem: ${system.id}\nCore: $coreId\nCore file: ${java.io.File(corePath).name}",
+        )
         paths = AppPaths(this)
         settings = Settings(this)
         audioHaptics = AudioHapticsEngine(this)
@@ -1737,6 +1741,7 @@ class EmulatorActivity : ComponentActivity() {
         super.onDestroy()
         if (isFinishing) {
             shutdownCore()
+            com.retrohero.app.data.CrashReporter.clearBreadcrumb(this)
             // Give the core a clean slate next time; see class comment.
             Process.killProcess(Process.myPid())
         }

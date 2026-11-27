@@ -34,6 +34,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccessibilityNew
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.Backup
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
@@ -153,6 +154,8 @@ internal fun M3SettingsPage(
     onImportSkin: () -> Unit,
     onBackup: () -> Unit,
     onRestore: () -> Unit,
+    onOpenCrashReports: () -> Unit = {},
+    crashReportCount: Int = 0,
     onDownloadCore: (CoreInfo) -> Unit,
     onDownloadAllNeededCores: () -> Unit,
     onDeleteCore: (CoreInfo) -> Unit,
@@ -764,7 +767,7 @@ internal fun M3SettingsPage(
                     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         M3SegmentedItem(
                             index = 0,
-                            count = 4,
+                            count = 5,
                             icon = Icons.Rounded.AutoAwesome,
                             badgePolygon = MaterialShapes.Sunny,
                             badgeContainer = cs.primaryContainer,
@@ -775,7 +778,7 @@ internal fun M3SettingsPage(
                         )
                         M3SegmentedItem(
                             index = 1,
-                            count = 4,
+                            count = 5,
                             icon = Icons.Rounded.Backup,
                             badgePolygon = MaterialShapes.Cookie9Sided,
                             badgeContainer = cs.primaryContainer,
@@ -786,7 +789,7 @@ internal fun M3SettingsPage(
                         )
                         M3SegmentedItem(
                             index = 2,
-                            count = 4,
+                            count = 5,
                             icon = Icons.Rounded.Restore,
                             badgePolygon = MaterialShapes.Clover4Leaf,
                             badgeContainer = cs.secondaryContainer,
@@ -797,7 +800,7 @@ internal fun M3SettingsPage(
                         )
                         M3SegmentedItem(
                             index = 3,
-                            count = 4,
+                            count = 5,
                             icon = Icons.Rounded.Link,
                             badgePolygon = MaterialShapes.Cookie6Sided,
                             badgeContainer = cs.tertiaryContainer,
@@ -805,6 +808,18 @@ internal fun M3SettingsPage(
                             title = "Download ROM via HTTPS link",
                             subtitle = "Fetch a game file or folder directly",
                             onClick = onOpenDownloadGame,
+                        )
+                        M3SegmentedItem(
+                            index = 4,
+                            count = 5,
+                            icon = Icons.Rounded.BugReport,
+                            badgePolygon = MaterialShapes.Cookie4Sided,
+                            badgeContainer = cs.errorContainer,
+                            badgeContent = cs.onErrorContainer,
+                            title = "Crash reports",
+                            subtitle = if (crashReportCount == 0) "None saved · stored only on this device"
+                            else "$crashReportCount saved on this device · Tap to share or delete",
+                            onClick = onOpenCrashReports,
                         )
                     }
                 }

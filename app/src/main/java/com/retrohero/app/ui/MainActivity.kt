@@ -29,6 +29,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import com.retrohero.app.R
+import com.retrohero.app.data.CrashReporter
 import com.retrohero.app.data.DeltaSkins
 import com.retrohero.app.ui.components.LocalArtPaths
 import com.retrohero.app.ui.components.LocalArtVersion
@@ -138,6 +139,8 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
     var runAheadFrames by remember { mutableIntStateOf(vm.settings.runAheadFrames) }
     var showPerfHud by remember { mutableStateOf(vm.settings.showPerfHud) }
     var homebrewOpen by rememberSaveable { mutableStateOf(false) }
+    var crashReportCount by remember { mutableIntStateOf(0) }
+    var crashDialog by remember { mutableStateOf<Boolean?>(null) } // null = hidden, true = after a crash
     var raSignInOpen by rememberSaveable { mutableStateOf(false) }
     var toastMessage by remember { mutableStateOf<AppViewModel.Message?>(null) }
     var engineVersion by remember { mutableIntStateOf(0) }
@@ -146,6 +149,15 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
 
     LifecycleResumeEffect(Unit) {
         vm.refreshStats()
+        // Picks up crashes from the game process (or the last run) and offers to share them once.
+        scope.launch {
+            val (total, unseen) = withContext(Dispatchers.IO) {
+                CrashReporter.collectSystemExits(context)
+                CrashReporter.reports(context).size to CrashReporter.unseenReports(context).size
+            }
+            crashReportCount = total
+            if (unseen > 0 && crashDialog == null) crashDialog = true
+        }
         onPauseOrDispose { }
     }
     LaunchedEffect(games.size) { vm.refreshStats() }
@@ -302,6 +314,8 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
             backupCreator.launch("retrohero-backup-$stamp.zip")
         },
         onRestore = { restorePicker.launch(arrayOf("application/zip", "*/*")) },
+        onOpenCrashReports = { crashDialog = false },
+        crashReportCount = crashReportCount,
         onDownloadCore = vm::downloadCore,
         onDownloadAllNeededCores = vm::downloadCores,
         onDeleteCore = vm::deleteCore,
@@ -356,6 +370,31 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
                 vm.resetRaAuthError()
                 raSignInOpen = false
             },
+        )
+    }
+
+    crashDialog?.let { afterCrash ->
+        val close = {
+            CrashReporter.acknowledge(context)
+            crashDialog = null
+        }
+        CrashReportsDialog(
+            count = crashReportCount,
+            afterCrash = afterCrash,
+            onShare = {
+                close()
+                runCatching { shareCrashReports(context) }
+                    .onFailure { vm.say("Couldn't share crash reports") }
+            },
+            onClear = {
+                close()
+                scope.launch {
+                    withContext(Dispatchers.IO) { CrashReporter.clear(context) }
+                    crashReportCount = 0
+                    vm.say("Crash reports deleted")
+                }
+            },
+            onDismiss = close,
         )
     }
 

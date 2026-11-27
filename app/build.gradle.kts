@@ -48,13 +48,23 @@ android {
         versionCode = resolvedVersion.first
         versionName = resolvedVersion.second
 
-        ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
-        }
         externalNativeBuild {
             cmake {
                 arguments += listOf("-DANDROID_STL=c++_shared")
             }
+        }
+    }
+
+    // One APK per CPU type instead of one fat APK carrying all three. ML Kit's translation and OCR
+    // libraries are ~10 MB per ABI, so the arm64 APK most phones need is under half the size.
+    // Every split shares the same versionCode and signing key, so any of them updates any other
+    // (including the universal APK) in place when sideloaded.
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86_64")
+            isUniversalApk = true
         }
     }
 

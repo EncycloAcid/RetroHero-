@@ -4,6 +4,7 @@ import android.app.Application
 import com.retrohero.app.data.AppPaths
 import com.retrohero.app.data.BiosManager
 import com.retrohero.app.data.CoreManager
+import com.retrohero.app.data.CrashReporter
 import com.retrohero.app.data.GameLibrary
 import com.retrohero.app.data.RomCache
 import com.retrohero.app.data.RomPatchStore
@@ -20,6 +21,7 @@ class RetroHeroApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        CrashReporter.install(this)
         paths = AppPaths(this)
         settings = Settings(this)
     }
