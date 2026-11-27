@@ -511,15 +511,18 @@ private fun PulledCaseSpotlight(
         withContext(Dispatchers.IO) { dossierFor(game) }?.let { dossier = it }
         loadDossier?.let { load -> runCatching { load(game) }.getOrNull()?.let { dossier = it } }
     }
+    var launchCeremonyNonce by remember(game.id) { mutableStateOf(0) }
     val spec = remember(game.systemId) { PhysicalMediaSpec.forSystem(game.systemId) }
 
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         // The game page's own 3D case & disc viewer: drag 360°, double-tap to flip, Case / Disc,
-        // Zoom. The case turns out of the shelf from its spine to the 3/4 view.
+        // Zoom, and animated cartridge/disc insertion into the console on Play.
         M3PhysicalBoxViewerSection(
             game = game,
             dossier = dossier,
             introFromYawDeg = ShelfLayoutMath.SPINE_YAW,
+            onPlay = onPlay,
+            insertLaunchTrigger = launchCeremonyNonce,
         )
         Row(
             Modifier
@@ -561,7 +564,7 @@ private fun PulledCaseSpotlight(
                 Text("Details", style = MaterialTheme.typography.labelLarge, maxLines = 1, softWrap = false)
             }
             Button(
-                onClick = onPlay,
+                onClick = { launchCeremonyNonce++ },
                 modifier = Modifier.height(40.dp),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 0.dp),
             ) {

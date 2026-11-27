@@ -62,6 +62,7 @@ import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Memory
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.RestartAlt
 import androidx.compose.material.icons.rounded.Search
@@ -184,6 +185,10 @@ fun M3PhysicalBoxViewerSection(
     modifier: Modifier = Modifier,
     /** If set, the case starts at this angle and turns to [initialYawDeg] (e.g. spine-on, pulled off a shelf). */
     introFromYawDeg: Float? = null,
+    /** When provided, shows a tactile Play action on the 3D viewer that animates inserting the media into the console. */
+    onPlay: (() -> Unit)? = null,
+    /** Increment to trigger the 3D cartridge/disc console insertion ceremony externally. */
+    insertLaunchTrigger: Int = 0,
 ) {
     val cs = MaterialTheme.colorScheme
     val view = LocalView.current
@@ -213,10 +218,16 @@ fun M3PhysicalBoxViewerSection(
     var tiltEnabled by remember(game.id) { mutableStateOf(!reducedMotion) }
     var tiltResetNonce by remember(game.id) { mutableIntStateOf(0) }
     var showInspector by remember(game.id) { mutableStateOf(false) }
+    var showInsertCeremony by remember(game.id) { mutableStateOf(false) }
 
     LaunchedEffect(openInspectorTrigger) {
         if (openInspectorTrigger > 0) {
             showInspector = true
+        }
+    }
+    LaunchedEffect(insertLaunchTrigger) {
+        if (insertLaunchTrigger > 0 && onPlay != null) {
+            showInsertCeremony = true
         }
     }
 
@@ -538,7 +549,7 @@ fun M3PhysicalBoxViewerSection(
             }
         }
 
-        // LaunchBox-style Quick Angle & Turntable Controls Strip
+        // LaunchBox-style Quick Angle, Insert & Play & Turntable Controls Strip
         Row(
             Modifier
                 .fillMaxWidth()
@@ -547,6 +558,37 @@ fun M3PhysicalBoxViewerSection(
             horizontalArrangement = Arrangement.spacedBy(7.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (onPlay != null) {
+                Row(
+                    Modifier
+                        .clip(CircleShape)
+                        .background(cs.primary)
+                        .clickable {
+                            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                            showInsertCeremony = true
+                        }
+                        .padding(horizontal = 13.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Icon(
+                        Icons.Rounded.PlayArrow,
+                        contentDescription = null,
+                        tint = cs.onPrimary,
+                        modifier = Modifier.size(15.dp),
+                    )
+                    Text(
+                        text = if (spec.mediaKind.isOpticalDisc) "Load & Play" else "Insert & Play",
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = FontWeight.ExtraBold,
+                            fontSize = 11.5.sp,
+                        ),
+                        color = cs.onPrimary,
+                        maxLines = 1,
+                    )
+                }
+            }
+
             val normYaw = normalizeSignedDegrees(effectiveYaw)
             if (subject == PhysicalViewerSubject.RETAIL_BOX) {
                 AnglePresetChip(
@@ -637,7 +679,23 @@ fun M3PhysicalBoxViewerSection(
             initialSubject = subject,
             initialYawDeg = yawAnim.value,
             boxAspect = animatedBoxAspect,
+            onPlayFromModel = if (onPlay != null) {
+                {
+                    showInspector = false
+                    showInsertCeremony = true
+                }
+            } else null,
             onDismiss = { showInspector = false },
+        )
+    }
+
+    if (showInsertCeremony && onPlay != null) {
+        M3ConsoleInsertionDialog(
+            game = game,
+            spec = spec,
+            textures = textures,
+            onLaunchNow = onPlay,
+            onDismiss = { showInsertCeremony = false },
         )
     }
 }
@@ -715,6 +773,7 @@ private fun M3PhysicalBoxInspectorDialog(
     initialSubject: PhysicalViewerSubject,
     initialYawDeg: Float,
     boxAspect: Float,
+    onPlayFromModel: (() -> Unit)? = null,
     onDismiss: () -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
@@ -959,6 +1018,34 @@ private fun M3PhysicalBoxInspectorDialog(
                             snapYaw(18f)
                         },
                     )
+                }
+
+                if (onPlayFromModel != null) {
+                    Row(
+                        Modifier
+                            .clip(CircleShape)
+                            .background(cs.primary)
+                            .clickable {
+                                view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                onPlayFromModel()
+                            }
+                            .padding(horizontal = 15.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    ) {
+                        Icon(
+                            Icons.Rounded.PlayArrow,
+                            contentDescription = null,
+                            tint = cs.onPrimary,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Text(
+                            text = if (spec.mediaKind.isOpticalDisc) "Load & Play" else "Insert & Play",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.ExtraBold),
+                            color = cs.onPrimary,
+                            maxLines = 1,
+                        )
+                    }
                 }
             }
         }

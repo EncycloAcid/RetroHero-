@@ -1339,6 +1339,7 @@ internal fun M3GameDetailPage(
                     game = game,
                     dossier = dossier,
                     openInspectorTrigger = open3dInspectorNonce,
+                    onPlay = { onPlay(null) },
                 )
             }
 
