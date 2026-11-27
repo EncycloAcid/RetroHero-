@@ -221,14 +221,23 @@ object LaunchBoxMetadata {
         "Fanart - Box - Front",
     )
 
-    private fun preferredRegionKeywords(romBaseName: String): List<String> {
+    internal fun preferredRegionKeywords(romBaseName: String): List<String> {
         val lower = romBaseName.lowercase(Locale.US)
+        // All region tags together, e.g. "(Japan, USA) (En)" -> "japan, usa,en".
+        val tags = Regex("""\(([^)]*)\)""").findAll(lower).joinToString(",") { it.groupValues[1] }
+        val regions = tags.split(',').map { it.trim() }.toSet()
+        val northAmerica = listOf("north america", "united states", "world", "europe")
         return when {
-            "(europe" in lower || "(e)" in lower -> listOf("europe", "united kingdom", "world", "north america", "united states")
-            "(japan" in lower || "(j)" in lower -> listOf("japan", "world", "north america", "united states")
-            else -> listOf("north america", "united states", "world", "europe")
+            // A release that includes the USA (or is worldwide) gets North American art, even if Japan is listed first.
+            regions.any { it == "usa" || it == "u" || it == "world" || it == "canada" } -> northAmerica
+            regions.any { it == "europe" || it == "e" || it == "uk" || it in EUROPEAN_COUNTRIES } ->
+                listOf("europe", "united kingdom", "world", "north america", "united states")
+            regions.any { it == "japan" || it == "j" } -> listOf("japan", "world", "north america", "united states")
+            else -> northAmerica
         }
     }
+
+    private val EUROPEAN_COUNTRIES = setOf("germany", "france", "spain", "italy", "netherlands", "sweden", "australia")
 
     /** Picks the best storefront hero banner, 3D case faces (front/back/spine/full), cart/disc scans, and screenshots. */
     fun selectStorefrontMedia(images: List<LaunchBoxImage>, romBaseName: String = ""): LaunchBoxStorefrontMedia {
@@ -835,15 +844,12 @@ object LaunchBoxMetadata {
         var record = parseDetailsHtml(detailHtml, bestHit)
         // LaunchBox's /games/details/ tab usually shows only Box - Front + featured art;
         // fetch /games/images/ as well so 3D Box - Back, Box - Spine, Box - Full, Cart & Disc scans load!
-        val has3dCaseAndMedia = record.images.any {
-            it.type.startsWith("Box - Back", ignoreCase = true) ||
-                it.type.equals("Box - Spine", ignoreCase = true) ||
-                it.type.equals("Box - Full", ignoreCase = true)
-        } && record.images.any {
-            it.type.startsWith("Cart -", ignoreCase = true) ||
-                it.type.contains("Disc", ignoreCase = true)
+        // Spine and full-wrap scans usually appear only on the Images tab, so read it unless the
+        // details page already had one (a box back + cart there is not enough).
+        val hasSpineArt = record.images.any {
+            it.type.equals("Box - Spine", ignoreCase = true) || it.type.equals("Box - Full", ignoreCase = true)
         }
-        if (!has3dCaseAndMedia) {
+        if (!hasSpineArt) {
             val imagesPath = bestHit.detailPath.replace("/games/details/", "/games/images/")
             val imagesHtml = fetchHtml("$GAMESDB_BASE_URL$imagesPath")
             if (imagesHtml != null) {

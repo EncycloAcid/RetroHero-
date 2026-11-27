@@ -99,7 +99,8 @@ data class GameDossier(
         )
 
     companion object {
-        const val CACHE_SCHEMA_VERSION = 6
+        // 7: re-fetch dossiers saved before LaunchBox spine scans and region choice were fixed.
+        const val CACHE_SCHEMA_VERSION = 7
 
         fun fromJson(o: JSONObject): GameDossier? {
             if (o.optInt("schemaVersion", 1) < CACHE_SCHEMA_VERSION) return null

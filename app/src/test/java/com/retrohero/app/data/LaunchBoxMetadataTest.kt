@@ -278,4 +278,13 @@ class LaunchBoxMetadataTest {
         assertTrue(media.boxBackUrl!!.endsWith("back-na.png"))
         assertTrue(media.cartFrontUrl!!.endsWith("cart-na.png"))
     }
+
+    @Test
+    fun multiRegionReleasesThatIncludeTheUsaPreferNorthAmericanArt() {
+        assertEquals("north america", LaunchBoxMetadata.preferredRegionKeywords("Super Metroid (Japan, USA) (En)").first())
+        assertEquals("north america", LaunchBoxMetadata.preferredRegionKeywords("Sonic The Hedgehog 2 (World)").first())
+        assertEquals("europe", LaunchBoxMetadata.preferredRegionKeywords("Mega Man (Europe)").first())
+        assertEquals("japan", LaunchBoxMetadata.preferredRegionKeywords("Mother (Japan)").first())
+        assertEquals("north america", LaunchBoxMetadata.preferredRegionKeywords("Untagged Game").first())
+    }
 }
