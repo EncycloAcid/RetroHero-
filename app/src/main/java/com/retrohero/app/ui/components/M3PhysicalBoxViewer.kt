@@ -1215,9 +1215,9 @@ internal fun Physical3dStageCanvas(
                     fillPaint = fillPaint,
                     srcPts = srcPts,
                 )
-            } else if (isCartridge && textures.hasRealMedia) {
-                // Real LaunchBox transparent-PNG cartridge scan: extrude its EXACT alpha silhouette in 3D
-                // (so NES notches, SNES shoulders, GB/N64 cutouts never have a rectangular grey box sticking out!)
+            } else if (isCartridge) {
+                // True alpha-silhouette 3D extrusion for both real LaunchBox scans AND console-sculpted
+                // procedural cartridges (3DS lockout tab, GBA flared wings, NES stepped neck, GB notch, N64 arch!)
                 draw3dRealCartridgeScan(
                     native = native,
                     quads = quads,
@@ -1231,6 +1231,7 @@ internal fun Physical3dStageCanvas(
                     bmpPaint = bmpPaint,
                     fillPaint = fillPaint,
                     srcPts = srcPts,
+                    useTexSilhouette = !textures.hasRealMedia,
                 )
             } else {
                 val caseColorArgb = if (subject == PhysicalViewerSubject.RETAIL_BOX) {
@@ -1531,6 +1532,7 @@ private fun draw3dRealCartridgeScan(
     bmpPaint: Paint,
     fillPaint: Paint,
     srcPts: FloatArray,
+    useTexSilhouette: Boolean = false,
 ) {
     val mainFace = quads.firstOrNull { it.face == BoxFaceId.FRONT || it.face == BoxFaceId.BACK }
 
@@ -1552,7 +1554,7 @@ private fun draw3dRealCartridgeScan(
 
     val isFront = mainFace.face == BoxFaceId.FRONT
     val tex = if (isFront) frontScanBmp else backShellBmp
-    val silhouetteBmp = frontScanBmp
+    val silhouetteBmp = if (useTexSilhouette) tex else frontScanBmp
     val bw = tex.width.toFloat()
     val bh = tex.height.toFloat()
     val sw = silhouetteBmp.width.toFloat()
@@ -1690,6 +1692,26 @@ private fun sampleBitmapEdgeArgb(bmp: Bitmap, topEdge: Boolean): Int {
     return AndroidColor.rgb((rSum / count).toInt(), (gSum / count).toInt(), (bSum / count).toInt())
 }
 
+private fun buildUmdShellPath(bw: Float, bh: Float): AndroidPath {
+    // Authentic Sony PSP UMD protective shell silhouette: semicircular top dome + straight sides + squared beveled bottom!
+    val r = bw * 0.485f
+    val cx = bw * 0.50f
+    val domeCy = bh * 0.495f
+    val left = cx - r
+    val right = cx + r
+    val bottom = bh * 0.965f
+    val corner = bw * 0.055f
+    return AndroidPath().apply {
+        // Upper semicircular arc from right (0°) counter-clockwise to left (180°)
+        arcTo(RectF(left, domeCy - r, right, domeCy + r), 0f, -180f, true)
+        lineTo(left, bottom - corner)
+        quadTo(left, bottom, left + corner, bottom)
+        lineTo(right - corner, bottom)
+        quadTo(right, bottom, right, bottom - corner)
+        close()
+    }
+}
+
 private fun draw3dOpticalDisc(
     native: AndroidCanvas,
     quads: List<com.retrohero.app.data.ProjectedQuad>,
@@ -1716,11 +1738,17 @@ private fun draw3dOpticalDisc(
             close()
         }
         fillPaint.shader = null
-        fillPaint.color = AndroidColor.argb(230, 210, 220, 235)
+        fillPaint.color = if (spec.blackDiscUnderside) {
+            AndroidColor.rgb(28, 30, 36)
+        } else {
+            AndroidColor.argb(235, 224, 232, 244)
+        }
         native.drawPath(path, fillPaint)
         return
     }
 
+    val isUmd = spec.mediaKind == PhysicalMediaKind.UMD_DISC
+    val isMiniGc = spec.mediaKind == PhysicalMediaKind.MINI_DISC_GC
     val isLabelSide = mainFace.face == BoxFaceId.FRONT
     val tex = if (isLabelSide) labelBmp else undersideBmp
     val bw = tex.width.toFloat()
@@ -1731,9 +1759,196 @@ private fun draw3dOpticalDisc(
     srcPts[6] = 0f; srcPts[7] = bh
 
     val d = mainFace.dstPoints
-    // Subtle extruded polycarbonate thickness rim slightly offset behind the disc
-    val rimShiftX = -sin(Math.toRadians(yawDeg.toDouble())).toFloat() * 5.5f
-    val rimShiftY = sin(Math.toRadians(pitchDeg.toDouble())).toFloat() * 4.0f
+
+    if (isUmd) {
+        // ---- AUTHENTIC ENCASED SONY PSP UMD CARTRIDGE (Clear-White Shell + 60mm Inner Disc + Steel Magnetic Hub) ----
+        val shellPath = buildUmdShellPath(bw, bh)
+        val rimShiftX = -sin(Math.toRadians(yawDeg.toDouble())).toFloat() * 8.5f
+        val rimShiftY = sin(Math.toRadians(pitchDeg.toDouble())).toFloat() * 6.0f
+        for (slice in 3 downTo 1) {
+            val t = slice / 3f
+            val rimDst = floatArrayOf(
+                d[0] + rimShiftX * t, d[1] + rimShiftY * t,
+                d[2] + rimShiftX * t, d[3] + rimShiftY * t,
+                d[4] + rimShiftX * t, d[5] + rimShiftY * t,
+                d[6] + rimShiftX * t, d[7] + rimShiftY * t,
+            )
+            if (polyMatrix.setPolyToPoly(srcPts, 0, rimDst, 0, 4)) {
+                native.save()
+                native.concat(polyMatrix)
+                fillPaint.shader = null
+                fillPaint.color = if (slice == 2) AndroidColor.rgb(186, 194, 208) else AndroidColor.rgb(228, 234, 244)
+                native.drawPath(shellPath, fillPaint)
+                native.restore()
+            }
+        }
+
+        if (polyMatrix.setPolyToPoly(srcPts, 0, d, 0, 4)) {
+            native.save()
+            native.concat(polyMatrix)
+            native.clipPath(shellPath)
+
+            // Outer translucent-pearl UMD polycarbonate shell body
+            fillPaint.shader = LinearGradient(
+                0f, 0f, bw, bh,
+                intArrayOf(
+                    AndroidColor.rgb(246, 249, 254),
+                    AndroidColor.rgb(218, 224, 235),
+                    AndroidColor.rgb(196, 204, 218),
+                ),
+                floatArrayOf(0f, 0.55f, 1f),
+                Shader.TileMode.CLAMP,
+            )
+            native.drawPath(shellPath, fillPaint)
+            fillPaint.shader = null
+
+            // Inner circular cavity recess holding the 60mm optical mini-disc
+            val cx = bw * 0.50f
+            val cy = bh * 0.50f
+            val innerR = bw * 0.432f
+            fillPaint.color = AndroidColor.rgb(22, 25, 32)
+            native.drawCircle(cx, cy, innerR + bw * 0.012f, fillPaint)
+
+            // Draw the 60mm optical mini-disc inside the clear protective UMD window!
+            val innerDiscClip = AndroidPath().apply {
+                addCircle(cx, cy, innerR, AndroidPath.Direction.CW)
+            }
+            native.save()
+            native.clipPath(innerDiscClip)
+            val discRect = RectF(cx - innerR, cy - innerR, cx + innerR, cy + innerR)
+            native.drawBitmap(tex, null, discRect, bmpPaint)
+
+            // Subtle specular gloss sweep across the enclosed UMD disc
+            val sweepAngle = (yawDeg * 1.5f + pitchDeg * 1.1f)
+            native.save()
+            native.rotate(sweepAngle, cx, cy)
+            fillPaint.shader = SweepGradient(
+                cx, cy,
+                if (isLabelSide) {
+                    intArrayOf(
+                        AndroidColor.argb(0, 255, 255, 255),
+                        AndroidColor.argb(66, 255, 255, 255),
+                        AndroidColor.argb(0, 255, 255, 255),
+                        AndroidColor.argb(46, 255, 255, 255),
+                        AndroidColor.argb(0, 255, 255, 255),
+                    )
+                } else {
+                    intArrayOf(
+                        AndroidColor.argb(0, 255, 255, 255),
+                        AndroidColor.argb(95, 70, 225, 255),
+                        AndroidColor.argb(85, 255, 110, 210),
+                        AndroidColor.argb(85, 255, 225, 95),
+                        AndroidColor.argb(0, 255, 255, 255),
+                    )
+                },
+                null,
+            )
+            native.drawRect(discRect, fillPaint)
+            fillPaint.shader = null
+            native.restore()
+            native.restore()
+
+            if (isLabelSide) {
+                // Translucent acrylic top UMD shell overlay sheen + white outer frame ring
+                val shellStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    style = Paint.Style.STROKE
+                    strokeWidth = bw * 0.018f
+                    color = AndroidColor.argb(215, 245, 248, 255)
+                }
+                native.drawCircle(cx, cy, innerR + bw * 0.008f, shellStroke)
+
+                // Iconic brushed stainless-steel magnetic clamping puck in the center of a real PSP UMD!
+                val hubR = bw * 0.125f
+                fillPaint.color = AndroidColor.rgb(34, 38, 46)
+                native.drawCircle(cx, cy, hubR + bw * 0.018f, fillPaint)
+                fillPaint.shader = android.graphics.RadialGradient(
+                    cx - hubR * 0.25f, cy - hubR * 0.25f, hubR * 1.35f,
+                    intArrayOf(
+                        AndroidColor.rgb(248, 251, 255),
+                        AndroidColor.rgb(188, 196, 210),
+                        AndroidColor.rgb(122, 130, 146),
+                        AndroidColor.rgb(218, 224, 236),
+                    ),
+                    floatArrayOf(0f, 0.45f, 0.78f, 1f),
+                    Shader.TileMode.CLAMP,
+                )
+                native.drawCircle(cx, cy, hubR, fillPaint)
+                fillPaint.shader = null
+                // Center steel spindle dimple + concentric machined rings
+                val ringP = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                    style = Paint.Style.STROKE
+                    strokeWidth = bw * 0.007f
+                    color = AndroidColor.argb(140, 68, 76, 92)
+                }
+                native.drawCircle(cx, cy, hubR * 0.68f, ringP)
+                fillPaint.color = AndroidColor.rgb(72, 78, 90)
+                native.drawCircle(cx, cy, hubR * 0.28f, fillPaint)
+                fillPaint.color = AndroidColor.rgb(225, 232, 242)
+                native.drawCircle(cx - hubR * 0.08f, cy - hubR * 0.08f, hubR * 0.10f, fillPaint)
+
+                // Molded white bottom corner bevel panels & subtle "UMD" mark on lower-left lip
+                val umdTp = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+                    color = AndroidColor.rgb(88, 96, 112)
+                    typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+                    textSize = bw * 0.042f
+                    letterSpacing = 0.10f
+                    textAlign = Paint.Align.CENTER
+                }
+                native.drawText("UMD", bw * 0.145f, bh * 0.935f, umdTp)
+                native.drawText("PSP", bw * 0.855f, bh * 0.935f, umdTp)
+            } else {
+                // Underside UMD shutter window framing the lower optical read slot
+                fillPaint.color = AndroidColor.argb(215, 228, 233, 242)
+                val maskRect = RectF(0f, 0f, bw, bh * 0.46f)
+                native.drawRect(maskRect, fillPaint)
+                // Brushed steel center clamp puck also visible on rear!
+                val hubR = bw * 0.130f
+                fillPaint.shader = android.graphics.RadialGradient(
+                    cx - hubR * 0.25f, cy - hubR * 0.25f, hubR * 1.3f,
+                    intArrayOf(AndroidColor.rgb(245, 248, 255), AndroidColor.rgb(156, 164, 180), AndroidColor.rgb(112, 120, 136)),
+                    floatArrayOf(0f, 0.6f, 1f),
+                    Shader.TileMode.CLAMP,
+                )
+                native.drawCircle(cx, cy, hubR, fillPaint)
+                fillPaint.shader = null
+            }
+
+            // Crisp glossy acrylic diagonal reflection across the whole clear UMD case!
+            fillPaint.shader = LinearGradient(
+                0f, 0f, bw, bh * 0.85f,
+                intArrayOf(
+                    AndroidColor.argb(72, 255, 255, 255),
+                    AndroidColor.argb(14, 255, 255, 255),
+                    AndroidColor.argb(0, 255, 255, 255),
+                    AndroidColor.argb(40, 255, 255, 255),
+                    AndroidColor.argb(0, 255, 255, 255),
+                ),
+                floatArrayOf(0f, 0.24f, 0.48f, 0.62f, 1f),
+                Shader.TileMode.CLAMP,
+            )
+            native.drawPath(shellPath, fillPaint)
+            fillPaint.shader = null
+
+            // Outer clear-white shell edge rim highlight
+            val outerStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                style = Paint.Style.STROKE
+                strokeWidth = bw * 0.016f
+                color = AndroidColor.argb(190, 255, 255, 255)
+            }
+            native.drawPath(shellPath, outerStroke)
+            native.restore()
+        }
+        return
+    }
+
+    // ---- STANDARD 12cm CD/DVD & 8cm GAMECUBE MINI-DVD ----
+    val holeFrac = if (isMiniGc) 0.118f else 0.084f
+    val hubRingInner = if (isMiniGc) 0.145f else 0.110f
+    val hubRingOuter = if (isMiniGc) 0.235f else 0.188f
+
+    // Multi-slice extruded polycarbonate thickness rim behind the disc
+    val rimShiftX = -sin(Math.toRadians(yawDeg.toDouble())).toFloat() * 6.0f
+    val rimShiftY = sin(Math.toRadians(pitchDeg.toDouble())).toFloat() * 4.5f
     val rimDst = floatArrayOf(
         d[0] + rimShiftX, d[1] + rimShiftY,
         d[2] + rimShiftX, d[3] + rimShiftY,
@@ -1744,11 +1959,11 @@ private fun draw3dOpticalDisc(
         native.save()
         native.concat(polyMatrix)
         fillPaint.shader = null
-        fillPaint.color = if (spec.blackDiscUnderside) AndroidColor.rgb(32, 34, 42) else AndroidColor.rgb(185, 196, 212)
+        fillPaint.color = if (spec.blackDiscUnderside) AndroidColor.rgb(24, 26, 34) else AndroidColor.rgb(198, 208, 224)
         val discPath = AndroidPath().apply {
             fillType = AndroidPath.FillType.EVEN_ODD
             addCircle(bw * 0.5f, bh * 0.5f, bw * 0.495f, AndroidPath.Direction.CW)
-            addCircle(bw * 0.5f, bh * 0.5f, bw * 0.082f, AndroidPath.Direction.CW)
+            addCircle(bw * 0.5f, bh * 0.5f, bw * holeFrac, AndroidPath.Direction.CW)
         }
         native.drawPath(discPath, fillPaint)
         native.restore()
@@ -1757,49 +1972,52 @@ private fun draw3dOpticalDisc(
     if (polyMatrix.setPolyToPoly(srcPts, 0, d, 0, 4)) {
         native.save()
         native.concat(polyMatrix)
+        val cx = bw * 0.5f
+        val cy = bh * 0.5f
         val discClip = AndroidPath().apply {
             fillType = AndroidPath.FillType.EVEN_ODD
-            addCircle(bw * 0.5f, bh * 0.5f, bw * 0.495f, AndroidPath.Direction.CW)
-            addCircle(bw * 0.5f, bh * 0.5f, bw * 0.082f, AndroidPath.Direction.CW)
+            addCircle(cx, cy, bw * 0.495f, AndroidPath.Direction.CW)
+            addCircle(cx, cy, bw * holeFrac, AndroidPath.Direction.CW)
         }
         native.clipPath(discClip)
         native.drawBitmap(tex, 0f, 0f, bmpPaint)
 
-        // Live rainbow diffraction / specular reflection sweep on the optical disc!
+        // Live rainbow diffraction / metallic specular reflection sweep on the optical disc!
         val sweepAngle = (yawDeg * 1.6f + pitchDeg * 1.2f)
         native.save()
-        native.rotate(sweepAngle, bw * 0.5f, bh * 0.5f)
+        native.rotate(sweepAngle, cx, cy)
         fillPaint.shader = SweepGradient(
-            bw * 0.5f,
-            bh * 0.5f,
+            cx,
+            cy,
             if (isLabelSide) {
                 intArrayOf(
                     AndroidColor.argb(0, 255, 255, 255),
-                    AndroidColor.argb(58, 255, 255, 255),
+                    AndroidColor.argb(72, 255, 255, 255),
+                    AndroidColor.argb(18, 210, 232, 255),
                     AndroidColor.argb(0, 255, 255, 255),
-                    AndroidColor.argb(42, 255, 255, 255),
+                    AndroidColor.argb(56, 255, 255, 255),
                     AndroidColor.argb(0, 255, 255, 255),
                 )
             } else if (spec.blackDiscUnderside) {
-                // PS1 iconic black polycarbonate sheen
+                // PS1 iconic jet-black polycarbonate indigo sheen
                 intArrayOf(
                     AndroidColor.argb(0, 255, 255, 255),
-                    AndroidColor.argb(95, 190, 210, 255),
-                    AndroidColor.argb(35, 170, 120, 255),
+                    AndroidColor.argb(105, 195, 215, 255),
+                    AndroidColor.argb(42, 175, 125, 255),
                     AndroidColor.argb(0, 255, 255, 255),
-                    AndroidColor.argb(85, 210, 225, 255),
+                    AndroidColor.argb(92, 215, 230, 255),
                     AndroidColor.argb(0, 255, 255, 255),
                 )
             } else {
                 // Iridescent CD/DVD diffraction spectrum
                 intArrayOf(
                     AndroidColor.argb(0, 255, 255, 255),
-                    AndroidColor.argb(92, 0, 230, 255),
-                    AndroidColor.argb(88, 120, 255, 150),
-                    AndroidColor.argb(88, 255, 210, 70),
-                    AndroidColor.argb(84, 255, 80, 200),
+                    AndroidColor.argb(96, 0, 230, 255),
+                    AndroidColor.argb(90, 120, 255, 150),
+                    AndroidColor.argb(90, 255, 210, 70),
+                    AndroidColor.argb(86, 255, 80, 200),
                     AndroidColor.argb(0, 255, 255, 255),
-                    AndroidColor.argb(88, 80, 210, 255),
+                    AndroidColor.argb(92, 80, 210, 255),
                     AndroidColor.argb(0, 255, 255, 255),
                 )
             },
@@ -1809,13 +2027,61 @@ private fun draw3dOpticalDisc(
         fillPaint.shader = null
         native.restore()
 
-        // Translucent polycarbonate inner clamping hub ring
-        val hubPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE
-            strokeWidth = bw * 0.052f
-            color = AndroidColor.argb(135, 232, 238, 248)
+        // Authentic multi-ring polycarbonate center clamping hub + mirror-silver IFPI matrix band!
+        val hubPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE }
+        // 1. Outer translucent stacking ridge ring
+        hubPaint.strokeWidth = bw * 0.016f
+        hubPaint.color = AndroidColor.argb(150, 240, 246, 255)
+        native.drawCircle(cx, cy, bw * hubRingOuter, hubPaint)
+        hubPaint.strokeWidth = bw * 0.008f
+        hubPaint.color = AndroidColor.argb(110, 16, 20, 28)
+        native.drawCircle(cx, cy, bw * (hubRingOuter + 0.010f), hubPaint)
+
+        // 2. Mirror-silver inner metallic clamping band (with subtle IFPI matrix barcode ticks)
+        val bandMidR = bw * ((hubRingInner + hubRingOuter) * 0.5f)
+        val bandW = bw * (hubRingOuter - hubRingInner)
+        hubPaint.strokeWidth = bandW
+        hubPaint.color = if (spec.blackDiscUnderside && !isLabelSide) {
+            AndroidColor.argb(165, 42, 46, 58)
+        } else {
+            AndroidColor.argb(165, 214, 222, 236)
         }
-        native.drawCircle(bw * 0.5f, bh * 0.5f, bw * 0.115f, hubPaint)
+        native.drawCircle(cx, cy, bandMidR, hubPaint)
+
+        // Subtle radial IFPI micro-etched matrix ticks around the mirror clamping ring
+        hubPaint.strokeWidth = bw * 0.004f
+        hubPaint.color = AndroidColor.argb(85, 65, 76, 96)
+        for (i in 0 until 28) {
+            val ang = Math.toRadians(i * (360.0 / 28.0))
+            val r0 = bw * (hubRingInner + 0.012f)
+            val r1 = bw * (hubRingOuter - 0.016f)
+            native.drawLine(
+                cx + cos(ang).toFloat() * r0,
+                cy + sin(ang).toFloat() * r0,
+                cx + cos(ang).toFloat() * r1,
+                cy + sin(ang).toFloat() * r1,
+                hubPaint,
+            )
+        }
+
+        // 3. Clear polycarbonate inner collar + crisp beveled spindle hole catch-light
+        hubPaint.strokeWidth = bw * (hubRingInner - holeFrac)
+        hubPaint.color = AndroidColor.argb(135, 236, 242, 252)
+        native.drawCircle(cx, cy, bw * ((holeFrac + hubRingInner) * 0.5f), hubPaint)
+
+        hubPaint.strokeWidth = bw * 0.007f
+        hubPaint.color = AndroidColor.argb(170, 255, 255, 255)
+        native.drawCircle(cx, cy, bw * (holeFrac + 0.004f), hubPaint)
+
+        // 4. Crisp outer beveled clear polycarbonate disc edge catch-light
+        hubPaint.strokeWidth = bw * 0.011f
+        hubPaint.color = if (spec.blackDiscUnderside) {
+            AndroidColor.argb(145, 190, 200, 218)
+        } else {
+            AndroidColor.argb(190, 242, 248, 255)
+        }
+        native.drawCircle(cx, cy, bw * 0.490f, hubPaint)
+
         native.restore()
     }
 }
@@ -3009,6 +3275,248 @@ internal fun buildProceduralSpineBitmap(
     return bmp
 }
 
+/**
+ * Builds the authentic physical silhouette outline for each console's cartridge / Game Card
+ * (3DS protruding top-right lockout tab, DS chamfered corner, Switch slim vertical card,
+ * Game Boy top-right power notch, GBC raised bubble crown, GBA flared top grip wings,
+ * NES stepped narrower lower pin neck, N64/Genesis curved dome arch, SNES sculpted shoulders).
+ */
+private fun buildCartridgeSilhouettePath(
+    spec: PhysicalMediaSpec,
+    w: Float,
+    h: Float,
+    mirrorX: Boolean = false,
+): AndroidPath {
+    val path = AndroidPath()
+    val id = spec.systemId.lowercase(Locale.US)
+    when {
+        id == "3ds" -> {
+            // Iconic Nintendo 3DS Game Card: protruding top-right lockout tab + chamfered bottom-left corner!
+            val l = w * 0.055f
+            val r = w * 0.885f
+            val tabR = w * 0.965f
+            val t = h * 0.035f
+            val tabBot = h * 0.195f
+            val b = h * 0.965f
+            val cham = w * 0.095f
+            val rad = w * 0.042f
+            path.moveTo(l + rad, t)
+            path.lineTo(tabR - rad * 0.7f, t)
+            path.quadTo(tabR, t, tabR, t + rad * 0.7f)
+            path.lineTo(tabR, tabBot - rad * 0.6f)
+            path.quadTo(tabR, tabBot, tabR - rad * 0.6f, tabBot)
+            path.lineTo(r + rad * 0.35f, tabBot)
+            path.quadTo(r, tabBot, r, tabBot + rad * 0.45f)
+            path.lineTo(r, b - rad)
+            path.quadTo(r, b, r - rad, b)
+            path.lineTo(l + cham, b)
+            path.lineTo(l, b - cham)
+            path.lineTo(l, t + rad)
+            path.quadTo(l, t, l + rad, t)
+            path.close()
+        }
+        id == "nds" -> {
+            // Iconic Nintendo DS Game Card: square charcoal shell with chamfered bottom-left corner
+            val l = w * 0.06f
+            val r = w * 0.94f
+            val t = h * 0.04f
+            val b = h * 0.96f
+            val cham = w * 0.095f
+            val rad = w * 0.045f
+            path.moveTo(l + rad, t)
+            path.lineTo(r - rad, t)
+            path.quadTo(r, t, r, t + rad)
+            path.lineTo(r, b - rad)
+            path.quadTo(r, b, r - rad, b)
+            path.lineTo(l + cham, b)
+            path.lineTo(l, b - cham)
+            path.lineTo(l, t + rad)
+            path.quadTo(l, t, l + rad, t)
+            path.close()
+        }
+        id == "switch" -> {
+            // Iconic Nintendo Switch Game Card: sleek narrow vertical matte-black card + chamfered bottom-right
+            val l = w * 0.145f
+            val r = w * 0.855f
+            val t = h * 0.03f
+            val b = h * 0.97f
+            val cham = w * 0.075f
+            val rad = w * 0.042f
+            path.moveTo(l + rad, t)
+            path.lineTo(r - rad, t)
+            path.quadTo(r, t, r, t + rad)
+            path.lineTo(r, b - cham)
+            path.lineTo(r - cham, b)
+            path.lineTo(l + rad, b)
+            path.quadTo(l, b, l, b - rad)
+            path.lineTo(l, t + rad)
+            path.quadTo(l, t, l + rad, t)
+            path.close()
+        }
+        id == "gb" -> {
+            // Classic 1989 Game Boy DMG Game Pak: iconic top-right power-switch lockout notch!
+            val l = w * 0.045f
+            val r = w * 0.955f
+            val t = h * 0.035f
+            val b = h * 0.965f
+            val notchX = w * 0.825f
+            val notchY = h * 0.155f
+            val rad = w * 0.040f
+            path.moveTo(l + rad, t)
+            path.lineTo(notchX - rad * 0.4f, t)
+            path.quadTo(notchX, t, notchX, t + rad * 0.4f)
+            path.lineTo(notchX, notchY - rad * 0.35f)
+            path.quadTo(notchX, notchY, notchX + rad * 0.4f, notchY)
+            path.lineTo(r - rad * 0.4f, notchY)
+            path.quadTo(r, notchY, r, notchY + rad * 0.5f)
+            path.lineTo(r, b - rad)
+            path.quadTo(r, b, r - rad, b)
+            path.lineTo(l + rad, b)
+            path.quadTo(l, b, l, b - rad)
+            path.lineTo(l, t + rad)
+            path.quadTo(l, t, l + rad, t)
+            path.close()
+        }
+        id == "gbc" -> {
+            // Classic Game Boy Color cartridge: smooth convex arched top bubble crown (no corner notch!)
+            val l = w * 0.045f
+            val r = w * 0.955f
+            val shoulderY = h * 0.085f
+            val b = h * 0.965f
+            val rad = w * 0.040f
+            path.moveTo(l, shoulderY)
+            path.quadTo(w * 0.50f, -h * 0.015f, r, shoulderY)
+            path.lineTo(r, b - rad)
+            path.quadTo(r, b, r - rad, b)
+            path.lineTo(l + rad, b)
+            path.quadTo(l, b, l, b - rad)
+            path.close()
+        }
+        spec.mediaKind == PhysicalMediaKind.CART_GBA -> {
+            // Iconic Game Boy Advance Game Pak: wide flared top grip wings stepping into narrower slot body!
+            val wingL = w * 0.025f
+            val wingR = w * 0.975f
+            val bodyL = w * 0.068f
+            val bodyR = w * 0.932f
+            val t = h * 0.035f
+            val wingBot = h * 0.195f
+            val b = h * 0.965f
+            val rad = w * 0.042f
+            path.moveTo(wingL + rad, t)
+            path.lineTo(wingR - rad, t)
+            path.quadTo(wingR, t, wingR, t + rad)
+            path.lineTo(wingR, wingBot - rad * 0.4f)
+            path.quadTo(wingR, wingBot, wingR - rad * 0.45f, wingBot)
+            path.lineTo(bodyR + rad * 0.25f, wingBot)
+            path.quadTo(bodyR, wingBot, bodyR, wingBot + rad * 0.4f)
+            path.lineTo(bodyR, b - rad)
+            path.quadTo(bodyR, b, bodyR - rad, b)
+            path.lineTo(bodyL + rad, b)
+            path.quadTo(bodyL, b, bodyL, b - rad)
+            path.lineTo(bodyL, wingBot + rad * 0.4f)
+            path.quadTo(bodyL, wingBot, bodyL - rad * 0.25f, wingBot)
+            path.lineTo(wingL + rad * 0.45f, wingBot)
+            path.quadTo(wingL, wingBot, wingL, wingBot - rad * 0.4f)
+            path.lineTo(wingL, t + rad)
+            path.quadTo(wingL, t, wingL + rad, t)
+            path.close()
+        }
+        spec.mediaKind == PhysicalMediaKind.CART_NES -> {
+            // Iconic 1985 NES Game Pak: wide upper body stepping inward into narrower lower 72-pin connector neck!
+            val l = w * 0.035f
+            val r = w * 0.965f
+            val neckL = w * 0.105f
+            val neckR = w * 0.895f
+            val t = h * 0.025f
+            val stepY = h * 0.805f
+            val b = h * 0.975f
+            val rad = w * 0.026f
+            path.moveTo(l + rad, t)
+            path.lineTo(r - rad, t)
+            path.quadTo(r, t, r, t + rad)
+            path.lineTo(r, stepY - rad)
+            path.quadTo(r, stepY, r - rad, stepY)
+            path.lineTo(neckR + rad * 0.4f, stepY)
+            path.lineTo(neckR, stepY + rad * 0.6f)
+            path.lineTo(neckR, b - rad)
+            path.quadTo(neckR, b, neckR - rad, b)
+            path.lineTo(neckL + rad, b)
+            path.quadTo(neckL, b, neckL, b - rad)
+            path.lineTo(neckL, stepY + rad * 0.6f)
+            path.lineTo(neckL - rad * 0.4f, stepY)
+            path.lineTo(l + rad, stepY)
+            path.quadTo(l, stepY, l, stepY - rad)
+            path.lineTo(l, t + rad)
+            path.quadTo(l, t, l + rad, t)
+            path.close()
+        }
+        spec.mediaKind == PhysicalMediaKind.CART_N64 -> {
+            // Iconic Nintendo 64 cartridge: smooth arched dome crown + sculpted vertical sides
+            val l = w * 0.035f
+            val r = w * 0.965f
+            val archY = h * 0.135f
+            val b = h * 0.965f
+            val rad = w * 0.036f
+            path.moveTo(l, archY)
+            path.quadTo(w * 0.50f, -h * 0.03f, r, archY)
+            path.lineTo(r, b - rad)
+            path.quadTo(r, b, r - rad, b)
+            path.lineTo(l + rad, b)
+            path.quadTo(l, b, l, b - rad)
+            path.close()
+        }
+        spec.mediaKind == PhysicalMediaKind.CART_SEGA -> {
+            // Iconic Sega Genesis / Mega Drive cartridge: gentle arched dome top + sleek rounded body
+            val l = w * 0.04f
+            val r = w * 0.96f
+            val archY = h * 0.115f
+            val b = h * 0.965f
+            val rad = w * 0.036f
+            path.moveTo(l, archY)
+            path.quadTo(w * 0.50f, -h * 0.02f, r, archY)
+            path.lineTo(r, b - rad)
+            path.quadTo(r, b, r - rad, b)
+            path.lineTo(l + rad, b)
+            path.quadTo(l, b, l, b - rad)
+            path.close()
+        }
+        else -> {
+            // SNES / TurboGrafx / generic sculpted cartridge
+            path.addRoundRect(RectF(w * 0.025f, h * 0.025f, w * 0.975f, h * 0.975f), 26f, 26f, AndroidPath.Direction.CW)
+        }
+    }
+    if (mirrorX) {
+        val m = Matrix().apply { setScale(-1f, 1f, w * 0.5f, h * 0.5f) }
+        path.transform(m)
+    }
+    return path
+}
+
+private fun drawEmbossedCartridgeText(
+    c: AndroidCanvas,
+    text: String,
+    cx: Float,
+    cy: Float,
+    textSizePx: Float,
+    shellArgb: Int,
+    italic: Boolean = false,
+) {
+    val style = if (italic) Typeface.BOLD_ITALIC else Typeface.BOLD
+    val tp = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        typeface = Typeface.create(Typeface.SANS_SERIF, style)
+        textSize = textSizePx
+        letterSpacing = 0.08f
+        textAlign = Paint.Align.CENTER
+    }
+    val fm = tp.fontMetrics
+    val baseY = cy - (fm.ascent + fm.descent) * 0.5f
+    // Bottom highlight + dark debossed shadow for authentic injection-molded plastic relief!
+    tp.color = shadeArgb(shellArgb, 1.24f)
+    c.drawText(text, cx, baseY + 1.8f, tp)
+    tp.color = shadeArgb(shellArgb, 0.56f)
+    c.drawText(text, cx, baseY, tp)
+}
+
 internal fun buildProceduralCartFrontBitmap(
     game: Game,
     dossier: GameDossier,
@@ -3022,147 +3530,234 @@ internal fun buildProceduralCartFrontBitmap(
     val p = Paint(Paint.ANTI_ALIAS_FLAG)
     val bmpPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
 
+    val id = spec.systemId.lowercase(Locale.US)
     val shellArgb = spec.mediaShellColor.toArgb()
-    val outerRect = RectF(6f, 6f, w - 6f, h - 6f)
-    // Injection-molded ABS plastic shell body gradient
+    val silhouette = buildCartridgeSilhouettePath(spec, w.toFloat(), h.toFloat(), mirrorX = false)
+
+    c.save()
+    c.clipPath(silhouette)
+
+    // Injection-molded ABS plastic shell body gradient with subtle studio top-left key light
     p.shader = LinearGradient(
-        0f, 0f, w * 0.25f, h.toFloat(),
-        shadeArgb(shellArgb, 1.14f),
-        shadeArgb(shellArgb, 0.80f),
+        0f, 0f, w * 0.30f, h.toFloat(),
+        intArrayOf(
+            shadeArgb(shellArgb, 1.15f),
+            shellArgb,
+            shadeArgb(shellArgb, 0.78f),
+        ),
+        floatArrayOf(0f, 0.48f, 1f),
         Shader.TileMode.CLAMP,
     )
-    c.drawRoundRect(outerRect, 28f, 28f, p)
+    c.drawPath(silhouette, p)
     p.shader = null
 
-    // Tactile molded outer rim bevel highlight + underside shadow
-    p.style = Paint.Style.STROKE
-    p.strokeWidth = 5f
-    p.shader = LinearGradient(
-        0f, 0f, 0f, h.toFloat(),
-        AndroidColor.argb(120, 255, 255, 255),
-        AndroidColor.argb(115, 0, 0, 0),
-        Shader.TileMode.CLAMP,
-    )
-    c.drawRoundRect(RectF(10f, 10f, w - 10f, h - 10f), 25f, 25f, p)
-    p.shader = null
-    p.style = Paint.Style.FILL
-
-    // Console-specific sculpted hardware molding
-    when (spec.mediaKind) {
-        PhysicalMediaKind.CART_SNES -> {
-            // Iconic SNES dual side grip columns + center recessed bay + top lock notch
-            p.color = shadeArgb(shellArgb, 0.90f)
-            c.drawRoundRect(RectF(w * 0.14f, h * 0.02f, w * 0.86f, h * 0.96f), 14f, 14f, p)
-            // Left & right sculpted horizontal shoulder ribs
+    // Console-specific sculpted hardware molding & embossed typography
+    when {
+        spec.mediaKind == PhysicalMediaKind.CART_SNES -> {
+            // Iconic SNES dual side grip columns + center recessed bay + top lock trough + embossed SUPER NINTENDO
+            p.color = shadeArgb(shellArgb, 0.91f)
+            c.drawRoundRect(RectF(w * 0.145f, h * 0.025f, w * 0.855f, h * 0.96f), 14f, 14f, p)
             for (side in 0..1) {
-                val x0 = if (side == 0) w * 0.032f else w * 0.885f
-                val x1 = if (side == 0) w * 0.115f else w * 0.968f
+                val x0 = if (side == 0) w * 0.042f else w * 0.875f
+                val x1 = if (side == 0) w * 0.125f else w * 0.958f
                 for (i in 0..7) {
                     val gy = h * 0.14f + i * (h * 0.088f)
-                    p.color = shadeArgb(shellArgb, 0.68f)
+                    p.color = shadeArgb(shellArgb, 0.66f)
                     c.drawRoundRect(RectF(x0, gy, x1, gy + h * 0.030f), 4f, 4f, p)
                     p.color = shadeArgb(shellArgb, 1.18f)
                     c.drawRoundRect(RectF(x0, gy + h * 0.030f, x1, gy + h * 0.044f), 3f, 3f, p)
                 }
             }
-            // Top locking slot & embossed header groove
-            p.color = shadeArgb(shellArgb, 0.72f)
-            c.drawRoundRect(RectF(w * 0.22f, h * 0.038f, w * 0.78f, h * 0.110f), 14f, 14f, p)
-            p.color = shadeArgb(shellArgb, 1.12f)
-            c.drawRoundRect(RectF(w * 0.23f, h * 0.046f, w * 0.77f, h * 0.102f), 11f, 11f, p)
-            // Classic SNES front center lock-tab notch near bottom
-            p.color = shadeArgb(shellArgb, 0.64f)
-            c.drawRoundRect(RectF(w * 0.34f, h * 0.845f, w * 0.66f, h * 0.878f), 6f, 6f, p)
+            p.color = shadeArgb(shellArgb, 0.74f)
+            c.drawRoundRect(RectF(w * 0.21f, h * 0.042f, w * 0.79f, h * 0.118f), 14f, 14f, p)
+            p.color = shadeArgb(shellArgb, 1.04f)
+            c.drawRoundRect(RectF(w * 0.22f, h * 0.050f, w * 0.78f, h * 0.110f), 11f, 11f, p)
+            drawEmbossedCartridgeText(c, "SUPER NINTENDO", w * 0.50f, h * 0.080f, 19f, shellArgb, italic = true)
+            // Classic SNES front center lock-tab cutout notch near bottom
+            p.color = shadeArgb(shellArgb, 0.58f)
+            c.drawRoundRect(RectF(w * 0.34f, h * 0.848f, w * 0.66f, h * 0.888f), 6f, 6f, p)
         }
-        PhysicalMediaKind.CART_GAMEBOY -> {
-            // Top horizontal grip grooves + oval GAME BOY header recess
+        spec.mediaKind == PhysicalMediaKind.CART_GAMEBOY -> {
+            // Horizontal top grip grooves + oval GAME BOY / GAME BOY COLOR recessed header pill
             for (i in 0..3) {
-                val gy = h * 0.052f + i * (h * 0.023f)
+                val gy = h * 0.058f + i * (h * 0.023f)
+                val xEnd = if (id == "gb" && gy < h * 0.155f) w * 0.79f else w * 0.92f
                 p.color = shadeArgb(shellArgb, 0.68f)
-                c.drawRoundRect(RectF(w * 0.06f, gy, w * 0.94f, gy + h * 0.011f), 4f, 4f, p)
+                c.drawRoundRect(RectF(w * 0.08f, gy, xEnd, gy + h * 0.011f), 4f, 4f, p)
                 p.color = shadeArgb(shellArgb, 1.16f)
-                c.drawRoundRect(RectF(w * 0.06f, gy + h * 0.011f, w * 0.94f, gy + h * 0.016f), 2f, 2f, p)
+                c.drawRoundRect(RectF(w * 0.08f, gy + h * 0.011f, xEnd, gy + h * 0.016f), 2f, 2f, p)
+            }
+            p.color = shadeArgb(shellArgb, 0.72f)
+            c.drawRoundRect(RectF(w * 0.16f, h * 0.048f, w * 0.81f, h * 0.168f), 46f, 46f, p)
+            p.color = shadeArgb(shellArgb, if (id == "gbc") 1.10f else 0.96f)
+            c.drawRoundRect(RectF(w * 0.178f, h * 0.058f, w * 0.792f, h * 0.158f), 40f, 40f, p)
+            drawEmbossedCartridgeText(
+                c,
+                if (id == "gbc") "GAME BOY COLOR" else "Nintendo GAME BOY",
+                w * 0.485f,
+                h * 0.108f,
+                21f,
+                shellArgb,
+                italic = true,
+            )
+        }
+        spec.mediaKind == PhysicalMediaKind.CART_GBA -> {
+            // Flared top shoulder lip + curved embossed GAME BOY ADVANCE trough
+            p.color = shadeArgb(shellArgb, 1.14f)
+            c.drawRoundRect(RectF(w * 0.04f, h * 0.045f, w * 0.96f, h * 0.175f), 24f, 24f, p)
+            p.color = shadeArgb(shellArgb, 0.74f)
+            c.drawRoundRect(RectF(w * 0.14f, h * 0.068f, w * 0.86f, h * 0.162f), 34f, 34f, p)
+            p.color = shadeArgb(shellArgb, 0.94f)
+            c.drawRoundRect(RectF(w * 0.155f, h * 0.078f, w * 0.845f, h * 0.152f), 28f, 28f, p)
+            drawEmbossedCartridgeText(c, "GAME BOY ADVANCE", w * 0.50f, h * 0.115f, 19f, shellArgb, italic = true)
+        }
+        spec.mediaKind == PhysicalMediaKind.CART_NES -> {
+            // Iconic NES left vertical 17-rib grip column + molded top-left Nintendo oval + stepped neck seam
+            p.color = shadeArgb(shellArgb, 0.72f)
+            c.drawRoundRect(RectF(w * 0.062f, h * 0.042f, w * 0.220f, h * 0.088f), 14f, 14f, p)
+            drawEmbossedCartridgeText(c, "Nintendo", w * 0.141f, h * 0.065f, 15f, shellArgb)
+            for (i in 0..14) {
+                val gy = h * 0.108f + i * (h * 0.045f)
+                p.color = shadeArgb(shellArgb, 0.66f)
+                c.drawRect(w * 0.065f, gy, w * 0.218f, gy + h * 0.020f, p)
+                p.color = shadeArgb(shellArgb, 1.18f)
+                c.drawRect(w * 0.065f, gy + h * 0.020f, w * 0.218f, gy + h * 0.028f, p)
+            }
+            // Subtle horizontal molded step crease where the lower 72-pin neck narrows
+            p.color = shadeArgb(shellArgb, 0.64f)
+            c.drawRect(w * 0.105f, h * 0.802f, w * 0.895f, h * 0.809f, p)
+            // Twin lower molded guide rails on the narrow neck
+            p.color = shadeArgb(shellArgb, 0.78f)
+            c.drawRect(w * 0.14f, h * 0.818f, w * 0.175f, h * 0.96f, p)
+            c.drawRect(w * 0.825f, h * 0.818f, w * 0.86f, h * 0.96f, p)
+        }
+        spec.mediaKind == PhysicalMediaKind.CART_N64 -> {
+            // Sculpted N64 side pillars + arched embossed NINTENDO 64 trough
+            p.color = shadeArgb(shellArgb, 0.84f)
+            c.drawRoundRect(RectF(w * 0.045f, h * 0.12f, w * 0.105f, h * 0.92f), 8f, 8f, p)
+            c.drawRoundRect(RectF(w * 0.895f, h * 0.12f, w * 0.955f, h * 0.92f), 8f, 8f, p)
+            p.color = shadeArgb(shellArgb, 0.74f)
+            c.drawRoundRect(RectF(w * 0.22f, h * 0.068f, w * 0.78f, h * 0.132f), 18f, 18f, p)
+            drawEmbossedCartridgeText(c, "NINTENDO 64", w * 0.50f, h * 0.100f, 18f, shellArgb)
+        }
+        spec.mediaKind == PhysicalMediaKind.CART_SEGA -> {
+            // Jet-black Sega Genesis sculpted upper grip ridge + side notches
+            p.color = shadeArgb(shellArgb, 1.24f)
+            c.drawRoundRect(RectF(w * 0.18f, h * 0.055f, w * 0.82f, h * 0.118f), 16f, 16f, p)
+            drawEmbossedCartridgeText(c, "SEGA", w * 0.50f, h * 0.086f, 18f, shellArgb)
+            for (side in 0..1) {
+                val x0 = if (side == 0) w * 0.052f else w * 0.912f
+                val x1 = if (side == 0) w * 0.088f else w * 0.948f
+                for (i in 0..4) {
+                    val gy = h * 0.22f + i * (h * 0.055f)
+                    p.color = shadeArgb(shellArgb, 0.62f)
+                    c.drawRoundRect(RectF(x0, gy, x1, gy + h * 0.022f), 3f, 3f, p)
+                }
+            }
+        }
+        id == "3ds" || id == "nds" || id == "switch" -> {
+            // Tactile molded top pull lip groove on DS / 3DS / Switch Game Cards
+            val grooveL = if (id == "switch") w * 0.20f else w * 0.12f
+            val grooveR = when (id) {
+                "switch" -> w * 0.80f
+                "3ds" -> w * 0.82f
+                else -> w * 0.88f
             }
             p.color = shadeArgb(shellArgb, 0.74f)
-            c.drawRoundRect(RectF(w * 0.16f, h * 0.042f, w * 0.84f, h * 0.158f), 42f, 42f, p)
-            p.color = shadeArgb(shellArgb, 0.96f)
-            c.drawRoundRect(RectF(w * 0.18f, h * 0.052f, w * 0.82f, h * 0.148f), 36f, 36f, p)
-        }
-        PhysicalMediaKind.CART_GBA -> {
-            // Iconic flared GBA top shoulder lip & curved embossed header pill
-            p.color = shadeArgb(shellArgb, 1.14f)
-            c.drawRoundRect(RectF(w * 0.03f, h * 0.018f, w * 0.97f, h * 0.14f), 24f, 24f, p)
-            p.color = shadeArgb(shellArgb, 0.72f)
-            c.drawRoundRect(RectF(w * 0.14f, h * 0.048f, w * 0.86f, h * 0.132f), 34f, 34f, p)
-        }
-        PhysicalMediaKind.CART_NES -> {
-            // Iconic NES left vertical 17-rib grip column with highlight/shadow bevels
-            for (i in 0..16) {
-                val gy = h * 0.075f + i * (h * 0.048f)
-                p.color = shadeArgb(shellArgb, 0.68f)
-                c.drawRect(w * 0.065f, gy, w * 0.215f, gy + h * 0.022f, p)
-                p.color = shadeArgb(shellArgb, 1.16f)
-                c.drawRect(w * 0.065f, gy + h * 0.022f, w * 0.215f, gy + h * 0.030f, p)
-            }
-        }
-        PhysicalMediaKind.CART_N64 -> {
-            // Arched N64 crown + sculpted vertical side ribs
-            p.color = shadeArgb(shellArgb, 0.84f)
-            c.drawRoundRect(RectF(w * 0.04f, h * 0.05f, w * 0.10f, h * 0.92f), 8f, 8f, p)
-            c.drawRoundRect(RectF(w * 0.90f, h * 0.05f, w * 0.96f, h * 0.92f), 8f, 8f, p)
-            p.color = shadeArgb(shellArgb, 0.72f)
-            c.drawRoundRect(RectF(w * 0.24f, h * 0.035f, w * 0.76f, h * 0.095f), 16f, 16f, p)
+            c.drawRoundRect(RectF(grooveL, h * 0.068f, grooveR, h * 0.104f), 8f, 8f, p)
+            p.color = shadeArgb(shellArgb, 1.18f)
+            c.drawRect(grooveL + 8f, h * 0.104f, grooveR - 8f, h * 0.110f, p)
         }
         else -> {
             p.color = shadeArgb(shellArgb, 0.74f)
-            c.drawRoundRect(RectF(w * 0.18f, h * 0.04f, w * 0.82f, h * 0.10f), 12f, 12f, p)
+            c.drawRoundRect(RectF(w * 0.18f, h * 0.05f, w * 0.82f, h * 0.11f), 12f, 12f, p)
         }
     }
 
-    // Recessed sticker well with the game's cover artwork + console header band
-    val labelRect = when (spec.mediaKind) {
-        PhysicalMediaKind.CART_NES -> RectF(w * 0.26f, h * 0.06f, w * 0.88f, h * 0.84f)
-        PhysicalMediaKind.CART_GAMEBOY -> RectF(w * 0.13f, h * 0.20f, w * 0.87f, h * 0.85f)
-        PhysicalMediaKind.CART_GBA -> RectF(w * 0.12f, h * 0.18f, w * 0.88f, h * 0.84f)
-        PhysicalMediaKind.CART_DS_SWITCH -> RectF(w * 0.10f, h * 0.12f, w * 0.90f, h * 0.88f)
-        PhysicalMediaKind.CART_SNES -> RectF(w * 0.17f, h * 0.145f, w * 0.83f, h * 0.815f)
+    // Recessed sticker well sized & aligned for each exact console silhouette
+    val labelRect = when {
+        id == "3ds" -> RectF(w * 0.12f, h * 0.145f, w * 0.82f, h * 0.845f)
+        id == "nds" -> RectF(w * 0.13f, h * 0.145f, w * 0.87f, h * 0.855f)
+        id == "switch" -> RectF(w * 0.20f, h * 0.145f, w * 0.80f, h * 0.865f)
+        spec.mediaKind == PhysicalMediaKind.CART_NES -> RectF(w * 0.265f, h * 0.058f, w * 0.895f, h * 0.785f)
+        spec.mediaKind == PhysicalMediaKind.CART_GAMEBOY -> RectF(w * 0.13f, h * 0.205f, w * 0.87f, h * 0.855f)
+        spec.mediaKind == PhysicalMediaKind.CART_GBA -> RectF(w * 0.135f, h * 0.215f, w * 0.865f, h * 0.855f)
+        spec.mediaKind == PhysicalMediaKind.CART_SNES -> RectF(w * 0.175f, h * 0.150f, w * 0.825f, h * 0.815f)
+        spec.mediaKind == PhysicalMediaKind.CART_N64 -> RectF(w * 0.155f, h * 0.175f, w * 0.845f, h * 0.835f)
+        spec.mediaKind == PhysicalMediaKind.CART_SEGA -> RectF(w * 0.145f, h * 0.165f, w * 0.855f, h * 0.845f)
         else -> RectF(w * 0.14f, h * 0.14f, w * 0.86f, h * 0.82f)
     }
 
-    // Deep recessed sticker well shadow + crisp bottom rim catch-light
-    p.color = shadeArgb(shellArgb, 0.56f)
+    // Deep recessed sticker well bevel shadow + crisp bottom rim catch-light
+    p.color = shadeArgb(shellArgb, 0.54f)
     c.drawRoundRect(
         RectF(labelRect.left - 7f, labelRect.top - 7f, labelRect.right + 7f, labelRect.bottom + 7f),
         18f, 18f, p,
     )
-    p.color = shadeArgb(shellArgb, 1.18f)
+    p.color = shadeArgb(shellArgb, 1.20f)
     c.drawRoundRect(
         RectF(labelRect.left - 5f, labelRect.top - 3f, labelRect.right + 5f, labelRect.bottom + 5f),
         16f, 16f, p,
     )
     drawFramedBackScreenshot(c, coverBmp, labelRect, spec.spineHeaderColor.toArgb(), p, bmpPaint)
 
+    // Authentic console sticker branding band along bottom/top edge of DS, 3DS & Switch Game Cards!
+    if (id == "3ds" || id == "nds" || id == "switch") {
+        val bandH = labelRect.height() * 0.17f
+        val bandRect = if (id == "switch") {
+            RectF(labelRect.left, labelRect.top, labelRect.right, labelRect.top + bandH)
+        } else {
+            RectF(labelRect.left, labelRect.bottom - bandH, labelRect.right, labelRect.bottom)
+        }
+        p.color = when (id) {
+            "switch" -> AndroidColor.rgb(228, 0, 18)
+            "3ds" -> AndroidColor.rgb(245, 246, 250)
+            else -> AndroidColor.rgb(236, 238, 244)
+        }
+        c.drawRect(bandRect, p)
+        if (id == "3ds") {
+            p.color = AndroidColor.rgb(218, 20, 32)
+            c.drawRect(bandRect.right - bandRect.width() * 0.18f, bandRect.top, bandRect.right, bandRect.bottom, p)
+        }
+        val tagTp = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = if (id == "switch") AndroidColor.WHITE else AndroidColor.rgb(34, 38, 46)
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+            textSize = bandH * 0.44f
+            letterSpacing = 0.06f
+            textAlign = Paint.Align.CENTER
+        }
+        val cardBadge = when (id) {
+            "switch" -> "SWITCH"
+            "3ds" -> "NINTENDO 3DS"
+            else -> "NINTENDO DS"
+        }
+        val fm = tagTp.fontMetrics
+        c.drawText(
+            cardBadge,
+            bandRect.centerX() - (if (id == "3ds") bandRect.width() * 0.06f else 0f),
+            bandRect.centerY() - (fm.ascent + fm.descent) * 0.5f,
+            tagTp,
+        )
+    }
+
     // Subtle inner top-lip cast shadow inside the recessed sticker well
     p.shader = LinearGradient(
-        labelRect.left, labelRect.top, labelRect.left, labelRect.top + labelRect.height() * 0.14f,
-        intArrayOf(
-            AndroidColor.argb(72, 0, 0, 0),
-            AndroidColor.TRANSPARENT,
-        ),
+        labelRect.left, labelRect.top, labelRect.left, labelRect.top + labelRect.height() * 0.15f,
+        intArrayOf(AndroidColor.argb(78, 0, 0, 0), AndroidColor.TRANSPARENT),
         floatArrayOf(0f, 1f),
         Shader.TileMode.CLAMP,
     )
     c.drawRoundRect(labelRect, 12f, 12f, p)
     p.shader = null
 
-    // Subtle glossy vinyl sticker diagonal specular sheen
+    // Glossy vinyl sticker diagonal specular sheen
     p.shader = LinearGradient(
         labelRect.left, labelRect.top, labelRect.right, labelRect.bottom,
         intArrayOf(
-            AndroidColor.argb(46, 255, 255, 255),
-            AndroidColor.argb(10, 255, 255, 255),
+            AndroidColor.argb(52, 255, 255, 255),
+            AndroidColor.argb(12, 255, 255, 255),
             AndroidColor.argb(0, 255, 255, 255),
-            AndroidColor.argb(32, 0, 0, 0),
+            AndroidColor.argb(34, 0, 0, 0),
         ),
         floatArrayOf(0f, 0.34f, 0.62f, 1f),
         Shader.TileMode.CLAMP,
@@ -3170,15 +3765,32 @@ internal fun buildProceduralCartFrontBitmap(
     c.drawRoundRect(labelRect, 12f, 12f, p)
     p.shader = null
 
-    // Bottom center molded insertion arrow triangle
-    p.color = shadeArgb(shellArgb, 0.58f)
+    // Bottom center molded insertion arrow triangle (shifted slightly left on 3DS to center on main body!)
+    val arrowCx = if (id == "3ds") w * 0.470f else w * 0.500f
+    val arrowTop = if (spec.mediaKind == PhysicalMediaKind.CART_NES) h * 0.852f else h * 0.892f
+    val arrowBot = if (spec.mediaKind == PhysicalMediaKind.CART_NES) h * 0.916f else h * 0.946f
+    p.color = shadeArgb(shellArgb, 0.54f)
     val arrow = AndroidPath().apply {
-        moveTo(w * 0.455f, h * 0.902f)
-        lineTo(w * 0.545f, h * 0.902f)
-        lineTo(w * 0.500f, h * 0.958f)
+        moveTo(arrowCx - w * 0.044f, arrowTop)
+        lineTo(arrowCx + w * 0.044f, arrowTop)
+        lineTo(arrowCx, arrowBot)
         close()
     }
     c.drawPath(arrow, p)
+
+    // Tactile molded outer rim bevel highlight + shadow along the EXACT console silhouette!
+    p.style = Paint.Style.STROKE
+    p.strokeWidth = 7f
+    p.shader = LinearGradient(
+        0f, 0f, 0f, h.toFloat(),
+        AndroidColor.argb(135, 255, 255, 255),
+        AndroidColor.argb(125, 0, 0, 0),
+        Shader.TileMode.CLAMP,
+    )
+    c.drawPath(silhouette, p)
+    p.shader = null
+    p.style = Paint.Style.FILL
+    c.restore()
     return bmp
 }
 
@@ -3189,6 +3801,10 @@ internal fun buildProceduralCartBackBitmap(game: Game, spec: PhysicalMediaSpec):
     val c = AndroidCanvas(bmp)
     val p = Paint(Paint.ANTI_ALIAS_FLAG)
     val shellArgb = spec.mediaShellColor.toArgb()
+    val silhouette = buildCartridgeSilhouettePath(spec, w.toFloat(), h.toFloat(), mirrorX = true)
+
+    c.save()
+    c.clipPath(silhouette)
 
     // Injection-molded rear shell body with subtle top-to-bottom shading
     p.shader = LinearGradient(
@@ -3201,19 +3817,8 @@ internal fun buildProceduralCartBackBitmap(game: Game, spec: PhysicalMediaSpec):
         floatArrayOf(0f, 0.45f, 1f),
         Shader.TileMode.CLAMP,
     )
-    val shellRect = RectF(6f, 6f, w - 6f, h - 6f)
-    c.drawRoundRect(shellRect, 26f, 26f, p)
+    c.drawPath(silhouette, p)
     p.shader = null
-
-    // Perimeter molded bevel catch-light + dark outer seam
-    p.style = Paint.Style.STROKE
-    p.strokeWidth = 3f
-    p.color = AndroidColor.argb(65, 255, 255, 255)
-    c.drawRoundRect(RectF(9f, 9f, w - 9f, h - 9f), 24f, 24f, p)
-    p.strokeWidth = 2f
-    p.color = AndroidColor.argb(75, 0, 0, 0)
-    c.drawRoundRect(RectF(6f, 6f, w - 6f, h - 6f), 26f, 26f, p)
-    p.style = Paint.Style.FILL
 
     // Console-authentic rear side grip channels for SNES/N64/NES shells
     if (spec.mediaKind == PhysicalMediaKind.CART_SNES || spec.mediaKind == PhysicalMediaKind.CART_N64) {
@@ -3223,20 +3828,23 @@ internal fun buildProceduralCartBackBitmap(game: Game, spec: PhysicalMediaSpec):
     }
 
     if (spec.mediaKind == PhysicalMediaKind.CART_DS_SWITCH || spec.mediaKind == PhysicalMediaKind.CART_HUCARD) {
-        // Gleaming gold contact fingers exposed along the bottom rear of DS / Switch / Vita / HuCard cards!
+        // Gleaming gold contact fingers exposed along the bottom rear of DS / 3DS / Switch / Vita / HuCard cards!
+        val isSwitch = spec.systemId.lowercase(Locale.US) == "switch"
+        val pinL = if (isSwitch) w * 0.21f else w * 0.15f
+        val pinR = if (isSwitch) w * 0.79f else w * 0.85f
         val pinZoneTop = h * 0.62f
         val pinZoneBottom = h * 0.92f
         p.color = AndroidColor.rgb(22, 62, 38)
-        c.drawRoundRect(RectF(w * 0.13f, pinZoneTop, w * 0.87f, pinZoneBottom), 10f, 10f, p)
-        // PCB recessed shadow lip
+        c.drawRoundRect(RectF(pinL, pinZoneTop, pinR, pinZoneBottom), 10f, 10f, p)
         p.style = Paint.Style.STROKE
         p.strokeWidth = 2.5f
         p.color = AndroidColor.argb(110, 0, 0, 0)
-        c.drawRoundRect(RectF(w * 0.13f, pinZoneTop, w * 0.87f, pinZoneBottom), 10f, 10f, p)
+        c.drawRoundRect(RectF(pinL, pinZoneTop, pinR, pinZoneBottom), 10f, 10f, p)
         p.style = Paint.Style.FILL
 
-        val pins = 14
-        val step = (w * 0.68f) / pins
+        val pins = if (isSwitch) 10 else 14
+        val pinSpan = (pinR - pinL) * 0.92f
+        val step = pinSpan / pins
         p.shader = LinearGradient(
             0f, pinZoneTop, 0f, pinZoneBottom,
             intArrayOf(
@@ -3248,21 +3856,20 @@ internal fun buildProceduralCartBackBitmap(game: Game, spec: PhysicalMediaSpec):
             Shader.TileMode.CLAMP,
         )
         for (i in 0 until pins) {
-            val px = w * 0.16f + i * step
+            val px = pinL + (pinR - pinL) * 0.04f + i * step
             c.drawRoundRect(RectF(px, pinZoneTop + 7f, px + step * 0.66f, pinZoneBottom - 6f), 4f, 4f, p)
         }
         p.shader = null
         // Plastic divider ribs between contact fingers
         p.color = shadeArgb(shellArgb, 0.72f)
         for (i in 0..pins) {
-            val rx = w * 0.152f + i * step
+            val rx = pinL + (pinR - pinL) * 0.032f + i * step
             c.drawRect(rx, pinZoneTop + 2f, rx + 3f, pinZoneBottom - 2f, p)
         }
     } else {
         // Deep recessed metallic brass GameBit security screw wells
-        val screwPositions = listOf(w * 0.14f to h * 0.82f, w * 0.86f to h * 0.82f)
+        val screwPositions = listOf(w * 0.16f to h * 0.80f, w * 0.84f to h * 0.80f)
         for ((sx, sy) in screwPositions) {
-            // Outer countersunk well shadow
             p.color = shadeArgb(shellArgb, 0.52f)
             c.drawCircle(sx, sy, 15.5f, p)
             p.style = Paint.Style.STROKE
@@ -3270,7 +3877,6 @@ internal fun buildProceduralCartBackBitmap(game: Game, spec: PhysicalMediaSpec):
             p.color = AndroidColor.argb(55, 255, 255, 255)
             c.drawCircle(sx, sy + 1f, 15.5f, p)
             p.style = Paint.Style.FILL
-            // Specular metallic brass GameBit screw head
             p.shader = android.graphics.RadialGradient(
                 sx - 3f, sy - 3f, 10f,
                 intArrayOf(
@@ -3283,7 +3889,6 @@ internal fun buildProceduralCartBackBitmap(game: Game, spec: PhysicalMediaSpec):
             )
             c.drawCircle(sx, sy, 9.2f, p)
             p.shader = null
-            // Center security hex/star notch
             p.color = AndroidColor.rgb(72, 58, 28)
             c.drawCircle(sx, sy, 3.2f, p)
         }
@@ -3295,7 +3900,12 @@ internal fun buildProceduralCartBackBitmap(game: Game, spec: PhysicalMediaSpec):
     }
 
     // Recessed rear matte caution sticker plate with hairline catch-light
-    val warnRect = RectF(w * 0.17f, h * 0.16f, w * 0.83f, h * 0.56f)
+    val isSwitch = spec.systemId.lowercase(Locale.US) == "switch"
+    val warnRect = if (isSwitch) {
+        RectF(w * 0.22f, h * 0.16f, w * 0.78f, h * 0.54f)
+    } else {
+        RectF(w * 0.18f, h * 0.16f, w * 0.82f, h * 0.56f)
+    }
     p.color = shadeArgb(shellArgb, 0.68f)
     c.drawRoundRect(warnRect, 14f, 14f, p)
     val labelInset = RectF(warnRect.left + 6f, warnRect.top + 6f, warnRect.right - 6f, warnRect.bottom - 6f)
@@ -3317,22 +3927,44 @@ internal fun buildProceduralCartBackBitmap(game: Game, spec: PhysicalMediaSpec):
     val tp = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         color = AndroidColor.rgb(42, 46, 54)
         typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
-        textSize = 17f
+        textSize = if (isSwitch) 14f else 17f
         textAlign = Paint.Align.CENTER
     }
     c.drawText((game.system?.name ?: game.systemId).uppercase(Locale.US), w * 0.5f, labelInset.top + 36f, tp)
     p.color = AndroidColor.argb(70, 42, 46, 54)
     c.drawRect(labelInset.left + 22f, labelInset.top + 48f, labelInset.right - 22f, labelInset.top + 50f, p)
 
-    tp.textSize = 13.5f
+    tp.textSize = if (isSwitch) 11f else 13.5f
     tp.typeface = Typeface.MONOSPACE
     c.drawText("CAUTION · DO NOT TOUCH EDGE PINS", w * 0.5f, labelInset.top + 78f, tp)
     c.drawText("STORE IN PROTECTIVE CASE AFTER PLAY", w * 0.5f, labelInset.top + 102f, tp)
-    tp.textSize = 11.5f
+    tp.textSize = if (isSwitch) 9.5f else 11.5f
     tp.color = AndroidColor.rgb(88, 94, 106)
-    c.drawText("PAT. PEND. · MADE FOR RETROHERO ARCHIVE", w * 0.5f, labelInset.bottom - 18f, tp)
+    c.drawText("PAT. PEND. · RETROHERO ARCHIVE", w * 0.5f, labelInset.bottom - 18f, tp)
+
+    // Perimeter molded bevel catch-light along the mirrored silhouette
+    p.style = Paint.Style.STROKE
+    p.strokeWidth = 6f
+    p.shader = LinearGradient(
+        0f, 0f, 0f, h.toFloat(),
+        AndroidColor.argb(95, 255, 255, 255),
+        AndroidColor.argb(115, 0, 0, 0),
+        Shader.TileMode.CLAMP,
+    )
+    c.drawPath(silhouette, p)
+    p.shader = null
+    p.style = Paint.Style.FILL
+    c.restore()
     return bmp
 }
+
+private data class DiscSilkscreenStyle(
+    val crescentTop: Int,
+    val crescentBot: Int,
+    val primaryTextCol: Int,
+    val subTextCol: Int,
+    val formatBadge: String,
+)
 
 internal fun buildProceduralDiscLabelBitmap(
     game: Game,
@@ -3341,59 +3973,136 @@ internal fun buildProceduralDiscLabelBitmap(
     coverBmp: Bitmap,
 ): Bitmap {
     val s = 600
+    val cx = s * 0.5f
+    val cy = s * 0.5f
     val bmp = Bitmap.createBitmap(s, s, Bitmap.Config.ARGB_8888)
     val c = AndroidCanvas(bmp)
     val p = Paint(Paint.ANTI_ALIAS_FLAG)
     val bmpPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
 
+    val id = spec.systemId.lowercase(Locale.US)
+    val isMiniGc = spec.mediaKind == PhysicalMediaKind.MINI_DISC_GC
+    val isUmd = spec.mediaKind == PhysicalMediaKind.UMD_DISC
+
     val discClip = AndroidPath().apply {
-        addCircle(s * 0.5f, s * 0.5f, s * 0.495f, AndroidPath.Direction.CW)
+        addCircle(cx, cy, s * 0.495f, AndroidPath.Direction.CW)
     }
     c.save()
     c.clipPath(discClip)
 
-    // Printed cover artwork on top half / silkscreened disc label
+    // Printed cover artwork filling the upper & full circular disc label
     val scale = max(s.toFloat() / coverBmp.width, s.toFloat() / coverBmp.height)
     val dw = coverBmp.width * scale
     val dh = coverBmp.height * scale
     c.drawBitmap(coverBmp, null, RectF((s - dw) * 0.5f, (s - dh) * 0.5f, (s + dw) * 0.5f, (s + dh) * 0.5f), bmpPaint)
 
-    // Bottom silkscreen title band
-    p.color = shadeArgb(spec.spineHeaderColor.toArgb(), 0.88f)
-    p.alpha = 215
-    c.drawRect(0f, s * 0.66f, s.toFloat(), s.toFloat(), p)
+    // Subtle radial silkscreen vignette so disc typography & center hub read with real physical contrast
+    p.shader = android.graphics.RadialGradient(
+        cx, cy, s * 0.50f,
+        intArrayOf(
+            AndroidColor.argb(40, 0, 0, 0),
+            AndroidColor.argb(0, 0, 0, 0),
+            AndroidColor.argb(82, 0, 0, 0),
+        ),
+        floatArrayOf(0.18f, 0.62f, 1f),
+        Shader.TileMode.CLAMP,
+    )
+    c.drawCircle(cx, cy, s * 0.495f, p)
+    p.shader = null
+
+    // Console-authentic curved lower silkscreen crescent arc (replacing boxy horizontal stripe!)
+    val (crescentTop, crescentBot, primaryTextCol, subTextCol, formatBadge) = when (id) {
+        "psx", "ps1" -> DiscSilkscreenStyle(AndroidColor.rgb(18, 20, 26), AndroidColor.rgb(8, 9, 13), AndroidColor.WHITE, AndroidColor.rgb(196, 204, 218), "PlayStation · COMPACT DISC")
+        "ps2" -> DiscSilkscreenStyle(AndroidColor.rgb(16, 62, 168), AndroidColor.rgb(9, 34, 98), AndroidColor.WHITE, AndroidColor.rgb(196, 218, 255), "PlayStation 2 · DVD-ROM")
+        "gc", "gamecube" -> DiscSilkscreenStyle(AndroidColor.rgb(74, 54, 158), AndroidColor.rgb(44, 30, 104), AndroidColor.WHITE, AndroidColor.rgb(218, 208, 255), "NINTENDO GAMECUBE")
+        "dreamcast", "dc" -> DiscSilkscreenStyle(AndroidColor.rgb(244, 246, 250), AndroidColor.rgb(218, 222, 232), AndroidColor.rgb(28, 32, 40), AndroidColor.rgb(96, 102, 114), "SEGA · GD-ROM")
+        "wii", "wiiu" -> DiscSilkscreenStyle(AndroidColor.rgb(244, 248, 252), AndroidColor.rgb(212, 224, 238), AndroidColor.rgb(46, 54, 68), AndroidColor.rgb(0, 138, 214), if (id == "wiiu") "Wii U · OPTICAL DISC" else "Wii · OPTICAL DISC")
+        "psp" -> DiscSilkscreenStyle(AndroidColor.rgb(24, 28, 36), AndroidColor.rgb(12, 14, 20), AndroidColor.WHITE, AndroidColor.rgb(196, 204, 218), "PSP · UMD")
+        else -> DiscSilkscreenStyle(shadeArgb(spec.spineHeaderColor.toArgb(), 0.78f), shadeArgb(spec.spineHeaderColor.toArgb(), 0.48f), AndroidColor.WHITE, AndroidColor.rgb(220, 226, 238), "${(game.system?.shortName ?: game.systemId).uppercase(Locale.US)} · OPTICAL DISC")
+    }
+
+    val crescentPath = AndroidPath().apply {
+        moveTo(0f, s * 0.655f)
+        quadTo(cx, s * 0.725f, s.toFloat(), s * 0.655f)
+        lineTo(s.toFloat(), s.toFloat())
+        lineTo(0f, s.toFloat())
+        close()
+    }
+    p.shader = LinearGradient(
+        0f, s * 0.655f, 0f, s.toFloat(),
+        crescentTop,
+        crescentBot,
+        Shader.TileMode.CLAMP,
+    )
+    p.alpha = 238
+    c.drawPath(crescentPath, p)
+    p.shader = null
     p.alpha = 255
 
+    // Crisp metallic silver trim arc separating cover artwork from the lower silkscreen badge
+    p.style = Paint.Style.STROKE
+    p.strokeWidth = 3.2f
+    p.color = AndroidColor.argb(190, 236, 242, 252)
+    val arcLine = AndroidPath().apply {
+        moveTo(0f, s * 0.655f)
+        quadTo(cx, s * 0.725f, s.toFloat(), s * 0.655f)
+    }
+    c.drawPath(arcLine, p)
+    p.style = Paint.Style.FILL
+
+    // Dreamcast signature orange swirl emblem dot on the pearl-white arc
+    if (id == "dreamcast" || id == "dc") {
+        p.style = Paint.Style.STROKE
+        p.strokeWidth = 4f
+        p.color = AndroidColor.rgb(255, 98, 24)
+        c.drawCircle(cx, s * 0.722f, 11f, p)
+        p.style = Paint.Style.FILL
+    }
+
     val tp = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = AndroidColor.WHITE
+        color = primaryTextCol
         typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-        textSize = 26f
+        textSize = 25f
         textAlign = Paint.Align.CENTER
     }
     c.drawText(
-        TextUtils.ellipsize(game.title, tp, s * 0.72f, TextUtils.TruncateAt.END).toString(),
-        s * 0.5f,
-        s * 0.76f,
+        TextUtils.ellipsize(game.title, tp, s * 0.64f, TextUtils.TruncateAt.END).toString(),
+        cx,
+        s * 0.785f,
         tp,
     )
-    tp.textSize = 17f
-    c.drawText(
-        "${(game.system?.shortName ?: game.systemId).uppercase(Locale.US)} · ${dossier.publisher.ifBlank { "OPTICAL DISC" }.uppercase(Locale.US)}",
-        s * 0.5f,
-        s * 0.83f,
-        tp,
-    )
+    tp.color = subTextCol
+    tp.textSize = 15.5f
+    tp.letterSpacing = 0.08f
+    c.drawText(formatBadge, cx, s * 0.848f, tp)
+
+    val pubText = dossier.publisher.ifBlank { dossier.developer }.uppercase(Locale.US)
+    if (pubText.isNotBlank()) {
+        tp.textSize = 12f
+        tp.alpha = 185
+        c.drawText(TextUtils.ellipsize(pubText, tp, s * 0.48f, TextUtils.TruncateAt.END).toString(), cx, s * 0.896f, tp)
+        tp.alpha = 255
+    }
+
+    // Subtle concentric silkscreen rim copyright ring near outer edge
+    p.style = Paint.Style.STROKE
+    p.strokeWidth = 1.6f
+    p.color = AndroidColor.argb(95, 240, 246, 255)
+    c.drawCircle(cx, cy, s * 0.456f, p)
     c.restore()
 
-    // Outer silver rim + punch out center hole
+    // Outer mirror-silver beveled disc rim + punch out authentic center spindle hole (except UMD which has solid steel hub)
     p.style = Paint.Style.STROKE
-    p.strokeWidth = 8f
-    p.color = AndroidColor.rgb(220, 226, 236)
-    c.drawCircle(s * 0.5f, s * 0.5f, s * 0.49f, p)
+    p.strokeWidth = 8.5f
+    p.color = if (spec.blackDiscUnderside) AndroidColor.rgb(172, 180, 196) else AndroidColor.rgb(228, 234, 244)
+    c.drawCircle(cx, cy, s * 0.489f, p)
     p.style = Paint.Style.FILL
-    p.xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
-    c.drawCircle(s * 0.5f, s * 0.5f, s * 0.082f, p)
-    p.xfermode = null
+    if (!isUmd) {
+        val holeFrac = if (isMiniGc) 0.118f else 0.084f
+        p.xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
+        c.drawCircle(cx, cy, s * holeFrac, p)
+        p.xfermode = null
+    }
     return bmp
 }
 

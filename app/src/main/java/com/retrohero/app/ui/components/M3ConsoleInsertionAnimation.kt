@@ -1005,6 +1005,24 @@ private fun Ds3dsPhotoSlot1Stage(
             } else {
                 drawNdsOr3dsConsoleBack(hwSpec, frame)
             }
+            // Subtle grounded drop shadow beneath the flat gliding DS / 3DS Game Card
+            val shadowAlpha = (0.48f * (1f - frame.insertDepth * 0.65f)).coerceIn(0f, 0.5f)
+            if (shadowAlpha > 0.04f) {
+                val scx = size.width * 0.5f
+                val scy = (yDp + cardSizeDp * 0.56f).dp.toPx()
+                val sw = (cardSizeDp * 0.62f * cardScale).dp.toPx()
+                val sh = (cardSizeDp * 0.22f * cardScale).dp.toPx()
+                drawOval(
+                    brush = Brush.radialGradient(
+                        0f to Color.Black.copy(alpha = shadowAlpha),
+                        1f to Color.Transparent,
+                        center = Offset(scx, scy),
+                        radius = (sw * 0.62f).coerceAtLeast(12f),
+                    ),
+                    topLeft = Offset(scx - sw * 0.5f, scy - sh * 0.5f),
+                    size = Size(sw, sh),
+                )
+            }
         }
 
         // Layer 2: Real 3D DS / 3DS Game Card sliding flat horizontally into Slot-1!
@@ -1117,6 +1135,24 @@ private fun NesPhotoFrontDeckStage(
                 drawPhotoCentered(photo, left, top, cw, ch)
             } else {
                 drawNesConsoleBack(frame)
+            }
+            // Subtle contact shadow cast by the gliding NES Game Pak on the front apron
+            val shadowAlpha = (0.50f * cartAlpha * (1f - frame.insertDepth * 0.60f)).coerceIn(0f, 0.5f)
+            if (shadowAlpha > 0.04f) {
+                val scx = size.width * 0.5f + slotOffsetX.dp.toPx()
+                val scy = (yDp + cartH * 0.56f).dp.toPx()
+                val sw = (cartW * 0.70f * scale).dp.toPx()
+                val sh = (cartH * 0.20f * scale).dp.toPx()
+                drawOval(
+                    brush = Brush.radialGradient(
+                        0f to Color.Black.copy(alpha = shadowAlpha),
+                        1f to Color.Transparent,
+                        center = Offset(scx, scy),
+                        radius = (sw * 0.60f).coerceAtLeast(14f),
+                    ),
+                    topLeft = Offset(scx - sw * 0.5f, scy - sh * 0.5f),
+                    size = Size(sw, sh),
+                )
             }
         }
 
@@ -1474,10 +1510,10 @@ private fun SwitchPhotoTopFlapStage(
     val slotLipY = consoleTopY + consoleH * slotLipFrac // 203.2dp
     val slotOffsetX = (slotCxFrac - 0.5f) * consoleW // +70.5dp
 
-    val cardW = 50f
-    val cardH = 66f
-    val startY = 30f
-    val endY = slotLipY - 8f
+    val cardW = 60f
+    val cardH = 74f
+    val startY = 26f
+    val endY = slotLipY - 10f
     val yDp = startY + (endY - startY) * frame.insertDepth + frame.latchMotion * 5f
 
     Box(modifier = modifier, contentAlignment = Alignment.TopCenter) {
@@ -1600,6 +1636,24 @@ private fun DiscTopLidStage(
                 } else {
                     drawTopLidConsoleBack(hwSpec, frame)
                 }
+                if (discAlpha > 0.05f && frame.insertDepth > 0.05f) {
+                    val cx = size.width * 0.5f
+                    val cy = bayCyDp.dp.toPx()
+                    val rx = bayRxDp.dp.toPx() * (1.06f - frame.insertDepth * 0.14f)
+                    val ry = bayRyDp.dp.toPx() * (1.06f - frame.insertDepth * 0.14f)
+                    val shadowAlpha = (0.14f + frame.insertDepth * 0.24f) * discAlpha
+                    drawOval(
+                        brush = Brush.radialGradient(
+                            0f to Color.Black.copy(alpha = shadowAlpha),
+                            0.72f to Color.Black.copy(alpha = shadowAlpha * 0.55f),
+                            1f to Color.Transparent,
+                            center = Offset(cx, cy + 3.dp.toPx()),
+                            radius = rx.coerceAtLeast(1f),
+                        ),
+                        topLeft = Offset(cx - rx, cy - ry + 3.dp.toPx()),
+                        size = Size(rx * 2f, ry * 2f),
+                    )
+                }
             }
 
             Box(
@@ -1714,7 +1768,7 @@ private fun DiscTopLidStage(
     val discSizeDp = if (isDreamcast) 218f else 226f
     val bayCyDp = if (isDreamcast) 360f * 0.60f else 360f * 0.61f
     val startY = 4f
-    val endY = bayCyDp - discSizeDp * 0.5f
+    val endY = bayCyDp - discSizeDp * 0.48f
     val yDp = startY + (endY - startY) * frame.insertDepth
     val foreshortenY = (0.82f - frame.insertDepth * 0.32f).coerceIn(0.50f, 0.90f)
     val discAlpha = if (frame.lidOpen < 0.42f) (frame.lidOpen / 0.42f).coerceIn(0f, 1f) else 1f
@@ -1772,9 +1826,9 @@ private fun PspPhotoRearUmdStage(
     val doorTopFrac = 0.555f
     val doorTopY = consoleTopY + consoleH * doorTopFrac // 233.7dp (top rim of the real open chrome-ring door!)
 
-    val umdSizeDp = 132f
-    val startY = 14f
-    val endY = bayCyDp - umdSizeDp * 0.5f + 10f
+    val umdSizeDp = 128f
+    val startY = 12f
+    val endY = bayCyDp - umdSizeDp * 0.48f + 6f
     val yDp = startY + (endY - startY) * frame.insertDepth
     val umdAlpha = if (frame.lidOpen < 0.38f) (frame.lidOpen / 0.38f).coerceIn(0f, 1f) else 1f
 
@@ -1882,7 +1936,7 @@ private fun Ps2SlideTrayInsertionStage(
     val trayBackY = 360f * 0.47f + 14f
     val trayTipY = 360f * 0.47f + 28f + frame.trayOut * 84f
     val trayCenterY = trayBackY + (trayTipY - trayBackY) * 0.54f
-    val seatedTopY = trayCenterY - discSizeDp * 0.5f
+    val seatedTopY = trayCenterY - discSizeDp * 0.48f
     val yDp = 8f + (seatedTopY - 8f) * frame.insertDepth
     val foreshortenY = (0.80f - frame.insertDepth * 0.34f).coerceIn(0.42f, 0.88f)
     val discAlpha = (frame.trayOut * 1.4f).coerceIn(0f, 1f)
