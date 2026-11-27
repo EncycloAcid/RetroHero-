@@ -46,6 +46,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import com.retrohero.app.data.GameDossier
 import kotlinx.coroutines.Dispatchers
@@ -94,6 +95,36 @@ data class SpineDimensions(
 )
 
 object ShelfLayoutMath {
+    /** Spine-fit framing for the shared 3D renderer: case half-height and center, as fractions of the slot height. */
+    const val SPINE_FIT_HALF_HEIGHT = 0.46f
+    const val SPINE_FIT_CENTER = 0.5f
+
+    /** Shelf cases face the room spine-first, the same angle as the game page's "Spine" view. */
+    const val SPINE_YAW = 88f
+    const val SPINE_PITCH = -4f
+    /** A pulled case turns a little toward you, showing a sliver of its front. */
+    const val PULLED_YAW = 66f
+
+    /** Width / height of a case's spine face in the 3D model (depth relative to the case's long side). */
+    fun spineFaceRatio(spec: PhysicalMediaSpec, boxAspect: Float): Float =
+        (spec.caseStyle.depthRatio * maxOf(boxAspect, 1f)).coerceIn(0.05f, 0.4f)
+
+    /** Aspect of the generated box front, which the 3D viewer uses when there's no real cover. */
+    fun proceduralFrontAspect(spec: PhysicalMediaSpec): Float {
+        val w = if (spec.defaultBoxAspect > 1.12f) 740 else 540
+        val h = Math.round(w / spec.defaultBoxAspect).coerceIn(480, 860)
+        return w.toFloat() / h
+    }
+
+    /** How wide a shelf slot must be for the 3D case standing at [yawDeg], with a little air either side. */
+    fun spineSlotWidthDp(spec: PhysicalMediaSpec, boxAspect: Float, heightDp: Float, yawDeg: Float = SPINE_YAW): Float {
+        val halfH = heightDp * SPINE_FIT_HALF_HEIGHT
+        val halfW = halfH * boxAspect
+        val halfD = maxOf(halfW, halfH) * spec.caseStyle.depthRatio
+        val rad = Math.toRadians(yawDeg.toDouble())
+        val projected = 2f * (halfD * kotlin.math.abs(kotlin.math.sin(rad)).toFloat() + halfW * kotlin.math.abs(kotlin.math.cos(rad)).toFloat())
+        return projected * 1.08f + 4f
+    }
 
     /**
      * Maps each console's [RetailCaseStyle] to distinct, authentic physical spine proportions
@@ -265,7 +296,7 @@ fun M3BookshelfSection(
                             loadDossier = loadDossier,
                             onPlay = { onQuickPlay(g) },
                             onInspect = { onOpenDetail(g) },
-                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
+                            modifier = Modifier.padding(vertical = 12.dp),
                         )
                     }
                 }
@@ -281,173 +312,81 @@ private fun ShelfSpineCase(
     onClick: () -> Unit,
     dossierFor: (Game) -> GameDossier?,
 ) {
-    val spec = remember(game.systemId) { PhysicalMediaSpec.forSystem(game.systemId) }
-    // Same spec (and accent) as the game page's 3D viewer, so the spine art matches it.
+    val dims = remember(game.systemId) { ShelfLayoutMath.spineDimensions(game.systemId) }
+    // Same spec (and accent) as the game page's 3D viewer, so the case is the same model.
     val viewerAccent = game.system?.color ?: MaterialTheme.colorScheme.primary
     val viewerSpec = remember(game.systemId, viewerAccent) { PhysicalMediaSpec.forSystem(game.systemId, viewerAccent) }
-    val spineArt = rememberShelfSpineArt(game, viewerSpec, dossierFor)
-    val dims = remember(game.systemId) { ShelfLayoutMath.spineDimensions(game.systemId) }
-    val baseColor = remember(game.id) { ShelfLayoutMath.spineBaseColor(game, spec) }
-    val isLight = remember(baseColor) { ShelfLayoutMath.isLightSpine(baseColor) }
-    val textColor = if (isLight) Color(0xFF14171D) else Color(0xFFF5F6FA)
-    val accent = game.system?.color ?: spec.spineHeaderColor
-    val shortSys = when (game.systemId.lowercase()) {
-        "genesis" -> "GEN"
-        "dreamcast" -> "DC"
-        "saturn" -> "SAT"
-        "wonderswan" -> "WS"
-        else -> (game.system?.shortName ?: game.systemId).uppercase().take(4)
-    }
+    val art = rememberShelfCaseArt(game, viewerSpec, dossierFor)
 
+    val yaw by animateFloatAsState(
+        targetValue = if (pulled) ShelfLayoutMath.PULLED_YAW else ShelfLayoutMath.SPINE_YAW,
+        animationSpec = spring(dampingRatio = 0.74f, stiffness = 300f),
+        label = "spineYaw",
+    )
     val liftY by animateDpAsState(
         targetValue = if (pulled) (-16).dp else 0.dp,
         animationSpec = spring(dampingRatio = 0.68f, stiffness = 420f),
         label = "spineLift",
     )
-    val scale by animateFloatAsState(
-        targetValue = if (pulled) 1.07f else 1f,
-        animationSpec = spring(dampingRatio = 0.72f, stiffness = 420f),
-        label = "spineScale",
-    )
-
-    val corner = when (spec.caseStyle) {
-        RetailCaseStyle.JEWEL_CASE_CD -> 3.dp
-        RetailCaseStyle.CARDBOARD_LANDSCAPE,
-        RetailCaseStyle.CARDBOARD_VERTICAL,
-        RetailCaseStyle.CARDBOARD_SQUARE -> 4.dp
-        else -> 6.dp
-    }
+    val aspect = art?.boxAspect ?: ShelfLayoutMath.proceduralFrontAspect(viewerSpec)
+    // The slot follows the case as it turns, so neighbours make room for a pulled case.
+    val slotW = ShelfLayoutMath.spineSlotWidthDp(viewerSpec, aspect, dims.heightDp, yaw)
 
     Box(
         Modifier
             .offset(y = liftY)
-            .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
-                rotationZ = if (pulled) -2.5f else 0f
-            }
-            .width(dims.widthDp.dp)
+            .width(slotW.dp)
             .height(dims.heightDp.dp)
-            .shadow(
-                elevation = if (pulled) 14.dp else 4.dp,
-                shape = RoundedCornerShape(topStart = corner, topEnd = corner, bottomStart = 2.dp, bottomEnd = 2.dp),
-            )
-            .clip(RoundedCornerShape(topStart = corner, topEnd = corner, bottomStart = 2.dp, bottomEnd = 2.dp))
-            .background(baseColor)
-            .border(
-                width = if (pulled) 1.5.dp else 0.75.dp,
-                color = if (pulled) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = if (isLight) 0.55f else 0.16f),
-                shape = RoundedCornerShape(topStart = corner, topEnd = corner, bottomStart = 2.dp, bottomEnd = 2.dp),
-            )
-            .semantics { contentDescription = game.title }
+            .semantics {
+                contentDescription = game.title
+                selected = pulled
+            }
             .clickable(onClick = onClick),
     ) {
-        if (spineArt != null) {
-            Image(
-                bitmap = spineArt,
-                contentDescription = null,
-                contentScale = ContentScale.FillBounds,
+        if (art != null) {
+            Physical3dStageCanvas(
+                subject = PhysicalViewerSubject.RETAIL_BOX,
+                spec = viewerSpec,
+                textures = art.textures,
+                boxAspect = art.boxAspect,
+                yawDeg = yaw,
+                pitchDeg = ShelfLayoutMath.SPINE_PITCH,
+                spineFit = true,
+                floorShadow = false,
                 modifier = Modifier.fillMaxSize(),
             )
+        } else {
+            FlatSpinePlaceholder(game, viewerSpec, Modifier.fillMaxSize())
         }
-        // 3D cylindrical spine bevel shading + subtle plastic/cardboard top edge highlight
-        Canvas(Modifier.fillMaxSize()) {
-            // Left/right spine curvature lighting
-            drawRect(
-                brush = Brush.horizontalGradient(
-                    0f to Color.White.copy(alpha = if (isLight) 0.35f else 0.20f),
-                    0.18f to Color.Transparent,
-                    0.78f to Color.Transparent,
-                    1f to Color.Black.copy(alpha = 0.42f),
-                ),
-            )
-            // Top edge thickness glint
-            drawRect(
-                color = Color.White.copy(alpha = if (isLight) 0.45f else 0.18f),
-                topLeft = Offset.Zero,
-                size = Size(size.width, dims.topBevelDp.dp.toPx() * 0.45f),
-            )
-            // CD Jewel case clear plastic hinge ribs at top/bottom
-            if (spec.caseStyle == RetailCaseStyle.JEWEL_CASE_CD) {
-                for (i in 0..3) {
-                    val y = 6.dp.toPx() + i * 2.5.dp.toPx()
-                    drawLine(Color.White.copy(alpha = 0.24f), Offset(2f, y), Offset(size.width - 2f, y), strokeWidth = 1f)
-                }
-            }
-            // Bottom contact shadow where case meets the shelf
-            drawRect(
-                brush = Brush.verticalGradient(
-                    0.82f to Color.Transparent,
-                    1f to Color.Black.copy(alpha = 0.45f),
-                ),
-            )
-        }
+    }
+}
 
-        // Plain printed spine while the real art loads (the art already carries title and logo).
-        if (spineArt == null) Column(
-            Modifier
-                .fillMaxSize()
-                .padding(vertical = 6.dp, horizontal = 2.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween,
-        ) {
-            // Console color band / logo header at top of spine
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 2.dp)
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(accent.copy(alpha = if (isLight) 0.90f else 0.82f))
-                    .padding(vertical = 3.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = shortSys.take(4),
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 7.sp,
-                        fontWeight = FontWeight.Black,
-                        letterSpacing = 0.3.sp,
-                    ),
-                    color = Color.White,
-                    maxLines = 1,
-                    softWrap = false,
-                )
-            }
-
-            // Vertical rotated game title along the spine
-            Box(
-                Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = game.title,
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 9.5.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 0.2.sp,
-                    ),
-                    color = textColor,
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Ellipsis,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .requiredWidth((dims.heightDp - 44f).dp)
-                        .rotate(-90f),
-                )
-            }
-
-            // Tiny bottom console stripe accent
-            Box(
-                Modifier
-                    .width(12.dp)
-                    .height(3.dp)
-                    .clip(CircleShape)
-                    .background(accent.copy(alpha = 0.78f)),
-            )
-        }
+/** A plain printed spine shown for the moment before the case's 3D textures are ready. */
+@Composable
+private fun FlatSpinePlaceholder(game: Game, spec: PhysicalMediaSpec, modifier: Modifier) {
+    val dims = remember(game.systemId) { ShelfLayoutMath.spineDimensions(game.systemId) }
+    val baseColor = remember(game.id) { ShelfLayoutMath.spineBaseColor(game, spec) }
+    val isLight = remember(baseColor) { ShelfLayoutMath.isLightSpine(baseColor) }
+    val textColor = if (isLight) Color(0xFF14171D) else Color(0xFFF5F6FA)
+    val shape = RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp, bottomStart = 2.dp, bottomEnd = 2.dp)
+    Box(
+        modifier
+            .padding(vertical = (dims.heightDp * (0.5f - ShelfLayoutMath.SPINE_FIT_HALF_HEIGHT)).dp, horizontal = 2.dp)
+            .clip(shape)
+            .background(baseColor),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = game.title,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.ExtraBold),
+            color = textColor,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .requiredWidth((dims.heightDp - 36f).dp)
+                .rotate(90f),
+        )
     }
 }
 
@@ -539,67 +478,30 @@ private fun PulledCaseSpotlight(
     modifier: Modifier = Modifier,
 ) {
     val cs = MaterialTheme.colorScheme
-    val spec = remember(game.systemId) { PhysicalMediaSpec.forSystem(game.systemId) }
-    // The same box front and disc/cartridge textures the game page's 3D viewer shows.
+    // Same LaunchBox data the game page loads, so its 3D viewer shows the same case and disc.
     var dossier by remember(game.id) { mutableStateOf(GameDossier.localFallback(game)) }
     LaunchedEffect(game.id) {
         withContext(Dispatchers.IO) { dossierFor(game) }?.let { dossier = it }
         loadDossier?.let { load -> runCatching { load(game) }.getOrNull()?.let { dossier = it } }
     }
-    val viewerAccent = game.system?.color ?: cs.primary
-    val viewerSpec = remember(game.systemId, viewerAccent) { PhysicalMediaSpec.forSystem(game.systemId, viewerAccent) }
-    val textures = rememberPhysicalTextures(game, dossier, viewerSpec, null)
-    val frontAspect = (textures.front.width.toFloat() / textures.front.height.coerceAtLeast(1)).coerceIn(0.6f, 1.45f)
-    Surface(
-        shape = RoundedCornerShape(24.dp),
-        color = cs.surfaceContainerHigh,
-        tonalElevation = 4.dp,
-        modifier = modifier
-            .fillMaxWidth()
-            .border(1.dp, cs.primary.copy(alpha = 0.32f), RoundedCornerShape(24.dp)),
-    ) {
-        Row(
-            Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            // Angled 3/4 case with its disc or cartridge sliding out from behind it
-            // Wide boxes (SNES, N64) get shorter rather than wider, so the text and buttons keep their room.
-            val caseW = (92f * frontAspect).coerceAtMost(96f).dp
-            val caseH = (caseW.value / frontAspect).dp
-            Box(
-                Modifier
-                    .width(caseW + 28.dp)
-                    .height(96.dp)
-                    .clickable(onClickLabel = "Open the 3D case", onClick = onInspect),
-            ) {
-                Image(
-                    bitmap = textures.mediaFront.asImageBitmap(),
-                    contentDescription = null,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .size(if (viewerSpec.mediaKind.isOpticalDisc) 64.dp else 52.dp)
-                        .graphicsLayer { rotationZ = if (viewerSpec.mediaKind.isOpticalDisc) 0f else 7f },
-                )
-                Image(
-                    bitmap = textures.front.asImageBitmap(),
-                    contentDescription = "${game.title} case",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .align(Alignment.CenterStart)
-                        .width(caseW)
-                        .height(caseH)
-                        .graphicsLayer {
-                            rotationY = -14f
-                            cameraDistance = 14f * density
-                        }
-                        .shadow(8.dp, RoundedCornerShape(6.dp))
-                        .clip(RoundedCornerShape(6.dp)),
-                )
-            }
+    val spec = remember(game.systemId) { PhysicalMediaSpec.forSystem(game.systemId) }
 
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // The game page's own 3D case & disc viewer: drag 360°, double-tap to flip, Case / Disc,
+        // Zoom. The case turns out of the shelf from its spine to the 3/4 view.
+        M3PhysicalBoxViewerSection(
+            game = game,
+            dossier = dossier,
+            introFromYawDeg = ShelfLayoutMath.SPINE_YAW,
+        )
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     text = game.title,
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
@@ -623,26 +525,22 @@ private fun PulledCaseSpotlight(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(
-                        onClick = onPlay,
-                        modifier = Modifier.height(36.dp),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 0.dp),
-                    ) {
-                        Icon(Icons.Rounded.PlayArrow, null, Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("Play", style = MaterialTheme.typography.labelMedium, maxLines = 1, softWrap = false)
-                    }
-                    FilledTonalButton(
-                        onClick = onInspect,
-                        modifier = Modifier.height(36.dp),
-                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                    ) {
-                        Icon(Icons.Rounded.ViewInAr, null, Modifier.size(15.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("3D Case", style = MaterialTheme.typography.labelMedium, maxLines = 1, softWrap = false)
-                    }
-                }
+            }
+            FilledTonalButton(
+                onClick = onInspect,
+                modifier = Modifier.height(40.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 14.dp, vertical = 0.dp),
+            ) {
+                Text("Details", style = MaterialTheme.typography.labelLarge, maxLines = 1, softWrap = false)
+            }
+            Button(
+                onClick = onPlay,
+                modifier = Modifier.height(40.dp),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 0.dp),
+            ) {
+                Icon(Icons.Rounded.PlayArrow, null, Modifier.size(18.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("Play", style = MaterialTheme.typography.labelLarge, maxLines = 1, softWrap = false)
             }
         }
     }

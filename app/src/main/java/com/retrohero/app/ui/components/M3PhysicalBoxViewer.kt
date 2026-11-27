@@ -181,6 +181,8 @@ fun M3PhysicalBoxViewerSection(
     initialYawDeg: Float = 24f,
     overrideBitmaps: PhysicalViewerBitmaps? = null,
     modifier: Modifier = Modifier,
+    /** If set, the case starts at this angle and turns to [initialYawDeg] (e.g. spine-on, pulled off a shelf). */
+    introFromYawDeg: Float? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     val view = LocalView.current
@@ -195,7 +197,16 @@ fun M3PhysicalBoxViewerSection(
     val textures = rememberPhysicalTextures(game, dossier, spec, overrideBitmaps)
 
     var subject by remember(game.id) { mutableStateOf(initialSubject) }
-    val yawAnim = remember(game.id) { Animatable(initialYawDeg) }
+    val yawAnim = remember(game.id) { Animatable(introFromYawDeg ?: initialYawDeg) }
+    LaunchedEffect(game.id) {
+        if (introFromYawDeg != null) {
+            if (reducedMotion) {
+                yawAnim.snapTo(initialYawDeg)
+            } else {
+                yawAnim.animateTo(initialYawDeg, spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessLow))
+            }
+        }
+    }
     var pitchDeg by remember(game.id) { mutableFloatStateOf(-5f) }
     var autoSpin by remember(game.id) { mutableStateOf(false) }
     var tiltEnabled by remember(game.id) { mutableStateOf(!reducedMotion) }
@@ -973,8 +984,13 @@ private fun InspectorPill(label: String, selected: Boolean, onClick: () -> Unit)
 
 // ---- Core 3D Canvas Renderer (Retail Box + Cartridge + Optical Disc) ----------------------------
 
+/**
+ * The 3D renderer for cases, cartridges and discs, shared by the game page and the Physical Shelf.
+ * [spineFit] sizes the case by height alone (for a narrow shelf slot showing the spine) instead of
+ * fitting the whole case in view; [floorShadow] draws the studio contact shadow under it.
+ */
 @Composable
-private fun Physical3dStageCanvas(
+internal fun Physical3dStageCanvas(
     subject: PhysicalViewerSubject,
     spec: PhysicalMediaSpec,
     textures: ResolvedPhysicalTextures,
@@ -982,6 +998,8 @@ private fun Physical3dStageCanvas(
     yawDeg: Float,
     pitchDeg: Float,
     modifier: Modifier = Modifier,
+    spineFit: Boolean = false,
+    floorShadow: Boolean = true,
 ) {
     val polyMatrix = remember { Matrix() }
     val clipPath = remember { AndroidPath() }
@@ -1017,7 +1035,7 @@ private fun Physical3dStageCanvas(
         if (stageW <= 16f || stageH <= 16f) return@Canvas
 
         val cx = stageW * 0.5f
-        val cy = stageH * 0.48f
+        val cy = if (spineFit) stageH * ShelfLayoutMath.SPINE_FIT_CENTER else stageH * 0.48f
         val focal = max(stageW, stageH) * 2.35f
 
         val isDisc = subject == PhysicalViewerSubject.GAME_MEDIA && spec.mediaKind.isOpticalDisc
@@ -1035,42 +1053,45 @@ private fun Physical3dStageCanvas(
         // Fit cleanly inside the stage regardless of portrait vs landscape box proportions
         val maxBoxH = stageH * if (isDisc) 0.78f else 0.80f
         val maxBoxW = stageW * 0.70f
-        var halfH = maxBoxH * 0.5f
+        var halfH = if (spineFit) stageH * ShelfLayoutMath.SPINE_FIT_HALF_HEIGHT else maxBoxH * 0.5f
         var halfW = halfH * targetAspect
-        if (halfW * 2f > maxBoxW) {
+        if (!spineFit && halfW * 2f > maxBoxW) {
             halfW = maxBoxW * 0.5f
             halfH = halfW / targetAspect
         }
         val halfD = max(halfW, halfH) * depthRatio
 
-        // Dual-layer perspective-coupled studio contact shadow (soft wide penumbra + grounded core umbra)
         val yawRad = Math.toRadians(yawDeg.toDouble())
-        val projectedFootprintW = abs(halfW * cos(yawRad).toFloat()) + abs(halfD * sin(yawRad).toFloat())
-        val shadowRadiusX = (projectedFootprintW * 1.24f).coerceAtLeast(halfD * 1.9f)
-        val shadowY = cy + halfH * 1.09f
-        drawOval(
-            brush = Brush.radialGradient(
-                0.0f to Color.Black.copy(alpha = 0.28f),
-                0.55f to Color.Black.copy(alpha = 0.12f),
-                1.0f to Color.Transparent,
-                center = Offset(cx, shadowY + halfH * 0.02f),
-                radius = shadowRadiusX.coerceAtLeast(12f),
-            ),
-            topLeft = Offset(cx - shadowRadiusX, shadowY - halfH * 0.12f),
-            size = androidx.compose.ui.geometry.Size(shadowRadiusX * 2f, halfH * 0.26f),
-        )
-        val coreShadowX = (projectedFootprintW * 0.88f).coerceAtLeast(halfD * 1.15f)
-        drawOval(
-            brush = Brush.radialGradient(
-                0.0f to Color.Black.copy(alpha = 0.56f),
-                0.65f to Color.Black.copy(alpha = 0.22f),
-                1.0f to Color.Transparent,
-                center = Offset(cx, shadowY),
-                radius = coreShadowX.coerceAtLeast(10f),
-            ),
-            topLeft = Offset(cx - coreShadowX, shadowY - halfH * 0.065f),
-            size = androidx.compose.ui.geometry.Size(coreShadowX * 2f, halfH * 0.13f),
-        )
+        if (floorShadow) {
+            // Dual-layer perspective-coupled studio contact shadow (soft wide penumbra + grounded core umbra)
+            val projectedFootprintW = abs(halfW * cos(yawRad).toFloat()) + abs(halfD * sin(yawRad).toFloat())
+            val shadowRadiusX = (projectedFootprintW * 1.24f).coerceAtLeast(halfD * 1.9f)
+            val shadowY = cy + halfH * 1.09f
+            drawOval(
+                brush = Brush.radialGradient(
+                    0.0f to Color.Black.copy(alpha = 0.28f),
+                    0.55f to Color.Black.copy(alpha = 0.12f),
+                    1.0f to Color.Transparent,
+                    center = Offset(cx, shadowY + halfH * 0.02f),
+                    radius = shadowRadiusX.coerceAtLeast(12f),
+                ),
+                topLeft = Offset(cx - shadowRadiusX, shadowY - halfH * 0.12f),
+                size = androidx.compose.ui.geometry.Size(shadowRadiusX * 2f, halfH * 0.26f),
+            )
+            val coreShadowX = (projectedFootprintW * 0.88f).coerceAtLeast(halfD * 1.15f)
+            drawOval(
+                brush = Brush.radialGradient(
+                    0.0f to Color.Black.copy(alpha = 0.56f),
+                    0.65f to Color.Black.copy(alpha = 0.22f),
+                    1.0f to Color.Transparent,
+                    center = Offset(cx, shadowY),
+                    radius = coreShadowX.coerceAtLeast(10f),
+                ),
+                topLeft = Offset(cx - coreShadowX, shadowY - halfH * 0.065f),
+                size = androidx.compose.ui.geometry.Size(coreShadowX * 2f, halfH * 0.13f),
+            )
+
+        }
 
         val quads = Box3dMath.projectBox(
             halfW = halfW,
@@ -2112,8 +2133,8 @@ internal fun rememberPhysicalTextures(
         realBack ?: buildProceduralBackBitmap(game, dossier, spec, targetAspect, shot1 ?: frontBmp, shot2)
     }
 
-    val spineBmp = remember(game.id, realSpine, realFront, dossier.title, dossier.publisher, spec) {
-        realSpine ?: buildProceduralSpineBitmap(game, dossier, spec, realFront)
+    val spineBmp = remember(game.id, realSpine, realFront, targetAspect, dossier.title, dossier.publisher, spec) {
+        realSpine ?: buildProceduralSpineBitmap(game, dossier, spec, realFront, targetAspect)
     }
 
     val mediaFrontBmp = remember(game.id, loadedMediaFront, frontBmp, dossier.title, spec) {
@@ -2597,11 +2618,12 @@ internal fun buildProceduralSpineBitmap(
     dossier: GameDossier,
     spec: PhysicalMediaSpec,
     cover: Bitmap? = null,
+    /** Front aspect of the case this spine belongs to (sets the spine face's shape in 3D). */
+    boxAspect: Float = ShelfLayoutMath.proceduralFrontAspect(spec),
 ): Bitmap {
-    // Real case proportions (the same ones the shelf uses), so nothing gets squashed or stretched.
-    val dims = ShelfLayoutMath.spineDimensions(game.systemId)
+    // Exactly the spine face's shape in the 3D model, so the renderer never squashes or stretches it.
     val w = 160
-    val h = (w * dims.heightDp / dims.widthDp).toInt()
+    val h = (w / ShelfLayoutMath.spineFaceRatio(spec, boxAspect)).toInt()
     val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
     val c = AndroidCanvas(bmp)
     val p = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -2642,7 +2664,7 @@ internal fun buildProceduralSpineBitmap(
 
     // Console band at the top, with a label that always contrasts with it.
     val headerArgb = spec.spineHeaderColor.toArgb()
-    val capH = h * 0.12f
+    val capH = minOf(h * 0.12f, w * 0.8f)
     p.color = headerArgb
     c.drawRect(0f, 0f, w.toFloat(), capH, p)
     val sysLabel = (game.system?.shortName ?: game.systemId).uppercase(Locale.US)
@@ -3353,41 +3375,47 @@ private fun rememberDeviceTiltAngles(
     return (sensor != null) to offsetState
 }
 
-// ---- Shelf spines: the same spine art as the 3D viewer, at shelf size --------------------------
+// ---- Physical Shelf: the same 3D cases as the game page, at shelf size ----------------------------
 
-/** Shelf-size spines, kept within a fixed memory budget (a full 3D-viewer spine is ~400 KB). */
-private object ShelfSpineCache {
-    private val cache = object : android.util.LruCache<String, androidx.compose.ui.graphics.ImageBitmap>(12 * 1024) {
-        override fun sizeOf(key: String, value: androidx.compose.ui.graphics.ImageBitmap) =
-            (value.width * value.height * 4 / 1024).coerceAtLeast(1)
-    }
-    fun get(key: String) = cache.get(key)
-    fun put(key: String, value: androidx.compose.ui.graphics.ImageBitmap) { cache.put(key, value) }
+/** Textures for one case standing on the shelf, plus the front aspect that shapes it in 3D. */
+internal class ShelfCaseArt(val textures: ResolvedPhysicalTextures, val boxAspect: Float) {
+    val bytes: Int get() = textures.spine.byteCount + (if (textures.front !== textures.spine) textures.front.byteCount else 0)
 }
 
-private const val SHELF_SPINE_WIDTH_PX = 72
+/** Shelf cases kept within a fixed memory budget (full-size viewer textures are several MB each). */
+private object ShelfCaseCache {
+    private val cache = object : android.util.LruCache<String, ShelfCaseArt>(20 * 1024) {
+        override fun sizeOf(key: String, value: ShelfCaseArt) = (value.bytes / 1024).coerceAtLeast(1)
+    }
+    fun get(key: String): ShelfCaseArt? = cache.get(key)
+    fun put(key: String, value: ShelfCaseArt) { cache.put(key, value) }
+}
+
+private const val SHELF_SPINE_WIDTH_PX = 64
+private const val SHELF_COVER_PX = 220
 
 /**
- * The spine the 3D box viewer on the game page shows for [game], scaled down for the shelf:
- * the LaunchBox `Box - Spine` scan, else the spine slice of the `Box - Full` wraparound, else the
- * same generated spine. [dossierFor] is called off the main thread (it may read the disk cache).
- * Null until it's ready; the shelf draws a plain spine meanwhile.
+ * Builds what the shared 3D renderer needs to draw [game]'s case on the shelf, from the same
+ * sources and in the same order as the game page's 3D viewer: the LaunchBox `Box - Spine` scan,
+ * else the spine slice of `Box - Full`, else the same generated spine; the cover from your own
+ * cover, the LaunchBox front, then online art. Textures are shelf-sized and built off the main
+ * thread. [dossierFor] is called off the main thread too. Null until ready.
  */
 @Composable
-internal fun rememberShelfSpineArt(
+internal fun rememberShelfCaseArt(
     game: Game,
     spec: PhysicalMediaSpec,
     dossierFor: (Game) -> GameDossier?,
-): androidx.compose.ui.graphics.ImageBitmap? {
+): ShelfCaseArt? {
     val context = LocalContext.current
     val paths = LocalArtPaths.current
     val artVersion = LocalArtVersion.current
     val baseKey = "${game.id}|${spec.spineHeaderColor.toArgb()}|$artVersion"
-    val state = androidx.compose.runtime.produceState(initialValue = ShelfSpineCache.get(baseKey), baseKey) {
-        // Shows the last spine at once, then re-checks: the game page may have fetched real scans since.
+    val state = androidx.compose.runtime.produceState(initialValue = ShelfCaseCache.get(baseKey), baseKey) {
+        // Shows the last case at once, then re-checks: the game page may have fetched real scans since.
         val dossier = withContext(Dispatchers.IO) { dossierFor(game) } ?: GameDossier.localFallback(game)
         val key = "$baseKey|${dossier.boxSpineUrl}|${dossier.boxFullUrl}|${dossier.boxArtUrl}|${dossier.title}|${dossier.publisher}"
-        ShelfSpineCache.get(key)?.let { value = it; return@produceState }
+        ShelfCaseCache.get(key)?.let { value = it; return@produceState }
 
         suspend fun load(src: Any?, max: Int): Bitmap? {
             if (src == null) return null
@@ -3403,34 +3431,59 @@ internal fun rememberShelfSpineArt(
             }.getOrNull()?.takeIf { it.width >= 16 && it.height >= 16 }
         }
 
-        val realSpine = load(dossier.boxSpineUrl, 800)
-            ?: load(dossier.boxFullUrl, 1200)?.let { full ->
-                PhysicalMediaSpec.sliceFullBoxCover(full, (spec.caseStyle.depthRatio * 0.55f).coerceIn(0.05f, 0.14f))?.second
-            }
-        // Same cover the 3D viewer uses for its box front: your cover, LaunchBox front, then online art.
-        val cover = if (realSpine != null) null else {
-            val sources = artSources(game, paths)
-            val candidates = buildList<Any> {
-                sources.filterIsInstance<java.io.File>().forEach { add(it) }
-                dossier.boxArtUrl?.let { add(it) }
-                sources.forEach { if (it !in this) add(it) }
-            }
-            var found: Bitmap? = null
-            for (src in candidates) {
-                found = load(src, 360)
-                if (found != null) break
-            }
-            found
+        val sources = artSources(game, paths)
+        val coverCandidates = buildList<Any> {
+            sources.filterIsInstance<java.io.File>().forEach { add(it) }
+            dossier.boxArtUrl?.let { add(it) }
+            sources.forEach { if (it !in this) add(it) }
         }
-        val small = withContext(Dispatchers.Default) {
-            val full = realSpine?.let { PhysicalMediaSpec.orientSpineVertical(trimTransparentBounds(it)) }
-                ?: buildProceduralSpineBitmap(game, dossier, spec, cover?.let { trimTransparentBounds(it) })
-            val h = (SHELF_SPINE_WIDTH_PX * full.height.toFloat() / full.width).toInt().coerceIn(SHELF_SPINE_WIDTH_PX, 600)
-            Bitmap.createScaledBitmap(full, SHELF_SPINE_WIDTH_PX, h, true).asImageBitmap()
+        var cover: Bitmap? = null
+        for (src in coverCandidates) {
+            cover = load(src, 720)
+            if (cover != null) break
         }
-        ShelfSpineCache.put(key, small)
-        ShelfSpineCache.put(baseKey, small)
-        value = small
+        val loadedSpine = load(dossier.boxSpineUrl, 900)
+        val loadedFull = if (loadedSpine == null) load(dossier.boxFullUrl, 1400) else null
+
+        val art = withContext(Dispatchers.Default) {
+            val sliced = loadedFull?.let {
+                PhysicalMediaSpec.sliceFullBoxCover(it, (spec.caseStyle.depthRatio * 0.55f).coerceIn(0.05f, 0.14f))
+            }
+            val front = (cover?.let { trimTransparentBounds(it) }) ?: sliced?.third
+            // Same aspect rules as the 3D viewer: the real front, else the generated front's shape.
+            val aspect = (front?.let { it.width.toFloat() / it.height.coerceAtLeast(1) } ?: ShelfLayoutMath.proceduralFrontAspect(spec))
+                .coerceIn(0.56f, 1.48f)
+            val realSpine = (loadedSpine?.let { trimTransparentBounds(it) } ?: sliced?.second)
+                ?.let { PhysicalMediaSpec.orientSpineVertical(it) }
+            val spineFull = realSpine ?: buildProceduralSpineBitmap(game, dossier, spec, front, aspect)
+            val spineH = (SHELF_SPINE_WIDTH_PX * spineFull.height.toFloat() / spineFull.width).toInt().coerceIn(SHELF_SPINE_WIDTH_PX, 900)
+            val spineSmall = Bitmap.createScaledBitmap(spineFull, SHELF_SPINE_WIDTH_PX, spineH, true)
+            val frontSmall = if (front != null) {
+                val fw = SHELF_COVER_PX
+                Bitmap.createScaledBitmap(front, fw, (fw / aspect).toInt().coerceAtLeast(16), true)
+            } else {
+                // No cover: a plain face in the spine's body color (only a sliver ever shows on the shelf).
+                val body = spineSmall.getPixel(spineSmall.width / 2, spineSmall.height / 2)
+                Bitmap.createBitmap(32, (32 / aspect).toInt().coerceAtLeast(8), Bitmap.Config.ARGB_8888).apply { eraseColor(body) }
+            }
+            ShelfCaseArt(
+                textures = ResolvedPhysicalTextures(
+                    front = frontSmall,
+                    back = frontSmall,
+                    spine = spineSmall,
+                    mediaFront = frontSmall,
+                    mediaBack = frontSmall,
+                    hasRealFront = front != null,
+                    hasRealBack = false,
+                    hasRealSpine = realSpine != null,
+                    hasRealMedia = false,
+                ),
+                boxAspect = aspect,
+            )
+        }
+        ShelfCaseCache.put(key, art)
+        ShelfCaseCache.put(baseKey, art)
+        value = art
     }
     return state.value
 }

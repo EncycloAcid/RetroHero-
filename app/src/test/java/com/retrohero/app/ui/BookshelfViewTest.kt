@@ -109,8 +109,11 @@ class BookshelfViewTest {
         // Spines show the 3D viewer's spine art; the title is their accessibility label.
         compose.onNodeWithContentDescription("Chrono Trigger").performClick()
         compose.waitForIdle()
-        compose.onNodeWithText("3D Case").assertIsDisplayed()
-        compose.onNodeWithText("Play").assertIsDisplayed()
+        // The pulled case is the game page's own 3D case & cartridge viewer.
+        compose.onNodeWithText("3D box & cartridge").assertExists()
+        compose.onNodeWithText("Case").assertExists()
+        compose.onNodeWithText("Details").assertExists()
+        compose.onNodeWithText("Play").assertExists()
 
         // Spine and case art are built off the main thread; give them a moment before the capture.
         Thread.sleep(1500)
