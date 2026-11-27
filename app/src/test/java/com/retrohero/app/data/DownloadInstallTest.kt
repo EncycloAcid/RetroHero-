@@ -59,7 +59,7 @@ class DownloadInstallTest {
         // The ROM cache hands local files straight to the core.
         assertEquals(gba.absolutePath, app.romCache.prepare(game).absolutePath)
 
-        app.library.deleteLocal(game)
+        app.library.remove(game)
         assertFalse(gba.exists())
         assertFalse(app.library.games.value.any { it.id == game.id })
 

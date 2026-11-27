@@ -185,6 +185,7 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
     var showPerfHud by remember { mutableStateOf(vm.settings.showPerfHud) }
     var homebrewOpen by rememberSaveable { mutableStateOf(false) }
     var crashReportCount by remember { mutableIntStateOf(0) }
+    val hiddenGameCount by vm.hiddenGameCount.collectAsStateWithLifecycle()
     var crashDialog by remember { mutableStateOf<Boolean?>(null) } // null = hidden, true = after a crash
     var raSignInOpen by rememberSaveable { mutableStateOf(false) }
     var toastMessage by remember { mutableStateOf<AppViewModel.Message?>(null) }
@@ -367,6 +368,8 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
             }
         },
         crashReportCount = crashReportCount,
+        hiddenGameCount = hiddenGameCount,
+        onRestoreHiddenGames = vm::restoreHiddenGames,
         onDownloadCore = vm::downloadCore,
         onDownloadAllNeededCores = vm::downloadCores,
         onDeleteCore = vm::deleteCore,

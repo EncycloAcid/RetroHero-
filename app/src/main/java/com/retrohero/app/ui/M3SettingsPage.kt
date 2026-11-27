@@ -35,6 +35,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccessibilityNew
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.BugReport
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.Backup
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
@@ -156,6 +157,8 @@ internal fun M3SettingsPage(
     onRestore: () -> Unit,
     onOpenCrashReports: () -> Unit = {},
     crashReportCount: Int = 0,
+    hiddenGameCount: Int = 0,
+    onRestoreHiddenGames: () -> Unit = {},
     onDownloadCore: (CoreInfo) -> Unit,
     onDownloadAllNeededCores: () -> Unit,
     onDeleteCore: (CoreInfo) -> Unit,
@@ -757,6 +760,7 @@ internal fun M3SettingsPage(
                     launchboxStatus.synced -> "${launchboxStatus.gameCount} games indexed offline · Tap to refresh Metadata.zip"
                     else -> "Live GamesDB active · Tap to cache full Metadata.zip offline"
                 }
+                val rows = if (hiddenGameCount > 0) 6 else 5
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
                         text = "Backup, metadata & downloads",
@@ -767,7 +771,7 @@ internal fun M3SettingsPage(
                     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         M3SegmentedItem(
                             index = 0,
-                            count = 5,
+                            count = rows,
                             icon = Icons.Rounded.AutoAwesome,
                             badgePolygon = MaterialShapes.Sunny,
                             badgeContainer = cs.primaryContainer,
@@ -778,7 +782,7 @@ internal fun M3SettingsPage(
                         )
                         M3SegmentedItem(
                             index = 1,
-                            count = 5,
+                            count = rows,
                             icon = Icons.Rounded.Backup,
                             badgePolygon = MaterialShapes.Cookie9Sided,
                             badgeContainer = cs.primaryContainer,
@@ -789,7 +793,7 @@ internal fun M3SettingsPage(
                         )
                         M3SegmentedItem(
                             index = 2,
-                            count = 5,
+                            count = rows,
                             icon = Icons.Rounded.Restore,
                             badgePolygon = MaterialShapes.Clover4Leaf,
                             badgeContainer = cs.secondaryContainer,
@@ -800,7 +804,7 @@ internal fun M3SettingsPage(
                         )
                         M3SegmentedItem(
                             index = 3,
-                            count = 5,
+                            count = rows,
                             icon = Icons.Rounded.Link,
                             badgePolygon = MaterialShapes.Cookie6Sided,
                             badgeContainer = cs.tertiaryContainer,
@@ -811,7 +815,7 @@ internal fun M3SettingsPage(
                         )
                         M3SegmentedItem(
                             index = 4,
-                            count = 5,
+                            count = rows,
                             icon = Icons.Rounded.BugReport,
                             badgePolygon = MaterialShapes.Cookie4Sided,
                             badgeContainer = cs.errorContainer,
@@ -821,6 +825,19 @@ internal fun M3SettingsPage(
                             else "$crashReportCount saved on this device · Tap to share or delete",
                             onClick = onOpenCrashReports,
                         )
+                        if (hiddenGameCount > 0) {
+                            M3SegmentedItem(
+                                index = 5,
+                                count = rows,
+                                icon = Icons.Rounded.VisibilityOff,
+                                badgePolygon = MaterialShapes.Pill,
+                                badgeContainer = cs.secondaryContainer,
+                                badgeContent = cs.onSecondaryContainer,
+                                title = "Hidden games",
+                                subtitle = "$hiddenGameCount removed from your library · Tap to bring them back",
+                                onClick = onRestoreHiddenGames,
+                            )
+                        }
                     }
                 }
             }

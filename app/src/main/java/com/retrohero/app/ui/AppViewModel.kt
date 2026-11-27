@@ -500,8 +500,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         play(game)
     }
 
+    val hiddenGameCount = app.library.hiddenCount
+
+    /** Removes [game]: folder games are hidden with an Undo, downloaded ones are deleted (confirmed in the UI). */
     fun deleteGame(game: Game) {
-        viewModelScope.launch { app.library.deleteLocal(game) }
+        viewModelScope.launch {
+            app.library.remove(game)
+            if (game.isLocal) say("Deleted ${game.title}")
+            else say("Removed ${game.title} from your library", undo = { viewModelScope.launch { app.library.unhide(game) } })
+        }
+    }
+
+    fun restoreHiddenGames() {
+        app.library.unhideAll()
+        rescan()
+        say("Hidden games will come back after the scan")
     }
 
     fun addFolder(uri: Uri) {

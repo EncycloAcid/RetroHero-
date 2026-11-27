@@ -60,6 +60,15 @@ jobs:
       - name: Run unit tests
         run: ./gradlew testDebugUnitTest
 
+      # The UI tests render the main screens; download these to review UI changes.
+      - name: Upload UI screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-screenshots
+          path: app/build/screenshots/
+          if-no-files-found: ignore
+
       - name: Upload test report
         if: failure()
         uses: actions/upload-artifact@v4

@@ -68,6 +68,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -2150,19 +2151,49 @@ internal fun M3GameDetailPage(
                     }
 
                     if (onDelete != null) {
+                        // Downloaded games are deleted from disk, so confirm first. Folder games are
+                        // only hidden (RetroHero can't change your folders) and the app offers Undo.
+                        var confirmDelete by remember { mutableStateOf(false) }
+                        val label = if (game.isLocal) "Delete download" else "Remove from library"
                         Row(
                             Modifier
                                 .fillMaxWidth()
                                 .height(50.dp)
                                 .clip(CircleShape)
                                 .background(cs.errorContainer)
-                                .clickable(onClick = onDelete),
+                                .clickable(onClickLabel = label) {
+                                    if (game.isLocal) confirmDelete = true else onDelete()
+                                },
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.Center,
                         ) {
                             Icon(Icons.Rounded.DeleteOutline, null, tint = cs.onErrorContainer, modifier = Modifier.size(19.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("Remove from library", style = MaterialTheme.typography.labelLarge, color = cs.onErrorContainer)
+                            Text(label, style = MaterialTheme.typography.labelLarge, color = cs.onErrorContainer)
+                        }
+                        if (!game.isLocal) {
+                            Text(
+                                "Hides it from RetroHero. The file stays in your folder.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = cs.onSurfaceVariant,
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                        if (confirmDelete) {
+                            AlertDialog(
+                                onDismissRequest = { confirmDelete = false },
+                                icon = { Icon(Icons.Rounded.DeleteOutline, null) },
+                                title = { Text("Delete ${game.title}?") },
+                                text = { Text("The downloaded file is deleted from this phone. Saves and save states are kept.") },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        confirmDelete = false
+                                        onDelete()
+                                    }) { Text("Delete", color = cs.error) }
+                                },
+                                dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
+                            )
                         }
                     }
                 }
