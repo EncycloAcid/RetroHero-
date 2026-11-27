@@ -123,14 +123,14 @@ object ShelfLayoutMath {
         return w.toFloat() / h
     }
 
-    /** How wide a shelf slot must be for a case [caseHeightDp] tall standing at [yawDeg], with a little air either side. */
+    /** How wide a shelf slot must be for a case [caseHeightDp] tall standing at [yawDeg], with 1 dp of air either side. */
     fun spineSlotWidthDp(spec: PhysicalMediaSpec, boxAspect: Float, caseHeightDp: Float, yawDeg: Float = SPINE_YAW): Float {
         val halfH = caseHeightDp / 2f
         val halfW = halfH * boxAspect
         val halfD = maxOf(halfW, halfH) * spec.caseStyle.depthRatio
         val rad = Math.toRadians(yawDeg.toDouble())
         val projected = 2f * (halfD * kotlin.math.abs(kotlin.math.sin(rad)).toFloat() + halfW * kotlin.math.abs(kotlin.math.cos(rad)).toFloat())
-        return projected * 1.08f + 4f
+        return projected + 2f
     }
 
     /** Real retail case heights in millimetres (North American releases), standing upright. */
