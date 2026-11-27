@@ -2112,8 +2112,8 @@ internal fun rememberPhysicalTextures(
         realBack ?: buildProceduralBackBitmap(game, dossier, spec, targetAspect, shot1 ?: frontBmp, shot2)
     }
 
-    val spineBmp = remember(game.id, realSpine, dossier.title, dossier.publisher, spec) {
-        realSpine ?: buildProceduralSpineBitmap(game, dossier, spec)
+    val spineBmp = remember(game.id, realSpine, realFront, dossier.title, dossier.publisher, spec) {
+        realSpine ?: buildProceduralSpineBitmap(game, dossier, spec, realFront)
     }
 
     val mediaFrontBmp = remember(game.id, loadedMediaFront, frontBmp, dossier.title, spec) {
@@ -2596,63 +2596,116 @@ internal fun buildProceduralSpineBitmap(
     game: Game,
     dossier: GameDossier,
     spec: PhysicalMediaSpec,
+    cover: Bitmap? = null,
 ): Bitmap {
-    val w = 136
-    val h = 760
+    // Real case proportions (the same ones the shelf uses), so nothing gets squashed or stretched.
+    val dims = ShelfLayoutMath.spineDimensions(game.systemId)
+    val w = 160
+    val h = (w * dims.heightDp / dims.widthDp).toInt()
     val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
     val c = AndroidCanvas(bmp)
     val p = Paint(Paint.ANTI_ALIAS_FLAG)
 
-    val headerArgb = spec.spineHeaderColor.toArgb()
-    p.color = AndroidColor.rgb(24, 26, 34)
+    fun luminance(argb: Int): Float =
+        (0.2126f * AndroidColor.red(argb) + 0.7152f * AndroidColor.green(argb) + 0.0722f * AndroidColor.blue(argb)) / 255f
+    fun inkOn(argb: Int) = if (luminance(argb) > 0.6f) AndroidColor.rgb(20, 22, 28) else AndroidColor.WHITE
+
+    // Body: the cover's own colors when there's real art, else the shelf's per-game color.
+    val whiteCase = game.systemId.lowercase(Locale.US) in setOf("nds", "3ds")
+    val coverArgb = cover?.let { art ->
+        runCatching {
+            val small = Bitmap.createScaledBitmap(art, 96, (96f * art.height / art.width).toInt().coerceAtLeast(16), true)
+            val palette = androidx.palette.graphics.Palette.from(small).generate()
+            (palette.darkVibrantSwatch ?: palette.darkMutedSwatch ?: palette.dominantSwatch)?.rgb
+        }.getOrNull()
+    }
+    val bodyArgb = when {
+        whiteCase -> AndroidColor.rgb(236, 239, 244)
+        coverArgb != null -> {
+            // Keep it dark enough for white text.
+            val hsv = FloatArray(3).also { AndroidColor.colorToHSV(coverArgb, it) }
+            hsv[2] = hsv[2].coerceAtMost(0.42f)
+            AndroidColor.HSVToColor(hsv)
+        }
+        else -> ShelfLayoutMath.spineBaseColor(game, spec).toArgb()
+    }
+    val ink = inkOn(bodyArgb)
+    p.color = bodyArgb
     c.drawRect(0f, 0f, w.toFloat(), h.toFloat(), p)
 
-    // Top console color cap on spine
-    val capH = h * 0.16f
+    // White DS-style cases get a stripe of the cover's color down the edge.
+    if (whiteCase && coverArgb != null) {
+        p.color = coverArgb
+        c.drawRect(0f, 0f, w * 0.07f, h.toFloat(), p)
+        c.drawRect(w * 0.93f, 0f, w.toFloat(), h.toFloat(), p)
+    }
+
+    // Console band at the top, with a label that always contrasts with it.
+    val headerArgb = spec.spineHeaderColor.toArgb()
+    val capH = h * 0.12f
     p.color = headerArgb
     c.drawRect(0f, 0f, w.toFloat(), capH, p)
-
-    val sysShort = (game.system?.shortName ?: game.systemId).uppercase(Locale.US)
+    val sysLabel = (game.system?.shortName ?: game.systemId).uppercase(Locale.US)
     val capTp = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = AndroidColor.WHITE
+        color = inkOn(headerArgb)
         typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-        textSize = 24f
         textAlign = Paint.Align.CENTER
+        letterSpacing = 0.06f
+        textSize = 34f
     }
-    c.drawText(
-        TextUtils.ellipsize(sysShort, capTp, w * 0.88f, TextUtils.TruncateAt.END).toString(),
-        w * 0.5f,
-        capH * 0.60f,
-        capTp,
-    )
+    while (capTp.measureText(sysLabel) > w * 0.84f && capTp.textSize > 16f) capTp.textSize -= 1f
+    c.drawText(sysLabel, w * 0.5f, capH * 0.5f - (capTp.descent() + capTp.ascent()) / 2f, capTp)
 
-    // Rotated vertical game title along the spine
-    c.save()
-    c.translate(w * 0.36f, capH + 28f)
-    c.rotate(90f)
-    val spineTp = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = AndroidColor.WHITE
-        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-        textSize = 36f
+    // A window of the cover art near the bottom ties the spine to the box (when there's art).
+    val footH = h * 0.07f
+    val artSize = if (cover != null) w * 0.78f else 0f
+    val artBottom = h - footH - w * 0.08f
+    if (cover != null) {
+        val artTop = artBottom - artSize
+        val left = (w - artSize) / 2f
+        val side = minOf(cover.width, cover.height)
+        val src = android.graphics.Rect((cover.width - side) / 2, (cover.height - side) / 2, (cover.width + side) / 2, (cover.height + side) / 2)
+        c.save()
+        val clip = android.graphics.Path().apply {
+            addRoundRect(left, artTop, left + artSize, artTop + artSize, 10f, 10f, android.graphics.Path.Direction.CW)
+        }
+        c.clipPath(clip)
+        c.drawBitmap(cover, src, android.graphics.RectF(left, artTop, left + artSize, artTop + artSize), Paint(Paint.FILTER_BITMAP_FLAG))
+        c.restore()
     }
-    val maxTitlePx = h * 0.68f
-    c.drawText(
-        TextUtils.ellipsize(game.title, spineTp, maxTitlePx, TextUtils.TruncateAt.END).toString(),
-        0f,
-        0f,
-        spineTp,
-    )
+
+    // Title runs down the spine, sized to fill it and only shortened if it really can't fit.
+    val titleTop = capH + w * 0.12f
+    val titleBottom = (if (cover != null) artBottom - artSize else h - footH) - w * 0.12f
+    val titleLen = (titleBottom - titleTop).coerceAtLeast(40f)
+    val titleTp = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = ink
+        typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+        textSize = w * 0.40f
+    }
+    while (titleTp.measureText(game.title) > titleLen && titleTp.textSize > w * 0.22f) titleTp.textSize -= 1f
+    val title = TextUtils.ellipsize(game.title, titleTp, titleLen, TextUtils.TruncateAt.END).toString()
+    c.save()
+    // Rotated so it reads top to bottom, centered across the spine's width.
+    c.translate(w * 0.5f - (titleTp.descent() + titleTp.ascent()) / 2f, titleTop + (titleLen - titleTp.measureText(title)) / 2f)
+    c.rotate(90f)
+    c.drawText(title, 0f, 0f, titleTp)
     c.restore()
 
-    // Bottom catalog code stamp
-    val catTp = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = AndroidColor.argb(185, 210, 215, 228)
-        typeface = Typeface.MONOSPACE
-        textSize = 16f
-        textAlign = Paint.Align.CENTER
+    // Publisher at the foot: its first word, sized to fit (no cut-off names, nothing invented).
+    val publisher = dossier.publisher.trim().split(Regex("\\s+")).firstOrNull().orEmpty()
+        .trim(',', '.').uppercase(Locale.US)
+    if (publisher.isNotEmpty()) {
+        val pubTp = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = AndroidColor.argb(200, AndroidColor.red(ink), AndroidColor.green(ink), AndroidColor.blue(ink))
+            typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
+            textAlign = Paint.Align.CENTER
+            textSize = 22f
+            letterSpacing = 0.04f
+        }
+        while (pubTp.measureText(publisher) > w * 0.86f && pubTp.textSize > 11f) pubTp.textSize -= 1f
+        c.drawText(publisher, w * 0.5f, h - footH * 0.45f, pubTp)
     }
-    val pubShort = dossier.publisher.take(6).uppercase(Locale.US).ifBlank { "RETRO" }
-    c.drawText(pubShort, w * 0.5f, h * 0.95f, catTp)
     return bmp
 }
 
@@ -3327,11 +3380,13 @@ internal fun rememberShelfSpineArt(
     dossierFor: (Game) -> GameDossier?,
 ): androidx.compose.ui.graphics.ImageBitmap? {
     val context = LocalContext.current
-    val baseKey = "${game.id}|${spec.spineHeaderColor.toArgb()}"
+    val paths = LocalArtPaths.current
+    val artVersion = LocalArtVersion.current
+    val baseKey = "${game.id}|${spec.spineHeaderColor.toArgb()}|$artVersion"
     val state = androidx.compose.runtime.produceState(initialValue = ShelfSpineCache.get(baseKey), baseKey) {
         // Shows the last spine at once, then re-checks: the game page may have fetched real scans since.
         val dossier = withContext(Dispatchers.IO) { dossierFor(game) } ?: GameDossier.localFallback(game)
-        val key = "$baseKey|${dossier.boxSpineUrl}|${dossier.boxFullUrl}|${dossier.title}|${dossier.publisher}"
+        val key = "$baseKey|${dossier.boxSpineUrl}|${dossier.boxFullUrl}|${dossier.boxArtUrl}|${dossier.title}|${dossier.publisher}"
         ShelfSpineCache.get(key)?.let { value = it; return@produceState }
 
         suspend fun load(src: Any?, max: Int): Bitmap? {
@@ -3352,9 +3407,24 @@ internal fun rememberShelfSpineArt(
             ?: load(dossier.boxFullUrl, 1200)?.let { full ->
                 PhysicalMediaSpec.sliceFullBoxCover(full, (spec.caseStyle.depthRatio * 0.55f).coerceIn(0.05f, 0.14f))?.second
             }
+        // Same cover the 3D viewer uses for its box front: your cover, LaunchBox front, then online art.
+        val cover = if (realSpine != null) null else {
+            val sources = artSources(game, paths)
+            val candidates = buildList<Any> {
+                sources.filterIsInstance<java.io.File>().forEach { add(it) }
+                dossier.boxArtUrl?.let { add(it) }
+                sources.forEach { if (it !in this) add(it) }
+            }
+            var found: Bitmap? = null
+            for (src in candidates) {
+                found = load(src, 360)
+                if (found != null) break
+            }
+            found
+        }
         val small = withContext(Dispatchers.Default) {
             val full = realSpine?.let { PhysicalMediaSpec.orientSpineVertical(trimTransparentBounds(it)) }
-                ?: buildProceduralSpineBitmap(game, dossier, spec)
+                ?: buildProceduralSpineBitmap(game, dossier, spec, cover?.let { trimTransparentBounds(it) })
             val h = (SHELF_SPINE_WIDTH_PX * full.height.toFloat() / full.width).toInt().coerceIn(SHELF_SPINE_WIDTH_PX, 600)
             Bitmap.createScaledBitmap(full, SHELF_SPINE_WIDTH_PX, h, true).asImageBitmap()
         }
