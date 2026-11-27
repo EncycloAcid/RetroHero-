@@ -562,7 +562,7 @@ fun M3PhysicalBoxViewerSection(
                     },
                 )
                 AnglePresetChip(
-                    label = "Back Blurb",
+                    label = "Back",
                     active = !autoSpin && abs(normYaw) > 145f,
                     onClick = {
                         view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
@@ -594,7 +594,7 @@ fun M3PhysicalBoxViewerSection(
 
             if (!reducedMotion) {
                 AnglePresetChip(
-                    label = if (autoSpin) "Spinning" else "Auto-Spin",
+                    label = if (autoSpin) "Stop spin" else "Spin",
                     active = autoSpin,
                     onClick = {
                         view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)

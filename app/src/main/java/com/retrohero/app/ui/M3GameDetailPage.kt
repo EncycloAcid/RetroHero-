@@ -95,6 +95,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.geometry.Offset
@@ -489,7 +490,7 @@ internal fun M3GameDetailPage(
         }
     }
     val topBarAlpha by animateFloatAsState(
-        targetValue = if (scrolledPastHero) 0.96f else 0f,
+        targetValue = if (scrolledPastHero) 1f else 0f,
         animationSpec = tween(220),
         label = "detailTopBarAlpha",
     )
@@ -2205,7 +2206,17 @@ internal fun M3GameDetailPage(
             Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
-                .background(cs.background.copy(alpha = topBarAlpha))
+                .background(cs.surfaceContainer.copy(alpha = topBarAlpha))
+                .drawBehind {
+                    // Hairline under the bar once it's solid, so it reads as a bar, not a gap.
+                    if (topBarAlpha > 0f) {
+                        drawRect(
+                            color = cs.outlineVariant.copy(alpha = topBarAlpha * 0.6f),
+                            topLeft = androidx.compose.ui.geometry.Offset(0f, size.height - 1.dp.toPx()),
+                            size = androidx.compose.ui.geometry.Size(size.width, 1.dp.toPx()),
+                        )
+                    }
+                }
                 .windowInsetsPadding(WindowInsets.statusBars)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
