@@ -89,7 +89,10 @@ import com.retrohero.app.ui.components.M3ExpressiveSpring
 import com.retrohero.app.ui.components.M3GameCover
 import com.retrohero.app.ui.components.M3PhysicalCaseShowcase
 import com.retrohero.app.ui.components.M3ShapeBadge
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.material.icons.rounded.ViewColumn
+import androidx.compose.material.icons.rounded.ViewInAr
+import androidx.compose.material3.HorizontalDivider
 import com.retrohero.app.ui.components.M3BookshelfSection
 import com.retrohero.app.ui.components.m3SegmentedShape
 import com.retrohero.app.ui.components.m3StaggeredEntrance
@@ -118,7 +121,8 @@ internal fun M3LibraryPage(
     var query by rememberSaveable { mutableStateOf("") }
     var filterIdx by rememberSaveable { mutableIntStateOf(0) }
     var sortIdx by rememberSaveable { mutableIntStateOf(0) }
-    var viewMode by rememberSaveable { mutableIntStateOf(0) } // 0 = Grid, 1 = List, 2 = 3D Shelf
+    var viewMode by rememberSaveable { mutableIntStateOf(0) } // 0 = Shelves, 1 = List, 2 = 3D Spines
+    var use3dCases by rememberSaveable { mutableStateOf(true) }
 
     val counts = remember(games) { games.groupingBy { it.systemId }.eachCount() }
     val systems = remember(counts) {
@@ -155,7 +159,7 @@ internal fun M3LibraryPage(
         verticalArrangement = Arrangement.spacedBy(14.dp),
         modifier = Modifier.fillMaxSize(),
     ) {
-        // 1. M3 Expressive Display Header + 1-Tap Sort Pill
+        // 1. Clean Shelves Display Header + 3D/2D Box Toggle + Sort Pill
         item(key = "m3_lib_header", span = { GridItemSpan(maxLineSpan) }) {
             Row(
                 Modifier.fillMaxWidth().m3StaggeredEntrance(0, slideDp = 12.dp),
@@ -176,33 +180,68 @@ internal fun M3LibraryPage(
                         )
                     }
                     Text(
-                        text = "Games",
+                        text = "Shelves",
                         style = MaterialTheme.typography.displayMedium,
                         color = cs.onBackground,
                     )
                 }
 
                 Row(
-                    Modifier
-                        .height(38.dp)
-                        .clip(CircleShape)
-                        .background(cs.secondaryContainer)
-                        .semantics { contentDescription = "Sort games: ${M3LibrarySorts[sortIdx]}" }
-                        .clickable {
-                            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                            sortIdx = (sortIdx + 1) % M3LibrarySorts.size
-                        }
-                        .padding(horizontal = 13.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(5.dp),
                 ) {
-                    Icon(Icons.Rounded.SwapVert, null, tint = cs.onSecondaryContainer, modifier = Modifier.size(17.dp))
-                    Text(
-                        text = M3LibrarySorts[sortIdx],
-                        style = MaterialTheme.typography.labelMedium,
-                        color = cs.onSecondaryContainer,
-                        maxLines = 1,
-                    )
+                    if (viewMode == 0) {
+                        Row(
+                            Modifier
+                                .height(38.dp)
+                                .clip(CircleShape)
+                                .background(if (use3dCases) cs.primaryContainer else cs.surfaceContainerHighest)
+                                .semantics { contentDescription = if (use3dCases) "3D retail box art" else "Flat box art" }
+                                .clickable {
+                                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                    use3dCases = !use3dCases
+                                }
+                                .padding(horizontal = 11.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Icon(
+                                Icons.Rounded.ViewInAr,
+                                contentDescription = null,
+                                tint = if (use3dCases) cs.onPrimaryContainer else cs.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp),
+                            )
+                            Text(
+                                text = if (use3dCases) "3D" else "2D",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                color = if (use3dCases) cs.onPrimaryContainer else cs.onSurfaceVariant,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+
+                    Row(
+                        Modifier
+                            .height(38.dp)
+                            .clip(CircleShape)
+                            .background(cs.secondaryContainer)
+                            .semantics { contentDescription = "Sort games: ${M3LibrarySorts[sortIdx]}" }
+                            .clickable {
+                                view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                sortIdx = (sortIdx + 1) % M3LibrarySorts.size
+                            }
+                            .padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                    ) {
+                        Icon(Icons.Rounded.SwapVert, null, tint = cs.onSecondaryContainer, modifier = Modifier.size(17.dp))
+                        Text(
+                            text = M3LibrarySorts[sortIdx],
+                            style = MaterialTheme.typography.labelMedium,
+                            color = cs.onSecondaryContainer,
+                            maxLines = 1,
+                        )
+                    }
                 }
             }
         }
@@ -410,38 +449,175 @@ internal fun M3LibraryPage(
                 }
             }
         } else {
-            // Lead editorial full-width spotlight card for #1 filtered title!
-            val lead = filtered.first()
-            item(key = "m3_lead_${lead.id}", span = { GridItemSpan(maxLineSpan) }) {
-                M3LeadEditorialRowCard(
-                    game = lead,
-                    stat = stats[lead.id],
-                    isFavorite = lead.id in favoriteIds,
-                    onOpen = { onOpenDetail(lead) },
-                    onPlay = { onQuickPlay(lead) },
-                    dossierFor = dossierFor,
-                    loadDossier = loadDossier,
-                )
-            }
+            // Clean "Shelves" gallery layout: horizontal status rows (Currently Playing, Completed, Favorites, Backlog)
+            // displaying tight 4-up rows of pure 3D retail box art (or 2D flat box art via 1-tap header toggle).
+            val shelfRows = buildList<Pair<String, List<Game>>> {
+                if (filterIdx != 0) {
+                    val label = when (filterIdx) {
+                        1 -> "Currently Playing"
+                        2 -> "Favorites"
+                        3 -> "Completed"
+                        else -> "Library"
+                    }
+                    add(label to filtered)
+                } else {
+                    val playingExplicit = filtered.filter { shelfStatuses[it.id] == "playing" }
+                    val playing = playingExplicit.ifEmpty {
+                        filtered.filter { (stats[it.id]?.seconds ?: 0L) > 0L && shelfStatuses[it.id] != "completed" }
+                            .sortedByDescending { stats[it.id]?.lastPlayed ?: 0L }
+                            .take(8)
+                    }
+                    val playingIds = playing.map { it.id }.toSet()
+                    val completed = filtered.filter { shelfStatuses[it.id] == "completed" }
+                    val completedIds = completed.map { it.id }.toSet()
+                    val favs = filtered.filter { it.id in favoriteIds && it.id !in playingIds && it.id !in completedIds }
+                    val favIds = favs.map { it.id }.toSet()
+                    val backlog = filtered.filter { it.id !in playingIds && it.id !in completedIds && it.id !in favIds }
 
-            // Remaining titles flow in alternating sculptural 2-column magazine grid with smooth animateItem()
-            val rest = filtered.drop(1)
-            itemsIndexed(rest, key = { _, it -> "m3_grid_${it.id}" }) { idx, game ->
-                val sec = stats[game.id]?.seconds ?: 0
-                Box(Modifier.animateItem(placementSpec = spring(dampingRatio = 0.72f, stiffness = 360f))) {
-                    M3ExpressiveGameCard(
-                        game = game,
-                        width = null,
-                        isFavorite = game.id in favoriteIds,
-                        playTimeLabel = if (sec > 0) PlayTime.format(sec) else null,
-                        silhouetteVariant = (idx + 1) % 3,
-                        onOpen = { onOpenDetail(game) },
-                        onPlay = { onQuickPlay(game) },
-                        dossierFor = dossierFor,
-                        loadDossier = loadDossier,
-                    )
+                    if (playing.isNotEmpty()) add("Currently Playing" to playing)
+                    if (completed.isNotEmpty()) add("Completed" to completed)
+                    if (favs.isNotEmpty()) add("Favorites" to favs)
+                    if (backlog.isNotEmpty()) add("Backlog" to backlog)
+                    if (isEmpty() && filtered.isNotEmpty()) add("Library" to filtered)
                 }
             }
+
+            item(key = "m3_shelves_showcase", span = { GridItemSpan(maxLineSpan) }) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(18.dp),
+                ) {
+                    shelfRows.forEachIndexed { rowIdx, (sectionTitle, rowGames) ->
+                        M3CuratedShelfRow(
+                            title = sectionTitle,
+                            games = rowGames,
+                            use3dCases = use3dCases,
+                            dossierFor = dossierFor,
+                            loadDossier = loadDossier,
+                            onOpen = onOpenDetail,
+                            onPlay = onQuickPlay,
+                        )
+                        if (rowIdx < shelfRows.lastIndex) {
+                            HorizontalDivider(
+                                thickness = 0.75.dp,
+                                color = cs.outlineVariant.copy(alpha = 0.28f),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun M3CuratedShelfRow(
+    title: String,
+    games: List<Game>,
+    use3dCases: Boolean,
+    dossierFor: (Game) -> GameDossier?,
+    loadDossier: (suspend (Game) -> GameDossier)?,
+    onOpen: (Game) -> Unit,
+    onPlay: (Game) -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                ),
+                color = cs.onBackground,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = "${games.size} ${if (games.size == 1) "game" else "games"}",
+                style = MaterialTheme.typography.labelMedium,
+                color = cs.onSurfaceVariant,
+                maxLines = 1,
+            )
+        }
+
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            items(games, key = { "${title}_${it.id}" }) { game ->
+                M3ShelfCoverTile(
+                    game = game,
+                    use3dCase = use3dCases,
+                    dossierFor = dossierFor,
+                    loadDossier = loadDossier,
+                    onOpen = { onOpen(game) },
+                    onPlay = { onPlay(game) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun M3ShelfCoverTile(
+    game: Game,
+    use3dCase: Boolean,
+    dossierFor: (Game) -> GameDossier?,
+    loadDossier: (suspend (Game) -> GameDossier)?,
+    onOpen: () -> Unit,
+    onPlay: () -> Unit,
+) {
+    val view = LocalView.current
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val scale by animateFloatAsState(if (pressed) 0.94f else 1f, M3ExpressiveSpring, label = "shelfTileScale")
+
+    Box(
+        modifier = Modifier
+            .width(86.dp)
+            .height(126.dp)
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .clip(RoundedCornerShape(10.dp))
+            .semantics { contentDescription = game.title }
+            .combinedClickable(
+                interactionSource = interaction,
+                indication = null,
+                onClick = {
+                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                    onOpen()
+                },
+                onLongClick = {
+                    view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                    onPlay()
+                },
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (use3dCase) {
+            M3PhysicalCaseShowcase(
+                game = game,
+                dossierFor = dossierFor,
+                loadDossier = loadDossier,
+                yawDeg = 22f,
+                pitchDeg = -5f,
+                stagePaddingDp = 2.dp,
+                transparentStage = true,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            M3GameCover(
+                game = game,
+                showTitle = false,
+                modifier = Modifier.fillMaxSize(),
+            )
         }
     }
 }

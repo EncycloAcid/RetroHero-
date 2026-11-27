@@ -3578,6 +3578,7 @@ fun M3PhysicalCaseShowcase(
     yawDeg: Float = 24f,
     pitchDeg: Float = -6f,
     stagePaddingDp: androidx.compose.ui.unit.Dp = 8.dp,
+    transparentStage: Boolean = false,
 ) {
     val cs = MaterialTheme.colorScheme
     val viewerAccent = game.system?.color ?: cs.primary
@@ -3591,14 +3592,20 @@ fun M3PhysicalCaseShowcase(
         proceduralFrontFallback = true,
     )
 
-    Box(
-        modifier = modifier.background(
+    val stageModifier = if (transparentStage) {
+        modifier
+    } else {
+        modifier.background(
             Brush.radialGradient(
                 0.0f to cs.primaryContainer.copy(alpha = 0.24f),
                 0.62f to Color(0xFF14131B),
                 1.0f to Color(0xFF0A0A0F),
             ),
-        ),
+        )
+    }
+
+    Box(
+        modifier = stageModifier,
         contentAlignment = Alignment.Center,
     ) {
         if (art != null) {
