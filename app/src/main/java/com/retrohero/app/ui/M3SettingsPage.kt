@@ -55,6 +55,7 @@ import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.SportsEsports
 import androidx.compose.material.icons.rounded.Vibration
+import androidx.compose.material.icons.rounded.ViewInAr
 import androidx.compose.material.icons.rounded.Wallpaper
 import coil.compose.AsyncImage
 import com.retrohero.app.data.RaProfile
@@ -128,6 +129,7 @@ internal fun M3SettingsPage(
     stickAsDpad: Boolean,
     screenshotsToGallery: Boolean,
     reducedMotion: Boolean,
+    showCasesEverywhere: Boolean = false,
     fastForwardSpeed: Float,
     dynamicColor: Boolean,
     coreStates: Map<String, CoreState>,
@@ -140,6 +142,7 @@ internal fun M3SettingsPage(
     onSetStickAsDpad: (Boolean) -> Unit,
     onSetScreenshotsToGallery: (Boolean) -> Unit,
     onSetReducedMotion: (Boolean) -> Unit,
+    onSetShowCasesEverywhere: (Boolean) -> Unit = {},
     onSetFastForward: (Float) -> Unit,
     onSetDynamicColor: (Boolean) -> Unit,
     onSelectPalette: (String) -> Unit,
@@ -547,7 +550,18 @@ internal fun M3SettingsPage(
                     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         M3SegmentedItem(
                             index = 0,
-                            count = 4,
+                            count = 5,
+                            icon = Icons.Rounded.ViewInAr,
+                            badgePolygon = MaterialShapes.Arch,
+                            badgeContainer = cs.tertiaryContainer,
+                            badgeContent = cs.onTertiaryContainer,
+                            title = "3D cases everywhere",
+                            subtitle = "Show 3D cases on Home hero & cards (off: Game Info & Shelf only)",
+                            trailing = { M3ExpressiveSwitch(checked = showCasesEverywhere, onCheckedChange = onSetShowCasesEverywhere) },
+                        )
+                        M3SegmentedItem(
+                            index = 1,
+                            count = 5,
                             icon = Icons.Rounded.GridOn,
                             badgePolygon = MaterialShapes.Cookie6Sided,
                             badgeContainer = cs.primaryContainer,
@@ -560,7 +574,7 @@ internal fun M3SettingsPage(
                         Column(
                             Modifier
                                 .fillMaxWidth()
-                                .clip(m3SegmentedShape(1, 4))
+                                .clip(m3SegmentedShape(2, 5))
                                 .background(cs.surfaceContainerHigh)
                                 .padding(horizontal = 16.dp, vertical = 12.dp),
                             verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -594,8 +608,8 @@ internal fun M3SettingsPage(
                             )
                         }
                         M3SegmentedItem(
-                            index = 2,
-                            count = 4,
+                            index = 3,
+                            count = 5,
                             icon = Icons.Rounded.Gamepad,
                             badgePolygon = MaterialShapes.Sunny,
                             badgeContainer = cs.tertiaryContainer,
@@ -605,8 +619,8 @@ internal fun M3SettingsPage(
                             trailing = { M3ExpressiveSwitch(checked = stickAsDpad, onCheckedChange = onSetStickAsDpad) },
                         )
                         M3SegmentedItem(
-                            index = 3,
-                            count = 4,
+                            index = 4,
+                            count = 5,
                             icon = Icons.Rounded.SportsEsports,
                             badgePolygon = MaterialShapes.Gem,
                             badgeContainer = cs.secondaryContainer,

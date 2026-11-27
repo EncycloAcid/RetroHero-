@@ -164,6 +164,7 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
     val backupState by vm.backupState.collectAsStateWithLifecycle()
     val dynamicColor by vm.dynamicColor.collectAsStateWithLifecycle()
     val reducedMotion by vm.settings.reducedMotion.collectAsStateWithLifecycle()
+    val showCasesEverywhere by vm.settings.showCasesEverywhere.collectAsStateWithLifecycle()
     val biosVersion by vm.biosVersion.collectAsStateWithLifecycle()
     val artVersion by vm.artVersion.collectAsStateWithLifecycle()
     val raProfile by vm.raProfile.collectAsStateWithLifecycle()
@@ -284,6 +285,7 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
         stickAsDpad = stickAsDpad,
         screenshotsToGallery = screenshotsToGallery,
         reducedMotion = reducedMotion,
+        showCasesEverywhere = showCasesEverywhere,
         fastForwardSpeed = fastForward,
         dynamicColor = dynamicColor,
         coreStates = coreStates,
@@ -336,6 +338,7 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
         onSetStickAsDpad = { v -> stickAsDpad = v; vm.settings.stickAsDpad = v },
         onSetScreenshotsToGallery = { v -> screenshotsToGallery = v; vm.settings.screenshotsToGallery = v },
         onSetReducedMotion = { v -> vm.settings.setReducedMotion(v) },
+        onSetShowCasesEverywhere = { v -> vm.settings.setShowCasesEverywhere(v) },
         onSetFastForward = { v -> fastForward = v; vm.settings.fastForwardSpeed = v },
         onSetDynamicColor = { enabled -> vm.settings.setDynamicColor(enabled); setDynamicColorEnabled(enabled) },
         onSelectPalette = { id -> vm.settings.accent = id; setExpressivePalette(id) },

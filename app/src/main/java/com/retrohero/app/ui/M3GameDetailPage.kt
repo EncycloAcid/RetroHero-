@@ -85,6 +85,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -123,7 +124,9 @@ import com.retrohero.app.data.Cheat
 import com.retrohero.app.data.CheatFinder
 import com.retrohero.app.data.CheatPackMatch
 import com.retrohero.app.data.Cheats
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.retrohero.app.data.AppPaths
 import com.retrohero.app.data.CoreInfo
 import com.retrohero.app.data.ExternalEmulator
@@ -132,6 +135,7 @@ import com.retrohero.app.data.Game
 import com.retrohero.app.data.GameDossier
 import com.retrohero.app.data.GameSeries
 import com.retrohero.app.data.GameSystem
+import com.retrohero.app.data.PhysicalMediaSpec
 import com.retrohero.app.data.PlayStat
 import com.retrohero.app.data.PlayTime
 import com.retrohero.app.data.RaGameData
@@ -141,14 +145,18 @@ import com.retrohero.app.data.Systems
 import com.retrohero.app.ui.components.LocalReducedMotion
 import com.retrohero.app.ui.components.M3ConnectedButtonGroup
 import com.retrohero.app.ui.components.M3ConsoleImage
+import com.retrohero.app.ui.components.M3ConsoleInsertionDialog
 import com.retrohero.app.ui.components.M3ExpressiveSpring
 import com.retrohero.app.ui.components.M3GameCover
 import com.retrohero.app.ui.components.M3PatchLabDialog
+import com.retrohero.app.ui.components.M3PhysicalBoxInspectorDialog
 import com.retrohero.app.ui.components.M3PhysicalBoxViewerSection
 import com.retrohero.app.ui.components.M3ShapeBadge
 import com.retrohero.app.ui.components.M3SplitButton
 import com.retrohero.app.ui.components.M3WavyBar
+import com.retrohero.app.ui.components.PhysicalViewerSubject
 import com.retrohero.app.ui.components.m3SegmentedShape
+import com.retrohero.app.ui.components.rememberPhysicalTextures
 import com.retrohero.app.ui.theme.polygon
 import java.io.File
 import kotlin.math.PI
@@ -343,7 +351,10 @@ internal fun M3GameDetailPage(
     val hasAutoSave = saveSlots.any { it.first == AppPaths.AUTO_SLOT }
     val sysPoly = game.system?.polygon ?: MaterialShapes.Cookie6Sided
 
-    var savedCheats by remember(game.id) { mutableStateOf(Cheats.load(appPaths.cheatsFile(game))) }
+    var savedCheats by remember(game.id) { mutableStateOf<List<Cheat>>(emptyList()) }
+    LaunchedEffect(game.id) {
+        savedCheats = withContext(Dispatchers.IO) { Cheats.load(appPaths.cheatsFile(game)) }
+    }
     var findingCheats by remember(game.id) { mutableStateOf(false) }
     var cheatSource by remember(game.id) { mutableStateOf<String?>(null) }
     var cheatError by remember(game.id) { mutableStateOf<String?>(null) }
@@ -381,11 +392,15 @@ internal fun M3GameDetailPage(
     var dossier by remember(game.id) {
         mutableStateOf(initialDossier ?: GameDossier.localFallback(game))
     }
-    var loadingMeta by remember(game.id) { mutableStateOf(loadDossier != null && initialDossier == null) }
+    var loadingMeta by remember(game.id) { mutableStateOf(loadDossier != null && initialDossier?.isLive != true) }
     var refreshNonce by remember(game.id) { mutableIntStateOf(0) }
 
     LaunchedEffect(game.id, refreshNonce) {
         val loader = loadDossier ?: return@LaunchedEffect
+        if (refreshNonce == 0 && initialDossier?.isLive == true) {
+            loadingMeta = false
+            return@LaunchedEffect
+        }
         loadingMeta = true
         dossier = runCatching { loader(game, refreshNonce > 0) }.getOrElse { GameDossier.localFallback(game) }
         loadingMeta = false
@@ -476,8 +491,18 @@ internal fun M3GameDetailPage(
     }
     var selectedSlideIdx by remember(game.id) { mutableIntStateOf(0) }
     var lightboxSlideIdx by remember(game.id) { mutableStateOf<Int?>(null) }
-    var open3dInspectorNonce by remember(game.id) { mutableIntStateOf(0) }
+    var show3dInspector by remember(game.id) { mutableStateOf(false) }
+    var inspectorSubject by remember(game.id) { mutableStateOf(PhysicalViewerSubject.RETAIL_BOX) }
+    var inspectorYaw by remember(game.id) { mutableFloatStateOf(24f) }
+    var showInsertCeremony by remember(game.id) { mutableStateOf(false) }
     var patchLabOpen by remember(game.id) { mutableStateOf(false) }
+
+    val sysAccent = game.system?.color ?: cs.primary
+    val physicalSpec = remember(game.systemId, sysAccent) {
+        PhysicalMediaSpec.forSystem(game.systemId, sysAccent)
+    }
+    val physicalTextures = rememberPhysicalTextures(game, dossier, physicalSpec, override = null)
+
     val activeSlide = slides.getOrNull(selectedSlideIdx) ?: slides.firstOrNull()
 
     val listState = rememberLazyListState()
@@ -560,7 +585,9 @@ internal fun M3GameDetailPage(
                             .border(1.5.dp, cs.outlineVariant.copy(alpha = 0.55f), RoundedCornerShape(20.dp))
                             .clickable {
                                 view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                                open3dInspectorNonce++
+                                inspectorSubject = PhysicalViewerSubject.RETAIL_BOX
+                                inspectorYaw = 24f
+                                show3dInspector = true
                             }
                         val lbBox = dossier.boxArtUrl
                         if (lbBox != null) {
@@ -624,7 +651,11 @@ internal fun M3GameDetailPage(
                         onPrimaryClick = { onPlay(null) },
                         trailingIcon = androidx.compose.material.icons.Icons.Rounded.ViewInAr,
                         trailingDescription = "Inspect 3D retail box & cart",
-                        onTrailingClick = { open3dInspectorNonce++ },
+                        onTrailingClick = {
+                            inspectorSubject = PhysicalViewerSubject.RETAIL_BOX
+                            inspectorYaw = 24f
+                            show3dInspector = true
+                        },
                         trailingActive = false,
                         height = 56.dp,
                     )
@@ -1338,8 +1369,13 @@ internal fun M3GameDetailPage(
                 M3PhysicalBoxViewerSection(
                     game = game,
                     dossier = dossier,
-                    openInspectorTrigger = open3dInspectorNonce,
                     onPlay = { onPlay(null) },
+                    preloadedTextures = physicalTextures,
+                    onOpenInspector = { subj, yaw ->
+                        inspectorSubject = subj
+                        inspectorYaw = yaw
+                        show3dInspector = true
+                    },
                 )
             }
 
@@ -2460,6 +2496,36 @@ internal fun M3GameDetailPage(
                 persistCheats(savedCheats.map { it.copy(enabled = false) })
             },
             onDismiss = { showCheatsSheet = false },
+        )
+    }
+
+    if (show3dInspector) {
+        val boxAspect = remember(physicalTextures.front, physicalSpec) {
+            (physicalTextures.front.width.toFloat() / physicalTextures.front.height.toFloat().coerceAtLeast(1f))
+                .coerceIn(0.54f, 1.50f)
+        }
+        M3PhysicalBoxInspectorDialog(
+            game = game,
+            spec = physicalSpec,
+            textures = physicalTextures,
+            initialSubject = inspectorSubject,
+            initialYawDeg = inspectorYaw,
+            boxAspect = boxAspect,
+            onPlayFromModel = {
+                show3dInspector = false
+                showInsertCeremony = true
+            },
+            onDismiss = { show3dInspector = false },
+        )
+    }
+
+    if (showInsertCeremony) {
+        M3ConsoleInsertionDialog(
+            game = game,
+            spec = physicalSpec,
+            textures = physicalTextures,
+            onLaunchNow = { onPlay(null) },
+            onDismiss = { showInsertCeremony = false },
         )
     }
 }

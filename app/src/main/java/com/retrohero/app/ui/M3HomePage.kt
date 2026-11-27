@@ -67,12 +67,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -82,6 +86,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.retrohero.app.data.Game
 import com.retrohero.app.data.GameDossier
 import com.retrohero.app.data.GameSystem
@@ -104,7 +109,9 @@ import com.retrohero.app.ui.components.rememberMorph
 import com.retrohero.app.ui.theme.Tone
 import com.retrohero.app.ui.theme.polygon
 import com.retrohero.app.ui.theme.tag
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -129,6 +136,7 @@ internal fun M3HomePage(
     onOpenHomebrew: () -> Unit,
     dossierFor: (Game) -> GameDossier? = { null },
     loadDossier: (suspend (Game) -> GameDossier)? = null,
+    showCasesEverywhere: Boolean = false,
 ) {
     val cs = MaterialTheme.colorScheme
     val inset = LocalToolbarInset.current
@@ -362,6 +370,7 @@ internal fun M3HomePage(
                             onDetails = { onOpenDetail(game) },
                             dossierFor = dossierFor,
                             loadDossier = loadDossier,
+                            show3dCase = showCasesEverywhere,
                             modifier = Modifier.graphicsLayer {
                                 scaleX = pageScale
                                 scaleY = pageScale
@@ -477,6 +486,7 @@ internal fun M3HomePage(
                                     onPlay = { onPlay(game) },
                                     dossierFor = dossierFor,
                                     loadDossier = loadDossier,
+                                    show3dCase = showCasesEverywhere,
                                 )
                             }
                         }
@@ -510,6 +520,7 @@ internal fun M3HomePage(
                                     onPlay = { onPlay(game) },
                                     dossierFor = dossierFor,
                                     loadDossier = loadDossier,
+                                    show3dCase = showCasesEverywhere,
                                 )
                             }
                         }
@@ -517,6 +528,61 @@ internal fun M3HomePage(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun M3HeroLandingPhoto(
+    game: Game,
+    dossierFor: (Game) -> GameDossier?,
+    loadDossier: (suspend (Game) -> GameDossier)?,
+    modifier: Modifier = Modifier,
+) {
+    var heroUrl by remember(game.id) { mutableStateOf<String?>(null) }
+    var heroFailed by remember(game.id) { mutableStateOf(false) }
+
+    LaunchedEffect(game.id) {
+        val cached = withContext(Dispatchers.IO) { dossierFor(game) }
+        val initialUrl = cached?.heroImageUrl?.takeIf { it.isNotBlank() }
+        if (initialUrl != null) {
+            heroUrl = initialUrl
+        } else if (cached == null && loadDossier != null) {
+            val loaded = runCatching { loadDossier(game) }.getOrNull()
+            heroUrl = loaded?.heroImageUrl?.takeIf { it.isNotBlank() }
+        }
+    }
+
+    Box(modifier) {
+        // Immediate full-bleed cover/key-art photo with zero wait
+        M3GameCover(
+            game = game,
+            showTitle = false,
+            modifier = Modifier.fillMaxSize(),
+        )
+        // Upgrade smoothly to wide 16:9 LaunchBox hero/fanart landing photo when available
+        val wideUrl = heroUrl
+        if (wideUrl != null && !heroFailed) {
+            AsyncImage(
+                model = wideUrl,
+                contentDescription = game.title,
+                contentScale = ContentScale.Crop,
+                onError = { heroFailed = true },
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+        // Subtle cinematic vignette scrim so top & bottom pills stay crisp over bright artwork
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        0.0f to Color.Black.copy(alpha = 0.24f),
+                        0.32f to Color.Transparent,
+                        0.68f to Color.Transparent,
+                        1.0f to Color.Black.copy(alpha = 0.34f),
+                    ),
+                ),
+        )
     }
 }
 
@@ -532,6 +598,7 @@ private fun M3SculpturalHeroCard(
     modifier: Modifier = Modifier,
     dossierFor: (Game) -> GameDossier? = { null },
     loadDossier: (suspend (Game) -> GameDossier)? = null,
+    show3dCase: Boolean = false,
 ) {
     val cs = MaterialTheme.colorScheme
     val outerShape = RoundedCornerShape(34.dp)
@@ -557,15 +624,24 @@ private fun M3SculpturalHeroCard(
                     .fillMaxSize()
                     .clip(artShape),
             ) {
-                M3PhysicalCaseShowcase(
-                    game = game,
-                    dossierFor = dossierFor,
-                    loadDossier = loadDossier,
-                    yawDeg = 22f,
-                    pitchDeg = -6f,
-                    stagePaddingDp = 10.dp,
-                    modifier = Modifier.fillMaxSize(),
-                )
+                if (show3dCase) {
+                    M3PhysicalCaseShowcase(
+                        game = game,
+                        dossierFor = dossierFor,
+                        loadDossier = loadDossier,
+                        yawDeg = 22f,
+                        pitchDeg = -6f,
+                        stagePaddingDp = 10.dp,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    M3HeroLandingPhoto(
+                        game = game,
+                        dossierFor = dossierFor,
+                        loadDossier = loadDossier,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
 
                 Row(
                     Modifier
@@ -951,6 +1027,7 @@ internal fun M3ExpressiveGameCard(
     silhouetteVariant: Int = 0,
     dossierFor: (Game) -> GameDossier? = { null },
     loadDossier: (suspend (Game) -> GameDossier)? = null,
+    show3dCase: Boolean = false,
 ) {
     val cs = MaterialTheme.colorScheme
     val view = LocalView.current
@@ -994,15 +1071,23 @@ internal fun M3ExpressiveGameCard(
                 .aspectRatio(0.88f)
                 .clip(artShape),
         ) {
-            M3PhysicalCaseShowcase(
-                game = game,
-                dossierFor = dossierFor,
-                loadDossier = loadDossier,
-                yawDeg = 24f,
-                pitchDeg = -6f,
-                stagePaddingDp = 8.dp,
-                modifier = Modifier.fillMaxSize(),
-            )
+            if (show3dCase) {
+                M3PhysicalCaseShowcase(
+                    game = game,
+                    dossierFor = dossierFor,
+                    loadDossier = loadDossier,
+                    yawDeg = 24f,
+                    pitchDeg = -6f,
+                    stagePaddingDp = 8.dp,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            } else {
+                M3GameCover(
+                    game = game,
+                    showTitle = false,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
 
             if (playTimeLabel != null) {
                 Box(

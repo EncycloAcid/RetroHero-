@@ -508,7 +508,11 @@ private fun PulledCaseSpotlight(
     // Same LaunchBox data the game page loads, so its 3D viewer shows the same case and disc.
     var dossier by remember(game.id) { mutableStateOf(GameDossier.localFallback(game)) }
     LaunchedEffect(game.id) {
-        withContext(Dispatchers.IO) { dossierFor(game) }?.let { dossier = it }
+        val cached = withContext(Dispatchers.IO) { dossierFor(game) }
+        if (cached != null) {
+            dossier = cached
+            if (cached.isLive) return@LaunchedEffect
+        }
         loadDossier?.let { load -> runCatching { load(game) }.getOrNull()?.let { dossier = it } }
     }
     var launchCeremonyNonce by remember(game.id) { mutableStateOf(0) }

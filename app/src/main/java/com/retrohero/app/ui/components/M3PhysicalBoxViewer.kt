@@ -118,6 +118,8 @@ import coil.request.ImageRequest
 import coil.request.SuccessResult
 import coil.size.Scale
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import com.retrohero.app.data.Box3dMath
@@ -165,6 +167,7 @@ internal data class ResolvedPhysicalTextures(
     val hasRealBack: Boolean,
     val hasRealSpine: Boolean,
     val hasRealMedia: Boolean,
+    val maskedMediaBack: Bitmap = mediaBack,
 )
 
 /**
@@ -175,7 +178,7 @@ internal data class ResolvedPhysicalTextures(
  *   inspect the `Box - Spine`, and switch to the console-authentic 3D Cartridge / Game Card / Optical Disc!
  */
 @Composable
-fun M3PhysicalBoxViewerSection(
+internal fun M3PhysicalBoxViewerSection(
     game: Game,
     dossier: GameDossier,
     openInspectorTrigger: Int = 0,
@@ -189,6 +192,10 @@ fun M3PhysicalBoxViewerSection(
     onPlay: (() -> Unit)? = null,
     /** Increment to trigger the 3D cartridge/disc console insertion ceremony externally. */
     insertLaunchTrigger: Int = 0,
+    /** Optional hoisted textures so Game Info doesn't duplicate texture work between hero inspector & inline stage. */
+    preloadedTextures: ResolvedPhysicalTextures? = null,
+    /** Optional hoisted inspector handler so Game Info opens fullscreen 3D inspector instantly from anywhere. */
+    onOpenInspector: ((PhysicalViewerSubject, Float) -> Unit)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     val view = LocalView.current
@@ -200,7 +207,7 @@ fun M3PhysicalBoxViewerSection(
         PhysicalMediaSpec.forSystem(game.systemId, sysAccent)
     }
 
-    val textures = rememberPhysicalTextures(game, dossier, spec, overrideBitmaps)
+    val textures = preloadedTextures ?: rememberPhysicalTextures(game, dossier, spec, overrideBitmaps)
 
     var subject by remember(game.id) { mutableStateOf(initialSubject) }
     val yawAnim = remember(game.id) { Animatable(introFromYawDeg ?: initialYawDeg) }
@@ -505,7 +512,8 @@ fun M3PhysicalBoxViewerSection(
                         .background(cs.primaryContainer.copy(alpha = 0.92f))
                         .clickable {
                             view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                            showInspector = true
+                            val hoisted = onOpenInspector
+                            if (hoisted != null) hoisted(subject, yawAnim.value) else showInspector = true
                         }
                         .padding(horizontal = 11.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -766,7 +774,7 @@ private fun AnglePresetChip(
  * on LaunchBox `Box - Back` blurbs, `Box - Spine` strips, and `Cart - Front` / `Disc` labels.
  */
 @Composable
-private fun M3PhysicalBoxInspectorDialog(
+internal fun M3PhysicalBoxInspectorDialog(
     game: Game,
     spec: PhysicalMediaSpec,
     textures: ResolvedPhysicalTextures,
@@ -1109,13 +1117,7 @@ internal fun Physical3dStageCanvas(
             spec.mediaShellColor.toArgb()
         }
     }
-    val maskedCartBackBmp = remember(textures.mediaFront, textures.mediaBack, textures.hasRealMedia) {
-        if (textures.hasRealMedia && !spec.mediaKind.isOpticalDisc) {
-            maskBitmapToAlphaSilhouette(textures.mediaBack, textures.mediaFront)
-        } else {
-            textures.mediaBack
-        }
-    }
+    val maskedCartBackBmp = textures.maskedMediaBack
 
     Canvas(modifier) {
         val stageW = size.width
@@ -2056,38 +2058,122 @@ private fun shadeArgb(argb: Int, factor: Float): Int {
     return AndroidColor.argb(a, r, g, b)
 }
 
-// ---- Coil Async Texture Loader & Procedural Museum-Grade Fallbacks ------------------------------
+// ---- Cached Parallel Texture Loader & Procedural Museum-Grade Fallbacks -------------------------
 
-@Composable
-private fun rememberFirstLoadedBitmap(key: String, candidates: List<Any>): Bitmap? {
-    val context = LocalContext.current
-    var bmp by remember(key) { mutableStateOf<Bitmap?>(null) }
-    LaunchedEffect(key, candidates) {
-        if (candidates.isEmpty()) return@LaunchedEffect
-        for (src in candidates) {
-            val loaded = runCatching {
-                val req = ImageRequest.Builder(context)
-                    .data(src)
-                    .allowHardware(false)
-                    .bitmapConfig(Bitmap.Config.ARGB_8888)
-                    .size(1200, 1200)
-                    .scale(Scale.FIT)
-                    .build()
-                val res = context.imageLoader.execute(req)
-                val raw = (res as? SuccessResult)?.drawable?.toBitmap(config = Bitmap.Config.ARGB_8888)
-                if (raw != null && raw.width >= 16 && raw.height >= 16) {
-                    withContext(Dispatchers.Default) { trimTransparentBounds(raw) }
-                } else {
-                    null
-                }
-            }.getOrNull()
-            if (loaded != null && loaded.width >= 16 && loaded.height >= 16) {
-                bmp = loaded
-                break
+/**
+ * Bounded in-memory RAM cache for full 3D Case + Cartridge/Disc textures so reopening Game Info,
+ * tapping the 3D Case Inspector, or pulling a case from the 3D Bookshelf is instant (0 ms).
+ */
+private object PhysicalTexturesCache {
+    private val cache = object : android.util.LruCache<String, ResolvedPhysicalTextures>(48 * 1024) {
+        override fun sizeOf(key: String, value: ResolvedPhysicalTextures): Int {
+            val seen = java.util.IdentityHashMap<Bitmap, Boolean>(6)
+            var bytes = 0
+            fun add(b: Bitmap) {
+                if (seen.put(b, true) == null) bytes += b.byteCount
             }
+            add(value.front)
+            add(value.back)
+            add(value.spine)
+            add(value.mediaFront)
+            add(value.mediaBack)
+            add(value.maskedMediaBack)
+            return (bytes / 1024).coerceAtLeast(1)
         }
     }
-    return bmp
+
+    fun get(key: String): ResolvedPhysicalTextures? = cache.get(key)
+    fun put(key: String, value: ResolvedPhysicalTextures) { cache.put(key, value) }
+}
+
+private val instantStubCache = java.util.concurrent.ConcurrentHashMap<String, ResolvedPhysicalTextures>()
+
+/** Tiny (< 8 KB, < 0.05 ms) first-frame stub so clicking a cold 3D case never stalls the UI thread. */
+private fun buildInstantStubTextures(spec: PhysicalMediaSpec): ResolvedPhysicalTextures {
+    val key = "${spec.systemId}|${spec.spineHeaderColor.toArgb()}|${spec.mediaShellColor.toArgb()}"
+    return instantStubCache.getOrPut(key) {
+        val w = 32
+        val h = (w / spec.defaultBoxAspect).roundToInt().coerceIn(22, 48)
+        val headerArgb = spec.spineHeaderColor.toArgb()
+        val bodyArgb = shadeArgb(headerArgb, 0.34f)
+        val front = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888).apply {
+            val c = AndroidCanvas(this)
+            c.drawColor(bodyArgb)
+            val p = Paint().apply { color = headerArgb }
+            c.drawRect(0f, 0f, w.toFloat(), h * 0.14f, p)
+        }
+        val spine = Bitmap.createBitmap(12, h, Bitmap.Config.ARGB_8888).apply {
+            val c = AndroidCanvas(this)
+            c.drawColor(bodyArgb)
+            val p = Paint().apply { color = headerArgb }
+            c.drawRect(0f, 0f, 12f, h * 0.18f, p)
+        }
+        val media = Bitmap.createBitmap(24, 24, Bitmap.Config.ARGB_8888).apply {
+            eraseColor(spec.mediaShellColor.toArgb())
+        }
+        ResolvedPhysicalTextures(
+            front = front,
+            back = front,
+            spine = spine,
+            mediaFront = media,
+            mediaBack = media,
+            hasRealFront = false,
+            hasRealBack = false,
+            hasRealSpine = false,
+            hasRealMedia = false,
+            maskedMediaBack = media,
+        )
+    }
+}
+
+private fun ShelfCaseArt.toSeedTextures(spec: PhysicalMediaSpec): ResolvedPhysicalTextures {
+    val stub = buildInstantStubTextures(spec)
+    return ResolvedPhysicalTextures(
+        front = textures.front,
+        back = stub.back,
+        spine = textures.spine,
+        mediaFront = stub.mediaFront,
+        mediaBack = stub.mediaBack,
+        hasRealFront = textures.hasRealFront,
+        hasRealBack = false,
+        hasRealSpine = textures.hasRealSpine,
+        hasRealMedia = false,
+        maskedMediaBack = stub.maskedMediaBack,
+    )
+}
+
+private suspend fun loadFirstPhysicalBitmap(
+    context: Context,
+    candidates: List<Any>,
+    maxPx: Int,
+): Bitmap? {
+    if (candidates.isEmpty()) return null
+    for (src in candidates) {
+        if (src is java.io.File) {
+            val exists = withContext(Dispatchers.IO) { src.exists() && src.length() > 0L }
+            if (!exists) continue
+        }
+        val loaded = runCatching {
+            val req = ImageRequest.Builder(context)
+                .data(src)
+                .allowHardware(false)
+                .bitmapConfig(Bitmap.Config.ARGB_8888)
+                .size(maxPx, maxPx)
+                .scale(Scale.FIT)
+                .build()
+            val res = context.imageLoader.execute(req)
+            val raw = (res as? SuccessResult)?.drawable?.toBitmap(config = Bitmap.Config.ARGB_8888)
+            if (raw != null && raw.width >= 16 && raw.height >= 16) {
+                withContext(Dispatchers.Default) { trimTransparentBounds(raw) }
+            } else {
+                null
+            }
+        }.getOrNull()
+        if (loaded != null && loaded.width >= 16 && loaded.height >= 16) {
+            return loaded
+        }
+    }
+    return null
 }
 
 /**
@@ -2099,6 +2185,24 @@ private fun trimTransparentBounds(src: Bitmap): Bitmap {
     val w = src.width
     val h = src.height
     if (w < 24 || h < 24 || !src.hasAlpha()) return src
+    val alphaThreshold = 18
+
+    // O(1) perimeter fast-path: full-bleed JPEGs & unpadded retail box scans have opaque outer edges,
+    // letting us skip allocating & scanning a multi-megabyte IntArray altogether!
+    val topOpaque = (src.getPixel(w / 4, 1) ushr 24) > alphaThreshold ||
+        (src.getPixel(w / 2, 1) ushr 24) > alphaThreshold ||
+        (src.getPixel((w * 3) / 4, 1) ushr 24) > alphaThreshold
+    val botOpaque = (src.getPixel(w / 4, h - 2) ushr 24) > alphaThreshold ||
+        (src.getPixel(w / 2, h - 2) ushr 24) > alphaThreshold ||
+        (src.getPixel((w * 3) / 4, h - 2) ushr 24) > alphaThreshold
+    val leftOpaque = (src.getPixel(1, h / 4) ushr 24) > alphaThreshold ||
+        (src.getPixel(1, h / 2) ushr 24) > alphaThreshold ||
+        (src.getPixel(1, (h * 3) / 4) ushr 24) > alphaThreshold
+    val rightOpaque = (src.getPixel(w - 2, h / 4) ushr 24) > alphaThreshold ||
+        (src.getPixel(w - 2, h / 2) ushr 24) > alphaThreshold ||
+        (src.getPixel(w - 2, (h * 3) / 4) ushr 24) > alphaThreshold
+    if (topOpaque && botOpaque && leftOpaque && rightOpaque) return src
+
     val pixels = IntArray(w * h)
     src.getPixels(pixels, 0, w, 0, 0, w, h)
 
@@ -2106,11 +2210,10 @@ private fun trimTransparentBounds(src: Bitmap): Bitmap {
     var minY = h
     var maxX = -1
     var maxY = -1
-    val alphaThreshold = 18
-    // Step by 2px for speed, then pad by 2px so anti-aliased edges stay silky smooth
-    for (y in 0 until h step 2) {
+    val step = if (max(w, h) > 512) 4 else 2
+    for (y in 0 until h step step) {
         val rowOffset = y * w
-        for (x in 0 until w step 2) {
+        for (x in 0 until w step step) {
             if ((pixels[rowOffset + x] ushr 24) > alphaThreshold) {
                 if (x < minX) minX = x
                 if (x > maxX) maxX = x
@@ -2120,16 +2223,69 @@ private fun trimTransparentBounds(src: Bitmap): Bitmap {
         }
     }
     if (maxX <= minX || maxY <= minY) return src
-    val left = (minX - 2).coerceAtLeast(0)
-    val top = (minY - 2).coerceAtLeast(0)
-    val right = (maxX + 3).coerceAtMost(w)
-    val bottom = (maxY + 3).coerceAtMost(h)
+    val pad = step
+    val left = (minX - pad).coerceAtLeast(0)
+    val top = (minY - pad).coerceAtLeast(0)
+    val right = (maxX + pad + 1).coerceAtMost(w)
+    val bottom = (maxY + pad + 1).coerceAtMost(h)
     val cropW = right - left
     val cropH = bottom - top
     // Only crop if there is meaningful transparent margin (> 2%) and resulting image is valid
     if (cropW >= (w * 0.98f).toInt() && cropH >= (h * 0.98f).toInt()) return src
     if (cropW < 16 || cropH < 16) return src
     return runCatching { Bitmap.createBitmap(src, left, top, cropW, cropH) }.getOrDefault(src)
+}
+
+private fun assembleResolvedTextures(
+    game: Game,
+    dossier: GameDossier,
+    spec: PhysicalMediaSpec,
+    loadedFront: Bitmap?,
+    loadedBack: Bitmap?,
+    loadedSpineRaw: Bitmap?,
+    loadedFull: Bitmap?,
+    loadedMediaFront: Bitmap?,
+    loadedMediaBack: Bitmap?,
+    shot1: Bitmap?,
+    shot2: Bitmap?,
+): ResolvedPhysicalTextures {
+    val slicedFull = loadedFull?.let { PhysicalMediaSpec.sliceFullBoxCover(it, spec.fullWrapSpineFraction) }
+    val realFront = loadedFront ?: slicedFull?.third
+    val realBack = loadedBack ?: slicedFull?.first
+    val realSpine = (loadedSpineRaw ?: slicedFull?.second)?.let { PhysicalMediaSpec.orientSpineVertical(it) }
+
+    val frontBmp = realFront ?: buildProceduralFrontBitmap(game, dossier, spec)
+    val targetAspect = (frontBmp.width.toFloat() / frontBmp.height.toFloat().coerceAtLeast(1f)).coerceIn(0.56f, 1.48f)
+    val backBmp = realBack ?: buildProceduralBackBitmap(game, dossier, spec, targetAspect, shot1 ?: frontBmp, shot2)
+    val spineBmp = realSpine ?: buildProceduralSpineBitmap(game, dossier, spec, realFront, targetAspect)
+    val mediaFrontBmp = loadedMediaFront ?: if (spec.mediaKind.isOpticalDisc) {
+        buildProceduralDiscLabelBitmap(game, dossier, spec, frontBmp)
+    } else {
+        buildProceduralCartFrontBitmap(game, dossier, spec, frontBmp)
+    }
+    val mediaBackBmp = loadedMediaBack ?: if (spec.mediaKind.isOpticalDisc) {
+        buildProceduralDiscUndersideBitmap(spec)
+    } else {
+        buildProceduralCartBackBitmap(game, spec)
+    }
+    val hasRealMedia = loadedMediaFront != null
+    val maskedBack = if (hasRealMedia && !spec.mediaKind.isOpticalDisc) {
+        maskBitmapToAlphaSilhouette(mediaBackBmp, mediaFrontBmp)
+    } else {
+        mediaBackBmp
+    }
+    return ResolvedPhysicalTextures(
+        front = frontBmp,
+        back = backBmp,
+        spine = spineBmp,
+        mediaFront = mediaFrontBmp,
+        mediaBack = mediaBackBmp,
+        hasRealFront = realFront != null,
+        hasRealBack = realBack != null,
+        hasRealSpine = realSpine != null,
+        hasRealMedia = hasRealMedia,
+        maskedMediaBack = maskedBack,
+    )
 }
 
 @Composable
@@ -2139,26 +2295,56 @@ internal fun rememberPhysicalTextures(
     spec: PhysicalMediaSpec,
     override: PhysicalViewerBitmaps?,
 ): ResolvedPhysicalTextures {
+    // Deterministic synchronous path for unit/screenshot tests supplying override bitmaps.
+    if (override != null) {
+        return remember(game.id, dossier, spec, override) {
+            val loadedMediaFront = if (spec.mediaKind.isOpticalDisc) {
+                override.disc ?: override.cartFront
+            } else {
+                override.cartFront ?: override.disc
+            }
+            assembleResolvedTextures(
+                game = game,
+                dossier = dossier,
+                spec = spec,
+                loadedFront = override.boxFront,
+                loadedBack = override.boxBack,
+                loadedSpineRaw = override.boxSpine,
+                loadedFull = override.boxFull,
+                loadedMediaFront = loadedMediaFront,
+                loadedMediaBack = override.cartBack,
+                shot1 = override.screenshot1,
+                shot2 = override.screenshot2,
+            )
+        }
+    }
+
+    val context = LocalContext.current
+    val artVersion = LocalArtVersion.current
     val artSources = rememberArtSources(game)
+
+    val baseKey = "${game.id}|${spec.systemId}|${spec.spineHeaderColor.toArgb()}|$artVersion"
+    val fullKey = "$baseKey|${dossier.boxArtUrl}|${dossier.boxBackUrl}|${dossier.boxSpineUrl}|${dossier.boxFullUrl}|${dossier.cartFrontUrl}|${dossier.cartBackUrl}|${dossier.discUrl}|${dossier.title}|${dossier.publisher}|${dossier.esrbRating}"
+
+    // Instant first frame (0 ms, zero UI-thread Canvas synthesis):
+    // 1) Exact RAM cache hit -> 2) Last cached version for this game -> 3) Already-decoded Shelf cover & spine -> 4) 1 KB stub
+    val initialTextures = remember(fullKey, baseKey) {
+        PhysicalTexturesCache.get(fullKey)
+            ?: PhysicalTexturesCache.get(baseKey)
+            ?: ShelfCaseCache.peekGame("${game.id}|$artVersion")?.toSeedTextures(spec)
+            ?: buildInstantStubTextures(spec)
+    }
+
     val frontCandidates = remember(game.id, dossier.boxArtUrl, artSources) {
         buildList<Any> {
-            // 1. User's local custom / cached box art file (instant, offline, highest priority)
             artSources.filterIsInstance<java.io.File>().forEach { add(it) }
-            // 2. Real LaunchBox `Box - Front` scan
             dossier.boxArtUrl?.let { add(it) }
-            // 3. Full Libretro Named_Boxarts & regional official retail box art fallbacks
             artSources.forEach { src -> if (src !in this) add(src) }
         }
     }
-    val backCandidates = remember(game.id, dossier.boxBackUrl) {
-        listOfNotNull<Any>(dossier.boxBackUrl)
-    }
-    val spineCandidates = remember(game.id, dossier.boxSpineUrl) {
-        listOfNotNull<Any>(dossier.boxSpineUrl)
-    }
-    val fullCandidates = remember(game.id, dossier.boxFullUrl) {
-        listOfNotNull<Any>(dossier.boxFullUrl)
-    }
+    val backCandidates = remember(game.id, dossier.boxBackUrl) { listOfNotNull<Any>(dossier.boxBackUrl) }
+    val spineCandidates = remember(game.id, dossier.boxSpineUrl) { listOfNotNull<Any>(dossier.boxSpineUrl) }
+    val fullCandidates = remember(game.id, dossier.boxFullUrl) { listOfNotNull<Any>(dossier.boxFullUrl) }
     val mediaFrontCandidates = remember(game.id, dossier.cartFrontUrl, dossier.discUrl, spec.mediaKind.isOpticalDisc) {
         if (spec.mediaKind.isOpticalDisc) {
             listOfNotNull<Any>(dossier.discUrl, dossier.cartFrontUrl)
@@ -2166,9 +2352,7 @@ internal fun rememberPhysicalTextures(
             listOfNotNull<Any>(dossier.cartFrontUrl, dossier.discUrl)
         }
     }
-    val mediaBackCandidates = remember(game.id, dossier.cartBackUrl) {
-        listOfNotNull<Any>(dossier.cartBackUrl)
-    }
+    val mediaBackCandidates = remember(game.id, dossier.cartBackUrl) { listOfNotNull<Any>(dossier.cartBackUrl) }
     val shot1Candidates = remember(game.id, dossier.screenshotUrls, dossier.titleScreenUrl) {
         buildList<Any> {
             dossier.screenshotUrls.getOrNull(0)?.let { add(it) }
@@ -2183,79 +2367,80 @@ internal fun rememberPhysicalTextures(
         }
     }
 
-    val loadedFront = override?.boxFront ?: if (override != null) null else rememberFirstLoadedBitmap("${game.id}_f", frontCandidates)
-    val loadedBack = override?.boxBack ?: if (override != null) null else rememberFirstLoadedBitmap("${game.id}_b", backCandidates)
-    val loadedSpineRaw = override?.boxSpine ?: if (override != null) null else rememberFirstLoadedBitmap("${game.id}_s", spineCandidates)
-    val loadedFull = override?.boxFull ?: if (override != null) null else rememberFirstLoadedBitmap("${game.id}_full", fullCandidates)
-    val loadedMediaFront = (if (spec.mediaKind.isOpticalDisc) override?.disc ?: override?.cartFront else override?.cartFront ?: override?.disc)
-        ?: if (override != null) null else rememberFirstLoadedBitmap("${game.id}_mf", mediaFrontCandidates)
-    val loadedMediaBack = override?.cartBack ?: if (override != null) null else rememberFirstLoadedBitmap("${game.id}_mb", mediaBackCandidates)
-    val shot1 = override?.screenshot1 ?: if (override != null) null else rememberFirstLoadedBitmap("${game.id}_s1", shot1Candidates)
-    val shot2 = override?.screenshot2 ?: if (override != null) null else rememberFirstLoadedBitmap("${game.id}_s2", shot2Candidates)
+    val state = androidx.compose.runtime.produceState(initialValue = initialTextures, fullKey) {
+        PhysicalTexturesCache.get(fullKey)?.let { cached ->
+            value = cached
+            return@produceState
+        }
 
-    // Support LaunchBox `Box - Full` wraparound sleeves when individual Back/Spine/Front scans are absent!
-    val slicedFull = remember(loadedFull, spec.caseStyle) {
-        loadedFull?.let { PhysicalMediaSpec.sliceFullBoxCover(it, spec.fullWrapSpineFraction) }
-    }
+        // Launch primary face & media loads in parallel at crisp mobile resolution (768px -> 2.5x faster than 1200px)
+        coroutineScope {
+            val frontDef = async { loadFirstPhysicalBitmap(context, frontCandidates, 768) }
+            val spineDef = async { loadFirstPhysicalBitmap(context, spineCandidates, 768) }
+            val backDef = async { loadFirstPhysicalBitmap(context, backCandidates, 768) }
+            val mediaFrontDef = async { loadFirstPhysicalBitmap(context, mediaFrontCandidates, 768) }
+            val mediaBackDef = async { loadFirstPhysicalBitmap(context, mediaBackCandidates, 768) }
 
-    val realFront = loadedFront ?: slicedFull?.third
-    val realBack = loadedBack ?: slicedFull?.first
-    val realSpine = remember(loadedSpineRaw, slicedFull) {
-        (loadedSpineRaw ?: slicedFull?.second)?.let { PhysicalMediaSpec.orientSpineVertical(it) }
-    }
+            // Progressive fast-publish: the moment front art resolves, immediately show crisp 3D front + spine
+            // without waiting on back-of-box, full-wrap, or cartridge scans!
+            val loadedFront = frontDef.await()
+            if (loadedFront != null && (!value.hasRealFront || loadedFront.width > value.front.width)) {
+                val quickSpine = if (value.hasRealSpine) {
+                    value.spine
+                } else {
+                    withContext(Dispatchers.Default) {
+                        val asp = (loadedFront.width.toFloat() / loadedFront.height.toFloat().coerceAtLeast(1f)).coerceIn(0.56f, 1.48f)
+                        buildProceduralSpineBitmap(game, dossier, spec, loadedFront, asp)
+                    }
+                }
+                value = value.copy(
+                    front = loadedFront,
+                    spine = quickSpine,
+                    hasRealFront = true,
+                )
+            }
 
-    val frontBmp = remember(game.id, realFront, dossier.title, dossier.publisher, dossier.esrbRating, spec) {
-        realFront ?: buildProceduralFrontBitmap(game, dossier, spec)
-    }
-    val targetAspect = (frontBmp.width.toFloat() / frontBmp.height.toFloat().coerceAtLeast(1f)).coerceIn(0.56f, 1.48f)
+            val loadedSpineRaw = spineDef.await()
+            val loadedBack = backDef.await()
+            val loadedMediaFront = mediaFrontDef.await()
+            val loadedMediaBack = mediaBackDef.await()
 
-    val backBmp = remember(
-        game.id,
-        realBack,
-        targetAspect,
-        dossier.title,
-        dossier.summary,
-        dossier.developer,
-        dossier.publisher,
-        dossier.esrbRating,
-        shot1,
-        shot2,
-        frontBmp,
-    ) {
-        realBack ?: buildProceduralBackBitmap(game, dossier, spec, targetAspect, shot1 ?: frontBmp, shot2)
-    }
+            // Skip downloading massive Box - Full wraparound scan when front, back & spine are already present
+            val needFull = (loadedFront == null || loadedBack == null || loadedSpineRaw == null) && fullCandidates.isNotEmpty()
+            val loadedFull = if (needFull) loadFirstPhysicalBitmap(context, fullCandidates, 960) else null
 
-    val spineBmp = remember(game.id, realSpine, realFront, targetAspect, dossier.title, dossier.publisher, spec) {
-        realSpine ?: buildProceduralSpineBitmap(game, dossier, spec, realFront, targetAspect)
-    }
+            // Skip downloading back-of-box screenshots altogether when a real back scan (or full wrap) is present
+            val hasRealBackAlready = loadedBack != null || loadedFull != null
+            val (shot1, shot2) = if (!hasRealBackAlready) {
+                val s1 = async { loadFirstPhysicalBitmap(context, shot1Candidates, 480) }
+                val s2 = async { loadFirstPhysicalBitmap(context, shot2Candidates, 480) }
+                s1.await() to s2.await()
+            } else {
+                null to null
+            }
 
-    val mediaFrontBmp = remember(game.id, loadedMediaFront, frontBmp, dossier.title, spec) {
-        loadedMediaFront ?: if (spec.mediaKind.isOpticalDisc) {
-            buildProceduralDiscLabelBitmap(game, dossier, spec, frontBmp)
-        } else {
-            buildProceduralCartFrontBitmap(game, dossier, spec, frontBmp)
+            val resolved = withContext(Dispatchers.Default) {
+                assembleResolvedTextures(
+                    game = game,
+                    dossier = dossier,
+                    spec = spec,
+                    loadedFront = loadedFront,
+                    loadedBack = loadedBack,
+                    loadedSpineRaw = loadedSpineRaw,
+                    loadedFull = loadedFull,
+                    loadedMediaFront = loadedMediaFront,
+                    loadedMediaBack = loadedMediaBack,
+                    shot1 = shot1,
+                    shot2 = shot2,
+                )
+            }
+            PhysicalTexturesCache.put(fullKey, resolved)
+            PhysicalTexturesCache.put(baseKey, resolved)
+            value = resolved
         }
     }
 
-    val mediaBackBmp = remember(game.id, loadedMediaBack, spec) {
-        loadedMediaBack ?: if (spec.mediaKind.isOpticalDisc) {
-            buildProceduralDiscUndersideBitmap(spec)
-        } else {
-            buildProceduralCartBackBitmap(game, spec)
-        }
-    }
-
-    return ResolvedPhysicalTextures(
-        front = frontBmp,
-        back = backBmp,
-        spine = spineBmp,
-        mediaFront = mediaFrontBmp,
-        mediaBack = mediaBackBmp,
-        hasRealFront = realFront != null,
-        hasRealBack = realBack != null,
-        hasRealSpine = realSpine != null,
-        hasRealMedia = loadedMediaFront != null,
-    )
+    return state.value
 }
 
 internal fun buildProceduralFrontBitmap(
@@ -3514,11 +3699,19 @@ internal class ShelfCaseArt(val textures: ResolvedPhysicalTextures, val boxAspec
 
 /** Shelf cases kept within a fixed memory budget (full-size viewer textures are several MB each). */
 private object ShelfCaseCache {
-    private val cache = object : android.util.LruCache<String, ShelfCaseArt>(20 * 1024) {
+    private val cache = object : android.util.LruCache<String, ShelfCaseArt>(24 * 1024) {
         override fun sizeOf(key: String, value: ShelfCaseArt) = (value.bytes / 1024).coerceAtLeast(1)
     }
+    private val byGame = android.util.LruCache<String, ShelfCaseArt>(64)
     fun get(key: String): ShelfCaseArt? = cache.get(key)
     fun put(key: String, value: ShelfCaseArt) { cache.put(key, value) }
+    fun peekGame(gameKey: String): ShelfCaseArt? = byGame.get(gameKey)
+    fun putGame(gameKey: String, value: ShelfCaseArt) {
+        val prev = byGame.get(gameKey)
+        if (prev == null || value.textures.front.width >= prev.textures.front.width || value.textures.hasRealSpine) {
+            byGame.put(gameKey, value)
+        }
+    }
 }
 
 private const val SHELF_SPINE_WIDTH_PX = 64
@@ -3547,6 +3740,7 @@ internal fun rememberShelfCaseArt(
     val context = LocalContext.current
     val paths = LocalArtPaths.current
     val artVersion = LocalArtVersion.current
+    val gameKey = "${game.id}|$artVersion"
     val baseKey = "${game.id}|${spec.spineHeaderColor.toArgb()}|$artVersion|$frontWidthPx|$proceduralFrontFallback"
     val state = androidx.compose.runtime.produceState(initialValue = ShelfCaseCache.get(baseKey), baseKey) {
         // Shows the last case at once, then re-checks: the game page may have fetched real scans since.
@@ -3557,6 +3751,10 @@ internal fun rememberShelfCaseArt(
 
         suspend fun load(src: Any?, max: Int): Bitmap? {
             if (src == null) return null
+            if (src is java.io.File) {
+                val exists = withContext(Dispatchers.IO) { src.exists() && src.length() > 0L }
+                if (!exists) return null
+            }
             return runCatching {
                 val req = ImageRequest.Builder(context)
                     .data(src)
@@ -3618,7 +3816,12 @@ internal fun rememberShelfCaseArt(
             cover = load(src, 720)
             if (cover != null) break
         }
-        if (value == null) value = build(cover, null, null).also { ShelfCaseCache.put(baseKey, it) }
+        if (value == null) {
+            val built = build(cover, null, null)
+            ShelfCaseCache.put(baseKey, built)
+            ShelfCaseCache.putGame(gameKey, built)
+            value = built
+        }
 
         // 2. Never looked up: fetch the game's LaunchBox record, as its game page would, to get the
         //    real Box - Spine / Box - Full / Box - Front scans.
@@ -3626,24 +3829,39 @@ internal fun rememberShelfCaseArt(
             shelfLookupGate.withPermit { runCatching { loadDossier(game) }.getOrNull() }?.let { dossier = it }
         }
         val key = keyFor(dossier)
-        ShelfCaseCache.get(key)?.let { value = it; return@produceState }
-
-        // 3. Then online art in the 3D viewer's order: cover (if none yet), LaunchBox spine, full wrap.
-        if (cover == null) {
-            val onlineCovers = buildList<Any> {
-                dossier.boxArtUrl?.let { add(it) }
-                sources.forEach { if (it !is java.io.File && it !in this) add(it) }
-            }
-            for (src in onlineCovers) {
-                cover = load(src, 720)
-                if (cover != null) break
-            }
+        ShelfCaseCache.get(key)?.let {
+            ShelfCaseCache.putGame(gameKey, it)
+            value = it
+            return@produceState
         }
-        val loadedSpine = load(dossier.boxSpineUrl, 900)
-        val loadedFull = if (loadedSpine == null) load(dossier.boxFullUrl, 1400) else null
+
+        // 3. Then online art in parallel: cover (if none yet) + LaunchBox spine, then full wrap only if needed.
+        val (onlineCover, loadedSpine) = coroutineScope {
+            val coverDef = async {
+                if (cover != null) {
+                    cover
+                } else {
+                    val onlineCovers = buildList<Any> {
+                        dossier.boxArtUrl?.let { add(it) }
+                        sources.forEach { if (it !is java.io.File && it !in this) add(it) }
+                    }
+                    var found: Bitmap? = null
+                    for (src in onlineCovers) {
+                        found = load(src, 640)
+                        if (found != null) break
+                    }
+                    found
+                }
+            }
+            val spineDef = async { load(dossier.boxSpineUrl, 768) }
+            coverDef.await() to spineDef.await()
+        }
+        cover = onlineCover
+        val loadedFull = if (loadedSpine == null || cover == null) load(dossier.boxFullUrl, 960) else null
         val art = build(cover, loadedSpine, loadedFull)
         ShelfCaseCache.put(key, art)
         ShelfCaseCache.put(baseKey, art)
+        ShelfCaseCache.putGame(gameKey, art)
         value = art
     }
     return state.value

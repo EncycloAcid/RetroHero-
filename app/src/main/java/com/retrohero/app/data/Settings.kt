@@ -156,6 +156,14 @@ class Settings(context: Context) {
         _tiltEffects.value = on
     }
 
+    private val _showCasesEverywhere = MutableStateFlow(prefs.getBoolean("show_cases_everywhere", false))
+    /** Show 3D retail cases on Home hero & cards; when off, 3D cases appear only in Game Info and on the Shelf. */
+    val showCasesEverywhere: StateFlow<Boolean> = _showCasesEverywhere
+    fun setShowCasesEverywhere(on: Boolean) {
+        prefs.edit { putBoolean("show_cases_everywhere", on) }
+        _showCasesEverywhere.value = on
+    }
+
     /** The tab you were on, so the app reopens there. */
     var lastTab: String?
         get() = prefs.getString("last_tab", null)
@@ -276,6 +284,8 @@ class Settings(context: Context) {
             }
         }
         _dynamicColor.value = prefs.getBoolean("dynamic_color", true)
+        _reducedMotion.value = prefs.getBoolean("reduced_motion", false)
+        _showCasesEverywhere.value = prefs.getBoolean("show_cases_everywhere", false)
     }
 
     // ---- RetroAchievements ----
