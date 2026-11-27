@@ -166,6 +166,28 @@ JNIEXPORT void JNICALL JNI_FN(setColorProfile)(JNIEnv *, jobject, jint profile) 
     Frontend::get().setColorProfile(profile);
 }
 
+JNIEXPORT void JNICALL JNI_FN(setUpscaleFactor)(JNIEnv *, jobject, jint factor) {
+    Frontend::get().setUpscaleFactor(factor);
+}
+
+JNIEXPORT void JNICALL JNI_FN(setAmbilightEnabled)(JNIEnv *, jobject, jboolean enabled) {
+    Frontend::get().setAmbilightEnabled(enabled == JNI_TRUE);
+}
+
+JNIEXPORT void JNICALL JNI_FN(pollAmbilight)(JNIEnv *env, jobject, jintArray outArr) {
+    if (!outArr || env->GetArrayLength(outArr) < 5) return;
+    uint32_t raw[5] = {0};
+    Frontend::get().pollAmbilight(raw);
+    jint vals[5] = {
+        static_cast<jint>(raw[0]),
+        static_cast<jint>(raw[1]),
+        static_cast<jint>(raw[2]),
+        static_cast<jint>(raw[3]),
+        static_cast<jint>(raw[4]),
+    };
+    env->SetIntArrayRegion(outArr, 0, 5, vals);
+}
+
 JNIEXPORT void JNICALL JNI_FN(setRewindEnabled)(JNIEnv *, jobject, jboolean on) {
     Frontend::get().setRewindEnabled(on);
 }
@@ -215,6 +237,41 @@ JNIEXPORT void JNICALL JNI_FN(setButton)(JNIEnv *, jobject, jint port, jint id, 
     Frontend::get().setButton(port, id, pressed);
 }
 
+JNIEXPORT jint JNICALL JNI_FN(getButtonsMask)(JNIEnv *, jobject, jint port) {
+    if (port < 0) return 0;
+    return static_cast<jint>(Frontend::get().getButtonsMask(static_cast<unsigned>(port)));
+}
+
+JNIEXPORT jboolean JNICALL JNI_FN(netplayStart)(JNIEnv *, jobject, jint localPort, jint inputDelayFrames) {
+    return Frontend::get().netplayStart(localPort, inputDelayFrames) ? JNI_TRUE : JNI_FALSE;
+}
+
+JNIEXPORT void JNICALL JNI_FN(netplayStop)(JNIEnv *, jobject) {
+    Frontend::get().netplayStop();
+}
+
+JNIEXPORT void JNICALL JNI_FN(netplayPushRemoteInput)(JNIEnv *, jobject, jint frame, jint buttonsMask) {
+    if (frame < 0) return;
+    Frontend::get().netplayPushRemoteInput(static_cast<uint32_t>(frame), static_cast<uint32_t>(buttonsMask));
+}
+
+JNIEXPORT jintArray JNICALL JNI_FN(netplayPollTelemetry)(JNIEnv *env, jobject) {
+    rh::RollbackTelemetry t = Frontend::get().netplayTelemetry();
+    jintArray arr = env->NewIntArray(7);
+    if (!arr) return nullptr;
+    jint vals[7] = {
+        t.active ? 1 : 0,
+        static_cast<jint>(t.currentFrame),
+        static_cast<jint>(t.lastLocalFrame),
+        static_cast<jint>(t.lastLocalMask),
+        static_cast<jint>(t.rollbackCount),
+        static_cast<jint>(t.maxRollbackDepth),
+        static_cast<jint>(t.stateChecksum),
+    };
+    env->SetIntArrayRegion(arr, 0, 7, vals);
+    return arr;
+}
+
 JNIEXPORT void JNICALL JNI_FN(setAnalog)(JNIEnv *, jobject, jint port, jint index, jint axis,
                                          jfloat value) {
     float v = value < -1.f ? -1.f : (value > 1.f ? 1.f : value);
@@ -251,6 +308,10 @@ JNIEXPORT jobjectArray JNICALL JNI_FN(getOptions)(JNIEnv *env, jobject) {
 
 JNIEXPORT jfloat JNICALL JNI_FN(getAspectRatio)(JNIEnv *, jobject) {
     return Frontend::get().aspectRatio();
+}
+
+JNIEXPORT jfloat JNICALL JNI_FN(consumeAudioHaptic)(JNIEnv *, jobject) {
+    return Frontend::get().audio().consumeHapticEnergy();
 }
 
 JNIEXPORT jstring JNICALL JNI_FN(getLastError)(JNIEnv *env, jobject) {

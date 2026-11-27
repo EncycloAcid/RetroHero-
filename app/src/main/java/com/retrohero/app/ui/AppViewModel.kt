@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -45,6 +46,29 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun cachedDossier(game: Game): GameDossier? = metadataRepo.peekCached(game)
     suspend fun loadDossier(game: Game, forceRefresh: Boolean = false): GameDossier =
         metadataRepo.load(game, forceRefresh)
+
+    private val _launchboxStatus = MutableStateFlow(metadataRepo.launchboxDbStatus())
+    val launchboxStatus: StateFlow<com.retrohero.app.data.LaunchBoxDbStatus> = _launchboxStatus
+
+    private val _launchboxSyncProgress = MutableStateFlow<String?>(null)
+    val launchboxSyncProgress: StateFlow<String?> = _launchboxSyncProgress
+
+    fun syncLaunchBoxDatabase() {
+        if (_launchboxSyncProgress.value != null) return
+        _launchboxSyncProgress.value = "Connecting to LaunchBox GamesDB…"
+        viewModelScope.launch {
+            runCatching {
+                metadataRepo.syncLaunchBoxDatabase { msg -> _launchboxSyncProgress.value = msg }
+            }.onSuccess { status ->
+                _launchboxStatus.value = status
+                _launchboxSyncProgress.value = null
+                say("Synced ${status.gameCount} LaunchBox games across ${status.platformCount} consoles")
+            }.onFailure { err ->
+                _launchboxSyncProgress.value = null
+                say(err.message ?: "Couldn't download LaunchBox Metadata.zip")
+            }
+        }
+    }
 
     // ---- RetroAchievements ----
     val raProfile = settings.raProfile
@@ -476,8 +500,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         play(game)
     }
 
+    val hiddenGameCount = app.library.hiddenCount
+
+    /** Removes [game]: folder games are hidden with an Undo, downloaded ones are deleted (confirmed in the UI). */
     fun deleteGame(game: Game) {
-        viewModelScope.launch { app.library.deleteLocal(game) }
+        viewModelScope.launch {
+            app.library.remove(game)
+            if (game.isLocal) say("Deleted ${game.title}")
+            else say("Removed ${game.title} from your library", undo = { viewModelScope.launch { app.library.unhide(game) } })
+        }
+    }
+
+    fun restoreHiddenGames() {
+        app.library.unhideAll()
+        rescan()
+        say("Hidden games will come back after the scan")
     }
 
     fun addFolder(uri: Uri) {
@@ -545,10 +582,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         say(if (separate) "Patch uses its own save slot" else "Patch shares parent game save")
     }
 
-    /** Starts [game]; with [slot], resumes from that save-state slot; with [patch], soft-patches in memory on boot. */
-    fun play(game: Game, slot: Int? = null, patch: com.retrohero.app.data.RomPatch? = null) {
+    /** Starts [game]; with [slot] or [statePath], resumes from that save state; with [patch], soft-patches in memory on boot. */
+    fun play(
+        game: Game,
+        slot: Int? = null,
+        statePath: String? = null,
+        challengeTitle: String? = null,
+        patch: com.retrohero.app.data.RomPatch? = null,
+    ) {
         val system = game.system ?: return
-        val external = if (patch == null) selectedExternalEmulator(game) else null
+        val external = if (patch == null && statePath == null) selectedExternalEmulator(game) else null
         if (external != null) {
             val intent = com.retrohero.app.data.ExternalEmulators.launchIntent(app, external, game)
             if (intent != null) {
@@ -566,7 +609,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             )
             return
         }
-        if (app.cores.isInstalled(core.id)) prepareAndLaunch(game, core, slot, patch)
+        if (app.cores.isInstalled(core.id)) prepareAndLaunch(game, core, slot, statePath, challengeTitle, patch)
         else _launch.value = LaunchState.NeedsCore(game, core, slot, patch)
     }
 
@@ -575,6 +618,43 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         (listOf(AppPaths.AUTO_SLOT) + (1..4)).mapNotNull { slot ->
             app.paths.stateFile(game, slot).takeIf { it.exists() }?.let { slot to it.lastModified() }
         }.sortedByDescending { it.second }
+
+    /** Writing a game to an NFC tag: waiting for a tag, then done or failed. */
+    sealed interface NfcWrite {
+        val game: Game
+        data class Waiting(override val game: Game) : NfcWrite
+        data class Done(override val game: Game) : NfcWrite
+        data class Failed(override val game: Game, val message: String) : NfcWrite
+    }
+
+    private val _nfcWrite = MutableStateFlow<NfcWrite?>(null)
+    val nfcWrite: StateFlow<NfcWrite?> = _nfcWrite
+
+    fun startNfcWrite(game: Game) { _nfcWrite.value = NfcWrite.Waiting(game) }
+
+    fun dismissNfcWrite() { _nfcWrite.value = null }
+
+    /** Called from the NFC reader thread when a tag is held to the phone during a write. */
+    fun onNfcTag(tag: android.nfc.Tag) {
+        val waiting = _nfcWrite.value as? NfcWrite.Waiting ?: return
+        val result = com.retrohero.app.data.NfcCartridge.write(tag, com.retrohero.app.data.NfcCartridge.messageFor(waiting.game))
+        _nfcWrite.value = result.fold(
+            onSuccess = { NfcWrite.Done(waiting.game) },
+            onFailure = { NfcWrite.Failed(waiting.game, it.message ?: "Couldn't write the tag. Hold it still against the phone and try again.") },
+        )
+    }
+
+    /** Launches the game an NFC tag or retrohero:// link points to, once the library has loaded. */
+    fun playFromLink(link: com.retrohero.app.data.NfcCartridge.Link) {
+        viewModelScope.launch {
+            val list = kotlinx.coroutines.withTimeoutOrNull(8_000L) {
+                games.first { it.isNotEmpty() }
+            } ?: games.value
+            val game = com.retrohero.app.data.NfcCartridge.find(list, link)
+            if (game != null) play(game)
+            else say("“${link.title ?: "That game"}” isn't in your library. Add its folder in Settings, then tap the tag again.")
+        }
+    }
 
     /** "Gacha" pick: play a random game (optionally from one system), avoiding the last one played. */
     fun playRandom(systemId: String? = null) {
@@ -591,7 +671,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val error = app.cores.download(state.core.id)
             if (error != null) _launch.value = LaunchState.Error("Couldn't download ${state.core.displayName}: $error")
-            else prepareAndLaunch(state.game, state.core, state.slot, state.patch)
+            else prepareAndLaunch(state.game, state.core, state.slot, patch = state.patch)
         }
     }
 
@@ -603,6 +683,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         game: Game,
         core: CoreInfo,
         slot: Int? = null,
+        statePath: String? = null,
+        challengeTitle: String? = null,
         patch: com.retrohero.app.data.RomPatch? = null,
     ) {
         _launch.value = LaunchState.Preparing(game, patch?.name ?: game.fileName)
@@ -632,6 +714,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         corePath = corePathStr,
                         romPath = rom.absolutePath,
                         slot = slot,
+                        statePath = statePath,
+                        challengeTitle = challengeTitle,
                         patchPath = patchFile?.absolutePath,
                         patchName = patch?.name,
                         patchFormat = patch?.format?.label,

@@ -18,8 +18,15 @@ import java.util.zip.ZipInputStream
  */
 class GameLibrary(private val context: Context, private val paths: AppPaths) {
 
+    /** Games the player removed from their folders' listing. Their files are left alone. */
+    private val hiddenFile = File(paths.library.parentFile, "hidden_games.json")
+    private val hidden: MutableSet<String> = loadHidden()
+
     private val _games = MutableStateFlow(load())
     val games: StateFlow<List<Game>> = _games
+
+    private val _hiddenCount = MutableStateFlow(hidden.size)
+    val hiddenCount: StateFlow<Int> = _hiddenCount
 
     private val _scanning = MutableStateFlow(false)
     val scanning: StateFlow<Boolean> = _scanning
@@ -35,8 +42,18 @@ class GameLibrary(private val context: Context, private val paths: AppPaths) {
                 .getOrDefault(emptyList())
         } else emptyList()
 
+    private fun loadHidden(): MutableSet<String> = runCatching {
+        val arr = org.json.JSONArray(hiddenFile.readText())
+        (0 until arr.length()).map { arr.getString(it) }.toMutableSet()
+    }.getOrDefault(mutableSetOf())
+
+    private fun saveHidden() {
+        hiddenFile.writeText(org.json.JSONArray(hidden.toList()).toString())
+        _hiddenCount.value = hidden.size
+    }
+
     private fun publish(list: List<Game>) {
-        val grouped = MultiDisc.collapseMultiDiscGames(list)
+        val grouped = MultiDisc.collapseMultiDiscGames(list).filter { it.id !in hidden }
         val sorted = grouped.distinctBy { it.id }.sortedBy { it.title.lowercase() }
         paths.library.writeText(Game.listToJson(sorted))
         _games.value = sorted
@@ -69,12 +86,41 @@ class GameLibrary(private val context: Context, private val paths: AppPaths) {
         _games.value.firstOrNull { it.id == game.id || it.discs.any { d -> d.id == game.id } } ?: game
     }
 
-    suspend fun deleteLocal(game: Game) = withContext(Dispatchers.IO) {
-        if (!game.isLocal) return@withContext
+    /**
+     * Takes [game] out of the library. A game from the player's own folders is hidden (its file
+     * stays, and rescans skip it) because RetroHero only has read access there; a game downloaded
+     * into the app is deleted from disk.
+     */
+    suspend fun remove(game: Game) = withContext(Dispatchers.IO) {
+        if (game.isLocal) {
+            deleteLocal(game)
+        } else {
+            hidden += game.id
+            saveHidden()
+            publish(_games.value)
+        }
+    }
+
+    /** Undoes [remove] for a hidden folder game. */
+    suspend fun unhide(game: Game) = withContext(Dispatchers.IO) {
+        if (hidden.remove(game.id)) {
+            saveHidden()
+            publish(_games.value + game)
+        }
+    }
+
+    /** Brings back every hidden game; they reappear on the next scan. */
+    fun unhideAll() {
+        hidden.clear()
+        saveHidden()
+    }
+
+    private fun deleteLocal(game: Game) {
+        if (!game.isLocal) return
         if (game.isMultiDisc) {
             game.discs.forEach { d -> Uri.parse(d.id).path?.let { File(it).delete() } }
         } else {
-            File(Uri.parse(game.id).path ?: return@withContext).delete()
+            File(Uri.parse(game.id).path ?: return).delete()
         }
         publish(_games.value.filter { it.id != game.id })
     }

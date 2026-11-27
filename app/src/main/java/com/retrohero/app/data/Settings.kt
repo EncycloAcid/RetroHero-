@@ -79,6 +79,16 @@ class Settings(context: Context) {
         get() = prefs.getBoolean("haptics", true)
         set(v) = prefs.edit { putBoolean("haptics", v) }
 
+    /** Real-time rumble generated from game audio bass transients. */
+    var audioHaptics: Boolean
+        get() = prefs.getBoolean("audio_haptics", false)
+        set(v) = prefs.edit { putBoolean("audio_haptics", v) }
+
+    /** Strength multiplier (0.2..1.0) for audio-driven haptics. */
+    var audioHapticsStrength: Float
+        get() = prefs.getFloat("audio_haptics_strength", 0.7f)
+        set(v) = prefs.edit { putFloat("audio_haptics_strength", v) }
+
     var autoSave: Boolean
         get() = prefs.getBoolean("auto_save", true)
         set(v) = prefs.edit { putBoolean("auto_save", v) }
@@ -120,6 +130,16 @@ class Settings(context: Context) {
         else putString("delta_skin_$systemId", identifier)
     }
 
+    /** Source language code (e.g. "ja", "es", "fr") for in-game on-device translation. */
+    var translateSourceLang: String
+        get() = prefs.getString("translate_source_lang", "ja") ?: "ja"
+        set(v) = prefs.edit { putString("translate_source_lang", v) }
+
+    /** Save a checkpoint automatically when a new level or boss fight starts (needs game events). */
+    var smartCheckpoints: Boolean
+        get() = prefs.getBoolean("smart_checkpoints", true)
+        set(v) = prefs.edit { putBoolean("smart_checkpoints", v) }
+
     private val _reducedMotion = MutableStateFlow(prefs.getBoolean("reduced_motion", false))
     /** Fewer and calmer animations: no tilt, no spinning, instant transitions where possible. */
     val reducedMotion: StateFlow<Boolean> = _reducedMotion
@@ -134,6 +154,14 @@ class Settings(context: Context) {
     fun setTiltEffects(on: Boolean) {
         prefs.edit { putBoolean("tilt_effects", on) }
         _tiltEffects.value = on
+    }
+
+    private val _showCasesEverywhere = MutableStateFlow(prefs.getBoolean("show_cases_everywhere", false))
+    /** Show 3D retail cases on Home hero & cards; when off, 3D cases appear only in Game Info and on the Shelf. */
+    val showCasesEverywhere: StateFlow<Boolean> = _showCasesEverywhere
+    fun setShowCasesEverywhere(on: Boolean) {
+        prefs.edit { putBoolean("show_cases_everywhere", on) }
+        _showCasesEverywhere.value = on
     }
 
     /** The tab you were on, so the app reopens there. */
@@ -256,6 +284,8 @@ class Settings(context: Context) {
             }
         }
         _dynamicColor.value = prefs.getBoolean("dynamic_color", true)
+        _reducedMotion.value = prefs.getBoolean("reduced_motion", false)
+        _showCasesEverywhere.value = prefs.getBoolean("show_cases_everywhere", false)
     }
 
     // ---- RetroAchievements ----

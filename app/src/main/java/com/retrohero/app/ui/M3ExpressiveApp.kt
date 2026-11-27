@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
@@ -99,6 +100,7 @@ fun M3ExpressiveAppView(
     stickAsDpad: Boolean = true,
     screenshotsToGallery: Boolean = true,
     reducedMotion: Boolean = false,
+    showCasesEverywhere: Boolean = false,
     fastForwardSpeed: Float = 3f,
     dynamicColor: Boolean = false,
     coreStates: Map<String, CoreState> = emptyMap(),
@@ -128,6 +130,7 @@ fun M3ExpressiveAppView(
     onSetStickAsDpad: (Boolean) -> Unit = {},
     onSetScreenshotsToGallery: (Boolean) -> Unit = {},
     onSetReducedMotion: (Boolean) -> Unit = {},
+    onSetShowCasesEverywhere: (Boolean) -> Unit = {},
     onSetFastForward: (Float) -> Unit = {},
     onSetDynamicColor: (Boolean) -> Unit = {},
     onSelectPalette: (String) -> Unit = {},
@@ -143,6 +146,11 @@ fun M3ExpressiveAppView(
     onImportSkin: () -> Unit = {},
     onBackup: () -> Unit = {},
     onRestore: () -> Unit = {},
+    onOpenCrashReports: () -> Unit = {},
+    crashReportCount: Int = 0,
+    onWriteNfcTag: ((Game) -> Unit)? = null,
+    hiddenGameCount: Int = 0,
+    onRestoreHiddenGames: () -> Unit = {},
     onDownloadCore: (CoreInfo) -> Unit = {},
     onDownloadAllNeededCores: (List<CoreInfo>) -> Unit = {},
     onDeleteCore: (CoreInfo) -> Unit = {},
@@ -166,6 +174,9 @@ fun M3ExpressiveAppView(
     onPlayWithPatch: (Game, com.retrohero.app.data.RomPatch) -> Unit = { _, _ -> },
     onTogglePatchSeparateSave: (Game, com.retrohero.app.data.RomPatch, Boolean) -> Unit = { _, _, _ -> },
     onDeletePatch: (Game, com.retrohero.app.data.RomPatch) -> Unit = { _, _ -> },
+    launchboxStatus: com.retrohero.app.data.LaunchBoxDbStatus = com.retrohero.app.data.LaunchBoxDbStatus(false),
+    launchboxSyncProgress: String? = null,
+    onSyncLaunchBox: () -> Unit = {},
     initialTab: Int = 0,
 ) {
     val cs = MaterialTheme.colorScheme
@@ -267,6 +278,9 @@ fun M3ExpressiveAppView(
                                 onToggleTheme = { onSetDarkMode(!Tone.isDark) },
                                 onAddFolder = onAddFolder,
                                 onOpenHomebrew = onOpenHomebrew,
+                                dossierFor = cachedDossierFor,
+                                loadDossier = loadDossierFor?.let { load -> { g: Game -> load(g, false) } },
+                                showCasesEverywhere = showCasesEverywhere,
                             )
                             1 -> M3LibraryPage(
                                 games = games,
@@ -277,6 +291,8 @@ fun M3ExpressiveAppView(
                                 onSelectSystem = { librarySystemFilter = it },
                                 onOpenDetail = { g -> detailGameId = g.id },
                                 onQuickPlay = { g -> onPlay(g, null) },
+                                dossierFor = cachedDossierFor,
+                                loadDossier = loadDossierFor?.let { load -> { g: Game -> load(g, false) } },
                             )
                             else -> M3SettingsPage(
                                 games = games,
@@ -290,6 +306,7 @@ fun M3ExpressiveAppView(
                                 stickAsDpad = stickAsDpad,
                                 screenshotsToGallery = screenshotsToGallery,
                                 reducedMotion = reducedMotion,
+                                showCasesEverywhere = showCasesEverywhere,
                                 fastForwardSpeed = fastForwardSpeed,
                                 dynamicColor = dynamicColor,
                                 coreStates = coreStates,
@@ -302,6 +319,7 @@ fun M3ExpressiveAppView(
                                 onSetStickAsDpad = onSetStickAsDpad,
                                 onSetScreenshotsToGallery = onSetScreenshotsToGallery,
                                 onSetReducedMotion = onSetReducedMotion,
+                                onSetShowCasesEverywhere = onSetShowCasesEverywhere,
                                 onSetFastForward = onSetFastForward,
                                 onSetDynamicColor = onSetDynamicColor,
                                 onSelectPalette = onSelectPalette,
@@ -317,6 +335,10 @@ fun M3ExpressiveAppView(
                                 onImportSkin = onImportSkin,
                                 onBackup = onBackup,
                                 onRestore = onRestore,
+                                onOpenCrashReports = onOpenCrashReports,
+                                crashReportCount = crashReportCount,
+                                hiddenGameCount = hiddenGameCount,
+                                onRestoreHiddenGames = onRestoreHiddenGames,
                                 onDownloadCore = onDownloadCore,
                                 onDownloadAllNeededCores = { onDownloadAllNeededCores(missingCores) },
                                 onDeleteCore = onDeleteCore,
@@ -333,6 +355,9 @@ fun M3ExpressiveAppView(
                                 showPerfHud = showPerfHud,
                                 onSetRunAhead = onSetRunAhead,
                                 onSetShowPerfHud = onSetShowPerfHud,
+                                launchboxStatus = launchboxStatus,
+                                launchboxSyncProgress = launchboxSyncProgress,
+                                onSyncLaunchBox = onSyncLaunchBox,
                             )
                         }
                     }
@@ -388,6 +413,21 @@ fun M3ExpressiveAppView(
                         }
                     }
                 }
+
+                // Subtle bottom fade scrim so scrolling cards melt cleanly behind the floating dock
+                Box(
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .height(112.dp)
+                        .background(
+                            androidx.compose.ui.graphics.Brush.verticalGradient(
+                                0f to androidx.compose.ui.graphics.Color.Transparent,
+                                0.55f to cs.surface.copy(alpha = 0.78f),
+                                1f to cs.surface.copy(alpha = 0.96f),
+                            ),
+                        ),
+                )
 
                 // Pure Material 3 Expressive Floating Toolbar + Morphing Cookie7Sided FAB
                 M3FloatingToolbarDock(
@@ -468,6 +508,7 @@ fun M3ExpressiveAppView(
                     onSelectExternalEmulator = { ext -> onSelectExternalEmulator(game, ext) },
                     onUseScreenshotAsCover = { shot -> onUseScreenshotAsCover(game, shot) },
                     onClearCover = { onClearCover(game) },
+                    onWriteNfcTag = onWriteNfcTag?.let { write -> { write(game) } },
                     onDelete = onDeleteGame?.let { del ->
                         {
                             detailGameId = null

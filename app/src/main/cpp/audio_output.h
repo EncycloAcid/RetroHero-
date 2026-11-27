@@ -20,6 +20,8 @@ public:
     void setSyncSkew(double skew);
     void write(const int16_t *frames, size_t count);
     void clear();
+    /** Returns and resets the peak audio-haptic intensity [0..1] detected since the last call. */
+    float consumeHapticEnergy();
 
 private:
     static aaudio_data_callback_result_t dataCallback(AAudioStream *stream, void *user,
@@ -27,6 +29,7 @@ private:
     static void errorCallback(AAudioStream *stream, void *user, aaudio_result_t error);
     bool openStream();
     void closeStream();
+    void analyzeHaptics(const int16_t *frames, size_t count);
 
     std::mutex streamMutex_;
     AAudioStream *stream_ = nullptr;
@@ -45,6 +48,12 @@ private:
     // Resampler state (producer side only).
     double t_ = 0.0;
     int16_t prevL_ = 0, prevR_ = 0;
+
+    // Audio-driven haptic analyzer state (producer side only, lock-free output).
+    float lpState_ = 0.0f;
+    float envFast_ = 0.0f;
+    float envFloor_ = 0.02f;
+    std::atomic<float> hapticPeak_{0.0f};
 };
 
 }  // namespace rh

@@ -7,6 +7,7 @@ import android.os.SystemClock
 import android.provider.MediaStore
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Code
@@ -14,15 +15,42 @@ import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.OpenWith
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Tv
+import androidx.compose.material.icons.rounded.Bedtime
+import androidx.compose.material.icons.rounded.EmojiEvents
+import androidx.compose.material.icons.rounded.Flag
+import androidx.compose.material.icons.rounded.Loop
+import androidx.compose.material.icons.rounded.RecordVoiceOver
+import androidx.compose.material.icons.rounded.Replay
+import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.Public
+import androidx.compose.material.icons.rounded.Repeat
+import androidx.compose.material.icons.rounded.SwapVert
+import androidx.compose.material.icons.rounded.TouchApp
+import androidx.compose.material.icons.rounded.Translate
+import androidx.compose.material.icons.rounded.ViewAgenda
+import androidx.compose.material.icons.rounded.Wifi
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.unit.IntOffset
 import kotlin.math.roundToInt
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.IconButton
 import com.retrohero.app.data.Cheat
+import com.retrohero.app.data.CheatFinder
+import com.retrohero.app.data.CheatPackMatch
 import com.retrohero.app.data.Cheats
 import com.retrohero.app.data.DeltaAction
 import com.retrohero.app.data.DeltaSkin
@@ -176,15 +204,19 @@ class EmulatorActivity : ComponentActivity() {
     private lateinit var optionsStore: CoreOptionsStore
     private lateinit var gamePrefs: GamePrefs
     private lateinit var padLayouts: PadLayouts
+    private lateinit var audioHaptics: AudioHapticsEngine
     private var activeCoreId: String = ""
     private var preparedSave: com.retrohero.app.data.SavePortability.PreparedSave? = null
-    private var padSkin: PadSkin = Looks.Console
+    private var padSkin by mutableStateOf(Looks.Console)
+    private var currentCoreId: String = ""
+    private var challengeBanner by mutableStateOf<String?>(null)
     private var deltaSkinsForSystem: List<DeltaSkin> = emptyList()
     private var activeDeltaSkin by mutableStateOf<DeltaSkin?>(null)
 
     private var phase by mutableStateOf<Phase>(Phase.Loading)
     private var menuOpen by mutableStateOf(false)
     private var showPad by mutableStateOf(true)
+    private var audioHapticsOn by mutableStateOf(false)
     private var fastForwardToggle by mutableStateOf(false)
     private var slowMotion by mutableStateOf(false)
     private var runAheadFrames by mutableIntStateOf(0)
@@ -194,17 +226,36 @@ class EmulatorActivity : ComponentActivity() {
     private var perfActiveRa by mutableIntStateOf(0)
     private var aspect by mutableFloatStateOf(4f / 3f)
     private var frameSize by mutableStateOf(IntSize.Zero)
+
+    // Nintendo DS dual-screen usability
+    private var dsLayout by mutableStateOf(DsScreenLayout.STACKED)
+    private var dsSwapped by mutableStateOf(false)
+    private var dsLidClosed by mutableStateOf(false)
+    private var dsMicHeld by mutableStateOf(false)
+    private var dsLayoutMenuOpen by mutableStateOf(false)
+    private var dsLayoutAppliedFor: Boolean? = null
+
+    /** Root-space bounds of the visible game picture (for stylus passthrough under the overlay pad). */
+    private var gamePictureRect by mutableStateOf<androidx.compose.ui.geometry.Rect?>(null)
     private var filter by mutableIntStateOf(0)
     private var integerScale by mutableStateOf(false)
     private var rewindOn by mutableStateOf(false)
     private var cheats by mutableStateOf<List<Cheat>>(emptyList())
     private var cheatsSupported by mutableStateOf(false)
+    private var cheatSearching by mutableStateOf(false)
+    private var cheatSearchSource by mutableStateOf<String?>(null)
+    private var cheatSearchError by mutableStateOf<String?>(null)
+    private var cheatAlternatePacks by mutableStateOf<List<CheatPackMatch>>(emptyList())
+    private var activeCheatPack by mutableStateOf<CheatPackMatch?>(null)
+    private var cheatAutoTried by mutableStateOf(false)
     private var flash by mutableIntStateOf(0)
     /** Touch-control editing: null when not editing. */
     private var editingPad by mutableStateOf(false)
     private var padAdjust by mutableStateOf<Map<String, PadAdjust>>(emptyMap())
     private var padSelected by mutableStateOf<String?>(null)
     private var padLandscape = false
+    private var translateState by mutableStateOf<TranslateState>(TranslateState.Idle)
+    private var translateLang by mutableStateOf(TranslateSourceLang.JAPANESE)
 
     // Zero-config multi-disc runtime state
     private var discCount by mutableIntStateOf(0)
@@ -242,10 +293,97 @@ class EmulatorActivity : ComponentActivity() {
     private var visualMode by mutableStateOf(com.retrohero.app.data.VisualMode.ENHANCED)
     private var activeProfile by mutableStateOf<com.retrohero.app.data.HardwareProfile?>(null)
     private var colorProfile by mutableIntStateOf(com.retrohero.app.data.ColorProfile.NONE)
+    private var graphicsConfig by mutableStateOf(com.retrohero.app.data.GraphicsConfig())
+    private var ambilightMode by mutableStateOf(AmbilightMode.VIVID)
+    private var ambilightState by mutableStateOf(AmbilightState.Off)
+    private val ambilightTracker = AmbilightTracker()
     private var activePatchName by mutableStateOf<String?>(null)
     private var activePatchFormat by mutableStateOf<String?>(null)
     private var activePatchHeaderNote by mutableStateOf<String?>(null)
     private var activeRomCrc: String? = null
+
+    // #8 Real-Time Overlay Translation & Spoiler-Free Pocket Guide
+    private var liveTranslateOn by mutableStateOf(false)
+    private var liveTranslateBlocks by mutableStateOf<List<TranslatedBlock>>(emptyList())
+    private var liveTranslateScanning by mutableStateOf(false)
+    private var liveTranslateJob: kotlinx.coroutines.Job? = null
+    private var pocketGuideOpen by mutableStateOf(false)
+    private var pocketNotes by mutableStateOf("")
+    private var pinnedGuideNote by mutableStateOf<String?>(null)
+    private var practiceState by mutableStateOf(PracticeLoopState())
+    private var practiceSheetOpen by mutableStateOf(false)
+
+    // Game events from RetroAchievements Rich Presence → smart checkpoints (see data/GameEvents.kt)
+    @Volatile private var gameEvents: com.retrohero.app.data.GameEventDetector? = null
+    @Volatile private var rewindHeld = false
+    private var gameEventsStatus by mutableStateOf(GameEventsStatus.NOT_SIGNED_IN)
+    private val gameEventLog = androidx.compose.runtime.mutableStateListOf<com.retrohero.app.data.GameEvent>()
+    private var gameEventsSheetOpen by mutableStateOf(false)
+    private var presenceText by mutableStateOf("")
+    private var presenceValues by mutableStateOf<List<com.retrohero.app.data.RichPresence.Value>>(emptyList())
+    private var deathRetry by mutableStateOf<com.retrohero.app.data.Checkpoints.Entry?>(null)
+    private var checkpointList by mutableStateOf<List<com.retrohero.app.data.Checkpoints.Entry>>(emptyList())
+    private var lastCheckpointAtMs = 0L
+    private var smartCheckpointsOn by mutableStateOf(true)
+    private lateinit var checkpoints: com.retrohero.app.data.Checkpoints
+
+    // Read on-screen text aloud (see ReadAloud.kt)
+    private var narrator: GameNarrator? = null
+    private var readAloudOn by mutableStateOf(false)
+    private var practiceGhostMask by mutableIntStateOf(0)
+    private var practiceRunStartedAtMs: Long = 0L
+    private val practiceCurrentGhost = mutableListOf<GhostSample>()
+    private var nostalgiaConfig by mutableStateOf(NostalgiaConfig())
+    private var nostalgiaSheetOpen by mutableStateOf(false)
+    private var warmupProgress by mutableFloatStateOf(1f)
+    private var batteryPercent by mutableIntStateOf(100)
+    private var batteryPulsePhase by mutableFloatStateOf(0f)
+    private var macroPhase by mutableStateOf(MacroPhase.IDLE)
+    private var savedMacros by mutableStateOf<List<RecordedMacro>>(emptyList())
+    private var activeMacro by mutableStateOf<RecordedMacro?>(null)
+    private var macroSheetOpen by mutableStateOf(false)
+    private var macroFastForward by mutableStateOf(true)
+    private var macroElapsedMs by mutableStateOf(0L)
+    private var macroLoopCount by mutableIntStateOf(1)
+    private var macroAppliedMask: Int = 0
+    private var macroStartedAtMs: Long = 0L
+    private val macroRecordSteps = mutableListOf<MacroStep>()
+    private var macroBoostedFf: Boolean = false
+    private var browserOpen by mutableStateOf(false)
+    private var browserLastUrl by mutableStateOf<String?>(null)
+    private var browserBookmarkedUrl by mutableStateOf<String?>(null)
+    private var browserWebView: android.webkit.WebView? = null
+
+    // #9 Playable Challenge Snapshots (Evolving Moment Capsules + Input Ghost + Win Conditions)
+    private var challengeRecording by mutableStateOf(false)
+    private var challengeRecStartMs = 0L
+    private var challengeRecElapsedMs by mutableStateOf(0L)
+    private var challengeRecStartState: File? = null
+    private var challengeRecStartPng: File? = null
+    private val challengeRecFrames = ArrayList<com.retrohero.app.data.GhostFrame>()
+    private var challengeRecTitle = ""
+    private var challengeRecNote = ""
+    private var challengeRecWin: com.retrohero.app.data.ChallengeWinCondition? = null
+
+    private var activeChallengeStateFile: File? = null
+    private var activeChallengeTitle by mutableStateOf<String?>(null)
+    private var activeChallengeGhost by mutableStateOf<List<com.retrohero.app.data.GhostFrame>>(emptyList())
+    private var activeChallengeTargetMs by mutableStateOf(0L)
+    private var activeChallengeWin by mutableStateOf<com.retrohero.app.data.ChallengeWinCondition?>(null)
+    private var challengeElapsedMs by mutableStateOf(0L)
+    private var challengeGhostMask by mutableIntStateOf(0)
+    private var challengeCleared by mutableStateOf(false)
+    private var challengeClearedTimeMs by mutableStateOf<Long?>(null)
+    private var challengeStartRealtime = 0L
+
+    private val challengePicker = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) loadChallengeCapsuleFromUri(uri)
+    }
+
+    // #10 3-Second Mobile Rollback Netplay
+    private val netplaySession by lazy { RollbackNetplaySession(lifecycleScope) }
 
     // Play time: counted only while the game is actually running on screen.
     private var runningSince = 0L
@@ -278,10 +416,26 @@ class EmulatorActivity : ComponentActivity() {
             finish()
             return
         }
+        currentCoreId = coreId
+        challengeBanner = intent.getStringExtra(EXTRA_CHALLENGE_TITLE)?.takeIf { it.isNotBlank() }
         game = Game.fromJson(JSONObject(gameJson))
         system = game.system ?: run { finish(); return }
+        com.retrohero.app.data.CrashReporter.setBreadcrumb(
+            this,
+            "Game: ${game.title} (${game.fileName})\nSystem: ${system.id}\nCore: $coreId\nCore file: ${java.io.File(corePath).name}",
+        )
         paths = AppPaths(this)
         settings = Settings(this)
+        checkpoints = com.retrohero.app.data.Checkpoints(File(paths.states, system.id), game.baseName)
+        smartCheckpointsOn = settings.smartCheckpoints
+        gameEventsStatus = if (settings.raProfile.value == null) GameEventsStatus.NOT_SIGNED_IN else GameEventsStatus.LOADING
+        lifecycleScope.launch(Dispatchers.IO) {
+            val list = checkpoints.list()
+            withContext(Dispatchers.Main) { checkpointList = list }
+        }
+        audioHaptics = AudioHapticsEngine(this)
+        audioHapticsOn = settings.audioHaptics
+        translateLang = TranslateSourceLang.fromCode(settings.translateSourceLang)
         Tone.setDarkMode(settings.darkMode)
         input = InputMapper(settings.stickAsDpad, Remap.load(paths.remapFile))
         optionsStore = CoreOptionsStore(paths.coreOptionsFile(coreId))
@@ -298,6 +452,7 @@ class EmulatorActivity : ComponentActivity() {
         integerScale = gamePrefs.integerScale(system.id)
         vsyncLock = gamePrefs.vsyncLock
         bfi120Hz = gamePrefs.bfi120Hz
+        ambilightMode = gamePrefs.ambilightMode
         displayHz = DisplaySync.currentRefreshRate(this)
         smartTouch = SmartTouchConfig(
             thumbChordZones = gamePrefs.thumbChordZones,
@@ -334,7 +489,15 @@ class EmulatorActivity : ComponentActivity() {
             },
         )
         cheats = Cheats.load(paths.cheatsFile(game))
-        input.onRewind = { held -> if (rewindOn) NativeBridge.setRewinding(held) }
+        pocketNotes = runCatching { paths.notesFile(game).takeIf { it.exists() }?.readText().orEmpty() }.getOrDefault("")
+        pinnedGuideNote = gamePrefs.pinnedNote(game.id)
+        nostalgiaConfig = gamePrefs.nostalgiaConfig()
+        batteryPercent = readBatteryPercent()
+        savedMacros = MacroStore.load(paths.macrosFile(game))
+        browserBookmarkedUrl = runCatching {
+            paths.browserBookmarkFile(game).takeIf { it.exists() }?.readText()?.trim()?.takeIf { it.isNotBlank() }
+        }.getOrNull()
+        input.onRewind = { held -> if (rewindOn) setRewindingTracked(held) }
         input.rewindKeyEnabled = system.id != "psx"
         input.onFastForward = { held -> fastForwardHeld = held; applyFastForward() }
         input.onMenu = { if (phase is Phase.Running) setMenu(!menuOpen) }
@@ -349,7 +512,13 @@ class EmulatorActivity : ComponentActivity() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 when {
+                    browserOpen -> {
+                        if (browserWebView?.canGoBack() == true) browserWebView?.goBack()
+                        else closeInGameBrowser()
+                    }
+                    pocketGuideOpen -> closePocketGuide()
                     discPickerOpen -> discPickerOpen = false
+                    translateState !is TranslateState.Idle -> dismissTranslate()
                     editingPad -> finishPadEdit(save = true)
                     phase is Phase.Running -> setMenu(!menuOpen)
                     else -> finish()
@@ -364,11 +533,13 @@ class EmulatorActivity : ComponentActivity() {
 
     private suspend fun boot(coreId: String, corePath: String, romPath: String) {
         activeCoreId = coreId
+        val externalState = intent.getStringExtra(EXTRA_STATE_PATH)?.let(::File)?.takeIf { it.isFile }
         val requested = if (intent.hasExtra(EXTRA_LOAD_SLOT)) intent.getIntExtra(EXTRA_LOAD_SLOT, AppPaths.AUTO_SLOT) else null
         val patchPath = intent.getStringExtra(EXTRA_PATCH_PATH)
         val patchName = intent.getStringExtra(EXTRA_PATCH_NAME)
         val patchFormatLabel = intent.getStringExtra(EXTRA_PATCH_FORMAT)
-        raSessionHardcore = settings.raProfile.value != null && settings.raHardcore.value && requested == null && cheats.none { it.enabled }
+        raSessionHardcore = settings.raProfile.value != null && settings.raHardcore.value &&
+            externalState == null && requested == null && cheats.none { it.enabled }
         var bootNotice: String? = null
         var resolvedProfile: com.retrohero.app.data.HardwareProfile? = null
         var resolvedMode = com.retrohero.app.data.VisualMode.ENHANCED
@@ -430,9 +601,19 @@ class EmulatorActivity : ComponentActivity() {
 
             val savedDisc = gamePrefs.lastDisc(game.id)
             if (savedDisc > 0) NativeBridge.setInitialDisc(savedDisc)
+            val gfx = gamePrefs.graphicsConfig(system.id, com.retrohero.app.data.GraphicsCoreOptions.is3DCore(coreId))
+            graphicsConfig = gfx
             com.retrohero.app.data.CoreTuning.defaultsFor(coreId).forEach { (k, v) -> NativeBridge.setOption(k, v) }
             prof.coreOptions.forEach { (k, v) -> NativeBridge.setOption(k, v) }
+            com.retrohero.app.data.GraphicsCoreOptions.optionsFor(coreId, gfx).forEach { (k, v) -> NativeBridge.setOption(k, v) }
             optionsStore.load().forEach { (k, v) -> NativeBridge.setOption(k, v) }
+            if (DsDualScreen.isDs(system.id)) {
+                val land = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+                dsLayout = gamePrefs.dsLayout(game.id, land)
+                dsSwapped = gamePrefs.dsSwapped(game.id)
+                dsLayoutAppliedFor = land
+                DsDualScreen.coreOptions(coreId, dsLayout, dsSwapped).forEach { (k, v) -> NativeBridge.setOption(k, v) }
+            }
             if (!NativeBridge.loadCore(corePath, paths.system.absolutePath, paths.saves.absolutePath)) {
                 return@withContext NativeBridge.getLastError()
             }
@@ -449,20 +630,24 @@ class EmulatorActivity : ComponentActivity() {
             if (!loaded) {
                 return@withContext NativeBridge.getLastError()
             }
-            val resumeSlot = when {
-                raSessionHardcore -> null // Hardcore mode starts cleanly from boot
-                requested != null -> requested
-                settings.autoSave -> AppPaths.AUTO_SLOT
-                else -> null
-            }
-            val resume = resumeSlot?.let { paths.stateFile(game, it) }
-            if (resumeSlot != null && resume != null && resume.exists()) {
-                val savedByCore = gamePrefs.stateCore(game.id, resumeSlot)
-                if (savedByCore != null && savedByCore != coreId) {
-                    val coreName = system.cores.firstOrNull { it.id == coreId }?.displayName ?: coreId
-                    bootNotice = "Switched to $coreName · Battery save carried over cleanly"
-                } else {
-                    NativeBridge.loadState(resume.absolutePath)
+            if (externalState != null) {
+                loadStateTracked(externalState.absolutePath)
+            } else {
+                val resumeSlot = when {
+                    raSessionHardcore -> null // Hardcore mode starts cleanly from boot
+                    requested != null -> requested
+                    settings.autoSave -> AppPaths.AUTO_SLOT
+                    else -> null
+                }
+                val resume = resumeSlot?.let { paths.stateFile(game, it) }
+                if (resumeSlot != null && resume != null && resume.exists()) {
+                    val savedByCore = gamePrefs.stateCore(game.id, resumeSlot)
+                    if (savedByCore != null && savedByCore != coreId) {
+                        val coreName = system.cores.firstOrNull { it.id == coreId }?.displayName ?: coreId
+                        bootNotice = "Switched to $coreName · Battery save carried over cleanly"
+                    } else {
+                        loadStateTracked(resume.absolutePath)
+                    }
                 }
             }
             null
@@ -483,6 +668,8 @@ class EmulatorActivity : ComponentActivity() {
             }
             colorProfile = gamePrefs.colorProfileOverride(game.id) ?: prof.colorProfile
         }
+        NativeBridge.setUpscaleFactor(graphicsConfig.upscale)
+        NativeBridge.setAmbilightEnabled(ambilightMode.isEnabled)
         NativeBridge.setFilter(filter)
         NativeBridge.setColorProfile(colorProfile)
         runAheadFrames = settings.runAheadFrames
@@ -517,6 +704,55 @@ class EmulatorActivity : ComponentActivity() {
         NativeBridge.setFilter(filter)
         NativeBridge.setColorProfile(colorProfile)
         prof.coreOptions.forEach { (k, v) -> NativeBridge.setOption(k, v) }
+    }
+
+    private fun applyDsLayout(newLayout: DsScreenLayout, swapped: Boolean, landscape: Boolean, persist: Boolean = true) {
+        if (!DsDualScreen.isDs(system.id)) return
+        dsLayout = newLayout
+        dsSwapped = swapped
+        dsLayoutAppliedFor = landscape
+        if (persist) {
+            gamePrefs.setDsLayout(game.id, landscape, newLayout)
+            gamePrefs.setDsSwapped(game.id, swapped)
+        }
+        DsDualScreen.coreOptions(activeCoreId, newLayout, swapped).forEach { (k, v) ->
+            NativeBridge.setOption(k, v)
+        }
+        // Snap immediately to the expected layout aspect ratio so there is never a stretched frame,
+        // then refine with the core's exact reported geometry once retro_run() processes the option update.
+        aspect = DsDualScreen.expectedAspect(newLayout)
+        lifecycleScope.launch {
+            delay(80)
+            NativeBridge.getAspectRatio().takeIf { it > 0.1f }?.let { aspect = it }
+            delay(220)
+            NativeBridge.getAspectRatio().takeIf { it > 0.1f }?.let { aspect = it }
+        }
+    }
+
+    private fun holdDsMic(held: Boolean) {
+        if (!DsDualScreen.isDs(system.id)) return
+        val micId = DsDualScreen.hardwareButtons(activeCoreId).mic ?: return
+        dsMicHeld = held
+        NativeBridge.setButton(0, micId, held)
+    }
+
+    private fun toggleDsLid() {
+        if (!DsDualScreen.isDs(system.id)) return
+        val hw = DsDualScreen.hardwareButtons(activeCoreId)
+        if (hw.lid.isEmpty()) return
+        val nextClosed = !dsLidClosed
+        dsLidClosed = nextClosed
+        if (hw.lidIsToggle) {
+            // Pulse the core's lid-toggle combo briefly so face buttons aren't left held down.
+            lifecycleScope.launch {
+                hw.lid.forEach { NativeBridge.setButton(0, it, true) }
+                delay(120)
+                hw.lid.forEach { NativeBridge.setButton(0, it, false) }
+            }
+        } else {
+            hw.lid.forEach { NativeBridge.setButton(0, it, nextClosed) }
+        }
+        toast(if (nextClosed) "DS lid closed" else "DS lid opened")
     }
 
     private fun setColorMatrix(profile: Int) {
@@ -644,9 +880,112 @@ class EmulatorActivity : ComponentActivity() {
         }
     }
 
+    /** Loading a state, resetting or rewinding makes RAM jump; don't read that as game events. */
+    private fun quietGameEvents() {
+        val det = gameEvents ?: return
+        synchronized(det) { det.quiet(SystemClock.elapsedRealtime()) }
+    }
+
+    private fun loadStateTracked(path: String): Boolean =
+        NativeBridge.loadState(path).also {
+            quietGameEvents()
+            deathRetry = null
+        }
+
+    private fun resetTracked() {
+        NativeBridge.reset()
+        quietGameEvents()
+    }
+
+    private fun setRewindingTracked(rewinding: Boolean) {
+        rewindHeld = rewinding
+        NativeBridge.setRewinding(rewinding)
+        quietGameEvents()
+    }
+
+    private fun onGameEvents(events: List<com.retrohero.app.data.GameEvent>) {
+        gameEventLog.addAll(events)
+        while (gameEventLog.size > 60) gameEventLog.removeAt(0)
+        val checkpointsAllowed = smartCheckpointsOn && !raSessionHardcore
+        for (e in events) {
+            when (e) {
+                is com.retrohero.app.data.GameEvent.LevelChanged ->
+                    if (checkpointsAllowed) saveCheckpoint(e.to.ifBlank { e.name })
+                is com.retrohero.app.data.GameEvent.BossStarted ->
+                    if (checkpointsAllowed) saveCheckpoint(("Boss · " + e.scene).take(60))
+                is com.retrohero.app.data.GameEvent.Died ->
+                    if (checkpointsAllowed) checkpointList.firstOrNull()?.let(::showDeathRetry)
+                else -> Unit
+            }
+        }
+    }
+
+    private fun saveCheckpoint(label: String) {
+        val now = SystemClock.elapsedRealtime()
+        if (!started || shutDown || now - lastCheckpointAtMs < 8_000L) return
+        lastCheckpointAtMs = now
+        val core = activeCoreId
+        lifecycleScope.launch(Dispatchers.IO) {
+            val idx = checkpoints.nextIndex()
+            if (NativeBridge.saveState(checkpoints.stateFile(idx).absolutePath)) {
+                checkpoints.record(idx, label, System.currentTimeMillis(), core)
+                val list = checkpoints.list()
+                withContext(Dispatchers.Main) { checkpointList = list }
+            }
+        }
+    }
+
+    private fun showDeathRetry(cp: com.retrohero.app.data.Checkpoints.Entry) {
+        deathRetry = cp
+        lifecycleScope.launch {
+            delay(9_000L)
+            if (deathRetry == cp) deathRetry = null
+        }
+    }
+
+    private fun loadCheckpoint(cp: com.retrohero.app.data.Checkpoints.Entry) {
+        deathRetry = null
+        if (cp.coreId.isNotEmpty() && cp.coreId != activeCoreId) {
+            toast("That checkpoint was made with a different core")
+            return
+        }
+        val ok = loadStateTracked(checkpoints.stateFile(cp.index).absolutePath)
+        if (ok) demoteRaHardcore("checkpoint loaded")
+        toast(if (ok) "Back to checkpoint: ${cp.label}" else NativeBridge.getLastError().ifEmpty { "Couldn't load checkpoint" })
+    }
+
+    private fun toggleReadAloud(on: Boolean) {
+        readAloudOn = on
+        if (!on) {
+            narrator?.stop()
+            toast("Read aloud off")
+            return
+        }
+        val n = narrator ?: GameNarrator(this, lifecycleScope).also { narrator = it }
+        setMenu(false)
+        n.say("Reading on-screen text aloud")
+        n.start(
+            grabFrame = { if (started && !shutDown) NativeBridge.grabFrame() else null },
+            // While live translation runs, it hands the narrator English text instead.
+            paused = {
+                menuOpen || pocketGuideOpen || browserOpen || editingPad || liveTranslateOn ||
+                    translateState !is TranslateState.Idle
+            },
+        )
+        lifecycleScope.launch {
+            delay(2_000L)
+            if (readAloudOn && !n.available) {
+                toast("No text-to-speech voice is installed on this device")
+                readAloudOn = false
+                n.stop()
+            }
+        }
+    }
+
     private fun demoteRaHardcore(reason: String) {
         if (!raSessionHardcore) return
         raSessionHardcore = false
+        if (gameEventsStatus == GameEventsStatus.HARDCORE) gameEventsStatus = GameEventsStatus.ACTIVE
         toast("RetroAchievements: switched to Softcore ($reason)")
     }
 
@@ -657,17 +996,18 @@ class EmulatorActivity : ComponentActivity() {
         val raRepo = com.retrohero.app.data.RetroAchievementsRepository(this, File(filesDir, "ra_cache"))
         raJob?.cancel()
         raJob = lifecycleScope.launch(Dispatchers.IO) {
+            val noData: () -> Unit = { gameEventsStatus = GameEventsStatus.NO_DATA }
             val hash = com.retrohero.app.data.RetroAchievementsHasher.hashFile(File(romPath), system.id)
-                ?: return@launch
+                ?: return@launch noData()
             val gameId = com.retrohero.app.data.RetroAchievementsApi.lookupGameId(hash)
-                ?: return@launch
+                ?: return@launch noData()
             val data = com.retrohero.app.data.RetroAchievementsApi.fetchPatchAndUnlocks(
                 profile = profile,
                 gameId = gameId,
                 romHash = hash,
                 hardcore = raSessionHardcore,
                 includeUnofficial = includeUnofficial,
-            ) ?: return@launch
+            ) ?: return@launch noData()
 
             com.retrohero.app.data.RetroAchievementsApi.startSession(profile, gameId, raSessionHardcore, hash)
             withContext(Dispatchers.Main) {
@@ -689,7 +1029,15 @@ class EmulatorActivity : ComponentActivity() {
             val triggers = data.achievements
                 .filter { !it.unlocked }
                 .mapNotNull { com.retrohero.app.data.RaLogicEvaluator.compile(it) }
-            if (triggers.isEmpty()) return@launch
+            val detector = com.retrohero.app.data.RichPresence.parse(data.richPresencePatch)
+                ?.let { com.retrohero.app.data.GameEventDetector(it, system.id) }
+            gameEvents = detector
+            gameEventsStatus = when {
+                detector == null -> GameEventsStatus.NO_DATA
+                raSessionHardcore -> GameEventsStatus.HARDCORE
+                else -> GameEventsStatus.ACTIVE
+            }
+            if (triggers.isEmpty() && detector == null) return@launch
 
             var lastPingMs = SystemClock.elapsedRealtime()
             while (started && !shutDown) {
@@ -712,6 +1060,15 @@ class EmulatorActivity : ComponentActivity() {
                                 }
                                 raRepo.markUnlockedLocally(game, ach.id, hc)
                                 withContext(Dispatchers.Main) {
+                                    onGameEvents(
+                                        listOf(
+                                            com.retrohero.app.data.GameEvent.AchievementUnlocked(
+                                                SystemClock.elapsedRealtime(),
+                                                ach.title,
+                                                milestone = ach.type == "progression" || ach.type == "win_condition",
+                                            ),
+                                        ),
+                                    )
                                     raSessionGame = raSessionGame?.let { cur ->
                                         cur.copy(
                                             achievements = cur.achievements.map { item ->
@@ -735,10 +1092,32 @@ class EmulatorActivity : ComponentActivity() {
                             }
                         }
                     }
+                    if (detector != null && (sysRam != null || saveRam != null)) {
+                        val tick = SystemClock.elapsedRealtime()
+                        val evs = synchronized(detector) {
+                            if (rewindHeld) {
+                                detector.quiet(tick)
+                                emptyList()
+                            } else {
+                                detector.update(sysRam, saveRam, tick)
+                            }
+                        }
+                        val text = detector.currentText
+                        val vals = detector.currentValues
+                        if (evs.isNotEmpty() || text != presenceText || vals != presenceValues) {
+                            withContext(Dispatchers.Main) {
+                                presenceText = text
+                                presenceValues = vals
+                                if (evs.isNotEmpty()) onGameEvents(evs)
+                            }
+                        }
+                    }
                     val now = SystemClock.elapsedRealtime()
                     if (now - lastPingMs >= 120_000L) {
                         lastPingMs = now
-                        com.retrohero.app.data.RetroAchievementsApi.ping(profile, gameId, "Playing ${game.title} on RetroHero")
+                        // Share the live Rich Presence ("World 1-2 · 3 lives") when the game has it.
+                        val presence = detector?.currentText?.takeIf { it.isNotBlank() } ?: "Playing ${game.title} on RetroHero"
+                        com.retrohero.app.data.RetroAchievementsApi.ping(profile, gameId, presence)
                     }
                 }
                 delay(66L) // ~15 Hz RAM evaluation
@@ -788,12 +1167,85 @@ class EmulatorActivity : ComponentActivity() {
         applyCheats()
     }
 
+    private fun autoFindCheats(silentIfNone: Boolean = false) {
+        if (cheatSearching) return
+        cheatAutoTried = true
+        cheatSearching = true
+        cheatSearchError = null
+        lifecycleScope.launch {
+            val result = CheatFinder.autoFind(game, paths.cheats)
+            cheatSearching = false
+            cheatAlternatePacks = result.alternatePacks
+            if (result.cheats.isNotEmpty()) {
+                val merged = CheatFinder.merge(cheats, result.cheats)
+                val added = (merged.size - cheats.size).coerceAtLeast(0)
+                cheats = merged
+                Cheats.save(paths.cheatsFile(game), merged)
+                activeCheatPack = result.activePack
+                cheatSearchSource = result.sourceLabel
+                cheatSearchError = null
+                val msg = if (added > 0) "Found $added cheat${if (added == 1) "" else "s"} for ${game.title}"
+                else "All ${result.cheats.size} cheats already loaded"
+                toast(msg)
+            } else {
+                cheatSearchError = result.error
+                if (!silentIfNone && result.error != null) {
+                    toast("No cheat pack found for ${game.title}")
+                }
+            }
+        }
+    }
+
+    private fun selectCheatPack(pack: CheatPackMatch) {
+        if (cheatSearching || activeCheatPack?.fileName == pack.fileName) return
+        cheatSearching = true
+        cheatSearchError = null
+        lifecycleScope.launch {
+            val loaded = CheatFinder.loadPack(pack)
+            cheatSearching = false
+            if (loaded.isNotEmpty()) {
+                val keepEnabled = cheats.filter { it.enabled }
+                val merged = CheatFinder.merge(keepEnabled, loaded)
+                cheats = merged
+                Cheats.save(paths.cheatsFile(game), merged)
+                activeCheatPack = pack
+                cheatSearchSource = "${pack.fileName.removeSuffix(".cht")} · libretro-database"
+                toast("Loaded ${loaded.size} cheats (${pack.displayLabel})")
+            } else {
+                toast("Couldn't load ${pack.displayLabel}")
+            }
+        }
+    }
+
     private fun setScreen(newFilter: Int = filter, integer: Boolean = integerScale) {
         filter = newFilter
         integerScale = integer
         gamePrefs.setFilter(system.id, newFilter)
         gamePrefs.setIntegerScale(system.id, integer)
         NativeBridge.setFilter(newFilter)
+    }
+
+    private fun updateGraphics(transform: (com.retrohero.app.data.GraphicsConfig) -> com.retrohero.app.data.GraphicsConfig) {
+        val next = transform(graphicsConfig)
+        graphicsConfig = next
+        gamePrefs.setGraphicsConfig(system.id, next)
+        NativeBridge.setUpscaleFactor(next.upscale)
+        com.retrohero.app.data.GraphicsCoreOptions.optionsFor(activeCoreId, next).forEach { (k, v) ->
+            NativeBridge.setOption(k, v)
+        }
+    }
+
+    private fun setAmbilight(mode: AmbilightMode) {
+        ambilightMode = mode
+        gamePrefs.ambilightMode = mode
+        NativeBridge.setAmbilightEnabled(mode.isEnabled)
+        if (!mode.isEnabled) {
+            ambilightTracker.reset()
+            ambilightState = AmbilightState.Off
+        } else if (started) {
+            NativeBridge.pollAmbilight(ambilightTracker.rawBuffer)
+            ambilightState = ambilightTracker.step(ambilightTracker.rawBuffer, mode)
+        }
     }
 
     private fun setRewind(on: Boolean) {
@@ -840,6 +1292,506 @@ class EmulatorActivity : ComponentActivity() {
         contentResolver.openOutputStream(uri)?.use { out -> f.inputStream().use { it.copyTo(out) } }
     }
 
+    /** Packages the current state + screenshot (+ optional recorded input ghost & win condition) into a `.rhclip`. */
+    private fun shareMoment(
+        title: String,
+        note: String,
+        preCapturedState: File? = null,
+        preCapturedPng: File? = null,
+        ghostFrames: List<com.retrohero.app.data.GhostFrame> = emptyList(),
+        targetDurationMs: Long = 0L,
+        winCondition: com.retrohero.app.data.ChallengeWinCondition? = null,
+    ) {
+        lifecycleScope.launch {
+            val clipFile = withContext(Dispatchers.IO) {
+                runCatching {
+                    val tmpState = preCapturedState ?: File(paths.clipTmp, "moment-${System.nanoTime()}.state").also { f ->
+                        if (!NativeBridge.saveState(f.absolutePath)) error("Couldn't save state")
+                    }
+                    val tmpPng = preCapturedPng ?: NativeBridge.grabFrame()?.let { raw ->
+                        val w = raw[0]
+                        val h = raw[1]
+                        if (w > 0 && h > 0) {
+                            val bmp = Bitmap.createBitmap(raw, 2, w, w, h, Bitmap.Config.ARGB_8888)
+                            val k = (720 / maxOf(w, h)).coerceIn(1, 4)
+                            val out = if (k > 1) Bitmap.createScaledBitmap(bmp, w * k, h * k, false) else bmp
+                            File(paths.clipTmp, "moment-${System.nanoTime()}.png").also { f ->
+                                f.outputStream().use { out.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                            }
+                        } else null
+                    }
+                    val tmpGhost = if (ghostFrames.isNotEmpty()) {
+                        File(paths.clipTmp, "ghost-${System.nanoTime()}.bin").also { f ->
+                            f.writeBytes(com.retrohero.app.data.ChallengeGhost.encode(ghostFrames))
+                        }
+                    } else null
+                    val manifest = com.retrohero.app.data.MomentManifest(
+                        title = title.trim().ifEmpty { game.title },
+                        note = note.trim(),
+                        systemId = system.id,
+                        coreId = currentCoreId,
+                        gameTitle = game.title,
+                        gameBaseName = game.baseName,
+                        ghostFrames = ghostFrames.size,
+                        targetDurationMs = targetDurationMs,
+                        winCondition = winCondition,
+                    )
+                    val safeName = Regex("[^a-zA-Z0-9._-]+").replace(manifest.title, "_").trim('_').ifEmpty { "moment" }.take(40)
+                    val dest = File(paths.clips, "$safeName-${System.currentTimeMillis()}.rhclip")
+                    dest.outputStream().use {
+                        com.retrohero.app.data.MomentCapsule.export(it, manifest, tmpState, tmpPng, tmpGhost)
+                    }
+                    tmpState.delete()
+                    tmpPng?.delete()
+                    tmpGhost?.delete()
+                    dest
+                }.getOrNull()
+            }
+            if (clipFile == null) {
+                toast("Couldn't create .rhclip capsule")
+                return@launch
+            }
+            val uri = androidx.core.content.FileProvider.getUriForFile(this@EmulatorActivity, "$packageName.files", clipFile)
+            val send = Intent(Intent.ACTION_SEND)
+                .setType("application/octet-stream")
+                .putExtra(Intent.EXTRA_STREAM, uri)
+                .putExtra(
+                    Intent.EXTRA_SUBJECT,
+                    if (ghostFrames.isNotEmpty()) "RetroHero Challenge: ${title.ifBlank { game.title }}"
+                    else "RetroHero Moment: ${title.ifBlank { game.title }}",
+                )
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            startActivity(Intent.createChooser(send, "Share .rhclip challenge"))
+        }
+    }
+
+    private fun startChallengeRecording(
+        title: String,
+        note: String,
+        winCondition: com.retrohero.app.data.ChallengeWinCondition?,
+    ) {
+        lifecycleScope.launch {
+            val captured = withContext(Dispatchers.IO) {
+                runCatching {
+                    val stateF = File(paths.clipTmp, "chal-start-${System.nanoTime()}.state")
+                    if (!NativeBridge.saveState(stateF.absolutePath)) error("Save state failed")
+                    val pngF = NativeBridge.grabFrame()?.let { raw ->
+                        val w = raw[0]
+                        val h = raw[1]
+                        if (w > 0 && h > 0) {
+                            val bmp = Bitmap.createBitmap(raw, 2, w, w, h, Bitmap.Config.ARGB_8888)
+                            File(paths.clipTmp, "chal-start-${System.nanoTime()}.png").also { f ->
+                                f.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
+                            }
+                        } else null
+                    }
+                    stateF to pngF
+                }.getOrNull()
+            }
+            if (captured == null) {
+                toast("Couldn't snapshot starting frame for challenge")
+                return@launch
+            }
+            challengeRecStartState?.delete()
+            challengeRecStartPng?.delete()
+            challengeRecStartState = captured.first
+            challengeRecStartPng = captured.second
+            challengeRecFrames.clear()
+            challengeRecTitle = title.trim().ifEmpty { "${game.title} Challenge" }
+            challengeRecNote = note.trim()
+            challengeRecWin = winCondition
+            challengeRecStartMs = SystemClock.elapsedRealtime()
+            challengeRecElapsedMs = 0L
+            challengeRecording = true
+            setMenu(false)
+            toast("Recording Challenge Ghost — play your run, then tap Finish!")
+        }
+    }
+
+    private fun finishChallengeRecordingAndShare() {
+        if (!challengeRecording) return
+        challengeRecording = false
+        val duration = (SystemClock.elapsedRealtime() - challengeRecStartMs).coerceAtLeast(100L)
+        val stateF = challengeRecStartState
+        val pngF = challengeRecStartPng
+        val framesCopy = challengeRecFrames.toList()
+        challengeRecStartState = null
+        challengeRecStartPng = null
+        challengeRecFrames.clear()
+        val effectiveWin = challengeRecWin ?: com.retrohero.app.data.ChallengeWinCondition(
+            type = com.retrohero.app.data.ChallengeWinType.TIME_TRIAL,
+            label = "Beat ${formatChallengeClock(duration)}",
+        )
+        setMenu(true)
+        shareMoment(
+            title = challengeRecTitle,
+            note = challengeRecNote,
+            preCapturedState = stateF,
+            preCapturedPng = pngF,
+            ghostFrames = framesCopy,
+            targetDurationMs = duration,
+            winCondition = effectiveWin,
+        )
+    }
+
+    private fun cancelChallengeRecording() {
+        challengeRecording = false
+        challengeRecStartState?.delete()
+        challengeRecStartPng?.delete()
+        challengeRecStartState = null
+        challengeRecStartPng = null
+        challengeRecFrames.clear()
+        toast("Challenge recording canceled")
+    }
+
+    private fun loadChallengeCapsuleFromUri(uri: android.net.Uri) {
+        lifecycleScope.launch {
+            val extracted = withContext(Dispatchers.IO) {
+                runCatching {
+                    val destDir = File(paths.clipTmp, "play-${System.nanoTime()}")
+                    contentResolver.openInputStream(uri)?.use { input ->
+                        com.retrohero.app.data.MomentCapsule.extract(input, destDir)
+                    } ?: error("Could not read .rhclip file")
+                }
+            }
+            extracted.onFailure { err ->
+                toast(err.message ?: "Couldn't load .rhclip challenge")
+                return@launch
+            }
+            val moment = extracted.getOrNull() ?: return@launch
+            val loaded = withContext(Dispatchers.IO) {
+                loadStateTracked(moment.stateFile.absolutePath)
+            }
+            if (!loaded) {
+                toast("This .rhclip belongs to a different core or game revision")
+                return@launch
+            }
+            val ghost = withContext(Dispatchers.IO) {
+                moment.ghostFile?.takeIf { it.isFile }?.let {
+                    com.retrohero.app.data.ChallengeGhost.decode(it.readBytes())
+                }.orEmpty()
+            }
+            activeChallengeStateFile = moment.stateFile
+            activeChallengeTitle = moment.manifest.title
+            activeChallengeGhost = ghost
+            activeChallengeTargetMs = moment.manifest.targetDurationMs
+            activeChallengeWin = moment.manifest.winCondition
+            challengeCleared = false
+            challengeClearedTimeMs = null
+            challengeElapsedMs = 0L
+            challengeGhostMask = 0
+            challengeStartRealtime = SystemClock.elapsedRealtime()
+            setMenu(false)
+            toast("Challenge loaded: ${moment.manifest.title}")
+        }
+    }
+
+    private fun retryActiveChallenge() {
+        val stateF = activeChallengeStateFile ?: return
+        lifecycleScope.launch {
+            val ok = withContext(Dispatchers.IO) { loadStateTracked(stateF.absolutePath) }
+            if (ok) {
+                challengeCleared = false
+                challengeClearedTimeMs = null
+                challengeElapsedMs = 0L
+                challengeGhostMask = 0
+                challengeStartRealtime = SystemClock.elapsedRealtime()
+                toast("Retry! Go!")
+            }
+        }
+    }
+
+    private fun openPocketGuide() {
+        menuOpen = false
+        browserOpen = false
+        if (started) NativeBridge.setPaused(true)
+        stopClock()
+        pocketGuideOpen = true
+    }
+
+    private fun closePocketGuide() {
+        pocketGuideOpen = false
+        if (started && !shutDown && !menuOpen && !editingPad && !browserOpen && translateState is TranslateState.Idle) {
+            NativeBridge.setPaused(false)
+            startClock()
+        }
+    }
+
+    private fun openInGameBrowser() {
+        menuOpen = false
+        pocketGuideOpen = false
+        if (started) NativeBridge.setPaused(true)
+        stopClock()
+        browserOpen = true
+    }
+
+    private fun closeInGameBrowser() {
+        browserOpen = false
+        if (started && !shutDown && !menuOpen && !editingPad && !pocketGuideOpen && translateState is TranslateState.Idle) {
+            NativeBridge.setPaused(false)
+            startClock()
+        }
+    }
+
+    private fun saveBrowserBookmark(url: String?) {
+        browserBookmarkedUrl = url
+        lifecycleScope.launch(Dispatchers.IO) {
+            val f = paths.browserBookmarkFile(game)
+            runCatching {
+                if (url.isNullOrBlank()) f.delete() else f.writeText(url)
+            }
+        }
+        toast(if (url.isNullOrBlank()) "Removed pinned guide" else "Pinned walkthrough for ${game.title}")
+    }
+
+    private fun savePocketNotes(text: String) {
+        pocketNotes = text
+        lifecycleScope.launch(Dispatchers.IO) {
+            runCatching { paths.notesFile(game).writeText(text) }
+        }
+    }
+
+    private fun updatePinnedGuideNote(note: String?) {
+        val clean = note?.trim()?.takeIf { it.isNotBlank() }
+        pinnedGuideNote = clean
+        gamePrefs.setPinnedNote(game.id, clean)
+        if (clean != null) toast("Pinned to screen")
+    }
+
+    private fun dropPracticeAnchor() {
+        val anchorFile = paths.practiceAnchorFile(game)
+        val ok = NativeBridge.saveState(anchorFile.absolutePath)
+        if (!ok) {
+            toast("Couldn't drop Loop Anchor")
+            return
+        }
+        val savedPb = practiceState.bestSplitMs ?: gamePrefs.practiceBestMs(game.id)
+        practiceCurrentGhost.clear()
+        practiceGhostMask = 0
+        practiceRunStartedAtMs = System.currentTimeMillis()
+        practiceState = practiceState.copy(
+            active = true,
+            attempts = 1,
+            elapsedMs = 0L,
+            bestSplitMs = savedPb,
+            justHitPb = false,
+        )
+        setMenu(false)
+        toast("Loop Anchor dropped · tap Retry anytime!")
+    }
+
+    private fun retryPracticeLoop() {
+        val anchorFile = paths.practiceAnchorFile(game)
+        if (!anchorFile.exists()) {
+            toast("Drop a Loop Anchor first")
+            return
+        }
+        if (loadStateTracked(anchorFile.absolutePath)) {
+            practiceCurrentGhost.clear()
+            practiceGhostMask = 0
+            practiceRunStartedAtMs = System.currentTimeMillis()
+            practiceState = PracticeLoopMath.startRetry(practiceState)
+        }
+    }
+
+    private fun recordPracticeClear() {
+        if (!practiceState.active) return
+        val updated = PracticeLoopMath.recordClear(practiceState, practiceCurrentGhost.toList())
+        practiceState = updated
+        if (updated.justHitPb && updated.bestSplitMs != null) {
+            gamePrefs.setPracticeBestMs(game.id, updated.bestSplitMs)
+            val deltaStr = updated.lastDeltaMs?.let { " (${PracticeLoopMath.formatDelta(it)})" }.orEmpty()
+            toast("New PB! ${PracticeLoopMath.formatSplit(updated.bestSplitMs)}$deltaStr")
+        } else {
+            val split = updated.lastClearMs ?: updated.elapsedMs
+            toast("Cleared in ${PracticeLoopMath.formatSplit(split)}")
+        }
+    }
+
+    private fun stopPracticeLoop() {
+        practiceState = practiceState.copy(active = false, elapsedMs = 0L, justHitPb = false)
+        practiceGhostMask = 0
+        practiceCurrentGhost.clear()
+    }
+
+    private fun resetPracticeStats() {
+        gamePrefs.setPracticeBestMs(game.id, null)
+        practiceState = practiceState.copy(
+            attempts = 1,
+            clears = 0,
+            bestSplitMs = null,
+            lastClearMs = null,
+            lastDeltaMs = null,
+            justHitPb = false,
+            pbGhostFrames = emptyList(),
+        )
+        practiceGhostMask = 0
+        toast("Practice stats & PB reset")
+    }
+
+    private fun readBatteryPercent(): Int = runCatching {
+        val bm = getSystemService(android.content.Context.BATTERY_SERVICE) as? android.os.BatteryManager
+        val pct = bm?.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: 100
+        if (pct in 0..100) pct else 100
+    }.getOrDefault(100)
+
+    private fun updateNostalgiaConfig(cfg: NostalgiaConfig) {
+        nostalgiaConfig = cfg
+        gamePrefs.setNostalgiaConfig(cfg)
+    }
+
+    private fun triggerWarmupSequence(playChime: Boolean) {
+        if (playChime) {
+            NostalgiaAudioSynth.playAsync(NostalgiaAudioSynth.synthesizeBootChime(system.id))
+        }
+        if (nostalgiaConfig.crtWarmup) {
+            lifecycleScope.launch {
+                val start = System.currentTimeMillis()
+                val durationMs = 820L
+                warmupProgress = 0f
+                while (true) {
+                    val t = ((System.currentTimeMillis() - start).toFloat() / durationMs).coerceIn(0f, 1f)
+                    warmupProgress = t
+                    if (t >= 1f) break
+                    delay(16L)
+                }
+            }
+        } else {
+            warmupProgress = 1f
+        }
+    }
+
+    private fun performCartridgeBlow() {
+        NostalgiaAudioSynth.playAsync(NostalgiaAudioSynth.synthesizeCartridgeBlow())
+        if (settings.haptics) {
+            window.decorView.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+        }
+        setMenu(false)
+        lifecycleScope.launch {
+            delay(420L)
+            resetTracked()
+            triggerWarmupSequence(playChime = false)
+            toast("Cartridge blown & reseated!")
+        }
+    }
+
+    private fun startMacroRecording() {
+        stopMacroPlayback(silent = true)
+        macroRecordSteps.clear()
+        macroElapsedMs = 0L
+        macroStartedAtMs = System.currentTimeMillis()
+        macroPhase = MacroPhase.RECORDING
+        setMenu(false)
+        toast("Recording macro (up to 10s) · tap Save when done")
+    }
+
+    private fun stopAndSaveMacroRecording() {
+        if (macroPhase != MacroPhase.RECORDING) return
+        val dur = (System.currentTimeMillis() - macroStartedAtMs).coerceIn(MacroEngine.MIN_DURATION_MS, MacroEngine.MAX_DURATION_MS)
+        val steps = macroRecordSteps.toList()
+        macroPhase = MacroPhase.IDLE
+        macroRecordSteps.clear()
+        if (steps.none { it.buttonsMask != 0 }) {
+            toast("No buttons pressed — macro discarded")
+            return
+        }
+        val num = savedMacros.size + 1
+        val created = MacroEngine.createRecorded(
+            name = "Grind Loop #$num",
+            durationMs = dur,
+            steps = steps,
+            fastForward = macroFastForward,
+        )
+        val updated = (listOf(created) + savedMacros).take(MacroEngine.MAX_SAVED_MACROS)
+        savedMacros = updated
+        lifecycleScope.launch(Dispatchers.IO) { MacroStore.save(paths.macrosFile(game), updated) }
+        toast("Saved ${created.name} · looping!")
+        startMacroLoop(created)
+    }
+
+    private fun startMacroLoop(macro: RecordedMacro) {
+        stopMacroPlayback(silent = true)
+        activeMacro = macro
+        macroLoopCount = 1
+        macroElapsedMs = 0L
+        macroAppliedMask = 0
+        macroStartedAtMs = System.currentTimeMillis()
+        macroPhase = MacroPhase.PLAYING
+        if (macroFastForward && !fastForwardHeld) {
+            macroBoostedFf = true
+            fastForwardHeld = true
+            applyFastForward()
+        }
+        setMenu(false)
+    }
+
+    private fun stopMacroPlayback(silent: Boolean = false) {
+        if (macroAppliedMask != 0) {
+            for ((btnId, pressed) in MacroEngine.diffButtonChanges(macroAppliedMask, 0)) {
+                NativeBridge.setButton(0, btnId, pressed)
+            }
+            macroAppliedMask = 0
+        }
+        if (macroBoostedFf) {
+            macroBoostedFf = false
+            fastForwardHeld = false
+            applyFastForward()
+        }
+        val wasPlaying = macroPhase == MacroPhase.PLAYING
+        macroPhase = MacroPhase.IDLE
+        activeMacro = null
+        if (wasPlaying && !silent) toast("Manual control resumed")
+    }
+
+    private fun deleteSavedMacro(id: String) {
+        val updated = savedMacros.filterNot { it.id == id }
+        savedMacros = updated
+        lifecycleScope.launch(Dispatchers.IO) { MacroStore.save(paths.macrosFile(game), updated) }
+    }
+
+    private fun toggleLiveTranslate(enable: Boolean) {
+        liveTranslateOn = enable
+        liveTranslateJob?.cancel()
+        liveTranslateJob = null
+        if (!enable) {
+            liveTranslateBlocks = emptyList()
+            liveTranslateScanning = false
+            return
+        }
+        // Resume gameplay cleanly when activating Live In-Place Overlay!
+        translateState = TranslateState.Idle
+        menuOpen = false
+        pocketGuideOpen = false
+        browserOpen = false
+        if (started && !shutDown) {
+            NativeBridge.setPaused(false)
+            startClock()
+        }
+        toast("Live translate ON (${translateLang.label} → EN) — replacing dialogue in place")
+        liveTranslateJob = lifecycleScope.launch(Dispatchers.Default) {
+            var lastSig = 0L
+            while (liveTranslateOn && !shutDown) {
+                if (!menuOpen && !pocketGuideOpen && !browserOpen && translateState is TranslateState.Idle) {
+                    val raw = NativeBridge.grabFrame()
+                    val sig = frameDialogueSignature(raw)
+                    if (sig != 0L && sig != lastSig) {
+                        lastSig = sig
+                        withContext(Dispatchers.Main) { liveTranslateScanning = true }
+                        val res = ScreenTranslator.translateRawFrame(raw, translateLang) {}
+                        withContext(Dispatchers.Main) {
+                            liveTranslateScanning = false
+                            if (res is TranslateState.Ready) {
+                                liveTranslateBlocks = res.blocks
+                                if (readAloudOn) narrator?.speakNew(res.blocks.sortedBy { it.bounds.top }.map { it.translated })
+                            }
+                        }
+                    }
+                }
+                delay(700L)
+            }
+        }
+    }
+
     private fun startPadEdit() {
         padAdjust = padLayouts.get(system.id, padLandscape)
         padSelected = null
@@ -855,6 +1807,34 @@ class EmulatorActivity : ComponentActivity() {
         setMenu(false)
     }
 
+    private fun runScreenTranslate(lang: TranslateSourceLang = translateLang) {
+        translateLang = lang
+        settings.translateSourceLang = lang.code
+        menuOpen = false
+        if (started) NativeBridge.setPaused(true)
+        stopClock()
+        translateState = TranslateState.Working("Capturing frame…")
+        lifecycleScope.launch {
+            val raw = withContext(Dispatchers.IO) { NativeBridge.grabFrame() }
+            translateState = ScreenTranslator.translateRawFrame(raw, lang) { status ->
+                lifecycleScope.launch(Dispatchers.Main) {
+                    if (translateState is TranslateState.Working) translateState = TranslateState.Working(status)
+                }
+            }
+            (translateState as? TranslateState.Ready)?.let { ready ->
+                if (readAloudOn) narrator?.speakNew(ready.blocks.sortedBy { it.bounds.top }.map { it.translated })
+            }
+        }
+    }
+
+    private fun dismissTranslate() {
+        translateState = TranslateState.Idle
+        if (started && !shutDown && !menuOpen && !editingPad && !pocketGuideOpen && !browserOpen) {
+            NativeBridge.setPaused(false)
+            startClock()
+        }
+    }
+
     private fun applyFastForward() {
         NativeBridge.setFastForward(fastForwardToggle || fastForwardHeld, settings.fastForwardSpeed)
     }
@@ -864,8 +1844,9 @@ class EmulatorActivity : ComponentActivity() {
         stopVsyncFeed()
         gyroController?.stop()
         if (started && !shutDown) {
+            audioHaptics.cancel()
             NativeBridge.setPaused(true)
-            NativeBridge.setRewinding(false)
+            setRewindingTracked(false)
             flushCanonicalSram()
             stopClock()
         }
@@ -873,7 +1854,7 @@ class EmulatorActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (started && !shutDown && !menuOpen && !editingPad) {
+        if (started && !shutDown && !menuOpen && !editingPad && !pocketGuideOpen && !browserOpen && translateState is TranslateState.Idle) {
             applyDisplaySyncLock()
             startVsyncFeed()
             syncGyroSteering()
@@ -901,6 +1882,13 @@ class EmulatorActivity : ComponentActivity() {
 
     private fun shutdownCore() {
         if (!started || shutDown) return
+        liveTranslateOn = false
+        liveTranslateJob?.cancel()
+        liveTranslateJob = null
+        narrator?.shutdown()
+        narrator = null
+        readAloudOn = false
+        netplaySession.stop()
         stopVsyncFeed()
         gyroController?.stop()
         raJob?.cancel()
@@ -931,6 +1919,7 @@ class EmulatorActivity : ComponentActivity() {
         super.onDestroy()
         if (isFinishing) {
             shutdownCore()
+            com.retrohero.app.data.CrashReporter.clearBreadcrumb(this)
             // Give the core a clean slate next time; see class comment.
             Process.killProcess(Process.myPid())
         }
@@ -970,7 +1959,7 @@ class EmulatorActivity : ComponentActivity() {
                 fastForwardToggle = !fastForwardToggle
                 applyFastForward()
             }
-            DeltaAction.REWIND_HOLD -> if (rewindOn) NativeBridge.setRewinding(pressed)
+            DeltaAction.REWIND_HOLD -> if (rewindOn) setRewindingTracked(pressed)
             DeltaAction.QUICK_SAVE -> if (pressed) {
                 val file = paths.stateFile(game, AppPaths.QUICK_SLOT)
                 val ok = NativeBridge.saveState(file.absolutePath)
@@ -989,7 +1978,7 @@ class EmulatorActivity : ComponentActivity() {
                     val name = system.cores.firstOrNull { it.id == savedBy }?.displayName ?: savedBy
                     toast("Quick save was created on $name — use in-game battery save or switch back")
                 } else {
-                    val ok = NativeBridge.loadState(file.absolutePath)
+                    val ok = loadStateTracked(file.absolutePath)
                     if (ok) demoteRaHardcore("save state loaded")
                     toast(if (ok) "Quick loaded" else NativeBridge.getLastError().ifEmpty { "Quick load failed" })
                 }
@@ -1014,7 +2003,55 @@ class EmulatorActivity : ComponentActivity() {
             }
         }
 
+        LaunchedEffect(phase, menuOpen, editingPad, audioHapticsOn) {
+            if (phase !is Phase.Running || menuOpen || editingPad || !audioHapticsOn) {
+                audioHaptics.cancel()
+                return@LaunchedEffect
+            }
+            while (true) {
+                if (!fastForwardToggle && !fastForwardHeld) {
+                    val energy = NativeBridge.consumeAudioHaptic()
+                    if (energy > 0f) audioHaptics.trigger(energy, settings.audioHapticsStrength)
+                } else {
+                    NativeBridge.consumeAudioHaptic()
+                }
+                delay(32)
+            }
+        }
+
+        LaunchedEffect(phase, menuOpen, ambilightMode) {
+            if (!ambilightMode.isEnabled) {
+                ambilightState = AmbilightState.Off
+                return@LaunchedEffect
+            }
+            if (phase !is Phase.Running || menuOpen) return@LaunchedEffect
+            while (true) {
+                NativeBridge.pollAmbilight(ambilightTracker.rawBuffer)
+                ambilightState = ambilightTracker.step(ambilightTracker.rawBuffer, ambilightMode)
+                delay(33L)
+            }
+        }
+
+        LaunchedEffect(phase, landscape) {
+            if (phase is Phase.Running && DsDualScreen.isDs(system.id) && dsLayoutAppliedFor != landscape) {
+                val target = gamePrefs.dsLayout(game.id, landscape)
+                applyDsLayout(target, dsSwapped, landscape, persist = false)
+            }
+        }
+        LaunchedEffect(phase, menuOpen, dsLayout, dsSwapped) {
+            if (phase !is Phase.Running || !DsDualScreen.isDs(system.id) || menuOpen) return@LaunchedEffect
+            // Sync viewport aspect with the DS core once retro_run() processes any pending layout change.
+            repeat(12) {
+                delay(180L)
+                val live = NativeBridge.getAspectRatio()
+                if (live > 0.1f && kotlin.math.abs(live - aspect) > 0.015f) {
+                    aspect = live
+                }
+            }
+        }
+
         padLandscape = landscape
+        val isDs = DsDualScreen.isDs(system.id)
         BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
             val density = LocalDensity.current
             val containerW = with(density) { maxWidth.toPx() }
@@ -1027,6 +2064,10 @@ class EmulatorActivity : ComponentActivity() {
                 skin.representations.pick(landscape = landscape, tablet = tablet, tallPhone = tallPhone)
             } else null
 
+            val dsLandscapeInset = if (isDs && landscape && showPad) {
+                maxWidth * DsDualScreen.landscapeSideInsetFraction(dsLayout)
+            } else 0.dp
+
             val shellStyle = remember(padSkin, system.id, system.color, Tone.isDark) {
                 when (padSkin.faces) {
                     "console" -> ConsoleStyles.forSystem(system.id, system.color)
@@ -1035,8 +2076,36 @@ class EmulatorActivity : ComponentActivity() {
                         accent = com.retrohero.app.ui.components.Ascend.accent,
                         onAccent = com.retrohero.app.ui.components.Ascend.onAccent,
                         systemName = system.name,
+                        systemId = system.id,
                     )
                     else -> null
+                }
+            }
+
+            val nostalgiaLedOverride = if (nostalgiaConfig.enabled && nostalgiaConfig.batteryLedDimming && shellStyle != null) {
+                NostalgiaMath.batteryLedColor(batteryPercent, shellStyle.ledColor, batteryPulsePhase)
+            } else null
+
+            LaunchedEffect(phase) {
+                if (phase is Phase.Running && nostalgiaConfig.enabled) {
+                    triggerWarmupSequence(playChime = nostalgiaConfig.tactileStartup)
+                }
+            }
+
+            LaunchedEffect(phase, nostalgiaConfig.enabled, nostalgiaConfig.batteryLedDimming) {
+                if (phase !is Phase.Running || !nostalgiaConfig.enabled || !nostalgiaConfig.batteryLedDimming) {
+                    return@LaunchedEffect
+                }
+                while (true) {
+                    batteryPercent = readBatteryPercent()
+                    if (batteryPercent <= 15) {
+                        repeat(30) {
+                            batteryPulsePhase = (batteryPulsePhase + 0.08f) % 1f
+                            delay(100L)
+                        }
+                    } else {
+                        delay(15_000L)
+                    }
                 }
             }
 
@@ -1071,8 +2140,34 @@ class EmulatorActivity : ComponentActivity() {
                         onPress = { if (settings.haptics) view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP) },
                     )
                 }
+            } else if (landscape && shellStyle != null && showPad) {
+                LandscapeConsoleShell(
+                    style = shellStyle,
+                    fastForwardActive = fastForwardToggle || fastForwardHeld,
+                    sustainedCount = sustainedCount,
+                    ambilight = ambilightState,
+                    ledColorOverride = nostalgiaLedOverride,
+                    gameContent = {
+                        Box(Modifier.fillMaxSize().padding(horizontal = dsLandscapeInset), contentAlignment = Alignment.Center) {
+                            GameView()
+                        }
+                    },
+                    padContent = {
+                        if (phase is Phase.Running) {
+                            Pad(
+                                landscape = true,
+                                modifier = Modifier.fillMaxSize().safeDrawingPadding(),
+                                onSustainedChanged = { sustainedCount = it.size },
+                            )
+                        }
+                    },
+                )
             } else if (landscape) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { GameView() }
+                AmbilightBackdropHalo(ambilight = ambilightState, landscape = true)
+                Box(
+                    Modifier.fillMaxSize().padding(horizontal = dsLandscapeInset),
+                    contentAlignment = Alignment.Center,
+                ) { GameView() }
                 if (showPad && phase is Phase.Running) {
                     Pad(
                         landscape = true,
@@ -1086,6 +2181,9 @@ class EmulatorActivity : ComponentActivity() {
                     style = shellStyle,
                     fastForwardActive = fastForwardToggle || fastForwardHeld,
                     sustainedCount = sustainedCount,
+                    ambilight = ambilightState,
+                    padHeightFraction = if (isDs) DsDualScreen.PORTRAIT_PAD_FRACTION else 0.47f,
+                    ledColorOverride = nostalgiaLedOverride,
                     gameContent = { GameView() },
                     padContent = {
                         if (phase is Phase.Running) {
@@ -1099,12 +2197,15 @@ class EmulatorActivity : ComponentActivity() {
                     },
                 )
             } else {
+                AmbilightBackdropHalo(ambilight = ambilightState, landscape = false)
                 Column(Modifier.fillMaxSize().safeDrawingPadding()) {
                     Box(Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) { GameView() }
                     if (showPad && phase is Phase.Running) {
                         Pad(
                             landscape = false,
-                            modifier = Modifier.fillMaxWidth().fillMaxHeight(0.45f),
+                            modifier = Modifier.fillMaxWidth().fillMaxHeight(
+                                if (isDs) DsDualScreen.PORTRAIT_PAD_FRACTION else 0.45f,
+                            ),
                             onSustainedChanged = { sustainedCount = it.size },
                         )
                     }
@@ -1184,7 +2285,298 @@ class EmulatorActivity : ComponentActivity() {
                 }
             }
             if (discPickerOpen && discCount > 1 && !menuOpen) QuickDiscSwapSheet()
+            if (isDs && phase is Phase.Running && !menuOpen && !editingPad && !pocketGuideOpen) {
+                DsQuickBar(
+                    landscape = landscape,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .safeDrawingPadding()
+                        .padding(top = 10.dp, end = 12.dp),
+                )
+            }
+            if (dsLayoutMenuOpen && isDs && !menuOpen) DsLayoutSheet(landscape = landscape)
+            val npState by netplaySession.state.collectAsState()
+            if (!menuOpen && !pocketGuideOpen && translateState is TranslateState.Idle && phase is Phase.Running) {
+                Column(
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .safeDrawingPadding()
+                        .padding(top = 8.dp, start = 12.dp, end = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    if (npState.phase != NetplayPhase.IDLE && npState.phase != NetplayPhase.ERROR) {
+                        NetplayHudPill(state = npState, onClick = { setMenu(true) })
+                    }
+                    if (challengeRecording) {
+                        ChallengeRecordingPill(
+                            elapsedMs = challengeRecElapsedMs,
+                            onFinishAndShare = ::finishChallengeRecordingAndShare,
+                            onCancel = ::cancelChallengeRecording,
+                        )
+                    } else if (activeChallengeTitle != null) {
+                        ChallengePlayHud(
+                            title = activeChallengeTitle.orEmpty(),
+                            elapsedMs = challengeElapsedMs,
+                            targetMs = activeChallengeTargetMs,
+                            ghostButtonsMask = challengeGhostMask,
+                            hasGhost = activeChallengeGhost.isNotEmpty(),
+                            winGoalText = activeChallengeWin?.summary().orEmpty(),
+                            cleared = challengeCleared,
+                            clearedTimeMs = challengeClearedTimeMs,
+                            onInstantRetry = ::retryActiveChallenge,
+                        )
+                    }
+                    val pinned = pinnedGuideNote
+                    if (!pinned.isNullOrBlank()) {
+                        PinnedNoteBanner(
+                            note = pinned,
+                            onOpenGuide = ::openPocketGuide,
+                            onUnpin = { updatePinnedGuideNote(null) },
+                        )
+                    }
+                    if (practiceState.active) {
+                        PracticeLoopHud(
+                            state = practiceState,
+                            ghostMask = practiceGhostMask,
+                            onRetry = ::retryPracticeLoop,
+                            onClearSplit = ::recordPracticeClear,
+                            onOpenSettings = { practiceSheetOpen = true },
+                            onStop = ::stopPracticeLoop,
+                        )
+                    }
+                    if (macroPhase != MacroPhase.IDLE) {
+                        MacroHudPill(
+                            phase = macroPhase,
+                            activeMacroName = activeMacro?.name ?: "Grind Loop",
+                            elapsedMs = macroElapsedMs,
+                            loopCount = macroLoopCount,
+                            fastForward = macroFastForward,
+                            onStop = {
+                                if (macroPhase == MacroPhase.RECORDING) stopAndSaveMacroRecording()
+                                else stopMacroPlayback()
+                            },
+                        )
+                    }
+                    if (liveTranslateOn) {
+                        Surface(
+                            shape = RoundedCornerShape(999.dp),
+                            color = Color.Black.copy(alpha = 0.72f),
+                            contentColor = Color.White,
+                            onClick = { toggleLiveTranslate(false) },
+                        ) {
+                            Text(
+                                "LIVE ${translateLang.label}→EN · Tap to stop",
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.padding(horizontal = 11.dp, vertical = 5.dp),
+                            )
+                        }
+                    }
+                }
+            }
+            if (phase is Phase.Running && !menuOpen && !pocketGuideOpen && !editingPad && !browserOpen && translateState is TranslateState.Idle) {
+                GuideEdgeHandle(
+                    onOpen = ::openPocketGuide,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .safeDrawingPadding()
+                        .padding(top = if (isDs || discCount > 1) 54.dp else 18.dp),
+                )
+            }
+            if (gameEventsSheetOpen && !menuOpen) {
+                GameEventsSheet(
+                    status = gameEventsStatus,
+                    presenceText = presenceText,
+                    values = presenceValues,
+                    events = gameEventLog,
+                    checkpoints = checkpointList,
+                    smartCheckpoints = smartCheckpointsOn,
+                    onSetSmartCheckpoints = { on ->
+                        settings.smartCheckpoints = on
+                        smartCheckpointsOn = on
+                    },
+                    onLoadCheckpoint = { cp ->
+                        gameEventsSheetOpen = false
+                        loadCheckpoint(cp)
+                    },
+                    onDismiss = { gameEventsSheetOpen = false },
+                )
+            }
+            deathRetry?.let { cp ->
+                if (!menuOpen) {
+                    DeathRetryChip(
+                        checkpoint = cp,
+                        onRetry = { loadCheckpoint(cp) },
+                        onDismiss = { deathRetry = null },
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .safeDrawingPadding()
+                            .padding(top = 64.dp, start = 16.dp, end = 16.dp),
+                    )
+                }
+            }
+            if (practiceSheetOpen && !menuOpen) {
+                PracticeLoopSheet(
+                    state = practiceState,
+                    onDropAnchor = ::dropPracticeAnchor,
+                    onSetAutoReset = { sec -> practiceState = practiceState.copy(autoResetSeconds = sec) },
+                    onToggleGhost = { on -> practiceState = practiceState.copy(ghostEnabled = on) },
+                    onResetStats = ::resetPracticeStats,
+                    onStopLoop = ::stopPracticeLoop,
+                    onDismiss = { practiceSheetOpen = false },
+                )
+            }
+            if (nostalgiaSheetOpen && !menuOpen) {
+                NostalgiaModeSheet(
+                    config = nostalgiaConfig,
+                    systemId = system.id,
+                    batteryPercent = batteryPercent,
+                    onUpdate = ::updateNostalgiaConfig,
+                    onPreviewChime = { NostalgiaAudioSynth.playAsync(NostalgiaAudioSynth.synthesizeBootChime(system.id)) },
+                    onBlowCartridge = ::performCartridgeBlow,
+                    onDismiss = { nostalgiaSheetOpen = false },
+                )
+            }
+            if (macroSheetOpen && !menuOpen) {
+                MacroManagerSheet(
+                    savedMacros = savedMacros,
+                    fastForwardDefault = macroFastForward,
+                    onToggleFastForward = { macroFastForward = it },
+                    onStartRecording = ::startMacroRecording,
+                    onPlayMacro = ::startMacroLoop,
+                    onDeleteMacro = ::deleteSavedMacro,
+                    onDismiss = { macroSheetOpen = false },
+                )
+            }
+            LaunchedEffect(phase, macroPhase, menuOpen, pocketGuideOpen, macroSheetOpen, browserOpen) {
+                if (phase !is Phase.Running || macroPhase == MacroPhase.IDLE || menuOpen || pocketGuideOpen || macroSheetOpen || browserOpen) {
+                    // Release held macro buttons safely whenever paused or in a sheet
+                    if (macroAppliedMask != 0) {
+                        for ((btnId, pressed) in MacroEngine.diffButtonChanges(macroAppliedMask, 0)) {
+                            NativeBridge.setButton(0, btnId, pressed)
+                        }
+                        macroAppliedMask = 0
+                    }
+                    return@LaunchedEffect
+                }
+                if (macroPhase == MacroPhase.RECORDING) {
+                    macroStartedAtMs = System.currentTimeMillis() - macroElapsedMs
+                    while (macroPhase == MacroPhase.RECORDING) {
+                        val elapsed = (System.currentTimeMillis() - macroStartedAtMs).coerceAtLeast(0L)
+                        macroElapsedMs = elapsed
+                        val mask = NativeBridge.getButtonsMask(0)
+                        if (macroRecordSteps.isEmpty() || macroRecordSteps.last().buttonsMask != mask) {
+                            macroRecordSteps.add(MacroStep(elapsed, mask))
+                        }
+                        if (elapsed >= MacroEngine.MAX_DURATION_MS) {
+                            stopAndSaveMacroRecording()
+                            break
+                        }
+                        delay(33L)
+                    }
+                } else if (macroPhase == MacroPhase.PLAYING) {
+                    val m = activeMacro ?: return@LaunchedEffect
+                    macroStartedAtMs = System.currentTimeMillis() - macroElapsedMs
+                    while (macroPhase == MacroPhase.PLAYING) {
+                        val elapsed = (System.currentTimeMillis() - macroStartedAtMs).coerceAtLeast(0L)
+                        macroElapsedMs = elapsed
+                        macroLoopCount = (elapsed / m.durationMs.coerceAtLeast(1L)).toInt() + 1
+                        val desired = MacroEngine.sampleMaskAt(m, elapsed)
+                        if (desired != macroAppliedMask) {
+                            for ((btnId, pressed) in MacroEngine.diffButtonChanges(macroAppliedMask, desired)) {
+                                NativeBridge.setButton(0, btnId, pressed)
+                            }
+                            macroAppliedMask = desired
+                        }
+                        delay(25L)
+                    }
+                }
+            }
+            LaunchedEffect(phase, practiceState.active, menuOpen, pocketGuideOpen, practiceSheetOpen, browserOpen) {
+                if (phase !is Phase.Running || !practiceState.active || menuOpen || pocketGuideOpen || practiceSheetOpen || browserOpen) {
+                    return@LaunchedEffect
+                }
+                // Resume wall-clock anchor seamlessly across pauses
+                practiceRunStartedAtMs = System.currentTimeMillis() - practiceState.elapsedMs
+                while (practiceState.active) {
+                    val elapsed = (System.currentTimeMillis() - practiceRunStartedAtMs).coerceAtLeast(0L)
+                    practiceState = practiceState.copy(elapsedMs = elapsed)
+                    val mask = NativeBridge.getButtonsMask(0)
+                    if (practiceCurrentGhost.size < 3600 &&
+                        (practiceCurrentGhost.isEmpty() || practiceCurrentGhost.last().buttonsMask != mask)
+                    ) {
+                        practiceCurrentGhost.add(GhostSample(elapsed, mask))
+                    }
+                    practiceGhostMask = if (practiceState.ghostEnabled) {
+                        PracticeLoopMath.sampleGhostMask(practiceState.pbGhostFrames, elapsed)
+                    } else 0
+                    if (PracticeLoopMath.shouldAutoReset(elapsed, practiceState.autoResetSeconds)) {
+                        retryPracticeLoop()
+                    }
+                    delay(50)
+                }
+            }
             if (menuOpen) PauseMenu()
+            val manual = remember(game.id) { PocketGuides.forGame(game) }
+            PocketGuideDrawer(
+                visible = pocketGuideOpen,
+                game = game,
+                manual = manual,
+                initialNotes = pocketNotes,
+                pinnedNote = pinnedGuideNote,
+                raData = raSessionGame,
+                raHardcore = raSessionHardcore,
+                onSaveNotes = ::savePocketNotes,
+                onPinNote = ::updatePinnedGuideNote,
+                onOpenWebBrowser = ::openInGameBrowser,
+                onDismiss = ::closePocketGuide,
+            )
+            if (browserOpen) {
+                val startUrl = browserLastUrl
+                    ?: browserBookmarkedUrl
+                    ?: InGameBrowserUrls.defaultUrlFor(game)
+                InGameBrowserOverlay(
+                    game = game,
+                    initialUrl = startUrl,
+                    bookmarkedUrl = browserBookmarkedUrl,
+                    onUrlChanged = { browserLastUrl = it },
+                    onBookmarkUrl = ::saveBrowserBookmark,
+                    onWebViewReady = { browserWebView = it },
+                    onDismiss = ::closeInGameBrowser,
+                )
+            }
+            if (translateState !is TranslateState.Idle) {
+                TranslateOverlay(
+                    state = translateState,
+                    sourceLang = translateLang,
+                    liveActive = liveTranslateOn,
+                    onToggleLive = ::toggleLiveTranslate,
+                    onSelectLang = { runScreenTranslate(it) },
+                    onRescan = { runScreenTranslate(translateLang) },
+                    onDismiss = ::dismissTranslate,
+                )
+            }
+            challengeBanner?.let { banner ->
+                LaunchedEffect(banner) {
+                    delay(4500)
+                    challengeBanner = null
+                }
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = Color.Black.copy(alpha = 0.82f),
+                    contentColor = Color.White,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .safeDrawingPadding()
+                        .padding(top = 12.dp, start = 16.dp, end = 16.dp),
+                ) {
+                    Text(
+                        "Challenge: $banner",
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                    )
+                }
+            }
             if (editingPad) PadEditBar(Modifier.align(Alignment.TopCenter))
             raBanner?.let { banner ->
                 RaUnlockBanner(
@@ -1196,6 +2588,52 @@ class EmulatorActivity : ComponentActivity() {
                 )
             }
             ScreenshotFlash(flash)
+        }
+        // 60 Hz Playable Challenge Ghost recorder & live playback / RAM win-condition loop
+        LaunchedEffect(phase, challengeRecording, activeChallengeTitle, menuOpen, pocketGuideOpen, challengeCleared) {
+            if (phase !is Phase.Running || menuOpen || pocketGuideOpen) return@LaunchedEffect
+            var tick = 0
+            while (challengeRecording || (activeChallengeTitle != null && !challengeCleared)) {
+                if (challengeRecording) {
+                    val elapsed = SystemClock.elapsedRealtime() - challengeRecStartMs
+                    challengeRecElapsedMs = elapsed
+                    val mask = NativeBridge.getButtonsMask(0)
+                    if (challengeRecFrames.size < com.retrohero.app.data.ChallengeGhost.MAX_RECORD_FRAMES) {
+                        challengeRecFrames += com.retrohero.app.data.GhostFrame(mask)
+                    } else {
+                        finishChallengeRecordingAndShare()
+                        break
+                    }
+                }
+                if (activeChallengeTitle != null && !challengeCleared) {
+                    val elapsed = SystemClock.elapsedRealtime() - challengeStartRealtime
+                    challengeElapsedMs = elapsed
+                    val ghost = activeChallengeGhost
+                    if (ghost.isNotEmpty()) {
+                        val idx = ((elapsed * 60L) / 1000L).toInt()
+                        challengeGhostMask = if (idx in ghost.indices) ghost[idx].buttons else 0
+                    }
+                    val win = activeChallengeWin
+                    if (win != null) {
+                        val won = when (win.type) {
+                            com.retrohero.app.data.ChallengeWinType.SURVIVE ->
+                                win.targetSeconds > 0 && elapsed >= win.targetSeconds * 1000L
+                            com.retrohero.app.data.ChallengeWinType.RAM_GOAL ->
+                                (tick % 4 == 0) && win.evaluateRam(
+                                    withContext(Dispatchers.IO) { NativeBridge.readMemory(2, 512 * 1024) },
+                                )
+                            else -> false
+                        }
+                        if (won) {
+                            challengeCleared = true
+                            challengeClearedTimeMs = elapsed
+                            toast("Challenge Cleared in ${formatChallengeClock(elapsed)}!")
+                        }
+                    }
+                }
+                tick++
+                delay(16L)
+            }
         }
         LaunchedEffect(phase, showPerfHud) {
             while (phase is Phase.Running) {
@@ -1299,7 +2737,10 @@ class EmulatorActivity : ComponentActivity() {
             layout = system.layout,
             landscape = landscape,
             opacity = settings.overlayOpacity,
-            onButton = { id, pressed -> NativeBridge.setButton(0, id, pressed) },
+            onButton = { id, pressed ->
+                if (macroPhase == MacroPhase.PLAYING && pressed) stopMacroPlayback(silent = true)
+                NativeBridge.setButton(0, id, pressed)
+            },
             onMenu = { setMenu(true) },
             onFastForward = { held ->
                 fastForwardHeld = held
@@ -1310,7 +2751,7 @@ class EmulatorActivity : ComponentActivity() {
             accent = system.color,
             skin = padSkin,
             systemId = system.id,
-            onRewind = if (rewindOn) { held -> NativeBridge.setRewinding(held) } else null,
+            onRewind = if (rewindOn) { held -> setRewindingTracked(held) } else null,
             adjust = remember(editingPad, landscape) { padLayouts.get(system.id, landscape) },
             edit = if (editingPad) {
                 PadEditState(
@@ -1324,6 +2765,9 @@ class EmulatorActivity : ComponentActivity() {
             smartTouch = smartTouch,
             oneHandedPortrait = oneHanded,
             onSustainedChanged = onSustainedChanged,
+            touchScreenRect = if (system.touchScreen) gamePictureRect else null,
+            touchScreenContentScale = if (graphicsConfig.cropOverscan && !DsDualScreen.isDs(system.id)) 1.06f else 1f,
+            onTouchScreen = if (system.touchScreen) { x, y, down -> NativeBridge.setPointer(x, y, down) } else null,
         )
     }
 
@@ -1332,15 +2776,62 @@ class EmulatorActivity : ComponentActivity() {
     private fun GameView() {
         BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             val density = LocalDensity.current
-            val size = if (integerScale && frameSize.height > 0) {
+            val isDs = DsDualScreen.isDs(system.id)
+            val cropOverscan = graphicsConfig.cropOverscan && !isDs
+            val ratioOverride = if (isDs) null else graphicsConfig.aspectRatio.ratio
+            val isFill = ratioOverride != null && ratioOverride < 0f
+            val effectiveAspect = if (ratioOverride != null && ratioOverride > 0f) ratioOverride else aspect
+            val size = if (!isFill && integerScale && frameSize.height > 0) {
                 integerFit(
                     with(density) { maxWidth.toPx() },
                     with(density) { maxHeight.toPx() },
                     frameSize.height,
-                    aspect,
+                    effectiveAspect,
                 )?.let { (w, h) -> with(density) { Modifier.size(w.toDp(), h.toDp()) } }
             } else null
-            GameSurface(size ?: Modifier.aspectRatio(aspect))
+            val surfaceMod = when {
+                isFill -> Modifier.fillMaxSize()
+                size != null -> size
+                else -> Modifier.aspectRatio(effectiveAspect)
+            }
+            Box(
+                surfaceMod
+                    .clip(RoundedCornerShape(0.dp))
+                    .onGloballyPositioned { coords -> gamePictureRect = coords.boundsInRoot() },
+            ) {
+                GameSurface(
+                    Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            if (cropOverscan) {
+                                scaleX = 1.06f
+                                scaleY = 1.07f
+                            }
+                        },
+                )
+                if (nostalgiaConfig.enabled && nostalgiaConfig.displayAging > 0.01f) {
+                    NostalgiaAgingOverlay(
+                        aging = nostalgiaConfig.displayAging,
+                        isHandheld = NostalgiaMath.isHandheld(system.id),
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                if (warmupProgress < 1f) {
+                    NostalgiaWarmupOverlay(
+                        progress = warmupProgress,
+                        isCrt = NostalgiaMath.isCrtConsole(system.id),
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                if (liveTranslateOn && !menuOpen && !pocketGuideOpen && !browserOpen && translateState is TranslateState.Idle) {
+                    LiveTranslateOverlay(
+                        blocks = liveTranslateBlocks,
+                        sourceLang = translateLang,
+                        scanning = liveTranslateScanning,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
         }
     }
 
@@ -1370,9 +2861,18 @@ class EmulatorActivity : ComponentActivity() {
     }
 
     private fun onScreenTouch(v: View, e: MotionEvent): Boolean {
-        val x = e.x / v.width * 2f - 1f
-        val y = e.y / v.height * 2f - 1f
         val down = e.actionMasked != MotionEvent.ACTION_UP && e.actionMasked != MotionEvent.ACTION_CANCEL
+        if (macroPhase == MacroPhase.PLAYING && down) stopMacroPlayback(silent = true)
+        val scale = if (graphicsConfig.cropOverscan && !DsDualScreen.isDs(system.id)) 1.06f else 1f
+        val (x, y) = DsDualScreen.toPointerClamped(
+            px = e.x,
+            py = e.y,
+            left = 0f,
+            top = 0f,
+            width = v.width.toFloat(),
+            height = v.height.toFloat(),
+            contentScale = scale,
+        )
         NativeBridge.setPointer(x, y, down)
         return true
     }
@@ -1380,32 +2880,58 @@ class EmulatorActivity : ComponentActivity() {
     @Composable
     private fun PauseMenu() {
         var page by remember { mutableStateOf("main") }
+        val cs = MaterialTheme.colorScheme
         Box(
             Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.6f))
+                .background(Color.Black.copy(alpha = 0.64f))
                 .clickable(interactionSource = null, indication = null) { if (page == "main") setMenu(false) else page = "main" }
                 .safeDrawingPadding(),
             contentAlignment = Alignment.Center,
         ) {
             Surface(
-                shape = MaterialTheme.shapes.extraLarge,
-                color = MaterialTheme.colorScheme.surfaceContainer,
+                shape = RoundedCornerShape(30.dp),
+                color = cs.surfaceContainer,
+                tonalElevation = 4.dp,
                 modifier = Modifier
-                    .padding(16.dp)
+                    .padding(horizontal = 14.dp, vertical = 12.dp)
                     .widthIn(max = 460.dp)
+                    .fillMaxWidth()
                     .clickable(interactionSource = null, indication = null) {},
             ) {
-                Column(Modifier.verticalScroll(rememberScrollState()).padding(20.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        SystemBadge(system, 52.dp)
-                        Spacer(Modifier.width(16.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(game.title, style = MaterialTheme.typography.titleLarge, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            Text(system.name, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Column(Modifier.verticalScroll(rememberScrollState()).padding(18.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        SystemBadge(system, 46.dp)
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                            Text(
+                                game.title,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = cs.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                system.name,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = cs.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        Surface(
+                            onClick = { page = "screen" },
+                            shape = RoundedCornerShape(999.dp),
+                            color = cs.secondaryContainer,
+                            contentColor = cs.onSecondaryContainer,
+                        ) {
+                            Text(
+                                text = visualMode.label,
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            )
                         }
                     }
-                    Spacer(Modifier.height(20.dp))
+                    Spacer(Modifier.height(14.dp))
                     AnimatedContent(
                         targetState = page,
                         transitionSpec = {
@@ -1422,6 +2948,8 @@ class EmulatorActivity : ComponentActivity() {
                             "cheats" -> CheatsPage { page = "main" }
                             "screen" -> ScreenPage { page = "main" }
                             "skin" -> DeltaSkinPage { page = "main" }
+                            "share" -> ShareMomentPage { page = "main" }
+                            "netplay" -> NetplayPage { page = "main" }
                             else -> MainMenuPage { page = it }
                         }
                     }
@@ -1537,21 +3065,217 @@ class EmulatorActivity : ComponentActivity() {
     }
 
     @Composable
+    private fun DsQuickBar(landscape: Boolean, modifier: Modifier = Modifier) {
+        val cs = MaterialTheme.colorScheme
+        val hw = remember(activeCoreId) { DsDualScreen.hardwareButtons(activeCoreId) }
+        val view = androidx.compose.ui.platform.LocalView.current
+        Row(
+            modifier
+                .clip(RoundedCornerShape(50))
+                .background(Color.Black.copy(alpha = 0.70f))
+                .padding(horizontal = 6.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            // Layout picker pill
+            Row(
+                Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(Color.White.copy(alpha = 0.12f))
+                    .clickable {
+                        if (settings.haptics) view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                        dsLayoutMenuOpen = true
+                    }
+                    .padding(horizontal = 9.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Icon(
+                    Icons.Rounded.ViewAgenda,
+                    contentDescription = "DS screen layout",
+                    tint = cs.primary,
+                    modifier = Modifier.size(14.dp),
+                )
+                Text(
+                    text = dsLayout.shortLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White,
+                    maxLines = 1,
+                )
+            }
+            // 1-tap swap top/bottom or big/small screens
+            Box(
+                Modifier
+                    .clip(RoundedCornerShape(50))
+                    .background(if (dsSwapped) cs.primary.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.10f))
+                    .clickable {
+                        if (settings.haptics) view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                        applyDsLayout(dsLayout, !dsSwapped, landscape)
+                    }
+                    .padding(horizontal = 8.dp, vertical = 5.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Rounded.SwapVert,
+                    contentDescription = "Swap DS screens",
+                    tint = if (dsSwapped) cs.onPrimary else Color.White,
+                    modifier = Modifier.size(15.dp),
+                )
+            }
+            // Hold-to-blow microphone button (for Zelda, Mario Kart DS, Nintendogs, etc.)
+            if (hw.mic != null) {
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(if (dsMicHeld) cs.tertiary.copy(alpha = 0.92f) else Color.White.copy(alpha = 0.10f))
+                        .pointerInput(activeCoreId) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val ev = awaitPointerEvent()
+                                    val anyDown = ev.changes.any { it.pressed }
+                                    if (anyDown != dsMicHeld) {
+                                        if (anyDown && settings.haptics) {
+                                            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                                        }
+                                        holdDsMic(anyDown)
+                                    }
+                                    ev.changes.forEach { it.consume() }
+                                }
+                            }
+                        }
+                        .padding(horizontal = 8.dp, vertical = 5.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Rounded.Mic,
+                        contentDescription = "Hold to blow into DS mic",
+                        tint = if (dsMicHeld) cs.onTertiary else Color.White,
+                        modifier = Modifier.size(15.dp),
+                    )
+                }
+            }
+            // Close / Open DS hinge lid button
+            if (hw.lid.isNotEmpty()) {
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(if (dsLidClosed) cs.secondary.copy(alpha = 0.90f) else Color.White.copy(alpha = 0.10f))
+                        .clickable {
+                            if (settings.haptics) view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                            toggleDsLid()
+                        }
+                        .padding(horizontal = 8.dp, vertical = 5.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Rounded.Bedtime,
+                        contentDescription = if (dsLidClosed) "Open DS lid" else "Close DS lid",
+                        tint = if (dsLidClosed) cs.onSecondary else Color.White,
+                        modifier = Modifier.size(15.dp),
+                    )
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun DsLayoutSheet(landscape: Boolean) {
+        val cs = MaterialTheme.colorScheme
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.56f))
+                .clickable(interactionSource = null, indication = null) { dsLayoutMenuOpen = false }
+                .safeDrawingPadding(),
+            contentAlignment = Alignment.Center,
+        ) {
+            Surface(
+                shape = MaterialTheme.shapes.extraLarge,
+                color = cs.surfaceContainer,
+                modifier = Modifier
+                    .padding(20.dp)
+                    .widthIn(max = 420.dp)
+                    .clickable(interactionSource = null, indication = null) {},
+            ) {
+                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        ShapeIcon(Icons.Rounded.ViewAgenda)
+                        Column(Modifier.weight(1f)) {
+                            Text("Nintendo DS Screens", style = MaterialTheme.typography.titleLarge)
+                            Text(
+                                "Saved per game for ${if (landscape) "landscape" else "portrait"} · tap any screen to use stylus",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = cs.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    DsScreenLayout.entries.forEach { preset ->
+                        val selected = preset == dsLayout
+                        Surface(
+                            onClick = {
+                                applyDsLayout(preset, dsSwapped, landscape)
+                                dsLayoutMenuOpen = false
+                            },
+                            shape = RoundedCornerShape(16.dp),
+                            color = if (selected) cs.primaryContainer else cs.surfaceContainerHigh,
+                            contentColor = if (selected) cs.onPrimaryContainer else cs.onSurface,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Row(
+                                Modifier.padding(horizontal = 14.dp, vertical = 11.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text(preset.label, style = MaterialTheme.typography.titleSmall)
+                                if (selected) {
+                                    Icon(Icons.Default.Check, null, Modifier.size(18.dp))
+                                }
+                            }
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilledTonalButton(
+                            onClick = { applyDsLayout(dsLayout, !dsSwapped, landscape) },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Icon(Icons.Rounded.SwapVert, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(if (dsSwapped) "Swapped" else "Swap")
+                        }
+                        FilledTonalButton(
+                            onClick = {
+                                toggleDsLid()
+                                dsLayoutMenuOpen = false
+                            },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Icon(Icons.Rounded.Bedtime, null, Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(if (dsLidClosed) "Open lid" else "Close lid")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
     private fun MainMenuPage(navigate: (String) -> Unit) {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        val cs = MaterialTheme.colorScheme
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             val pName = activePatchName
             if (!pName.isNullOrBlank()) {
                 Surface(
                     shape = RoundedCornerShape(18.dp),
-                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                    color = cs.tertiaryContainer,
+                    contentColor = cs.onTertiaryContainer,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Column(Modifier.padding(horizontal = 14.dp, vertical = 9.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(
                             text = "Soft-patched in memory · ${activePatchFormat ?: "ROM Patch"}",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.85f),
+                            color = cs.onTertiaryContainer.copy(alpha = 0.85f),
                         )
                         Text(
                             text = pName,
@@ -1564,58 +3288,251 @@ class EmulatorActivity : ComponentActivity() {
                             Text(
                                 text = hdrNote,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.82f),
+                                color = cs.onTertiaryContainer.copy(alpha = 0.82f),
                             )
                         }
                     }
                 }
             }
+
+            // Primary Controls: Resume + Reset + Quit in one crisp row
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
                     onClick = { setMenu(false) },
                     shapes = ButtonDefaults.shapes(),
-                    modifier = Modifier.weight(1f).height(ButtonDefaults.MediumContainerHeight),
-                    contentPadding = ButtonDefaults.contentPaddingFor(ButtonDefaults.MediumContainerHeight),
+                    modifier = Modifier.weight(1f).height(52.dp),
                 ) {
-                    Icon(Icons.Default.PlayArrow, null, Modifier.size(ButtonDefaults.iconSizeFor(ButtonDefaults.MediumContainerHeight)))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Resume", style = ButtonDefaults.textStyleFor(ButtonDefaults.MediumContainerHeight))
+                    Icon(Icons.Default.PlayArrow, null, Modifier.size(20.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Resume", style = MaterialTheme.typography.titleSmall)
                 }
+                FilledTonalIconButton(
+                    onClick = {
+                        resetTracked()
+                        setMenu(false)
+                    },
+                    shapes = IconButtonDefaults.shapes(),
+                    modifier = Modifier.size(52.dp),
+                ) { Icon(Icons.Default.RestartAlt, "Reset game") }
                 FilledTonalIconButton(
                     onClick = { quit() },
                     shapes = IconButtonDefaults.shapes(),
-                    modifier = Modifier.size(ButtonDefaults.MediumContainerHeight),
+                    modifier = Modifier.size(52.dp),
                 ) { Icon(Icons.AutoMirrored.Filled.ExitToApp, "Quit game") }
             }
-            if (discCount > 1) {
-                val activeLabel = discLabels.getOrElse(currentDisc) { "Disc ${currentDisc + 1}" }
-                ActionTile(
-                    Icons.Default.Album,
-                    "Swap disc · $activeLabel of $discCount",
-                    Modifier.fillMaxWidth(),
-                ) { navigate("discs") }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ActionTile(Icons.Default.Save, "Save", Modifier.weight(1f)) { navigate("save") }
-                ActionTile(Icons.Default.Download, "Load", Modifier.weight(1f)) { navigate("load") }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ActionTile(Icons.Default.PhotoCamera, "Screenshot", Modifier.weight(1f)) { takeScreenshot() }
-                ActionTile(Icons.Default.Tv, "Screen", Modifier.weight(1f)) { navigate("screen") }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ActionTile(Icons.Default.Code, if (cheats.any { it.enabled }) "Cheats · ${cheats.count { it.enabled }}" else "Cheats", Modifier.weight(1f)) { navigate("cheats") }
-                ActionTile(Icons.Default.OpenWith, "Edit controls", Modifier.weight(1f)) { startPadEdit() }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ActionTile(Icons.Default.Tune, "Options", Modifier.weight(1f)) { navigate("options") }
-                ActionTile(Icons.Default.RestartAlt, "Reset", Modifier.weight(1f)) {
-                    NativeBridge.reset()
-                    setMenu(false)
+
+            if (DsDualScreen.isDs(system.id)) {
+                Surface(
+                    shape = RoundedCornerShape(18.dp),
+                    color = cs.surfaceContainerHigh,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            ) {
+                                Icon(Icons.Rounded.ViewAgenda, null, tint = cs.primary, modifier = Modifier.size(16.dp))
+                                Text("DS Screens", style = MaterialTheme.typography.titleSmall)
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                FilterChip(
+                                    selected = dsSwapped,
+                                    onClick = { applyDsLayout(dsLayout, !dsSwapped, padLandscape) },
+                                    label = { Text("Swap", style = MaterialTheme.typography.labelSmall) },
+                                )
+                                FilterChip(
+                                    selected = dsLidClosed,
+                                    onClick = { toggleDsLid() },
+                                    label = { Text(if (dsLidClosed) "Lid closed" else "Lid", style = MaterialTheme.typography.labelSmall) },
+                                )
+                            }
+                        }
+                        Row(
+                            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            DsScreenLayout.entries.forEach { preset ->
+                                FilterChip(
+                                    selected = dsLayout == preset,
+                                    onClick = { applyDsLayout(preset, dsSwapped, padLandscape) },
+                                    label = { Text(preset.shortLabel, style = MaterialTheme.typography.labelSmall) },
+                                )
+                            }
+                        }
+                    }
                 }
             }
-            val switchCount = if (deltaSkinsForSystem.isNotEmpty()) 8 else 7
-            SegmentedGroup(null, switchCount) {
+
+            if (discCount > 1) {
+                val activeLabel = discLabels.getOrElse(currentDisc) { "Disc ${currentDisc + 1}" }
+                Surface(
+                    onClick = { navigate("discs") },
+                    shape = RoundedCornerShape(18.dp),
+                    color = cs.secondaryContainer,
+                    contentColor = cs.onSecondaryContainer,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Icon(Icons.Default.Album, null, Modifier.size(18.dp))
+                        Text(
+                            "Swap disc · $activeLabel of $discCount",
+                            style = MaterialTheme.typography.labelLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+
+            // Quick Actions 4-Column Dock (Save, Load, Snap, Screen)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                CompactMenuTile(Icons.Default.Save, "Save", Modifier.weight(1f)) { navigate("save") }
+                CompactMenuTile(Icons.Default.Download, "Load", Modifier.weight(1f)) { navigate("load") }
+                CompactMenuTile(Icons.Default.PhotoCamera, "Snap", Modifier.weight(1f)) { takeScreenshot() }
+                CompactMenuTile(Icons.Default.Tv, "Screen", Modifier.weight(1f)) { navigate("screen") }
+            }
+
+            // Tools & Guides 3x3 Expressive Bento Grid (distinct icons, zero bloat)
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    CompactMenuTile(
+                        Icons.AutoMirrored.Rounded.MenuBook,
+                        "Guide",
+                        Modifier.weight(1f),
+                        accent = true,
+                    ) { openPocketGuide() }
+                    CompactMenuTile(
+                        Icons.Rounded.Public,
+                        "Browser",
+                        Modifier.weight(1f),
+                        accent = true,
+                    ) { openInGameBrowser() }
+                    CompactMenuTile(
+                        Icons.Rounded.Translate,
+                        if (liveTranslateOn) "Live ON" else "Translate",
+                        Modifier.weight(1f),
+                        active = liveTranslateOn,
+                        accent = true,
+                    ) { runScreenTranslate(translateLang) }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    CompactMenuTile(
+                        Icons.Rounded.EmojiEvents,
+                        "Challenges",
+                        Modifier.weight(1f),
+                        active = challengeRecording || activeChallengeTitle != null,
+                    ) { navigate("share") }
+                    CompactMenuTile(
+                        Icons.Rounded.Wifi,
+                        "Netplay",
+                        Modifier.weight(1f),
+                    ) { navigate("netplay") }
+                    CompactMenuTile(
+                        Icons.Default.Code,
+                        if (cheats.any { it.enabled }) "Cheats (${cheats.count { it.enabled }})" else "Cheats",
+                        Modifier.weight(1f),
+                        active = cheats.any { it.enabled },
+                    ) { navigate("cheats") }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    CompactMenuTile(Icons.Default.OpenWith, "Edit pad", Modifier.weight(1f)) { startPadEdit() }
+                    CompactMenuTile(Icons.Rounded.TouchApp, "Smart Touch", Modifier.weight(1f)) { navigate("smart_touch") }
+                    CompactMenuTile(Icons.Default.Tune, "Options", Modifier.weight(1f)) { navigate("options") }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    CompactMenuTile(
+                        Icons.Rounded.RecordVoiceOver,
+                        if (readAloudOn) "Reading" else "Read aloud",
+                        Modifier.weight(1f),
+                        active = readAloudOn,
+                        accent = true,
+                    ) { toggleReadAloud(!readAloudOn) }
+                    CompactMenuTile(
+                        Icons.Rounded.Replay,
+                        "Checkpoint",
+                        Modifier.weight(1f),
+                        active = checkpointList.isNotEmpty(),
+                    ) {
+                        val cp = checkpointList.firstOrNull()
+                        if (cp == null) {
+                            toast(if (gameEventsStatus == GameEventsStatus.ACTIVE) "No checkpoints yet" else "Checkpoints need game events · see Events")
+                        } else {
+                            setMenu(false)
+                            loadCheckpoint(cp)
+                        }
+                    }
+                    CompactMenuTile(
+                        Icons.Rounded.Flag,
+                        "Events",
+                        Modifier.weight(1f),
+                        active = gameEventsStatus == GameEventsStatus.ACTIVE,
+                    ) {
+                        setMenu(false)
+                        gameEventsSheetOpen = true
+                    }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    CompactMenuTile(
+                        Icons.Rounded.Loop,
+                        if (practiceState.active) "Loop #${practiceState.attempts}" else "Practice",
+                        Modifier.weight(1f),
+                        active = practiceState.active,
+                        accent = true,
+                    ) {
+                        if (practiceState.active) {
+                            setMenu(false)
+                            practiceSheetOpen = true
+                        } else {
+                            dropPracticeAnchor()
+                        }
+                    }
+                    CompactMenuTile(
+                        Icons.Rounded.AutoAwesome,
+                        if (nostalgiaConfig.enabled) "Nostalgia" else "Blow Cart",
+                        Modifier.weight(1f),
+                        active = nostalgiaConfig.enabled,
+                        accent = true,
+                    ) {
+                        setMenu(false)
+                        nostalgiaSheetOpen = true
+                    }
+                    CompactMenuTile(
+                        Icons.Rounded.Repeat,
+                        when (macroPhase) {
+                            MacroPhase.PLAYING -> "Grind ×$macroLoopCount"
+                            MacroPhase.RECORDING -> "Rec…"
+                            MacroPhase.IDLE -> "Grind Loop"
+                        },
+                        Modifier.weight(1f),
+                        active = macroPhase != MacroPhase.IDLE,
+                        accent = true,
+                    ) {
+                        setMenu(false)
+                        macroSheetOpen = true
+                    }
+                }
+            }
+
+            // Live Gameplay Toggles (harmonized with Material 3 Expressive surfaces)
+            val consoleSkinSummary = remember(activeDeltaSkin, padSkin, system.id, system.shortName, system.color) {
+                activeDeltaSkin?.let { "${it.name} · Delta skin" }
+                    ?: when (padSkin.id) {
+                        Looks.Console.id -> "Authentic ${system.shortName} · ${ConsoleStyles.forSystem(system.id, system.color).bezelWordmark}"
+                        Looks.Instrument.id -> "RetroHero Deck · ${system.shortName}"
+                        else -> "${padSkin.name} · ${system.shortName}"
+                    }
+            }
+            SegmentedGroup(null, 9) {
                 MenuSwitch(shapes(0), Icons.Default.FastForward, "Fast forward", "${settings.fastForwardSpeed.toInt()}× speed", fastForwardToggle) {
                     fastForwardToggle = it
                     if (it && slowMotion) {
@@ -1663,30 +3580,29 @@ class EmulatorActivity : ComponentActivity() {
                     settings.showPerfHud = it
                 }
                 MenuSwitch(shapes(5), Icons.Default.Gamepad, "Touch controls", "Show the on-screen gamepad", showPad) { showPad = it }
-                val smartSummary = buildList {
-                    if (smartTouch.thumbChordZones) add("Chords")
-                    if (smartTouch.shoulderLatch) add("L/R latch")
-                    if (smartTouch.comboMacroEnabled) add("Macro")
-                    if (smartTouch.gyroSteering) add("Gyro")
-                }.joinToString(" · ").ifBlank { "Standard touch" }
-                SegmentedListItem(
-                    onClick = { navigate("smart_touch") },
-                    shapes = shapes(6),
-                    colors = segmentColors(),
-                    leadingContent = { ShapeIcon(Icons.Default.Gamepad) },
-                    supportingContent = { Text(smartSummary, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    verticalAlignment = Alignment.CenterVertically,
-                ) { Text("Smart Touch ergonomics") }
-                if (deltaSkinsForSystem.isNotEmpty()) {
-                    SegmentedListItem(
-                        onClick = { navigate("skin") },
-                        shapes = shapes(7),
-                        colors = segmentColors(),
-                        leadingContent = { ShapeIcon(Icons.Default.AspectRatio) },
-                        supportingContent = { Text(activeDeltaSkin?.name ?: "Built-in RetroHero pad") },
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) { Text("Delta skin") }
+                MenuSwitch(
+                    shapes(6),
+                    Icons.Rounded.AutoAwesome,
+                    "Ambilight bezel glow",
+                    if (ambilightMode.isEnabled) "${ambilightMode.label} · Live OLED edge halo & flash"
+                    else "Off · Static bezel",
+                    ambilightMode.isEnabled,
+                ) { on ->
+                    setAmbilight(if (on) gamePrefs.lastActiveAmbilightMode else AmbilightMode.OFF)
                 }
+                MenuSwitch(shapes(7), Icons.Default.Tune, "Audio rumble", "Feel bass impacts from game audio", audioHapticsOn) {
+                    audioHapticsOn = it
+                    settings.audioHaptics = it
+                    if (!it) audioHaptics.cancel()
+                }
+                SegmentedListItem(
+                    onClick = { navigate("skin") },
+                    shapes = shapes(8),
+                    colors = segmentColors(),
+                    leadingContent = { ShapeIcon(Icons.Default.AspectRatio) },
+                    supportingContent = { Text(consoleSkinSummary, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) { Text("Display & shell skin") }
             }
         }
     }
@@ -1806,53 +3722,111 @@ class EmulatorActivity : ComponentActivity() {
 
     @Composable
     private fun DeltaSkinPage(back: () -> Unit) {
-        val options: List<DeltaSkin?> = listOf(null) + deltaSkinsForSystem
-        Column {
-            PageHeader("Delta skin", back)
-            SegmentedGroup(null, options.size) {
-                options.forEachIndexed { i, skin ->
-                    val selected = activeDeltaSkin?.identifier == skin?.identifier
+        val authenticStyle = remember(system.id, system.color) { ConsoleStyles.forSystem(system.id, system.color) }
+        val builtInSkins = Looks.skins
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            PageHeader("${system.shortName} display skin", back)
+            SegmentedGroup("Built-in shells for ${system.name}", builtInSkins.size) {
+                builtInSkins.forEachIndexed { i, skin ->
+                    val selected = activeDeltaSkin == null && padSkin.id == skin.id
+                    val title = when (skin.id) {
+                        Looks.Console.id -> "Authentic ${system.shortName}"
+                        Looks.Instrument.id -> "RetroHero Deck (${system.shortName})"
+                        else -> skin.name
+                    }
+                    val subtitle = when (skin.id) {
+                        Looks.Console.id -> "${authenticStyle.bezelWordmark} · ${authenticStyle.bezelSubtitle}".trimEnd(' ', '·')
+                        Looks.Instrument.id -> "Tactile hardware shell branded for ${system.shortName}"
+                        else -> "Translucent ${skin.name.lowercase()} touch overlay"
+                    }
                     SegmentedListItem(
                         onClick = {
-                            activeDeltaSkin = skin
-                            settings.setDeltaSkinFor(system.id, skin?.identifier)
+                            activeDeltaSkin = null
+                            settings.setDeltaSkinFor(system.id, null)
+                            padSkin = skin
+                            settings.padSkin = skin.id
                             setMenu(false)
                             back()
                         },
                         shapes = shapes(i),
                         colors = segmentColors(),
-                        leadingContent = {
-                            RadioButton(selected = selected, onClick = null)
-                        },
-                        supportingContent = {
-                            Text(if (skin == null) "Use RetroHero's built-in touch pad" else skin.identifier, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        },
+                        leadingContent = { RadioButton(selected = selected, onClick = null) },
+                        supportingContent = { Text(subtitle, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         verticalAlignment = Alignment.CenterVertically,
-                    ) { Text(skin?.name ?: "Built-in controls") }
+                    ) { Text(title) }
+                }
+            }
+            if (deltaSkinsForSystem.isNotEmpty()) {
+                SegmentedGroup("Imported ${system.shortName} Delta skins", deltaSkinsForSystem.size) {
+                    deltaSkinsForSystem.forEachIndexed { i, skin ->
+                        val selected = activeDeltaSkin?.identifier == skin.identifier
+                        SegmentedListItem(
+                            onClick = {
+                                activeDeltaSkin = skin
+                                settings.setDeltaSkinFor(system.id, skin.identifier)
+                                setMenu(false)
+                                back()
+                            },
+                            shapes = shapes(i),
+                            colors = segmentColors(),
+                            leadingContent = { RadioButton(selected = selected, onClick = null) },
+                            supportingContent = { Text(skin.identifier, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) { Text(skin.name) }
+                    }
                 }
             }
         }
     }
 
     @Composable
-    private fun ActionTile(icon: ImageVector, label: String, modifier: Modifier, onClick: () -> Unit) {
+    private fun CompactMenuTile(
+        icon: ImageVector,
+        label: String,
+        modifier: Modifier = Modifier,
+        active: Boolean = false,
+        accent: Boolean = false,
+        onClick: () -> Unit,
+    ) {
+        val cs = MaterialTheme.colorScheme
         val interaction = remember { MutableInteractionSource() }
-        val press = rememberPressFeedback(interaction, restCorner = 28.dp, pressedCorner = 14.dp, pressedScale = 0.96f)
+        val press = rememberPressFeedback(interaction, restCorner = 20.dp, pressedCorner = 12.dp, pressedScale = 0.95f)
+        val bg = when {
+            active -> cs.primaryContainer
+            accent -> cs.secondaryContainer
+            else -> cs.surfaceContainerHigh
+        }
+        val fg = when {
+            active -> cs.onPrimaryContainer
+            accent -> cs.onSecondaryContainer
+            else -> cs.onSurface
+        }
         Surface(
             shape = RoundedCornerShape(press.corner.value),
-            color = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            color = bg,
+            contentColor = fg,
             modifier = modifier
-                .height(84.dp)
+                .height(62.dp)
                 .graphicsLayer {
                     scaleX = press.scale.value
                     scaleY = press.scale.value
                 }
                 .clickable(interactionSource = interaction, indication = null, onClick = onClick),
         ) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.SpaceBetween) {
-                Icon(icon, null)
-                Text(label, style = MaterialTheme.typography.titleMedium)
+            Column(
+                Modifier.fillMaxSize().padding(horizontal = 6.dp, vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                Icon(icon, null, Modifier.size(20.dp))
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                )
             }
         }
     }
@@ -1928,7 +3902,7 @@ class EmulatorActivity : ComponentActivity() {
                                 }
                                 saved
                             } else {
-                                val loaded = NativeBridge.loadState(file.absolutePath)
+                                val loaded = loadStateTracked(file.absolutePath)
                                 if (loaded) demoteRaHardcore("save state loaded")
                                 loaded
                             }
@@ -2015,13 +3989,21 @@ class EmulatorActivity : ComponentActivity() {
 
     @Composable
     private fun ScreenPage(back: () -> Unit) {
+        val cs = MaterialTheme.colorScheme
         val prof = activeProfile
-        Column {
-            PageHeader("Screen", back)
+        val gfx = graphicsConfig
+        val is3D = com.retrohero.app.data.GraphicsCoreOptions.is3DCore(activeCoreId)
+        val hasPgxp = com.retrohero.app.data.GraphicsCoreOptions.supportsPgxp(activeCoreId)
+        val hasWideHack = com.retrohero.app.data.GraphicsCoreOptions.supportsWidescreenHack(activeCoreId)
+
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            PageHeader("Graphics & screen", back)
+
+            // 1. Hardware Intelligence Profile (Authentic vs Enhanced)
             Surface(
-                shape = RoundedCornerShape(24.dp),
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                shape = RoundedCornerShape(22.dp),
+                color = cs.surfaceContainerLow,
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(
@@ -2029,29 +4011,19 @@ class EmulatorActivity : ComponentActivity() {
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        Text(
-                            "Hardware profile",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
+                        Text("Hardware profile", style = MaterialTheme.typography.titleSmall, color = cs.onSurface)
                         if (prof?.isGameSpecific == true) {
-                            Surface(
-                                shape = RoundedCornerShape(999.dp),
-                                color = MaterialTheme.colorScheme.tertiaryContainer,
-                            ) {
+                            Surface(shape = RoundedCornerShape(999.dp), color = cs.tertiaryContainer) {
                                 Text(
                                     "Auto-tuned",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                    color = cs.onTertiaryContainer,
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                                 )
                             }
                         }
                     }
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         com.retrohero.app.data.VisualMode.entries.forEach { mode ->
                             val selected = visualMode == mode
                             Surface(
@@ -2060,30 +4032,20 @@ class EmulatorActivity : ComponentActivity() {
                                     toast("${mode.label}: ${activeProfile?.title ?: mode.tagline}")
                                 },
                                 shape = RoundedCornerShape(999.dp),
-                                color = if (selected) MaterialTheme.colorScheme.primaryContainer
-                                else MaterialTheme.colorScheme.surfaceContainerHigh,
-                                contentColor = if (selected) MaterialTheme.colorScheme.onPrimaryContainer
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = if (selected) cs.primaryContainer else cs.surfaceContainerHigh,
+                                contentColor = if (selected) cs.onPrimaryContainer else cs.onSurfaceVariant,
                                 modifier = Modifier.weight(1f),
                             ) {
                                 Row(
-                                    Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                    Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
                                     horizontalArrangement = Arrangement.Center,
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     if (selected) {
-                                        Icon(
-                                            Icons.Default.Check,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp),
-                                        )
-                                        Spacer(Modifier.width(6.dp))
+                                        Icon(Icons.Default.Check, null, Modifier.size(15.dp))
+                                        Spacer(Modifier.width(5.dp))
                                     }
-                                    Text(
-                                        mode.label,
-                                        style = MaterialTheme.typography.labelLarge,
-                                        maxLines = 1,
-                                    )
+                                    Text(mode.label, style = MaterialTheme.typography.labelLarge, maxLines = 1)
                                 }
                             }
                         }
@@ -2092,12 +4054,199 @@ class EmulatorActivity : ComponentActivity() {
                         Text(
                             "${prof.title} — ${prof.summary}",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = cs.onSurfaceVariant,
                         )
                     }
                 }
             }
-            SegmentedGroup(null, ScreenFilter.labels.size) {
+
+            // 1b. Live Framebuffer OLED Ambilight Bezel Glow Card
+            Surface(
+                shape = RoundedCornerShape(22.dp),
+                color = cs.surfaceContainerLow,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Icon(Icons.Rounded.AutoAwesome, null, tint = cs.primary, modifier = Modifier.size(18.dp))
+                            Text("OLED Ambilight bezel glow", style = MaterialTheme.typography.titleSmall, color = cs.onSurface)
+                        }
+                        Surface(shape = RoundedCornerShape(999.dp), color = if (ambilightMode.isEnabled) cs.primaryContainer else cs.surfaceContainerHigh) {
+                            Text(
+                                ambilightMode.label,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (ambilightMode.isEnabled) cs.onPrimaryContainer else cs.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            )
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        AmbilightMode.entries.forEach { mode ->
+                            val sel = ambilightMode == mode
+                            Surface(
+                                onClick = {
+                                    setAmbilight(mode)
+                                    toast("Ambilight: ${mode.label}")
+                                },
+                                shape = RoundedCornerShape(999.dp),
+                                color = if (sel) cs.primaryContainer else cs.surfaceContainerHigh,
+                                contentColor = if (sel) cs.onPrimaryContainer else cs.onSurfaceVariant,
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(
+                                    text = mode.label,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 1,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 9.dp),
+                                )
+                            }
+                        }
+                    }
+                    if (ambilightState.isVisiblyGlowing) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(8.dp)
+                                .clip(RoundedCornerShape(999.dp))
+                                .background(
+                                    androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                        listOf(ambilightState.left, ambilightState.top, ambilightState.bottom, ambilightState.right),
+                                    ),
+                                ),
+                        )
+                    }
+                    Text(
+                        text = ambilightMode.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = cs.onSurfaceVariant,
+                    )
+                }
+            }
+
+            // 2. Resolution & Upscaling Card (1x..4x 3D Internal Res or 2D Crisp Prescale + 3D Enhancements)
+            Surface(
+                shape = RoundedCornerShape(22.dp),
+                color = cs.surfaceContainerLow,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            if (is3D) "Internal resolution upscale" else "Pixel upscaling multiplier",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = cs.onSurface,
+                        )
+                        Surface(shape = RoundedCornerShape(999.dp), color = cs.secondaryContainer) {
+                            Text(
+                                "${gfx.upscale}×",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = cs.onSecondaryContainer,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            )
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        listOf(1 to "1× Native", 2 to "2× HD", 3 to "3× FHD", 4 to "4× QHD").forEach { (scale, label) ->
+                            val sel = gfx.upscale == scale
+                            Surface(
+                                onClick = {
+                                    updateGraphics { it.copy(upscale = scale) }
+                                    toast(com.retrohero.app.data.GraphicsCoreOptions.upscaleDescription(activeCoreId, scale))
+                                },
+                                shape = RoundedCornerShape(999.dp),
+                                color = if (sel) cs.primaryContainer else cs.surfaceContainerHigh,
+                                contentColor = if (sel) cs.onPrimaryContainer else cs.onSurfaceVariant,
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(
+                                    text = if (is3D) label else "${scale}×",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 1,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 9.dp),
+                                )
+                            }
+                        }
+                    }
+                    Text(
+                        text = com.retrohero.app.data.GraphicsCoreOptions.upscaleDescription(activeCoreId, gfx.upscale),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = cs.onSurfaceVariant,
+                    )
+
+                    if (is3D) {
+                        Text("Texture filtering", style = MaterialTheme.typography.labelMedium, color = cs.onSurfaceVariant)
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            com.retrohero.app.data.TextureFilterMode.entries.forEach { tf ->
+                                val sel = gfx.textureFilter == tf
+                                Surface(
+                                    onClick = { updateGraphics { it.copy(textureFilter = tf) } },
+                                    shape = RoundedCornerShape(999.dp),
+                                    color = if (sel) cs.secondaryContainer else cs.surfaceContainerHigh,
+                                    contentColor = if (sel) cs.onSecondaryContainer else cs.onSurfaceVariant,
+                                    modifier = Modifier.weight(1f),
+                                ) {
+                                    Text(
+                                        tf.label,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 3. Aspect Ratio Card
+            Surface(
+                shape = RoundedCornerShape(22.dp),
+                color = cs.surfaceContainerLow,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Aspect ratio", style = MaterialTheme.typography.titleSmall, color = cs.onSurface)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        com.retrohero.app.data.AspectRatioMode.entries.forEach { mode ->
+                            val sel = gfx.aspectRatio == mode
+                            Surface(
+                                onClick = { updateGraphics { it.copy(aspectRatio = mode) } },
+                                shape = RoundedCornerShape(999.dp),
+                                color = if (sel) cs.primaryContainer else cs.surfaceContainerHigh,
+                                contentColor = if (sel) cs.onPrimaryContainer else cs.onSurfaceVariant,
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(
+                                    mode.label,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 1,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 4. Shaders & Pixel Upscalers
+            SegmentedGroup("Shader & pixel upscaler", ScreenFilter.labels.size) {
                 ScreenFilter.labels.forEachIndexed { i, label ->
                     SegmentedListItem(
                         onClick = { setScreen(newFilter = i) },
@@ -2109,15 +4258,19 @@ class EmulatorActivity : ComponentActivity() {
                     ) { Text(label) }
                 }
             }
-            Spacer(Modifier.height(12.dp))
-            SegmentedGroup(null, 4) {
+
+            // 5. Color Matrix, 3D Geometry Fixes, Overscan & Display Sync
+            val extra3dSwitches = (if (hasPgxp) 1 else 0) + (if (hasWideHack) 1 else 0)
+            val totalRows = 5 + extra3dSwitches
+            SegmentedGroup("Color, geometry & display sync", totalRows) {
+                var row = 0
                 val safeColorIdx = colorProfile.coerceIn(0, com.retrohero.app.data.ColorProfile.labels.lastIndex)
                 SegmentedListItem(
                     onClick = {
                         val next = (safeColorIdx + 1) % com.retrohero.app.data.ColorProfile.labels.size
                         setColorMatrix(next)
                     },
-                    shapes = shapes(0),
+                    shapes = shapes(row++),
                     colors = segmentColors(),
                     leadingContent = { ShapeIcon(Icons.Default.Tune) },
                     supportingContent = {
@@ -2125,18 +4278,61 @@ class EmulatorActivity : ComponentActivity() {
                     },
                     verticalAlignment = Alignment.CenterVertically,
                 ) { Text("Hardware color matrix") }
-                MenuSwitch(shapes(1), Icons.Default.AspectRatio, "Integer scaling", "Every game pixel the same size, with a border", integerScale) {
-                    setScreen(integer = it)
+
+                if (hasPgxp) {
+                    MenuSwitch(
+                        shapes(row++),
+                        Icons.Default.Tv,
+                        "PGXP anti-wobble 3D",
+                        "Eliminates PS1 polygon jitter & warped textures",
+                        gfx.pgxpEnabled,
+                    ) { on -> updateGraphics { it.copy(pgxpEnabled = on) } }
                 }
+
+                if (hasWideHack) {
+                    MenuSwitch(
+                        shapes(row++),
+                        Icons.Default.AspectRatio,
+                        "3D Widescreen hack",
+                        "Extends 3D camera frustum for true 16:9 gameplay",
+                        gfx.widescreenHack,
+                    ) { on ->
+                        updateGraphics {
+                            it.copy(
+                                widescreenHack = on,
+                                aspectRatio = if (on) com.retrohero.app.data.AspectRatioMode.WIDESCREEN_16_9
+                                else com.retrohero.app.data.AspectRatioMode.AUTO,
+                            )
+                        }
+                    }
+                }
+
                 MenuSwitch(
-                    shapes(2),
+                    shapes(row++),
+                    Icons.Default.AspectRatio,
+                    "Crop TV overscan",
+                    "Trims noisy CRT edge borders on NES/SNES/Genesis/PS1",
+                    gfx.cropOverscan,
+                ) { on -> updateGraphics { it.copy(cropOverscan = on) } }
+
+                MenuSwitch(
+                    shapes(row++),
+                    Icons.Default.AspectRatio,
+                    "Integer scaling",
+                    "Every game pixel the exact same size, with a clean border",
+                    integerScale,
+                ) { setScreen(integer = it) }
+
+                MenuSwitch(
+                    shapes(row++),
                     Icons.Default.Tv,
                     "Tear-free Vsync lock",
                     "Choreographer vsync + micro-pitch audio · ${displayHz.roundToInt()} Hz screen",
                     vsyncLock,
                 ) { setDisplaySync(vsync = it) }
+
                 MenuSwitch(
-                    shapes(3),
+                    shapes(row),
                     Icons.Default.History,
                     "120 Hz OLED Black Frame Insertion",
                     if (bfiCapable) "CRT-sharp motion clarity on 120 Hz OLED"
@@ -2150,64 +4346,263 @@ class EmulatorActivity : ComponentActivity() {
                     }
                 }
             }
+
             Text(
-                "Hardware profile is saved per game; display sync & filter defaults are saved per ${system.shortName}.",
+                "Graphics & upscaling settings are saved per ${system.shortName}; hardware profile is saved per game.",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 10.dp, start = 4.dp),
+                color = cs.onSurfaceVariant,
+                modifier = Modifier.padding(start = 4.dp),
             )
         }
     }
 
     @Composable
     private fun CheatsPage(back: () -> Unit) {
+        val cs = MaterialTheme.colorScheme
         var adding by remember { mutableStateOf(false) }
         var deleting by remember { mutableStateOf<Cheat?>(null) }
-        Column {
+        var query by remember { mutableStateOf("") }
+        var filterTab by remember { mutableStateOf("all") } // "all", "popular", "active"
+        var visibleLimit by remember { mutableIntStateOf(50) }
+
+        LaunchedEffect(cheatsSupported) {
+            if (cheatsSupported && cheats.isEmpty() && !cheatAutoTried && !cheatSearching) {
+                autoFindCheats(silentIfNone = true)
+            }
+        }
+
+        val indexedCheats = remember(cheats, query, filterTab) {
+            val q = query.trim().lowercase()
+            cheats.mapIndexed { idx, c -> idx to c }
+                .filter { (_, c) ->
+                    val tabOk = when (filterTab) {
+                        "active" -> c.enabled
+                        "popular" -> CheatFinder.isPopularCheat(c.name) || c.enabled
+                        else -> true
+                    }
+                    val queryOk = q.isEmpty() ||
+                        c.name.lowercase().contains(q) ||
+                        c.code.lowercase().contains(q)
+                    tabOk && queryOk
+                }
+                .sortedByDescending { (_, c) -> c.enabled }
+        }
+        val activeCount = remember(cheats) { cheats.count { it.enabled } }
+        val popularCount = remember(cheats) { cheats.count { CheatFinder.isPopularCheat(it.name) } }
+
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             PageHeader("Cheats", back)
             when {
                 !cheatsSupported -> Text(
-                    "This emulator doesn't support cheat codes.",
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    "This emulator core doesn't support cheat codes.",
+                    color = cs.onSurfaceVariant,
                     modifier = Modifier.fillMaxWidth().padding(24.dp),
                     textAlign = TextAlign.Center,
                 )
                 else -> {
-                    if (cheats.isEmpty()) {
-                        Text(
-                            "No codes yet. Add Game Genie, Action Replay or GameShark codes for this game.",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 16.dp),
-                            textAlign = TextAlign.Center,
-                        )
-                    } else {
-                        SegmentedGroup(null, cheats.size) {
-                            cheats.forEachIndexed { i, cheat ->
-                                SegmentedListItem(
-                                    onClick = { updateCheats(cheats.toMutableList().also { it[i] = cheat.copy(enabled = !cheat.enabled) }) },
-                                    onLongClick = { deleting = cheat },
-                                    shapes = shapes(i),
-                                    colors = segmentColors(),
-                                    supportingContent = { Text(cheat.code, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                                    trailingContent = {
-                                        MonoSwitch(cheat.enabled, { on -> updateCheats(cheats.toMutableList().also { it[i] = cheat.copy(enabled = on) }) })
-                                    },
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) { Text(cheat.name) }
+                    // Primary actions: Auto-find cheats + Add manual code
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Button(
+                            onClick = { autoFindCheats(silentIfNone = false) },
+                            enabled = !cheatSearching,
+                            shapes = ButtonDefaults.shapes(),
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Icon(Icons.Rounded.AutoAwesome, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(if (cheatSearching) "Searching…" else "Auto-find")
+                        }
+                        FilledTonalButton(
+                            onClick = { adding = true },
+                            shapes = ButtonDefaults.shapes(),
+                        ) {
+                            Icon(Icons.Default.Add, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text("Add code")
+                        }
+                    }
+
+                    if (cheatSearching) {
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = cs.surfaceContainerHigh,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Row(
+                                Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                ContainedLoadingIndicator(Modifier.size(34.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text("Finding cheats for ${game.title}…", style = MaterialTheme.typography.titleSmall)
+                                    Text(
+                                        "Checking libretro-database & offline classics",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = cs.onSurfaceVariant,
+                                    )
+                                }
                             }
                         }
+                    }
+
+                    cheatSearchSource?.let { src ->
                         Text(
-                            "Hold a code to delete it.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 8.dp, start = 4.dp),
+                            text = "Matched: $src",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = cs.primary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(horizontal = 4.dp),
                         )
                     }
-                    Spacer(Modifier.height(12.dp))
-                    Button(onClick = { adding = true }, shapes = ButtonDefaults.shapes(), modifier = Modifier.fillMaxWidth()) {
-                        Icon(Icons.Default.Add, null)
-                        Spacer(Modifier.width(8.dp))
-                        Text("Add code")
+
+                    cheatSearchError?.let { err ->
+                        if (cheats.isEmpty() && !cheatSearching) {
+                            Text(
+                                text = err,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = cs.onSurfaceVariant,
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 4.dp),
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                    }
+
+                    // Alternate .cht packs (e.g., Game Genie / Action Replay / GameShark / Code Breaker)
+                    if (cheatAlternatePacks.size > 1) {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            cheatAlternatePacks.forEach { pack ->
+                                val selected = activeCheatPack?.fileName == pack.fileName
+                                FilterChip(
+                                    selected = selected,
+                                    onClick = { selectCheatPack(pack) },
+                                    label = { Text(pack.displayLabel, maxLines = 1) },
+                                )
+                            }
+                        }
+                    }
+
+                    if (cheats.isEmpty() && !cheatSearching) {
+                        Text(
+                            "Tap Auto-find to discover Game Genie, Action Replay, GameShark or Code Breaker codes for this game.",
+                            color = cs.onSurfaceVariant,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp),
+                            textAlign = TextAlign.Center,
+                        )
+                    } else if (cheats.isNotEmpty()) {
+                        // Search + filter bar when a cheat pack has more than a handful of entries
+                        if (cheats.size > 5) {
+                            OutlinedTextField(
+                                value = query,
+                                onValueChange = {
+                                    query = it
+                                    visibleLimit = 50
+                                },
+                                placeholder = { Text("Search ${cheats.size} cheats (lives, health, coins…)") },
+                                leadingIcon = { Icon(Icons.Rounded.Search, null, modifier = Modifier.size(18.dp)) },
+                                trailingIcon = if (query.isNotEmpty()) {
+                                    {
+                                        IconButton(onClick = { query = "" }) {
+                                            Icon(Icons.Rounded.Close, "Clear", modifier = Modifier.size(18.dp))
+                                        }
+                                    }
+                                } else null,
+                                singleLine = true,
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                FilterChip(
+                                    selected = filterTab == "all",
+                                    onClick = { filterTab = "all"; visibleLimit = 50 },
+                                    label = { Text("All (${cheats.size})") },
+                                )
+                                if (popularCount > 0) {
+                                    FilterChip(
+                                        selected = filterTab == "popular",
+                                        onClick = { filterTab = "popular"; visibleLimit = 50 },
+                                        label = { Text("Popular ($popularCount)") },
+                                    )
+                                }
+                                FilterChip(
+                                    selected = filterTab == "active",
+                                    onClick = { filterTab = "active"; visibleLimit = 50 },
+                                    label = { Text("Active ($activeCount)") },
+                                )
+                                if (activeCount > 0) {
+                                    TextButton(onClick = {
+                                        updateCheats(cheats.map { it.copy(enabled = false) })
+                                        toast("All cheats disabled")
+                                    }) { Text("Disable all") }
+                                }
+                            }
+                        }
+
+                        val shown = indexedCheats.take(visibleLimit)
+                        if (shown.isEmpty()) {
+                            Text(
+                                if (filterTab == "active") "No active cheats yet. Flip any switch to enable a code."
+                                else "No cheats match “$query”.",
+                                color = cs.onSurfaceVariant,
+                                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                textAlign = TextAlign.Center,
+                            )
+                        } else {
+                            SegmentedGroup(null, shown.size) {
+                                shown.forEachIndexed { rowIdx, (origIndex, cheat) ->
+                                    SegmentedListItem(
+                                        onClick = {
+                                            updateCheats(cheats.toMutableList().also {
+                                                it[origIndex] = cheat.copy(enabled = !cheat.enabled)
+                                            })
+                                        },
+                                        onLongClick = { deleting = cheat },
+                                        shapes = shapes(rowIdx),
+                                        colors = segmentColors(),
+                                        supportingContent = { Text(cheat.code, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                        trailingContent = {
+                                            MonoSwitch(cheat.enabled, { on ->
+                                                updateCheats(cheats.toMutableList().also {
+                                                    it[origIndex] = cheat.copy(enabled = on)
+                                                })
+                                            })
+                                        },
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) { Text(cheat.name, maxLines = 2, overflow = TextOverflow.Ellipsis) }
+                                }
+                            }
+                            if (indexedCheats.size > shown.size) {
+                                val remaining = indexedCheats.size - shown.size
+                                FilledTonalButton(
+                                    onClick = { visibleLimit += 50 },
+                                    shapes = ButtonDefaults.shapes(),
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Text("Show more (${remaining} remaining)")
+                                }
+                            }
+                            Text(
+                                "Hold any code to delete it · Auto-found cheats start off so Hardcore achievements stay safe.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = cs.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 2.dp, start = 4.dp),
+                            )
+                        }
                     }
                 }
             }
@@ -2328,11 +4723,13 @@ class EmulatorActivity : ComponentActivity() {
         private const val EXTRA_ROM_PATH = "rom_path"
 
         private const val EXTRA_LOAD_SLOT = "load_slot"
+        private const val EXTRA_STATE_PATH = "state_path"
+        private const val EXTRA_CHALLENGE_TITLE = "challenge_title"
         private const val EXTRA_PATCH_PATH = "patch_path"
         private const val EXTRA_PATCH_NAME = "patch_name"
         private const val EXTRA_PATCH_FORMAT = "patch_format"
 
-        /** [slot]: a save-state slot to resume from (AppPaths.AUTO_SLOT or 1..4); null uses the usual auto-resume. */
+        /** [slot] or [statePath]: resume from a save state instead of the usual auto-resume. */
         fun intent(
             context: Context,
             game: Game,
@@ -2340,6 +4737,8 @@ class EmulatorActivity : ComponentActivity() {
             corePath: String,
             romPath: String,
             slot: Int? = null,
+            statePath: String? = null,
+            challengeTitle: String? = null,
             patchPath: String? = null,
             patchName: String? = null,
             patchFormat: String? = null,
@@ -2351,9 +4750,163 @@ class EmulatorActivity : ComponentActivity() {
                 .putExtra(EXTRA_ROM_PATH, romPath)
                 .apply {
                     if (slot != null) putExtra(EXTRA_LOAD_SLOT, slot)
+                    if (!statePath.isNullOrBlank()) putExtra(EXTRA_STATE_PATH, statePath)
+                    if (!challengeTitle.isNullOrBlank()) putExtra(EXTRA_CHALLENGE_TITLE, challengeTitle)
                     if (!patchPath.isNullOrBlank()) putExtra(EXTRA_PATCH_PATH, patchPath)
                     if (!patchName.isNullOrBlank()) putExtra(EXTRA_PATCH_NAME, patchName)
                     if (!patchFormat.isNullOrBlank()) putExtra(EXTRA_PATCH_FORMAT, patchFormat)
                 }
+    }
+
+    @Composable
+    private fun ShareMomentPage(back: () -> Unit) {
+        var title by remember { mutableStateOf("${game.title} Challenge") }
+        var note by remember { mutableStateOf("") }
+        var winTypeIdx by remember { mutableIntStateOf(0) } // 0=Time Trial, 1=Survive 30s, 2=RAM Goal, 3=Free Snapshot
+        var surviveSecs by remember { mutableStateOf("30") }
+        var ramAddrHex by remember { mutableStateOf("0000") }
+        var ramTargetVal by remember { mutableStateOf("0") }
+
+        fun buildWinCondition(): com.retrohero.app.data.ChallengeWinCondition? = when (winTypeIdx) {
+            0 -> com.retrohero.app.data.ChallengeWinCondition(
+                type = com.retrohero.app.data.ChallengeWinType.TIME_TRIAL,
+                label = "Beat the ghost run",
+            )
+            1 -> com.retrohero.app.data.ChallengeWinCondition(
+                type = com.retrohero.app.data.ChallengeWinType.SURVIVE,
+                targetSeconds = (surviveSecs.toIntOrNull() ?: 30).coerceIn(5, 300),
+            )
+            2 -> {
+                val off = ramAddrHex.trim().removePrefix("0x").removePrefix("0X").toIntOrNull(16) ?: 0
+                val tv = ramTargetVal.trim().toIntOrNull() ?: 0
+                com.retrohero.app.data.ChallengeWinCondition(
+                    type = com.retrohero.app.data.ChallengeWinType.RAM_GOAL,
+                    ramOffset = off,
+                    ramSize = 1,
+                    op = com.retrohero.app.data.ChallengeRamOp.EQ,
+                    targetValue = tv,
+                )
+            }
+            else -> null
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            PageHeader("Challenge snapshots", back)
+            Text(
+                "Record a deterministic save state + input ghost + optional win condition as a tiny .rhclip file (no ROM included) so a friend drops straight into this exact frame.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedTextField(
+                value = title,
+                onValueChange = { title = it.take(80) },
+                label = { Text("Challenge title") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = note,
+                onValueChange = { note = it.take(240) },
+                label = { Text("Rule or trash-talk note (optional)") },
+                maxLines = 2,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("Ghost Race", "Survive", "RAM Goal", "Snapshot").forEachIndexed { idx, label ->
+                    val sel = winTypeIdx == idx
+                    Surface(
+                        onClick = { winTypeIdx = idx },
+                        shape = RoundedCornerShape(999.dp),
+                        color = if (sel) MaterialTheme.colorScheme.primaryContainer
+                        else MaterialTheme.colorScheme.surfaceContainerHigh,
+                        contentColor = if (sel) MaterialTheme.colorScheme.onPrimaryContainer
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(
+                            label,
+                            style = MaterialTheme.typography.labelSmall,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp),
+                        )
+                    }
+                }
+            }
+            if (winTypeIdx == 1) {
+                OutlinedTextField(
+                    value = surviveSecs,
+                    onValueChange = { surviveSecs = it.filter { c -> c.isDigit() }.take(3) },
+                    label = { Text("Survive duration (seconds)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            } else if (winTypeIdx == 2) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = ramAddrHex,
+                        onValueChange = { ramAddrHex = it.take(8) },
+                        label = { Text("RAM offset (hex)") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                    OutlinedTextField(
+                        value = ramTargetVal,
+                        onValueChange = { ramTargetVal = it.filter { c -> c.isDigit() }.take(5) },
+                        label = { Text("Target == value") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+            Button(
+                onClick = { startChallengeRecording(title, note, buildWinCondition()) },
+                shapes = ButtonDefaults.shapes(),
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Record Live Challenge Ghost (up to 60s)") }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(
+                    onClick = { shareMoment(title, note, winCondition = buildWinCondition()) },
+                    modifier = Modifier.weight(1f),
+                ) { Text("Instant snapshot") }
+                TextButton(
+                    onClick = { challengePicker.launch(arrayOf("*/*")) },
+                    modifier = Modifier.weight(1f),
+                ) { Text("Load .rhclip") }
+            }
+        }
+    }
+
+    @Composable
+    private fun NetplayPage(back: () -> Unit) {
+        val npState by netplaySession.state.collectAsState()
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            PageHeader("Rollback netplay", back)
+            NetplayPanel(
+                coreId = activeCoreId,
+                state = npState,
+                onHost = { delayFrames ->
+                    netplaySession.hostRoom(delayFrames)
+                },
+                onJoin = { codeOrInvite, delayFrames ->
+                    netplaySession.joinRoom(codeOrInvite, delayFrames)
+                },
+                onStop = {
+                    netplaySession.stop()
+                    toast("Rollback Netplay disconnected")
+                },
+                onCopyInvite = { invite ->
+                    val cm = getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+                    cm?.setPrimaryClip(android.content.ClipData.newPlainText("RetroHero Netplay", invite))
+                    toast("Room invite copied!")
+                },
+                onShareInvite = { invite ->
+                    val send = Intent(Intent.ACTION_SEND)
+                        .setType("text/plain")
+                        .putExtra(Intent.EXTRA_TEXT, "Join my RetroHero Rollback Netplay room for ${game.title}:\n$invite")
+                    startActivity(Intent.createChooser(send, "Share Netplay room"))
+                },
+            )
+        }
     }
 }

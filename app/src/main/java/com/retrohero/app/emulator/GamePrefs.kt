@@ -22,6 +22,27 @@ class GamePrefs(context: Context, sharpDefault: Boolean) {
     fun integerScale(systemId: String): Boolean = prefs.getBoolean("integer_$systemId", false)
     fun setIntegerScale(systemId: String, on: Boolean) = prefs.edit { putBoolean("integer_$systemId", on) }
 
+    fun graphicsConfig(systemId: String, is3D: Boolean): com.retrohero.app.data.GraphicsConfig {
+        val defaultUpscale = if (is3D) 2 else 3
+        return com.retrohero.app.data.GraphicsConfig(
+            upscale = prefs.getInt("gfx_upscale_$systemId", defaultUpscale).coerceIn(1, 4),
+            aspectRatio = com.retrohero.app.data.AspectRatioMode.fromId(prefs.getString("gfx_aspect_$systemId", null)),
+            textureFilter = com.retrohero.app.data.TextureFilterMode.fromId(prefs.getString("gfx_tex_$systemId", null)),
+            widescreenHack = prefs.getBoolean("gfx_wide_$systemId", false),
+            pgxpEnabled = prefs.getBoolean("gfx_pgxp_$systemId", true),
+            cropOverscan = prefs.getBoolean("gfx_overscan_$systemId", false),
+        )
+    }
+
+    fun setGraphicsConfig(systemId: String, cfg: com.retrohero.app.data.GraphicsConfig) = prefs.edit {
+        putInt("gfx_upscale_$systemId", cfg.upscale.coerceIn(1, 4))
+        putString("gfx_aspect_$systemId", cfg.aspectRatio.id)
+        putString("gfx_tex_$systemId", cfg.textureFilter.id)
+        putBoolean("gfx_wide_$systemId", cfg.widescreenHack)
+        putBoolean("gfx_pgxp_$systemId", cfg.pgxpEnabled)
+        putBoolean("gfx_overscan_$systemId", cfg.cropOverscan)
+    }
+
     var rewind: Boolean
         get() = prefs.getBoolean("rewind", true)
         set(v) = prefs.edit { putBoolean("rewind", v) }
@@ -33,6 +54,17 @@ class GamePrefs(context: Context, sharpDefault: Boolean) {
     var bfi120Hz: Boolean
         get() = prefs.getBoolean("bfi_120hz", false)
         set(v) = prefs.edit { putBoolean("bfi_120hz", v) }
+
+    var ambilightMode: AmbilightMode
+        get() = AmbilightMode.fromId(prefs.getString("ambilight_mode", AmbilightMode.VIVID.id))
+        set(v) = prefs.edit {
+            putString("ambilight_mode", v.id)
+            if (v.isEnabled) putString("ambilight_last_active", v.id)
+        }
+
+    val lastActiveAmbilightMode: AmbilightMode
+        get() = AmbilightMode.fromId(prefs.getString("ambilight_last_active", AmbilightMode.VIVID.id))
+            .takeIf { it.isEnabled } ?: AmbilightMode.VIVID
 
     var thumbChordZones: Boolean
         get() = prefs.getBoolean("smart_thumb_chord", true)
@@ -87,6 +119,55 @@ class GamePrefs(context: Context, sharpDefault: Boolean) {
 
     fun setStateCore(gameId: String, slot: Int, coreId: String) =
         prefs.edit { putString("state_core_${gameId.hashCode()}_$slot", coreId) }
+
+    /** Nintendo DS screen layout remembered per game + orientation, falling back to the last DS choice. */
+    fun dsLayout(gameId: String, landscape: Boolean): DsScreenLayout {
+        val o = if (landscape) "land" else "port"
+        return DsScreenLayout.fromId(prefs.getString("ds_layout_${gameId.hashCode()}_$o", null))
+            ?: DsScreenLayout.fromId(prefs.getString("ds_layout_last_$o", null))
+            ?: DsDualScreen.defaultLayout(landscape)
+    }
+
+    fun setDsLayout(gameId: String, landscape: Boolean, layout: DsScreenLayout) = prefs.edit {
+        val o = if (landscape) "land" else "port"
+        putString("ds_layout_${gameId.hashCode()}_$o", layout.id)
+        putString("ds_layout_last_$o", layout.id)
+    }
+
+    fun dsSwapped(gameId: String): Boolean = prefs.getBoolean("ds_swap_${gameId.hashCode()}", false)
+    fun setDsSwapped(gameId: String, swapped: Boolean) = prefs.edit { putBoolean("ds_swap_${gameId.hashCode()}", swapped) }
+
+    fun pinnedNote(gameId: String): String? =
+        prefs.getString("guide_pin_${gameId.hashCode()}", null)?.takeIf { it.isNotBlank() }
+
+    fun setPinnedNote(gameId: String, note: String?) = prefs.edit {
+        val key = "guide_pin_${gameId.hashCode()}"
+        if (note.isNullOrBlank()) remove(key) else putString(key, note.trim())
+    }
+
+    fun practiceBestMs(gameId: String): Long? =
+        prefs.getLong("practice_pb_${gameId.hashCode()}", -1L).takeIf { it > 0L }
+
+    fun setPracticeBestMs(gameId: String, ms: Long?) = prefs.edit {
+        val key = "practice_pb_${gameId.hashCode()}"
+        if (ms == null || ms <= 0L) remove(key) else putLong(key, ms)
+    }
+
+    fun nostalgiaConfig(): NostalgiaConfig = NostalgiaConfig(
+        enabled = prefs.getBoolean("nostalgia_enabled", false),
+        tactileStartup = prefs.getBoolean("nostalgia_startup", true),
+        crtWarmup = prefs.getBoolean("nostalgia_warmup", true),
+        displayAging = prefs.getFloat("nostalgia_aging", 0.25f).coerceIn(0f, 1f),
+        batteryLedDimming = prefs.getBoolean("nostalgia_battery_led", true),
+    )
+
+    fun setNostalgiaConfig(cfg: NostalgiaConfig) = prefs.edit {
+        putBoolean("nostalgia_enabled", cfg.enabled)
+        putBoolean("nostalgia_startup", cfg.tactileStartup)
+        putBoolean("nostalgia_warmup", cfg.crtWarmup)
+        putFloat("nostalgia_aging", cfg.displayAging.coerceIn(0f, 1f))
+        putBoolean("nostalgia_battery_led", cfg.batteryLedDimming)
+    }
 
     companion object {
         const val FILE = "game_prefs"

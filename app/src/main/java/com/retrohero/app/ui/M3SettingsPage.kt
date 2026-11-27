@@ -34,6 +34,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccessibilityNew
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.BugReport
+import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.Backup
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
@@ -53,6 +55,7 @@ import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.Shield
 import androidx.compose.material.icons.rounded.SportsEsports
 import androidx.compose.material.icons.rounded.Vibration
+import androidx.compose.material.icons.rounded.ViewInAr
 import androidx.compose.material.icons.rounded.Wallpaper
 import coil.compose.AsyncImage
 import com.retrohero.app.data.RaProfile
@@ -126,6 +129,7 @@ internal fun M3SettingsPage(
     stickAsDpad: Boolean,
     screenshotsToGallery: Boolean,
     reducedMotion: Boolean,
+    showCasesEverywhere: Boolean = false,
     fastForwardSpeed: Float,
     dynamicColor: Boolean,
     coreStates: Map<String, CoreState>,
@@ -138,6 +142,7 @@ internal fun M3SettingsPage(
     onSetStickAsDpad: (Boolean) -> Unit,
     onSetScreenshotsToGallery: (Boolean) -> Unit,
     onSetReducedMotion: (Boolean) -> Unit,
+    onSetShowCasesEverywhere: (Boolean) -> Unit = {},
     onSetFastForward: (Float) -> Unit,
     onSetDynamicColor: (Boolean) -> Unit,
     onSelectPalette: (String) -> Unit,
@@ -153,6 +158,10 @@ internal fun M3SettingsPage(
     onImportSkin: () -> Unit,
     onBackup: () -> Unit,
     onRestore: () -> Unit,
+    onOpenCrashReports: () -> Unit = {},
+    crashReportCount: Int = 0,
+    hiddenGameCount: Int = 0,
+    onRestoreHiddenGames: () -> Unit = {},
     onDownloadCore: (CoreInfo) -> Unit,
     onDownloadAllNeededCores: () -> Unit,
     onDeleteCore: (CoreInfo) -> Unit,
@@ -169,6 +178,9 @@ internal fun M3SettingsPage(
     showPerfHud: Boolean = false,
     onSetRunAhead: (Int) -> Unit = {},
     onSetShowPerfHud: (Boolean) -> Unit = {},
+    launchboxStatus: com.retrohero.app.data.LaunchBoxDbStatus = com.retrohero.app.data.LaunchBoxDbStatus(false),
+    launchboxSyncProgress: String? = null,
+    onSyncLaunchBox: () -> Unit = {},
 ) {
     var subPage by rememberSaveable { mutableStateOf(SettingsSubPage.Root) }
 
@@ -538,7 +550,18 @@ internal fun M3SettingsPage(
                     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         M3SegmentedItem(
                             index = 0,
-                            count = 4,
+                            count = 5,
+                            icon = Icons.Rounded.ViewInAr,
+                            badgePolygon = MaterialShapes.Arch,
+                            badgeContainer = cs.tertiaryContainer,
+                            badgeContent = cs.onTertiaryContainer,
+                            title = "3D cases everywhere",
+                            subtitle = "Show 3D cases on Home hero & cards (off: Game Info & Shelf only)",
+                            trailing = { M3ExpressiveSwitch(checked = showCasesEverywhere, onCheckedChange = onSetShowCasesEverywhere) },
+                        )
+                        M3SegmentedItem(
+                            index = 1,
+                            count = 5,
                             icon = Icons.Rounded.GridOn,
                             badgePolygon = MaterialShapes.Cookie6Sided,
                             badgeContainer = cs.primaryContainer,
@@ -551,7 +574,7 @@ internal fun M3SettingsPage(
                         Column(
                             Modifier
                                 .fillMaxWidth()
-                                .clip(m3SegmentedShape(1, 4))
+                                .clip(m3SegmentedShape(2, 5))
                                 .background(cs.surfaceContainerHigh)
                                 .padding(horizontal = 16.dp, vertical = 12.dp),
                             verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -585,8 +608,8 @@ internal fun M3SettingsPage(
                             )
                         }
                         M3SegmentedItem(
-                            index = 2,
-                            count = 4,
+                            index = 3,
+                            count = 5,
                             icon = Icons.Rounded.Gamepad,
                             badgePolygon = MaterialShapes.Sunny,
                             badgeContainer = cs.tertiaryContainer,
@@ -596,8 +619,8 @@ internal fun M3SettingsPage(
                             trailing = { M3ExpressiveSwitch(checked = stickAsDpad, onCheckedChange = onSetStickAsDpad) },
                         )
                         M3SegmentedItem(
-                            index = 3,
-                            count = 4,
+                            index = 4,
+                            count = 5,
                             icon = Icons.Rounded.SportsEsports,
                             badgePolygon = MaterialShapes.Gem,
                             badgeContainer = cs.secondaryContainer,
@@ -746,9 +769,15 @@ internal fun M3SettingsPage(
 
             // 6. Backup, Restore & Direct Downloads
             item(key = "m3_set_backup") {
+                val lbSubtitle = when {
+                    launchboxSyncProgress != null -> launchboxSyncProgress
+                    launchboxStatus.synced -> "${launchboxStatus.gameCount} games indexed offline · Tap to refresh Metadata.zip"
+                    else -> "Live GamesDB active · Tap to cache full Metadata.zip offline"
+                }
+                val rows = if (hiddenGameCount > 0) 6 else 5
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        text = "Backup & downloads",
+                        text = "Backup, metadata & downloads",
                         style = MaterialTheme.typography.titleSmall,
                         color = cs.primary,
                         modifier = Modifier.padding(horizontal = 8.dp),
@@ -756,7 +785,18 @@ internal fun M3SettingsPage(
                     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         M3SegmentedItem(
                             index = 0,
-                            count = 3,
+                            count = rows,
+                            icon = Icons.Rounded.AutoAwesome,
+                            badgePolygon = MaterialShapes.Sunny,
+                            badgeContainer = cs.primaryContainer,
+                            badgeContent = cs.onPrimaryContainer,
+                            title = "LaunchBox GamesDB metadata",
+                            subtitle = lbSubtitle,
+                            onClick = if (launchboxSyncProgress == null) onSyncLaunchBox else null,
+                        )
+                        M3SegmentedItem(
+                            index = 1,
+                            count = rows,
                             icon = Icons.Rounded.Backup,
                             badgePolygon = MaterialShapes.Cookie9Sided,
                             badgeContainer = cs.primaryContainer,
@@ -766,8 +806,8 @@ internal fun M3SettingsPage(
                             onClick = onBackup,
                         )
                         M3SegmentedItem(
-                            index = 1,
-                            count = 3,
+                            index = 2,
+                            count = rows,
                             icon = Icons.Rounded.Restore,
                             badgePolygon = MaterialShapes.Clover4Leaf,
                             badgeContainer = cs.secondaryContainer,
@@ -777,8 +817,8 @@ internal fun M3SettingsPage(
                             onClick = onRestore,
                         )
                         M3SegmentedItem(
-                            index = 2,
-                            count = 3,
+                            index = 3,
+                            count = rows,
                             icon = Icons.Rounded.Link,
                             badgePolygon = MaterialShapes.Cookie6Sided,
                             badgeContainer = cs.tertiaryContainer,
@@ -787,6 +827,31 @@ internal fun M3SettingsPage(
                             subtitle = "Fetch a game file or folder directly",
                             onClick = onOpenDownloadGame,
                         )
+                        M3SegmentedItem(
+                            index = 4,
+                            count = rows,
+                            icon = Icons.Rounded.BugReport,
+                            badgePolygon = MaterialShapes.Cookie4Sided,
+                            badgeContainer = cs.errorContainer,
+                            badgeContent = cs.onErrorContainer,
+                            title = "Crash reports",
+                            subtitle = if (crashReportCount == 0) "None saved · stored only on this device"
+                            else "$crashReportCount saved on this device · Tap to share or delete",
+                            onClick = onOpenCrashReports,
+                        )
+                        if (hiddenGameCount > 0) {
+                            M3SegmentedItem(
+                                index = 5,
+                                count = rows,
+                                icon = Icons.Rounded.VisibilityOff,
+                                badgePolygon = MaterialShapes.Pill,
+                                badgeContainer = cs.secondaryContainer,
+                                badgeContent = cs.onSecondaryContainer,
+                                title = "Hidden games",
+                                subtitle = "$hiddenGameCount removed from your library · Tap to bring them back",
+                                onClick = onRestoreHiddenGames,
+                            )
+                        }
                     }
                 }
             }

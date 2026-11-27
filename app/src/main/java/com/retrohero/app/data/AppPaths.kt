@@ -25,6 +25,9 @@ class AppPaths(context: Context) {
     val looks = File(context.filesDir, "looks")
     /** Imported .deltaskin bundles (extracted one per subfolder). */
     val deltaSkins = File(context.filesDir, "delta_skins")
+    /** Exported .rhclip playable moment capsules. */
+    val clips = File(context.filesDir, "clips").apply { mkdirs() }
+    val clipTmp = File(context.cacheDir, "clips").apply { mkdirs() }
     /** Controller remaps; written by the main app, read when a game starts. */
     val remapFile = File(context.filesDir, "remap.json")
     /** Touch-control positions; written in-game. */
@@ -61,6 +64,10 @@ class AppPaths(context: Context) {
         return File(File(states, game.systemId).apply { mkdirs() }, name)
     }
 
+    /** Dedicated Practice Loop Anchor save-state file (never overwrites user slots 1–6). */
+    fun practiceAnchorFile(game: Game): File =
+        File(File(states, game.systemId).apply { mkdirs() }, "${game.baseName}.practice.state")
+
     fun screenshotsDir(game: Game): File = File(File(screenshots, game.systemId), game.baseName)
 
     /** Your screenshots for [game], newest first. */
@@ -70,6 +77,9 @@ class AppPaths(context: Context) {
     fun coverFile(game: Game): File = File(File(covers, game.systemId), "${game.baseName}.png")
     fun cheatsFile(game: Game): File = File(File(cheats, game.systemId), "${game.baseName}.json")
     fun playtimeFile(game: Game): File = File(File(playtime, game.systemId), "${game.baseName}.json")
+    fun notesFile(game: Game): File = File(File(File(saves.parentFile, "notes"), game.systemId).apply { mkdirs() }, "${game.baseName}.txt")
+    fun macrosFile(game: Game): File = File(File(File(saves.parentFile, "macros"), game.systemId).apply { mkdirs() }, "${game.baseName}.json")
+    fun browserBookmarkFile(game: Game): File = File(File(File(saves.parentFile, "browser_bookmarks"), game.systemId).apply { mkdirs() }, "${game.baseName}.url")
     fun patchesDir(game: Game): File = File(File(patches, game.systemId), game.baseName)
 
     fun coreOptionsFile(coreId: String): File = File(coreOptions, "$coreId.opt")

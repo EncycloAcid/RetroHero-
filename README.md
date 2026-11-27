@@ -63,12 +63,16 @@ app/src/main/
 
 ## Building
 
-Requirements: JDK 17+, Android SDK 37.1, NDK 27.2.12479018 and CMake 3.22.1 (Android Studio installs these automatically).
+Requirements: JDK 21+ (17 builds, but Robolectric tests need 21), Android SDK 37.1, NDK 27.2.12479018 and CMake 3.22.1 (Android Studio installs these automatically).
 
 ```bash
-./gradlew assembleDebug        # app/build/outputs/apk/debug/app-debug.apk
+./gradlew assembleDebug        # app/build/outputs/apk/debug/app-<abi>-debug.apk
 ./gradlew testDebugUnitTest    # also renders UI screenshots to app/build/screenshots/
 ```
+
+Builds produce one APK per CPU type plus a universal one: `app-arm64-v8a-*.apk` (almost every phone), `app-armeabi-v7a-*.apk` (old 32-bit phones), `app-x86_64-*.apk` (emulators and Chromebooks) and `app-universal-*.apk` (runs anywhere, about twice the size). They share a version code and signing key, so any of them updates any other in place. CI runs the unit tests before building, and a failing test stops the APKs from being published.
+
+**Crash reports.** Crashes in the app or in a game (including native core crashes and ANRs on Android 11+) are saved as text files in the app's private storage. After a crash the app offers to share the report, and *Settings → Crash reports* lists, shares or deletes them. Nothing is sent anywhere unless the player shares it.
 
 `assembleRelease` is signed with the debug key so you can test a minified build. Set up your own signing config before you publish.
 

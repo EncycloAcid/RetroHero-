@@ -105,8 +105,19 @@ void VideoOutput::setWindow(ANativeWindow *window) {
 
 void VideoOutput::setFilter(int filter) {
     std::lock_guard<std::mutex> lk(mutex_);
-    filter_ = filter < Sharp || filter > Lcd ? Sharp : filter;
-    sharpScale_ = filter_ == Smooth ? 1 : 3;
+    filter_ = (filter < Sharp || filter > SharpBilinear) ? Sharp : filter;
+    sharpScale_ = (filter_ == Smooth) ? 1 : (filter_ == Scale2x ? 2 : upscaleFactor_);
+    bufW_ = bufH_ = 0;
+    if (window_ && !last_.empty())
+        blitLocked(last_.data(), lastW_, lastH_, lastPitch_, lastFmt_);
+}
+
+void VideoOutput::setUpscaleFactor(int factor) {
+    std::lock_guard<std::mutex> lk(mutex_);
+    int clamped = std::clamp(factor, 1, 4);
+    if (clamped == upscaleFactor_) return;
+    upscaleFactor_ = clamped;
+    sharpScale_ = (filter_ == Smooth) ? 1 : (filter_ == Scale2x ? 2 : upscaleFactor_);
     bufW_ = bufH_ = 0;
     if (window_ && !last_.empty())
         blitLocked(last_.data(), lastW_, lastH_, lastPitch_, lastFmt_);
@@ -147,6 +158,137 @@ void VideoOutput::redraw() {
         blitLocked(last_.data(), lastW_, lastH_, lastPitch_, lastFmt_);
 }
 
+namespace {
+
+struct EdgeAccum {
+    uint32_t rSum = 0;
+    uint32_t gSum = 0;
+    uint32_t bSum = 0;
+    uint32_t wSum = 0;
+    uint32_t lumaSum = 0;
+    uint32_t count = 0;
+
+    inline void add(uint32_t r, uint32_t g, uint32_t b) {
+        uint32_t maxC = std::max({r, g, b});
+        uint32_t minC = std::min({r, g, b});
+        uint32_t chroma = maxC - minC;
+        uint32_t luma = (r * 77u + g * 150u + b * 29u) >> 8;
+        // Favor saturated & luminous pixels so black overscan/void borders don't dull live game colors
+        uint32_t w = 14u + (chroma >> 1) + (luma >> 2);
+        rSum += r * w;
+        gSum += g * w;
+        bSum += b * w;
+        wSum += w;
+        lumaSum += luma;
+        count++;
+    }
+
+    inline uint32_t toBoostedArgb() const {
+        if (wSum == 0) return 0xFF000000u;
+        float r = static_cast<float>(rSum) / static_cast<float>(wSum);
+        float g = static_cast<float>(gSum) / static_cast<float>(wSum);
+        float b = static_cast<float>(bSum) / static_cast<float>(wSum);
+        // Subtle OLED chroma boost (+32% saturation around neutral axis; preserves pure white flashes)
+        float mid = (r + g + b) * (1.0f / 3.0f);
+        auto boost = [mid](float c) -> uint32_t {
+            float v = mid + (c - mid) * 1.32f;
+            int iv = static_cast<int>(v + 0.5f);
+            if (iv < 0) iv = 0;
+            if (iv > 255) iv = 255;
+            return static_cast<uint32_t>(iv);
+        };
+        return 0xFF000000u | (boost(r) << 16) | (boost(g) << 8) | boost(b);
+    }
+
+    inline float meanLuma() const {
+        return count > 0 ? static_cast<float>(lumaSum) / static_cast<float>(count) : 0.0f;
+    }
+};
+
+inline uint32_t computeFlashStep(float frameLuma, float &avgLumaState) {
+    if (avgLumaState < 0.0f) {
+        avgLumaState = frameLuma;
+        return 0u;
+    }
+    float jump = std::max(0.0f, frameLuma - avgLumaState);
+    avgLumaState = avgLumaState * 0.88f + frameLuma * 0.12f;
+    int flash = static_cast<int>(jump * 3.2f + 0.5f);
+    return static_cast<uint32_t>(std::clamp(flash, 0, 255));
+}
+
+}  // namespace
+
+void computeAmbilightFromRgbaGrid(const uint8_t *rgba16x16, bool bottomLeftOrigin,
+                                  float &avgLumaState, uint32_t out[5]) {
+    if (!rgba16x16) return;
+    EdgeAccum top, bottom, left, right;
+    auto sampleAt = [&](int gx, int gy, EdgeAccum &acc) {
+        int sy = bottomLeftOrigin ? (15 - gy) : gy;
+        const uint8_t *p = rgba16x16 + (sy * 16 + gx) * 4;
+        acc.add(p[0], p[1], p[2]);
+    };
+    // Inset by 1 cell (1..14) so 1-row overscan borders don't mute the halo
+    for (int i = 1; i <= 14; i++) {
+        sampleAt(i, 1, top);
+        sampleAt(i, 2, top);
+        sampleAt(i, 14, bottom);
+        sampleAt(i, 13, bottom);
+        sampleAt(1, i, left);
+        sampleAt(2, i, left);
+        sampleAt(14, i, right);
+        sampleAt(13, i, right);
+    }
+    float frameLuma = 0.25f * (top.meanLuma() + bottom.meanLuma() + left.meanLuma() + right.meanLuma());
+    out[0] = top.toBoostedArgb();
+    out[1] = bottom.toBoostedArgb();
+    out[2] = left.toBoostedArgb();
+    out[3] = right.toBoostedArgb();
+    out[4] = computeFlashStep(frameLuma, avgLumaState);
+}
+
+void VideoOutput::pollAmbilight(uint32_t out[5]) const {
+    for (int i = 0; i < 5; i++) {
+        out[i] = ambilight_[i].load(std::memory_order_relaxed);
+    }
+}
+
+void VideoOutput::sampleAmbilight(const uint8_t *data, unsigned width, unsigned height,
+                                  size_t pitch, int fmt) {
+    if (width < 4 || height < 4) return;
+    EdgeAccum top, bottom, left, right;
+    const unsigned insetX = std::max(1u, width / 12u);
+    const unsigned insetY = std::max(1u, height / 12u);
+    const unsigned spanX = width > insetX * 2 ? (width - insetX * 2) : width;
+    const unsigned spanY = height > insetY * 2 ? (height - insetY * 2) : height;
+
+    auto readRgb = [&](unsigned x, unsigned y, EdgeAccum &acc) {
+        uint32_t argb = toArgb(data + static_cast<size_t>(y) * pitch, x, fmt);
+        acc.add((argb >> 16) & 0xFFu, (argb >> 8) & 0xFFu, argb & 0xFFu);
+    };
+
+    constexpr unsigned kSamples = 16;
+    const unsigned yTop = std::min(insetY, height - 1);
+    const unsigned yBottom = height > insetY ? (height - 1 - insetY) : (height - 1);
+    const unsigned xLeft = std::min(insetX, width - 1);
+    const unsigned xRight = width > insetX ? (width - 1 - insetX) : (width - 1);
+
+    for (unsigned i = 0; i < kSamples; i++) {
+        unsigned sx = std::min(width - 1, insetX + (i * spanX) / kSamples);
+        unsigned sy = std::min(height - 1, insetY + (i * spanY) / kSamples);
+        readRgb(sx, yTop, top);
+        readRgb(sx, yBottom, bottom);
+        readRgb(xLeft, sy, left);
+        readRgb(xRight, sy, right);
+    }
+
+    float frameLuma = 0.25f * (top.meanLuma() + bottom.meanLuma() + left.meanLuma() + right.meanLuma());
+    ambilight_[0].store(top.toBoostedArgb(), std::memory_order_relaxed);
+    ambilight_[1].store(bottom.toBoostedArgb(), std::memory_order_relaxed);
+    ambilight_[2].store(left.toBoostedArgb(), std::memory_order_relaxed);
+    ambilight_[3].store(right.toBoostedArgb(), std::memory_order_relaxed);
+    ambilight_[4].store(computeFlashStep(frameLuma, ambilightAvgLuma_), std::memory_order_relaxed);
+}
+
 bool VideoOutput::grabArgb(std::vector<uint32_t> &out, unsigned &width, unsigned &height) {
     std::lock_guard<std::mutex> lk(mutex_);
     if (last_.empty() || lastW_ == 0 || lastH_ == 0) return false;
@@ -163,6 +305,9 @@ bool VideoOutput::grabArgb(std::vector<uint32_t> &out, unsigned &width, unsigned
 void VideoOutput::present(const void *data, unsigned width, unsigned height, size_t pitch,
                           int pixelFormat) {
     if (!data || width == 0 || height == 0) return;
+    if (ambilightEnabled_.load(std::memory_order_relaxed)) {
+        sampleAmbilight(static_cast<const uint8_t *>(data), width, height, pitch, pixelFormat);
+    }
     std::lock_guard<std::mutex> lk(mutex_);
     size_t bytes = pitch * height;
     if (last_.size() != bytes) last_.resize(bytes);
@@ -191,7 +336,7 @@ void VideoOutput::blitLocked(const uint8_t *data, unsigned width, unsigned heigh
     const bool is32 = fmt == RETRO_PIXEL_FORMAT_XRGB8888;
     const int winFmt = is32 ? WINDOW_FORMAT_RGBX_8888 : WINDOW_FORMAT_RGB_565;
     int s = sharpScale_;
-    const int cap = height > 0 ? static_cast<int>(800 / height) : 1;
+    const int cap = height > 0 ? static_cast<int>(1080 / height) : 1;
     if (s > cap) s = cap < 1 ? 1 : cap;
     const int outW = static_cast<int>(width) * s;
     const int outH = static_cast<int>(height) * s;
@@ -214,6 +359,7 @@ void VideoOutput::blitLocked(const uint8_t *data, unsigned width, unsigned heigh
 
     const bool crt = filter_ == Crt && s >= 2;
     const bool lcd = filter_ == Lcd && s >= 2;
+    const bool scale2x = filter_ == Scale2x && s == 2;
     const bool useLcdLut = (colorProfile_ == ColorGbaLcd || colorProfile_ == ColorGbcLcd) && lut565_.size() == 65536;
     const bool useComposite = colorProfile_ == ColorCrtComposite;
     const uint16_t *lut = useLcdLut ? lut565_.data() : nullptr;
@@ -226,36 +372,72 @@ void VideoOutput::blitLocked(const uint8_t *data, unsigned width, unsigned heigh
             if (useLcdLut) px = applyLcdMatrixRgbx(px, colorProfile_);
             return px;
         };
-        for (int sy = 0; sy < srcRows; sy++) {
-            const auto *src = reinterpret_cast<const uint32_t *>(data + static_cast<size_t>(sy) * pitch);
-            uint32_t *firstRow = dst + static_cast<size_t>(sy * s) * buf.stride;
-            uint32_t prevPx = srcCols > 0 ? fetch32(src, 0) : 0;
-            uint32_t curPx = prevPx;
-            for (int sx = 0; sx < srcCols; sx++) {
-                uint32_t nextPx = (sx + 1 < srcCols) ? fetch32(src, sx + 1) : curPx;
-                uint32_t px = useComposite ? blendRgbx(prevPx, curPx, nextPx) : curPx;
-                prevPx = curPx;
-                curPx = nextPx;
-                if (s == 1) {
-                    firstRow[sx] = px;
-                } else if (s == 2) {
-                    uint32_t *d = firstRow + sx * 2;
-                    d[0] = px;
-                    d[1] = lcd ? shadeRgbx(px, kGrid) : px;
-                } else {
-                    uint32_t *d = firstRow + sx * 3;
-                    d[0] = px;
-                    d[1] = px;
-                    d[2] = lcd ? shadeRgbx(px, kGrid) : px;
+        if (scale2x) {
+            for (int sy = 0; sy < srcRows; sy++) {
+                const auto *srcC = reinterpret_cast<const uint32_t *>(data + static_cast<size_t>(sy) * pitch);
+                const auto *srcU = reinterpret_cast<const uint32_t *>(data + static_cast<size_t>(sy > 0 ? sy - 1 : 0) * pitch);
+                const auto *srcD = reinterpret_cast<const uint32_t *>(data + static_cast<size_t>(sy + 1 < srcRows ? sy + 1 : sy) * pitch);
+                uint32_t *row0 = dst + static_cast<size_t>(sy * 2) * buf.stride;
+                uint32_t *row1 = row0 + buf.stride;
+                for (int sx = 0; sx < srcCols; sx++) {
+                    const int xl = sx > 0 ? sx - 1 : 0;
+                    const int xr = sx + 1 < srcCols ? sx + 1 : sx;
+                    const uint32_t E = fetch32(srcC, sx);
+                    const uint32_t B = fetch32(srcU, sx);
+                    const uint32_t H = fetch32(srcD, sx);
+                    const uint32_t D = fetch32(srcC, xl);
+                    const uint32_t F = fetch32(srcC, xr);
+                    uint32_t e0 = E, e1 = E, e2 = E, e3 = E;
+                    if (B != H && D != F) {
+                        if (D == B) e0 = D;
+                        if (B == F) e1 = F;
+                        if (D == H) e2 = D;
+                        if (H == F) e3 = F;
+                    }
+                    row0[sx * 2] = e0;
+                    row0[sx * 2 + 1] = e1;
+                    row1[sx * 2] = e2;
+                    row1[sx * 2 + 1] = e3;
                 }
             }
-            for (int r = 1; r < s; r++) {
-                uint32_t *subRow = firstRow + static_cast<size_t>(r) * buf.stride;
-                if (r == s - 1 && (crt || lcd)) {
-                    const unsigned k = crt ? kScanline : kGrid;
-                    for (int x = 0; x < outCols; x++) subRow[x] = shadeRgbx(firstRow[x], k);
-                } else {
-                    memcpy(subRow, firstRow, rowBytes);
+        } else {
+            for (int sy = 0; sy < srcRows; sy++) {
+                const auto *src = reinterpret_cast<const uint32_t *>(data + static_cast<size_t>(sy) * pitch);
+                uint32_t *firstRow = dst + static_cast<size_t>(sy * s) * buf.stride;
+                uint32_t prevPx = srcCols > 0 ? fetch32(src, 0) : 0;
+                uint32_t curPx = prevPx;
+                for (int sx = 0; sx < srcCols; sx++) {
+                    uint32_t nextPx = (sx + 1 < srcCols) ? fetch32(src, sx + 1) : curPx;
+                    uint32_t px = useComposite ? blendRgbx(prevPx, curPx, nextPx) : curPx;
+                    prevPx = curPx;
+                    curPx = nextPx;
+                    if (s == 1) {
+                        firstRow[sx] = px;
+                    } else if (s == 2) {
+                        uint32_t *d = firstRow + sx * 2;
+                        d[0] = px;
+                        d[1] = lcd ? shadeRgbx(px, kGrid) : px;
+                    } else if (s == 3) {
+                        uint32_t *d = firstRow + sx * 3;
+                        d[0] = px;
+                        d[1] = px;
+                        d[2] = lcd ? shadeRgbx(px, kGrid) : px;
+                    } else {
+                        uint32_t *d = firstRow + sx * 4;
+                        d[0] = px;
+                        d[1] = px;
+                        d[2] = px;
+                        d[3] = lcd ? shadeRgbx(px, kGrid) : px;
+                    }
+                }
+                for (int r = 1; r < s; r++) {
+                    uint32_t *subRow = firstRow + static_cast<size_t>(r) * buf.stride;
+                    if (r == s - 1 && (crt || lcd)) {
+                        const unsigned k = crt ? kScanline : kGrid;
+                        for (int x = 0; x < outCols; x++) subRow[x] = shadeRgbx(firstRow[x], k);
+                    } else {
+                        memcpy(subRow, firstRow, rowBytes);
+                    }
                 }
             }
         }
@@ -268,40 +450,76 @@ void VideoOutput::blitLocked(const uint8_t *data, unsigned width, unsigned heigh
             if (lut) px = lut[px];
             return px;
         };
-        for (int sy = 0; sy < srcRows; sy++) {
-            const auto *src = reinterpret_cast<const uint16_t *>(data + static_cast<size_t>(sy) * pitch);
-            uint16_t *firstRow = dst + static_cast<size_t>(sy * s) * buf.stride;
-            if (s == 1 && !is1555 && !lut && !useComposite) {
-                memcpy(firstRow, src, rowBytes);
-            } else {
-                uint16_t prevPx = srcCols > 0 ? fetch16(src, 0) : 0;
-                uint16_t curPx = prevPx;
+        if (scale2x) {
+            for (int sy = 0; sy < srcRows; sy++) {
+                const auto *srcC = reinterpret_cast<const uint16_t *>(data + static_cast<size_t>(sy) * pitch);
+                const auto *srcU = reinterpret_cast<const uint16_t *>(data + static_cast<size_t>(sy > 0 ? sy - 1 : 0) * pitch);
+                const auto *srcD = reinterpret_cast<const uint16_t *>(data + static_cast<size_t>(sy + 1 < srcRows ? sy + 1 : sy) * pitch);
+                uint16_t *row0 = dst + static_cast<size_t>(sy * 2) * buf.stride;
+                uint16_t *row1 = row0 + buf.stride;
                 for (int sx = 0; sx < srcCols; sx++) {
-                    uint16_t nextPx = (sx + 1 < srcCols) ? fetch16(src, sx + 1) : curPx;
-                    uint16_t px = useComposite ? blend565(prevPx, curPx, nextPx) : curPx;
-                    prevPx = curPx;
-                    curPx = nextPx;
-                    if (s == 1) {
-                        firstRow[sx] = px;
-                    } else if (s == 2) {
-                        uint16_t *d = firstRow + sx * 2;
-                        d[0] = px;
-                        d[1] = lcd ? shade565(px, kGrid) : px;
-                    } else {
-                        uint16_t *d = firstRow + sx * 3;
-                        d[0] = px;
-                        d[1] = px;
-                        d[2] = lcd ? shade565(px, kGrid) : px;
+                    const int xl = sx > 0 ? sx - 1 : 0;
+                    const int xr = sx + 1 < srcCols ? sx + 1 : sx;
+                    const uint16_t E = fetch16(srcC, sx);
+                    const uint16_t B = fetch16(srcU, sx);
+                    const uint16_t H = fetch16(srcD, sx);
+                    const uint16_t D = fetch16(srcC, xl);
+                    const uint16_t F = fetch16(srcC, xr);
+                    uint16_t e0 = E, e1 = E, e2 = E, e3 = E;
+                    if (B != H && D != F) {
+                        if (D == B) e0 = D;
+                        if (B == F) e1 = F;
+                        if (D == H) e2 = D;
+                        if (H == F) e3 = F;
                     }
+                    row0[sx * 2] = e0;
+                    row0[sx * 2 + 1] = e1;
+                    row1[sx * 2] = e2;
+                    row1[sx * 2 + 1] = e3;
                 }
             }
-            for (int r = 1; r < s; r++) {
-                uint16_t *subRow = firstRow + static_cast<size_t>(r) * buf.stride;
-                if (r == s - 1 && (crt || lcd)) {
-                    const unsigned k = crt ? kScanline : kGrid;
-                    for (int x = 0; x < outCols; x++) subRow[x] = shade565(firstRow[x], k);
+        } else {
+            for (int sy = 0; sy < srcRows; sy++) {
+                const auto *src = reinterpret_cast<const uint16_t *>(data + static_cast<size_t>(sy) * pitch);
+                uint16_t *firstRow = dst + static_cast<size_t>(sy * s) * buf.stride;
+                if (s == 1 && !is1555 && !lut && !useComposite) {
+                    memcpy(firstRow, src, rowBytes);
                 } else {
-                    memcpy(subRow, firstRow, rowBytes);
+                    uint16_t prevPx = srcCols > 0 ? fetch16(src, 0) : 0;
+                    uint16_t curPx = prevPx;
+                    for (int sx = 0; sx < srcCols; sx++) {
+                        uint16_t nextPx = (sx + 1 < srcCols) ? fetch16(src, sx + 1) : curPx;
+                        uint16_t px = useComposite ? blend565(prevPx, curPx, nextPx) : curPx;
+                        prevPx = curPx;
+                        curPx = nextPx;
+                        if (s == 1) {
+                            firstRow[sx] = px;
+                        } else if (s == 2) {
+                            uint16_t *d = firstRow + sx * 2;
+                            d[0] = px;
+                            d[1] = lcd ? shade565(px, kGrid) : px;
+                        } else if (s == 3) {
+                            uint16_t *d = firstRow + sx * 3;
+                            d[0] = px;
+                            d[1] = px;
+                            d[2] = lcd ? shade565(px, kGrid) : px;
+                        } else {
+                            uint16_t *d = firstRow + sx * 4;
+                            d[0] = px;
+                            d[1] = px;
+                            d[2] = px;
+                            d[3] = lcd ? shade565(px, kGrid) : px;
+                        }
+                    }
+                }
+                for (int r = 1; r < s; r++) {
+                    uint16_t *subRow = firstRow + static_cast<size_t>(r) * buf.stride;
+                    if (r == s - 1 && (crt || lcd)) {
+                        const unsigned k = crt ? kScanline : kGrid;
+                        for (int x = 0; x < outCols; x++) subRow[x] = shade565(firstRow[x], k);
+                    } else {
+                        memcpy(subRow, firstRow, rowBytes);
+                    }
                 }
             }
         }

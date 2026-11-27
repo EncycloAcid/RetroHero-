@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Only screenshots are ever shared. -->
+<!-- Only screenshots and the bundled crash-report file are ever shared. -->
 <paths>
     <files-path name="screenshots" path="screenshots/" />
+    <files-path name="crash_reports" path="crashes/share/" />
 </paths>

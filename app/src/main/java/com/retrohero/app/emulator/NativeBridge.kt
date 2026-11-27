@@ -47,6 +47,12 @@ object NativeBridge {
     external fun setFilter(filter: Int)
     /** 0 = Vivid/None, 1 = Authentic GBA LCD, 2 = Authentic GBC LCD, 3 = CRT Composite Blend. */
     external fun setColorProfile(profile: Int)
+    /** Software pixel prescale multiplier (1..4) for 2D crisp pixel rendering. */
+    external fun setUpscaleFactor(factor: Int)
+    /** Enables or disables near-zero-cost C++ framebuffer edge color sampling for OLED Ambilight. */
+    external fun setAmbilightEnabled(enabled: Boolean)
+    /** Writes [topArgb, bottomArgb, leftArgb, rightArgb, flash0to255] into [out5] with zero allocation. */
+    external fun pollAmbilight(out5: IntArray)
     /** Width and height of the last frame the core drew (0, 0 before the first). */
     external fun getFrameSize(): IntArray
     /** [width, height, ARGB pixels…] of the last frame, or null before the first. */
@@ -60,13 +66,23 @@ object NativeBridge {
     external fun setCheats(codes: Array<String>): Boolean
 
     external fun setButton(port: Int, id: Int, pressed: Boolean)
+    external fun getButtonsMask(port: Int): Int
     external fun setAnalog(port: Int, index: Int, axis: Int, value: Float)
     /** Normalised pointer position, -1..1 on both axes across the game image. */
     external fun setPointer(x: Float, y: Float, down: Boolean)
 
+    /** 3-Second Mobile Rollback Netplay (GGPO-style native frame rollback). */
+    external fun netplayStart(localPort: Int, inputDelayFrames: Int): Boolean
+    external fun netplayStop()
+    external fun netplayPushRemoteInput(frame: Int, buttonsMask: Int)
+    /** Returns [active, currentFrame, lastLocalFrame, lastLocalMask, rollbackCount, maxDepth, stateChecksum]. */
+    external fun netplayPollTelemetry(): IntArray
+
     external fun setOption(key: String, value: String)
     external fun getOptions(): Array<String>
     external fun getAspectRatio(): Float
+    /** Peak audio-driven haptic energy [0..1] detected since the previous poll. */
+    external fun consumeAudioHaptic(): Float
     external fun getLastError(): String
 
     data class CoreOption(val key: String, val description: String, val current: String, val values: List<String>)

@@ -33,6 +33,18 @@ data class GameDossier(
     val isLive: Boolean,
     val seriesName: String = "",
     val relatedGames: List<RelatedGame> = emptyList(),
+    val boxArtUrl: String? = null,
+    val boxBackUrl: String? = null,
+    val boxSpineUrl: String? = null,
+    val boxFullUrl: String? = null,
+    val cartFrontUrl: String? = null,
+    val cartBackUrl: String? = null,
+    val discUrl: String? = null,
+    val clearLogoUrl: String? = null,
+    val titleScreenUrl: String? = null,
+    val screenshotUrls: List<String> = emptyList(),
+    val esrbRating: String = "",
+    val communityRating: Float? = null,
 ) {
     data class FeatureBlock(val headline: String, val body: String)
     data class RadarAxis(val label: String, val value: Float)
@@ -53,6 +65,18 @@ data class GameDossier(
         .put("sourceLabel", sourceLabel)
         .put("isLive", isLive)
         .put("seriesName", seriesName)
+        .put("boxArtUrl", boxArtUrl ?: JSONObject.NULL)
+        .put("boxBackUrl", boxBackUrl ?: JSONObject.NULL)
+        .put("boxSpineUrl", boxSpineUrl ?: JSONObject.NULL)
+        .put("boxFullUrl", boxFullUrl ?: JSONObject.NULL)
+        .put("cartFrontUrl", cartFrontUrl ?: JSONObject.NULL)
+        .put("cartBackUrl", cartBackUrl ?: JSONObject.NULL)
+        .put("discUrl", discUrl ?: JSONObject.NULL)
+        .put("clearLogoUrl", clearLogoUrl ?: JSONObject.NULL)
+        .put("titleScreenUrl", titleScreenUrl ?: JSONObject.NULL)
+        .put("screenshotUrls", JSONArray().apply { screenshotUrls.forEach { put(it) } })
+        .put("esrbRating", esrbRating)
+        .put("communityRating", communityRating?.toDouble() ?: JSONObject.NULL)
         .put(
             "relatedGames",
             JSONArray().apply { relatedGames.forEach { put(it.toJson()) } },
@@ -75,7 +99,8 @@ data class GameDossier(
         )
 
     companion object {
-        const val CACHE_SCHEMA_VERSION = 4
+        // 7: re-fetch dossiers saved before LaunchBox spine scans and region choice were fixed.
+        const val CACHE_SCHEMA_VERSION = 7
 
         fun fromJson(o: JSONObject): GameDossier? {
             if (o.optInt("schemaVersion", 1) < CACHE_SCHEMA_VERSION) return null
@@ -102,6 +127,16 @@ data class GameDossier(
                     related += RelatedGame.fromJson(relArr.getJSONObject(i))
                 }
             }
+            val shots = mutableListOf<String>()
+            val shArr = o.optJSONArray("screenshotUrls")
+            if (shArr != null) {
+                for (i in 0 until shArr.length()) {
+                    shArr.optString(i).takeIf { it.isNotBlank() }?.let { shots += it }
+                }
+            }
+            fun optUrl(key: String): String? =
+                o.optString(key).takeIf { it.isNotBlank() && it != "null" }
+            val ratingVal = if (o.isNull("communityRating")) null else o.optDouble("communityRating", -1.0).toFloat().takeIf { it > 0f }
             return GameDossier(
                 title = o.optString("title"),
                 tagline = o.optString("tagline"),
@@ -115,11 +150,23 @@ data class GameDossier(
                 featureSections = sections,
                 promoQuote = o.optString("promoQuote"),
                 radarAxes = axes.ifEmpty { defaultRadar("") },
-                heroImageUrl = o.optString("heroImageUrl").takeIf { it.isNotBlank() && it != "null" },
+                heroImageUrl = optUrl("heroImageUrl"),
                 sourceLabel = o.optString("sourceLabel"),
                 isLive = o.optBoolean("isLive", false),
                 seriesName = o.optString("seriesName"),
                 relatedGames = related,
+                boxArtUrl = optUrl("boxArtUrl"),
+                boxBackUrl = optUrl("boxBackUrl"),
+                boxSpineUrl = optUrl("boxSpineUrl"),
+                boxFullUrl = optUrl("boxFullUrl"),
+                cartFrontUrl = optUrl("cartFrontUrl"),
+                cartBackUrl = optUrl("cartBackUrl"),
+                discUrl = optUrl("discUrl"),
+                clearLogoUrl = optUrl("clearLogoUrl"),
+                titleScreenUrl = optUrl("titleScreenUrl"),
+                screenshotUrls = shots,
+                esrbRating = o.optString("esrbRating"),
+                communityRating = ratingVal,
             )
         }
 
@@ -416,6 +463,18 @@ data class GameDossier(
  */
 class GameMetadataRepository(private val cacheDir: File) {
     private val memory = java.util.concurrent.ConcurrentHashMap<String, GameDossier>()
+    val launchboxDbDir: File = File(cacheDir, "launchbox_db")
+
+    fun launchboxDbStatus(): LaunchBoxDbStatus = LaunchBoxMetadata.dbStatus(launchboxDbDir)
+
+    suspend fun syncLaunchBoxDatabase(onProgress: (String) -> Unit = {}): LaunchBoxDbStatus {
+        val status = LaunchBoxMetadata.syncOfflineDatabase(launchboxDbDir, onProgress)
+        if (status.synced) {
+            memory.clear()
+            cacheDir.listFiles { f -> f.isFile && f.extension == "json" }?.forEach { it.delete() }
+        }
+        return status
+    }
 
     private fun cacheFile(game: Game): File {
         val key = "v${GameDossier.CACHE_SCHEMA_VERSION}:${game.systemId}:${game.title.lowercase()}"
@@ -440,7 +499,14 @@ class GameMetadataRepository(private val cacheDir: File) {
             peekCached(game)?.let { return@withContext it }
         }
         val fallback = GameDossier.localFallback(game)
-        val live = runCatching { fetchFromWikipedia(game, fallback) }.getOrNull()
+        // Primary: LaunchBox GamesDB (synced offline Metadata.zip index -> live gamesdb.launchbox-app.com)
+        val launchbox = runCatching {
+            LaunchBoxMetadata.lookup(game, launchboxDbDir)?.let { rec ->
+                LaunchBoxMetadata.toGameDossier(game, rec, fallback)
+            }
+        }.getOrNull()
+        // Secondary fallback: Wikipedia MediaWiki API
+        val live = launchbox ?: runCatching { fetchFromWikipedia(game, fallback) }.getOrNull()
         val result = live ?: fallback
         memory[game.id] = result
         if (live != null) {

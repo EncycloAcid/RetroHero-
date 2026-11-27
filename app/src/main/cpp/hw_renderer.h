@@ -37,6 +37,12 @@ public:
     /** Sets authentic hardware color matrix (0 none, 1 GBA LCD, 2 GBC LCD, 3 CRT composite). */
     void setColorProfile(int profile) { colorProfile_.store(profile); }
 
+    /** Enables or disables near-zero-cost 16x16 OpenGL Ambilight edge color sampling. */
+    void setAmbilightEnabled(bool enabled) { ambilightEnabled_.store(enabled, std::memory_order_relaxed); }
+
+    /** Reads the latest 4 directional Ambilight ARGB colors + flash [0..255]. */
+    void pollAmbilight(uint32_t out[5]) const;
+
     /** Called on the emulation thread before core_.run() to sync window & bind FBO. */
     void beginFrame(unsigned maxWidth, unsigned maxHeight);
 
@@ -57,6 +63,8 @@ public:
 
 private:
     bool ensureFbo(unsigned width, unsigned height);
+    bool ensureAmbilightFbo();
+    void destroyAmbilightFbo();
     bool initQuadProgram();
     void applyPendingWindow();
     void destroyWindowSurface();
@@ -79,6 +87,13 @@ private:
     GLuint depthRb_ = 0;
     unsigned fboW_ = 0;
     unsigned fboH_ = 0;
+
+    GLuint ambiFbo_ = 0;
+    GLuint ambiTex_ = 0;
+    uint32_t ambiTick_ = 0;
+    std::atomic<bool> ambilightEnabled_{true};
+    std::atomic<uint32_t> ambilight_[5]{0xFF000000u, 0xFF000000u, 0xFF000000u, 0xFF000000u, 0u};
+    float ambilightAvgLuma_ = -1.0f;
 
     GLuint program_ = 0;
     GLint locPos_ = -1;

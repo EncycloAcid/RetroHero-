@@ -22,8 +22,8 @@ val resolvedVersion: Pair<Int, String> = run {
     val explicitCode = ((project.findProperty("versionCode") as? String)
         ?: System.getenv("RETROHERO_VERSION_CODE"))?.toIntOrNull()
     val parsed = explicitName?.let(::computeVersionFromTag)
-    val fallbackCode = 20320
-    val fallbackName = "0.2.32-preview"
+    val fallbackCode = 20650
+    val fallbackName = "0.2.65-preview"
     val code = explicitCode ?: parsed?.first ?: fallbackCode
     val name = parsed?.second ?: explicitName?.removePrefix("v") ?: fallbackName
     code to name
@@ -48,13 +48,23 @@ android {
         versionCode = resolvedVersion.first
         versionName = resolvedVersion.second
 
-        ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
-        }
         externalNativeBuild {
             cmake {
                 arguments += listOf("-DANDROID_STL=c++_shared")
             }
+        }
+    }
+
+    // One APK per CPU type instead of one fat APK carrying all three. ML Kit's translation and OCR
+    // libraries are ~10 MB per ABI, so the arm64 APK most phones need is under half the size.
+    // Every split shares the same versionCode and signing key, so any of them updates any other
+    // (including the universal APK) in place when sideloaded.
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86_64")
+            isUniversalApk = true
         }
     }
 
@@ -144,6 +154,8 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.11.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
     implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation("com.google.mlkit:text-recognition-japanese:16.0.1")
+    implementation("com.google.mlkit:translate:17.0.3")
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     testImplementation("junit:junit:4.13.2")

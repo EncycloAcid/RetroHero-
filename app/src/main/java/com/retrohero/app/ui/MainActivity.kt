@@ -2,6 +2,7 @@ package com.retrohero.app.ui
 
 import android.app.ActivityOptions
 import android.content.Intent
+import android.nfc.NfcAdapter
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -27,8 +28,14 @@ import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import com.retrohero.app.R
+import com.retrohero.app.data.CrashReporter
+import com.retrohero.app.data.NfcCartridge
 import com.retrohero.app.data.DeltaSkins
 import com.retrohero.app.ui.components.LocalArtPaths
 import com.retrohero.app.ui.components.LocalArtVersion
@@ -56,7 +63,26 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch(Dispatchers.IO) {
             DeltaSkins.installBundledDefaults(this@MainActivity, vm.paths.deltaSkins, vm.settings)
         }
-        if (savedInstanceState == null) handleIncomingDeltaSkin(intent)
+        if (savedInstanceState == null) handleIncoming(intent)
+        // NFC reader mode only while a "write to tag" is waiting; Android turns it off on pause.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                vm.nfcWrite.map { it is AppViewModel.NfcWrite.Waiting }.distinctUntilChanged().collect { waiting ->
+                    val nfc = NfcAdapter.getDefaultAdapter(this@MainActivity) ?: return@collect
+                    if (waiting) {
+                        nfc.enableReaderMode(
+                            this@MainActivity,
+                            { tag -> vm.onNfcTag(tag) },
+                            NfcAdapter.FLAG_READER_NFC_A or NfcAdapter.FLAG_READER_NFC_B or
+                                NfcAdapter.FLAG_READER_NFC_F or NfcAdapter.FLAG_READER_NFC_V,
+                            null,
+                        )
+                    } else {
+                        nfc.disableReaderMode(this@MainActivity)
+                    }
+                }
+            }
+        }
         setContent {
             val dynamicColor by vm.dynamicColor.collectAsStateWithLifecycle()
             RetroHeroTheme(dynamicColor = dynamicColor) {
@@ -77,6 +103,26 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIncoming(intent)
+    }
+
+    private fun handleIncoming(intent: Intent?) {
+        if (handleGameLink(intent)) return
+        handleIncomingDeltaSkin(intent)
+    }
+
+    /** An NFC cartridge tag or a retrohero://play link: launch that game. */
+    private fun handleGameLink(intent: Intent?): Boolean {
+        val action = intent?.action ?: return false
+        if (action != NfcAdapter.ACTION_NDEF_DISCOVERED && action != Intent.ACTION_VIEW) return false
+        val link = NfcCartridge.parse(intent.data?.toString()) ?: return false
+        vm.playFromLink(link)
+        return true
     }
 
     private fun handleIncomingDeltaSkin(intent: Intent?) {
@@ -118,6 +164,7 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
     val backupState by vm.backupState.collectAsStateWithLifecycle()
     val dynamicColor by vm.dynamicColor.collectAsStateWithLifecycle()
     val reducedMotion by vm.settings.reducedMotion.collectAsStateWithLifecycle()
+    val showCasesEverywhere by vm.settings.showCasesEverywhere.collectAsStateWithLifecycle()
     val biosVersion by vm.biosVersion.collectAsStateWithLifecycle()
     val artVersion by vm.artVersion.collectAsStateWithLifecycle()
     val raProfile by vm.raProfile.collectAsStateWithLifecycle()
@@ -125,6 +172,8 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
     val raUnofficial by vm.raUnofficial.collectAsStateWithLifecycle()
     val raNotifications by vm.raNotifications.collectAsStateWithLifecycle()
     val raAuthState by vm.raAuth.collectAsStateWithLifecycle()
+    val launchboxStatus by vm.launchboxStatus.collectAsStateWithLifecycle()
+    val launchboxSyncProgress by vm.launchboxSyncProgress.collectAsStateWithLifecycle()
 
     var autoSave by remember { mutableStateOf(vm.settings.autoSave) }
     var haptics by remember { mutableStateOf(vm.settings.haptics) }
@@ -136,6 +185,9 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
     var runAheadFrames by remember { mutableIntStateOf(vm.settings.runAheadFrames) }
     var showPerfHud by remember { mutableStateOf(vm.settings.showPerfHud) }
     var homebrewOpen by rememberSaveable { mutableStateOf(false) }
+    var crashReportCount by remember { mutableIntStateOf(0) }
+    val hiddenGameCount by vm.hiddenGameCount.collectAsStateWithLifecycle()
+    var crashDialog by remember { mutableStateOf<Boolean?>(null) } // null = hidden, true = after a crash
     var raSignInOpen by rememberSaveable { mutableStateOf(false) }
     var toastMessage by remember { mutableStateOf<AppViewModel.Message?>(null) }
     var engineVersion by remember { mutableIntStateOf(0) }
@@ -144,6 +196,15 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
 
     LifecycleResumeEffect(Unit) {
         vm.refreshStats()
+        // Picks up crashes from the game process (or the last run) and offers to share them once.
+        scope.launch {
+            val (total, unseen) = withContext(Dispatchers.IO) {
+                CrashReporter.collectSystemExits(context)
+                CrashReporter.reports(context).size to CrashReporter.unseenReports(context).size
+            }
+            crashReportCount = total
+            if (unseen > 0 && crashDialog == null) crashDialog = true
+        }
         onPauseOrDispose { }
     }
     LaunchedEffect(games.size) { vm.refreshStats() }
@@ -224,6 +285,7 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
         stickAsDpad = stickAsDpad,
         screenshotsToGallery = screenshotsToGallery,
         reducedMotion = reducedMotion,
+        showCasesEverywhere = showCasesEverywhere,
         fastForwardSpeed = fastForward,
         dynamicColor = dynamicColor,
         coreStates = coreStates,
@@ -276,6 +338,7 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
         onSetStickAsDpad = { v -> stickAsDpad = v; vm.settings.stickAsDpad = v },
         onSetScreenshotsToGallery = { v -> screenshotsToGallery = v; vm.settings.screenshotsToGallery = v },
         onSetReducedMotion = { v -> vm.settings.setReducedMotion(v) },
+        onSetShowCasesEverywhere = { v -> vm.settings.setShowCasesEverywhere(v) },
         onSetFastForward = { v -> fastForward = v; vm.settings.fastForwardSpeed = v },
         onSetDynamicColor = { enabled -> vm.settings.setDynamicColor(enabled); setDynamicColorEnabled(enabled) },
         onSelectPalette = { id -> vm.settings.accent = id; setExpressivePalette(id) },
@@ -300,6 +363,16 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
             backupCreator.launch("retrohero-backup-$stamp.zip")
         },
         onRestore = { restorePicker.launch(arrayOf("application/zip", "*/*")) },
+        onOpenCrashReports = { crashDialog = false },
+        onWriteNfcTag = NfcAdapter.getDefaultAdapter(context)?.let { nfc ->
+            { game: com.retrohero.app.data.Game ->
+                if (!nfc.isEnabled) vm.say("Turn on NFC in your phone's settings first")
+                else vm.startNfcWrite(game)
+            }
+        },
+        crashReportCount = crashReportCount,
+        hiddenGameCount = hiddenGameCount,
+        onRestoreHiddenGames = vm::restoreHiddenGames,
         onDownloadCore = vm::downloadCore,
         onDownloadAllNeededCores = vm::downloadCores,
         onDeleteCore = vm::deleteCore,
@@ -339,6 +412,9 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
             vm.deletePatch(g, patch.id)
             patchesVersion++
         },
+        launchboxStatus = launchboxStatus,
+        launchboxSyncProgress = launchboxSyncProgress,
+        onSyncLaunchBox = vm::syncLaunchBoxDatabase,
     )
 
     if (raSignInOpen) {
@@ -351,6 +427,36 @@ private fun M3ExpressiveHost(vm: AppViewModel) {
                 vm.resetRaAuthError()
                 raSignInOpen = false
             },
+        )
+    }
+
+    val nfcWrite by vm.nfcWrite.collectAsStateWithLifecycle()
+    nfcWrite?.let { state ->
+        NfcWriteDialog(state = state, onRetry = { vm.startNfcWrite(state.game) }, onDismiss = vm::dismissNfcWrite)
+    }
+
+    crashDialog?.let { afterCrash ->
+        val close = {
+            CrashReporter.acknowledge(context)
+            crashDialog = null
+        }
+        CrashReportsDialog(
+            count = crashReportCount,
+            afterCrash = afterCrash,
+            onShare = {
+                close()
+                runCatching { shareCrashReports(context) }
+                    .onFailure { vm.say("Couldn't share crash reports") }
+            },
+            onClear = {
+                close()
+                scope.launch {
+                    withContext(Dispatchers.IO) { CrashReporter.clear(context) }
+                    crashReportCount = 0
+                    vm.say("Crash reports deleted")
+                }
+            },
+            onDismiss = close,
         )
     }
 

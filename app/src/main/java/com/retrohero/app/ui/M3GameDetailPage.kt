@@ -41,7 +41,9 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.Nfc
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.ViewInAr
 import androidx.compose.material.icons.rounded.CameraAlt
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
@@ -61,23 +63,42 @@ import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.SportsEsports
 import androidx.compose.material.icons.rounded.Verified
 import androidx.compose.material.icons.rounded.Wallpaper
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Code
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -88,6 +109,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -98,6 +120,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.graphics.shapes.RoundedPolygon
 import coil.compose.AsyncImage
+import com.retrohero.app.data.Cheat
+import com.retrohero.app.data.CheatFinder
+import com.retrohero.app.data.CheatPackMatch
+import com.retrohero.app.data.Cheats
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import com.retrohero.app.data.AppPaths
 import com.retrohero.app.data.CoreInfo
 import com.retrohero.app.data.ExternalEmulator
@@ -106,6 +135,7 @@ import com.retrohero.app.data.Game
 import com.retrohero.app.data.GameDossier
 import com.retrohero.app.data.GameSeries
 import com.retrohero.app.data.GameSystem
+import com.retrohero.app.data.PhysicalMediaSpec
 import com.retrohero.app.data.PlayStat
 import com.retrohero.app.data.PlayTime
 import com.retrohero.app.data.RaGameData
@@ -115,12 +145,18 @@ import com.retrohero.app.data.Systems
 import com.retrohero.app.ui.components.LocalReducedMotion
 import com.retrohero.app.ui.components.M3ConnectedButtonGroup
 import com.retrohero.app.ui.components.M3ConsoleImage
+import com.retrohero.app.ui.components.M3ConsoleInsertionDialog
 import com.retrohero.app.ui.components.M3ExpressiveSpring
 import com.retrohero.app.ui.components.M3GameCover
+import com.retrohero.app.ui.components.M3PatchLabDialog
+import com.retrohero.app.ui.components.M3PhysicalBoxInspectorDialog
+import com.retrohero.app.ui.components.M3PhysicalBoxViewerSection
 import com.retrohero.app.ui.components.M3ShapeBadge
 import com.retrohero.app.ui.components.M3SplitButton
 import com.retrohero.app.ui.components.M3WavyBar
+import com.retrohero.app.ui.components.PhysicalViewerSubject
 import com.retrohero.app.ui.components.m3SegmentedShape
+import com.retrohero.app.ui.components.rememberPhysicalTextures
 import com.retrohero.app.ui.theme.polygon
 import java.io.File
 import kotlin.math.PI
@@ -296,6 +332,7 @@ internal fun M3GameDetailPage(
     onUseScreenshotAsCover: (File) -> Unit = {},
     onClearCover: () -> Unit = {},
     onDelete: (() -> Unit)?,
+    onWriteNfcTag: (() -> Unit)? = null,
     patches: List<com.retrohero.app.data.RomPatch> = emptyList(),
     onAttachPatch: () -> Unit = {},
     onPlayWithPatch: (com.retrohero.app.data.RomPatch) -> Unit = {},
@@ -307,18 +344,63 @@ internal fun M3GameDetailPage(
 ) {
     val cs = MaterialTheme.colorScheme
     val view = LocalView.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val appPaths = remember(context) { AppPaths(context) }
     val cores = game.system?.cores.orEmpty()
     val hasAutoSave = saveSlots.any { it.first == AppPaths.AUTO_SLOT }
     val sysPoly = game.system?.polygon ?: MaterialShapes.Cookie6Sided
 
+    var savedCheats by remember(game.id) { mutableStateOf<List<Cheat>>(emptyList()) }
+    LaunchedEffect(game.id) {
+        savedCheats = withContext(Dispatchers.IO) { Cheats.load(appPaths.cheatsFile(game)) }
+    }
+    var findingCheats by remember(game.id) { mutableStateOf(false) }
+    var cheatSource by remember(game.id) { mutableStateOf<String?>(null) }
+    var cheatError by remember(game.id) { mutableStateOf<String?>(null) }
+    var cheatPacks by remember(game.id) { mutableStateOf<List<CheatPackMatch>>(emptyList()) }
+    var activeCheatPack by remember(game.id) { mutableStateOf<CheatPackMatch?>(null) }
+    var showCheatsSheet by remember(game.id) { mutableStateOf(false) }
+
+    fun persistCheats(updated: List<Cheat>) {
+        savedCheats = updated
+        Cheats.save(appPaths.cheatsFile(game), updated)
+    }
+
+    fun triggerAutoFindCheats(openSheetOnSuccess: Boolean = true) {
+        if (findingCheats) return
+        findingCheats = true
+        cheatError = null
+        scope.launch {
+            val res = CheatFinder.autoFind(game, appPaths.cheats)
+            findingCheats = false
+            cheatPacks = res.alternatePacks
+            if (res.cheats.isNotEmpty()) {
+                val merged = CheatFinder.merge(savedCheats, res.cheats)
+                persistCheats(merged)
+                activeCheatPack = res.activePack
+                cheatSource = res.sourceLabel
+                cheatError = null
+                if (openSheetOnSuccess) showCheatsSheet = true
+            } else {
+                cheatError = res.error
+                if (openSheetOnSuccess) showCheatsSheet = true
+            }
+        }
+    }
+
     var dossier by remember(game.id) {
         mutableStateOf(initialDossier ?: GameDossier.localFallback(game))
     }
-    var loadingMeta by remember(game.id) { mutableStateOf(loadDossier != null && initialDossier == null) }
+    var loadingMeta by remember(game.id) { mutableStateOf(loadDossier != null && initialDossier?.isLive != true) }
     var refreshNonce by remember(game.id) { mutableIntStateOf(0) }
 
     LaunchedEffect(game.id, refreshNonce) {
         val loader = loadDossier ?: return@LaunchedEffect
+        if (refreshNonce == 0 && initialDossier?.isLive == true) {
+            loadingMeta = false
+            return@LaunchedEffect
+        }
         loadingMeta = true
         dossier = runCatching { loader(game, refreshNonce > 0) }.getOrElse { GameDossier.localFallback(game) }
         loadingMeta = false
@@ -353,19 +435,54 @@ internal fun M3GameDetailPage(
         if (milestones.isEmpty()) 0 else (unlockedCount * 100) / milestones.size
     }
 
-    val slides = remember(game.id, screenshots, dossier.heroImageUrl) {
+    val slides = remember(
+        game.id,
+        screenshots,
+        dossier.heroImageUrl,
+        dossier.boxArtUrl,
+        dossier.boxBackUrl,
+        dossier.cartFrontUrl,
+        dossier.discUrl,
+        dossier.titleScreenUrl,
+        dossier.screenshotUrls,
+    ) {
         buildList {
-            if (game.gameplaySnapUrls.isNotEmpty()) {
+            if (dossier.screenshotUrls.isNotEmpty()) {
+                dossier.screenshotUrls.forEachIndexed { i, url ->
+                    val label = if (dossier.screenshotUrls.size == 1) "Gameplay" else "Gameplay ${i + 1}"
+                    add(GallerySlide("lb_shot_$i", label, listOf(url) + game.gameplaySnapUrls + game.boxArtUrls))
+                }
+            } else if (game.gameplaySnapUrls.isNotEmpty()) {
                 add(GallerySlide("snap", "Gameplay", game.gameplaySnapUrls + game.titleScreenUrls + game.boxArtUrls))
             }
-            if (game.titleScreenUrls.isNotEmpty()) {
-                add(GallerySlide("title", "Title screen", game.titleScreenUrls + game.boxArtUrls))
+            val titleSources = buildList<Any> {
+                dossier.titleScreenUrl?.let { add(it) }
+                addAll(game.titleScreenUrls)
+                dossier.boxArtUrl?.let { add(it) }
+                addAll(game.boxArtUrls)
             }
-            if (game.boxArtUrls.isNotEmpty()) {
-                add(GallerySlide("box", "Box art", game.boxArtUrls))
+            if (titleSources.isNotEmpty()) {
+                add(GallerySlide("title", "Title screen", titleSources))
             }
-            dossier.heroImageUrl?.let { wikiImg ->
-                add(GallerySlide("wiki", "Editorial", listOf(wikiImg) + game.artUrls))
+            val boxSources = buildList<Any> {
+                dossier.boxArtUrl?.let { add(it) }
+                addAll(game.boxArtUrls)
+            }
+            if (boxSources.isNotEmpty()) {
+                add(GallerySlide("box", "Box front", boxSources))
+            }
+            dossier.boxBackUrl?.let { backUrl ->
+                add(GallerySlide("box_back", "Box back", listOf(backUrl)))
+            }
+            dossier.cartFrontUrl?.let { cartUrl ->
+                add(GallerySlide("cart_front", "Cartridge", listOf(cartUrl)))
+            }
+            dossier.discUrl?.let { discUrl ->
+                add(GallerySlide("disc_art", "Disc", listOf(discUrl)))
+            }
+            val heroUrl = dossier.heroImageUrl
+            if (heroUrl != null && heroUrl != dossier.boxArtUrl) {
+                add(GallerySlide("hero_art", "Key art", listOf(heroUrl) + game.artUrls))
             }
             screenshots.forEachIndexed { i, shot ->
                 add(GallerySlide("shot_${shot.absolutePath}", "Capture ${i + 1}", listOf(shot), userShotFile = shot))
@@ -373,6 +490,19 @@ internal fun M3GameDetailPage(
         }
     }
     var selectedSlideIdx by remember(game.id) { mutableIntStateOf(0) }
+    var lightboxSlideIdx by remember(game.id) { mutableStateOf<Int?>(null) }
+    var show3dInspector by remember(game.id) { mutableStateOf(false) }
+    var inspectorSubject by remember(game.id) { mutableStateOf(PhysicalViewerSubject.RETAIL_BOX) }
+    var inspectorYaw by remember(game.id) { mutableFloatStateOf(24f) }
+    var showInsertCeremony by remember(game.id) { mutableStateOf(false) }
+    var patchLabOpen by remember(game.id) { mutableStateOf(false) }
+
+    val sysAccent = game.system?.color ?: cs.primary
+    val physicalSpec = remember(game.systemId, sysAccent) {
+        PhysicalMediaSpec.forSystem(game.systemId, sysAccent)
+    }
+    val physicalTextures = rememberPhysicalTextures(game, dossier, physicalSpec, override = null)
+
     val activeSlide = slides.getOrNull(selectedSlideIdx) ?: slides.firstOrNull()
 
     val listState = rememberLazyListState()
@@ -385,7 +515,7 @@ internal fun M3GameDetailPage(
         }
     }
     val topBarAlpha by animateFloatAsState(
-        targetValue = if (scrolledPastHero) 0.96f else 0f,
+        targetValue = if (scrolledPastHero) 1f else 0f,
         animationSpec = tween(220),
         label = "detailTopBarAlpha",
     )
@@ -401,7 +531,7 @@ internal fun M3GameDetailPage(
             contentPadding = PaddingValues(bottom = 36.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            // 1. CINEMATIC HERO BANNER
+            // 1. STOREFRONT HERO BANNER
             item(key = "detail_hero") {
                 Box(
                     Modifier
@@ -409,13 +539,14 @@ internal fun M3GameDetailPage(
                         .height(336.dp)
                         .clipToBounds(),
                 ) {
-                    // Backdrop artwork (prefers gameplay snap / title screen / editorial art)
-                    val heroSources = remember(game.id, dossier.heroImageUrl) {
+                    // Storefront key-art backdrop (LaunchBox 1920x1080 Fanart/Banner -> LaunchBox Box -> libretro)
+                    val heroSources = remember(game.id, dossier.heroImageUrl, dossier.boxArtUrl) {
                         buildList<Any> {
-                            addAll(game.gameplaySnapUrls.take(2))
-                            addAll(game.titleScreenUrls.take(2))
                             dossier.heroImageUrl?.let { add(it) }
+                            dossier.boxArtUrl?.let { add(it) }
                             addAll(game.boxArtUrls.take(2))
+                            addAll(game.titleScreenUrls.take(2))
+                            addAll(game.gameplaySnapUrls.take(2))
                         }
                     }
                     M3FallbackArtFrame(
@@ -430,14 +561,14 @@ internal fun M3GameDetailPage(
                             .background(
                                 Brush.verticalGradient(
                                     0.0f to cs.background.copy(alpha = 0.50f),
-                                    0.38f to cs.background.copy(alpha = 0.32f),
+                                    0.38f to cs.background.copy(alpha = 0.36f),
                                     0.72f to cs.background.copy(alpha = 0.88f),
                                     1.0f to cs.background,
                                 ),
                             ),
                     )
 
-                    // Bottom hero lockup: Box Art + Title + Developer/Year + Tagline
+                    // Bottom hero lockup: Uncropped Retail Box Art (tap to launch 3D Box & Media Inspector!) + Title
                     Row(
                         Modifier
                             .align(Alignment.BottomStart)
@@ -446,15 +577,34 @@ internal fun M3GameDetailPage(
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                         verticalAlignment = Alignment.Bottom,
                     ) {
-                        M3GameCover(
-                            game = game,
-                            showTitle = false,
-                            modifier = Modifier
-                                .width(96.dp)
-                                .aspectRatio(0.82f)
-                                .clip(RoundedCornerShape(22.dp))
-                                .border(2.dp, cs.surfaceContainerHighest, RoundedCornerShape(22.dp)),
-                        )
+                        val coverMod = Modifier
+                            .width(96.dp)
+                            .aspectRatio(0.86f)
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(cs.surfaceContainerHighest)
+                            .border(1.5.dp, cs.outlineVariant.copy(alpha = 0.55f), RoundedCornerShape(20.dp))
+                            .clickable {
+                                view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                inspectorSubject = PhysicalViewerSubject.RETAIL_BOX
+                                inspectorYaw = 24f
+                                show3dInspector = true
+                            }
+                        val lbBox = dossier.boxArtUrl
+                        if (lbBox != null) {
+                            M3FallbackArtFrame(
+                                game = game,
+                                sources = listOf(lbBox) + game.boxArtUrls,
+                                storefrontFit = true,
+                                modifier = coverMod,
+                            )
+                        } else {
+                            M3GameCover(
+                                game = game,
+                                showTitle = false,
+                                fitCover = true,
+                                modifier = coverMod,
+                            )
+                        }
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(
                                 text = game.title,
@@ -499,10 +649,14 @@ internal fun M3GameDetailPage(
                         label = if (hasAutoSave) "Resume game" else "Play game",
                         icon = Icons.Rounded.PlayArrow,
                         onPrimaryClick = { onPlay(null) },
-                        trailingIcon = if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                        trailingDescription = if (isFavorite) "Remove favorite" else "Add favorite",
-                        onTrailingClick = onToggleFavorite,
-                        trailingActive = isFavorite,
+                        trailingIcon = androidx.compose.material.icons.Icons.Rounded.ViewInAr,
+                        trailingDescription = "Inspect 3D retail box & cart",
+                        onTrailingClick = {
+                            inspectorSubject = PhysicalViewerSubject.RETAIL_BOX
+                            inspectorYaw = 24f
+                            show3dInspector = true
+                        },
+                        trailingActive = false,
                         height = 56.dp,
                     )
 
@@ -610,9 +764,10 @@ internal fun M3GameDetailPage(
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(22.dp))
                                     .background(cs.surfaceContainerLow)
+                                    .border(1.dp, cs.outlineVariant.copy(alpha = 0.24f), RoundedCornerShape(22.dp))
                                     .clickable {
                                         view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                                        onAttachPatch()
+                                        patchLabOpen = true
                                     }
                                     .padding(horizontal = 14.dp, vertical = 12.dp),
                                 verticalAlignment = Alignment.CenterVertically,
@@ -634,14 +789,14 @@ internal fun M3GameDetailPage(
                                 }
                                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                                     Text(
-                                        text = "Soft-patch ROM (IPS · BPS · UPS · xDelta)",
+                                        text = "ROM Patch Lab",
                                         style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold),
                                         color = cs.onSurface,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
                                     )
                                     Text(
-                                        text = "Attach fan translations or ROM hacks in memory — original ROM untouched",
+                                        text = "IPS · BPS · UPS · xDelta · Verify CRC32 & headers",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = cs.onSurfaceVariant,
                                         maxLines = 2,
@@ -652,6 +807,10 @@ internal fun M3GameDetailPage(
                                     Modifier
                                         .clip(CircleShape)
                                         .background(cs.primaryContainer)
+                                        .clickable {
+                                            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                            onAttachPatch()
+                                        }
                                         .padding(horizontal = 11.dp, vertical = 7.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -704,30 +863,48 @@ internal fun M3GameDetailPage(
                                         color = cs.onSurfaceVariant,
                                     )
                                 }
-                                Spacer(Modifier.width(8.dp))
-                                Row(
-                                    Modifier
-                                        .clip(CircleShape)
-                                        .background(cs.primaryContainer)
-                                        .clickable {
-                                            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                                            onAttachPatch()
-                                        }
-                                        .padding(horizontal = 12.dp, vertical = 7.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                ) {
-                                    Icon(
-                                        Icons.Rounded.Add,
-                                        contentDescription = null,
-                                        tint = cs.onPrimaryContainer,
-                                        modifier = Modifier.size(15.dp),
-                                    )
-                                    Text(
-                                        text = "Attach",
-                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                        color = cs.onPrimaryContainer,
-                                    )
+                                Spacer(Modifier.width(6.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        Modifier
+                                            .clip(CircleShape)
+                                            .background(cs.secondaryContainer)
+                                            .clickable {
+                                                view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                                patchLabOpen = true
+                                            }
+                                            .padding(horizontal = 10.dp, vertical = 7.dp),
+                                    ) {
+                                        Text(
+                                            text = "Patch Lab",
+                                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                            color = cs.onSecondaryContainer,
+                                        )
+                                    }
+                                    Row(
+                                        Modifier
+                                            .clip(CircleShape)
+                                            .background(cs.primaryContainer)
+                                            .clickable {
+                                                view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                                onAttachPatch()
+                                            }
+                                            .padding(horizontal = 11.dp, vertical = 7.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    ) {
+                                        Icon(
+                                            Icons.Rounded.Add,
+                                            contentDescription = null,
+                                            tint = cs.onPrimaryContainer,
+                                            modifier = Modifier.size(15.dp),
+                                        )
+                                        Text(
+                                            text = "Attach",
+                                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                            color = cs.onPrimaryContainer,
+                                        )
+                                    }
                                 }
                             }
 
@@ -872,6 +1049,101 @@ internal fun M3GameDetailPage(
                 }
             }
 
+            // 2e. AUTO-FIND CHEATS STRIP
+            item(key = "detail_cheats_strip") {
+                val activeCheats = remember(savedCheats) { savedCheats.count { it.enabled } }
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .clip(RoundedCornerShape(22.dp))
+                        .background(cs.surfaceContainerLow)
+                        .border(1.dp, cs.outlineVariant.copy(alpha = 0.24f), RoundedCornerShape(22.dp))
+                        .clickable {
+                            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                            if (savedCheats.isEmpty() && !findingCheats) {
+                                triggerAutoFindCheats(openSheetOnSuccess = true)
+                            } else {
+                                showCheatsSheet = true
+                            }
+                        }
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Box(
+                        Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(if (activeCheats > 0) cs.primaryContainer else cs.secondaryContainer),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (findingCheats) {
+                            CircularProgressIndicator(
+                                strokeWidth = 2.dp,
+                                color = cs.onSecondaryContainer,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        } else {
+                            Icon(
+                                Icons.Rounded.Code,
+                                contentDescription = null,
+                                tint = if (activeCheats > 0) cs.onPrimaryContainer else cs.onSecondaryContainer,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                        Text(
+                            text = when {
+                                findingCheats -> "Finding cheats for ${game.title}…"
+                                savedCheats.isNotEmpty() -> "Cheats (${savedCheats.size} ready${if (activeCheats > 0) " · $activeCheats active" else ""})"
+                                else -> "Auto-find cheats"
+                            },
+                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold),
+                            color = cs.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Text(
+                            text = when {
+                                cheatSource != null -> cheatSource!!
+                                savedCheats.isNotEmpty() -> "Tap to search & toggle codes before launching"
+                                else -> "Game Genie, Action Replay, GameShark & Code Breaker codes"
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = cs.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    Row(
+                        Modifier
+                            .clip(CircleShape)
+                            .background(cs.primaryContainer)
+                            .clickable(enabled = !findingCheats) {
+                                view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                triggerAutoFindCheats(openSheetOnSuccess = true)
+                            }
+                            .padding(horizontal = 11.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Icon(
+                            Icons.Rounded.AutoAwesome,
+                            contentDescription = null,
+                            tint = cs.onPrimaryContainer,
+                            modifier = Modifier.size(14.dp),
+                        )
+                        Text(
+                            text = if (savedCheats.isEmpty()) "Find" else "Browse",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                            color = cs.onPrimaryContainer,
+                        )
+                    }
+                }
+            }
+
             // 3. REAL STATS 4-COLUMN HYDRA-STYLE BENTO STRIP
             item(key = "detail_stats_strip") {
                 val raSet = raData
@@ -930,7 +1202,7 @@ internal fun M3GameDetailPage(
                 }
             }
 
-            // 4. INTERACTIVE MEDIA GALLERY & PROMO ADVERTISEMENT VIEWPORT
+            // 4. CLEAN STOREFRONT SCREENSHOTS & MEDIA GALLERY
             if (activeSlide != null) {
                 item(key = "detail_gallery") {
                     Column(
@@ -965,95 +1237,73 @@ internal fun M3GameDetailPage(
                             }
                         }
 
-                        // Featured 16:9 Showcase Viewport with editorial promo banner
+                        // Clean full-frame storefront screenshot viewport (uncropped, unobstructed — tap to expand)
                         Box(
                             Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 20.dp)
-                                .aspectRatio(16f / 9.5f)
-                                .clip(RoundedCornerShape(28.dp))
-                                .background(cs.surfaceContainerHigh),
+                                .aspectRatio(16f / 10.5f)
+                                .clip(RoundedCornerShape(24.dp))
+                                .background(cs.surfaceContainerHigh)
+                                .border(1.dp, cs.outlineVariant.copy(alpha = 0.35f), RoundedCornerShape(24.dp))
+                                .clickable {
+                                    view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+                                    lightboxSlideIdx = selectedSlideIdx
+                                },
                         ) {
                             AnimatedContent(
                                 targetState = activeSlide,
-                                transitionSpec = { fadeIn(tween(240)) togetherWith fadeOut(tween(180)) },
+                                transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(160)) },
                                 label = "galleryShowcase",
                             ) { slide ->
                                 M3FallbackArtFrame(
                                     game = game,
                                     sources = slide.sources,
+                                    storefrontFit = true,
                                     modifier = Modifier.fillMaxSize(),
-                                )
-                            }
-
-                            // Bottom editorial advertisement pull-quote overlay
-                            Box(
-                                Modifier
-                                    .align(Alignment.BottomCenter)
-                                    .fillMaxWidth()
-                                    .background(
-                                        Brush.verticalGradient(
-                                            listOf(Color.Transparent, cs.scrim.copy(alpha = 0.82f)),
-                                        ),
-                                    )
-                                    .padding(horizontal = 16.dp, vertical = 14.dp),
-                            ) {
-                                Row(
-                                    Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.Bottom,
-                                ) {
-                                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                        Text(
-                                            text = "“${dossier.promoQuote}”",
-                                            style = MaterialTheme.typography.titleSmall.copy(
-                                                fontWeight = FontWeight.Black,
-                                                letterSpacing = 0.5.sp,
-                                            ),
-                                            color = Color.White,
-                                            maxLines = 2,
-                                        )
-                                        Text(
-                                            text = "${activeSlide.label} · ${game.system?.name ?: game.systemId.uppercase()}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = Color.White.copy(alpha = 0.78f),
-                                        )
-                                    }
-                                    if (activeSlide.userShotFile != null) {
-                                        Row(
-                                            Modifier
-                                                .clip(CircleShape)
-                                                .background(cs.primary)
-                                                .clickable { onUseScreenshotAsCover(activeSlide.userShotFile) }
-                                                .padding(horizontal = 12.dp, vertical = 7.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(5.dp),
-                                        ) {
-                                            Icon(Icons.Rounded.Wallpaper, null, tint = cs.onPrimary, modifier = Modifier.size(14.dp))
-                                            Text("Use cover", style = MaterialTheme.typography.labelSmall, color = cs.onPrimary)
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Top-left media pill
-                            Box(
-                                Modifier
-                                    .align(Alignment.TopStart)
-                                    .padding(12.dp)
-                                    .clip(CircleShape)
-                                    .background(cs.surfaceContainerHighest.copy(alpha = 0.88f))
-                                    .padding(horizontal = 10.dp, vertical = 4.dp),
-                            ) {
-                                Text(
-                                    text = activeSlide.label.uppercase(),
-                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
-                                    color = cs.onSurface,
                                 )
                             }
                         }
 
-                        // Horizontal thumbnail selector strip
+                        // Subtle caption row below the photo (never covering the screenshot)
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 24.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = "${activeSlide.label} · ${game.system?.name ?: game.systemId.uppercase()}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = cs.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            if (activeSlide.userShotFile != null) {
+                                Row(
+                                    Modifier
+                                        .clip(CircleShape)
+                                        .background(cs.primaryContainer)
+                                        .clickable { onUseScreenshotAsCover(activeSlide.userShotFile) }
+                                        .padding(horizontal = 10.dp, vertical = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    Icon(Icons.Rounded.Wallpaper, null, tint = cs.onPrimaryContainer, modifier = Modifier.size(13.dp))
+                                    Text("Use as cover", style = MaterialTheme.typography.labelSmall, color = cs.onPrimaryContainer)
+                                }
+                            } else {
+                                Text(
+                                    text = "Tap to expand",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = cs.primary,
+                                )
+                            }
+                        }
+
+                        // Clean uncropped horizontal thumbnail strip with labels below each image
                         if (slides.size > 1) {
                             LazyRow(
                                 contentPadding = PaddingValues(horizontal = 20.dp),
@@ -1062,51 +1312,71 @@ internal fun M3GameDetailPage(
                                 itemsIndexed(slides, key = { _, s -> s.id }) { idx, slide ->
                                     val selected = idx == selectedSlideIdx
                                     val thumbScale by animateFloatAsState(
-                                        if (selected) 1f else 0.94f,
+                                        if (selected) 1f else 0.96f,
                                         M3ExpressiveSpring,
                                         label = "thumbScale",
                                     )
-                                    Box(
+                                    Column(
                                         Modifier
-                                            .width(106.dp)
-                                            .aspectRatio(16f / 10f)
+                                            .width(104.dp)
                                             .graphicsLayer { scaleX = thumbScale; scaleY = thumbScale }
-                                            .clip(RoundedCornerShape(16.dp))
-                                            .then(
-                                                if (selected) Modifier.border(2.5.dp, cs.primary, RoundedCornerShape(16.dp))
-                                                else Modifier,
-                                            )
-                                            .background(cs.surfaceContainerHigh)
                                             .clickable {
                                                 view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                                                 selectedSlideIdx = idx
                                             },
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(5.dp),
                                     ) {
-                                        M3FallbackArtFrame(
-                                            game = game,
-                                            sources = slide.sources,
-                                            modifier = Modifier.fillMaxSize(),
-                                        )
                                         Box(
                                             Modifier
-                                                .align(Alignment.BottomStart)
                                                 .fillMaxWidth()
-                                                .background(cs.scrim.copy(alpha = 0.56f))
-                                                .padding(horizontal = 7.dp, vertical = 3.dp),
+                                                .aspectRatio(16f / 10.5f)
+                                                .clip(RoundedCornerShape(14.dp))
+                                                .background(cs.surfaceContainerHigh)
+                                                .border(
+                                                    width = if (selected) 2.dp else 1.dp,
+                                                    color = if (selected) cs.primary else cs.outlineVariant.copy(alpha = 0.30f),
+                                                    shape = RoundedCornerShape(14.dp),
+                                                ),
                                         ) {
-                                            Text(
-                                                text = slide.label,
-                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp),
-                                                color = Color.White,
-                                                maxLines = 1,
+                                            M3FallbackArtFrame(
+                                                game = game,
+                                                sources = slide.sources,
+                                                storefrontFit = true,
+                                                modifier = Modifier.fillMaxSize(),
                                             )
                                         }
+                                        Text(
+                                            text = slide.label,
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontSize = 10.sp,
+                                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                            ),
+                                            color = if (selected) cs.primary else cs.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
                                     }
                                 }
                             }
                         }
                     }
                 }
+            }
+
+            // 4B. LAUNCHBOX-STYLE INTERACTIVE 3D RETAIL BOX, SPINE & CARTRIDGE/DISC SPIN VIEWER
+            item(key = "detail_3d_box_viewer") {
+                M3PhysicalBoxViewerSection(
+                    game = game,
+                    dossier = dossier,
+                    onPlay = { onPlay(null) },
+                    preloadedTextures = physicalTextures,
+                    onOpenInspector = { subj, yaw ->
+                        inspectorSubject = subj
+                        inspectorYaw = yaw
+                        show3dInspector = true
+                    },
+                )
             }
 
             // 5. GAME INFO & CREDITS DOSSIER (Hydra-style key-value rows)
@@ -1166,6 +1436,10 @@ internal fun M3GameDetailPage(
                         add("RELEASE DATE" to dossier.releaseDate)
                         add("GENRE" to dossier.genre)
                         add("MODES" to dossier.modes)
+                        if (dossier.esrbRating.isNotBlank()) add("ESRB RATING" to dossier.esrbRating)
+                        dossier.communityRating?.let { rating ->
+                            add("COMMUNITY RATING" to String.format(java.util.Locale.US, "★ %.1f / 5.0", rating))
+                        }
                         add("PLATFORM" to (game.system?.name ?: game.systemId.uppercase()))
                         add("ROM FILE" to "${game.extension.uppercase()} · ${formatFileSizeShort(game.size)}")
                     }
@@ -1897,20 +2171,67 @@ internal fun M3GameDetailPage(
                         }
                     }
 
+                    if (onWriteNfcTag != null) {
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(50.dp)
+                                .clip(CircleShape)
+                                .background(cs.secondaryContainer)
+                                .clickable(onClickLabel = "Write ${game.title} to an NFC tag", onClick = onWriteNfcTag),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                        ) {
+                            Icon(Icons.Rounded.Nfc, null, tint = cs.onSecondaryContainer, modifier = Modifier.size(19.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Write to NFC tag", style = MaterialTheme.typography.labelLarge, color = cs.onSecondaryContainer)
+                        }
+                    }
+
                     if (onDelete != null) {
+                        // Downloaded games are deleted from disk, so confirm first. Folder games are
+                        // only hidden (RetroHero can't change your folders) and the app offers Undo.
+                        var confirmDelete by remember { mutableStateOf(false) }
+                        val label = if (game.isLocal) "Delete download" else "Remove from library"
                         Row(
                             Modifier
                                 .fillMaxWidth()
                                 .height(50.dp)
                                 .clip(CircleShape)
                                 .background(cs.errorContainer)
-                                .clickable(onClick = onDelete),
+                                .clickable(onClickLabel = label) {
+                                    if (game.isLocal) confirmDelete = true else onDelete()
+                                },
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.Center,
                         ) {
                             Icon(Icons.Rounded.DeleteOutline, null, tint = cs.onErrorContainer, modifier = Modifier.size(19.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("Remove from library", style = MaterialTheme.typography.labelLarge, color = cs.onErrorContainer)
+                            Text(label, style = MaterialTheme.typography.labelLarge, color = cs.onErrorContainer)
+                        }
+                        if (!game.isLocal) {
+                            Text(
+                                "Hides it from RetroHero. The file stays in your folder.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = cs.onSurfaceVariant,
+                                modifier = Modifier.fillMaxWidth(),
+                                textAlign = TextAlign.Center,
+                            )
+                        }
+                        if (confirmDelete) {
+                            AlertDialog(
+                                onDismissRequest = { confirmDelete = false },
+                                icon = { Icon(Icons.Rounded.DeleteOutline, null) },
+                                title = { Text("Delete ${game.title}?") },
+                                text = { Text("The downloaded file is deleted from this phone. Saves and save states are kept.") },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        confirmDelete = false
+                                        onDelete()
+                                    }) { Text("Delete", color = cs.error) }
+                                },
+                                dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Cancel") } },
+                            )
                         }
                     }
                 }
@@ -1922,7 +2243,17 @@ internal fun M3GameDetailPage(
             Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
-                .background(cs.background.copy(alpha = topBarAlpha))
+                .background(cs.surfaceContainer.copy(alpha = topBarAlpha))
+                .drawBehind {
+                    // Hairline under the bar once it's solid, so it reads as a bar, not a gap.
+                    if (topBarAlpha > 0f) {
+                        drawRect(
+                            color = cs.outlineVariant.copy(alpha = topBarAlpha * 0.6f),
+                            topLeft = androidx.compose.ui.geometry.Offset(0f, size.height - 1.dp.toPx()),
+                            size = androidx.compose.ui.geometry.Size(size.width, 1.dp.toPx()),
+                        )
+                    }
+                }
                 .windowInsetsPadding(WindowInsets.statusBars)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -2011,6 +2342,398 @@ internal fun M3GameDetailPage(
                     tint = if (isFavorite) cs.onTertiaryContainer else cs.onSurface,
                     modifier = Modifier.size(20.dp),
                 )
+            }
+        }
+    }
+
+    if (patchLabOpen) {
+        M3PatchLabDialog(
+            game = game,
+            patches = patches,
+            onAttachPatch = onAttachPatch,
+            onPlayOriginal = { onPlay(null) },
+            onPlayWithPatch = onPlayWithPatch,
+            onTogglePatchSeparateSave = onTogglePatchSeparateSave,
+            onDeletePatch = onDeletePatch,
+            onDismiss = { patchLabOpen = false },
+        )
+    }
+
+    lightboxSlideIdx?.let { startIdx ->
+        val currentIdx = startIdx.coerceIn(0, (slides.size - 1).coerceAtLeast(0))
+        val slide = slides.getOrNull(currentIdx)
+        if (slide != null) {
+            Dialog(
+                onDismissRequest = { lightboxSlideIdx = null },
+                properties = DialogProperties(usePlatformDefaultWidth = false),
+            ) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.94f))
+                        .clickable { lightboxSlideIdx = null },
+                ) {
+                    M3FallbackArtFrame(
+                        game = game,
+                        sources = slide.sources,
+                        storefrontFit = true,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp, vertical = 72.dp),
+                    )
+                    // Top close bar
+                    Row(
+                        Modifier
+                            .align(Alignment.TopCenter)
+                            .fillMaxWidth()
+                            .windowInsetsPadding(WindowInsets.statusBars)
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "${slide.label} (${currentIdx + 1}/${slides.size})",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = Color.White,
+                        )
+                        Box(
+                            Modifier
+                                .size(38.dp)
+                                .clip(CircleShape)
+                                .background(Color.White.copy(alpha = 0.16f))
+                                .clickable { lightboxSlideIdx = null },
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(Icons.Rounded.Close, contentDescription = "Close", tint = Color.White, modifier = Modifier.size(20.dp))
+                        }
+                    }
+                    // Bottom prev/next controls when multiple slides exist
+                    if (slides.size > 1) {
+                        Row(
+                            Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth()
+                                .windowInsetsPadding(WindowInsets.navigationBars)
+                                .padding(horizontal = 20.dp, vertical = 16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(
+                                Modifier
+                                    .size(44.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White.copy(alpha = 0.16f))
+                                    .clickable {
+                                        val prev = (currentIdx - 1 + slides.size) % slides.size
+                                        lightboxSlideIdx = prev
+                                        selectedSlideIdx = prev
+                                    },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Previous", tint = Color.White)
+                            }
+                            Text(
+                                text = game.title,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Color.White.copy(alpha = 0.80f),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(horizontal = 12.dp).weight(1f),
+                                textAlign = TextAlign.Center,
+                            )
+                            Box(
+                                Modifier
+                                    .size(44.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White.copy(alpha = 0.16f))
+                                    .clickable {
+                                        val next = (currentIdx + 1) % slides.size
+                                        lightboxSlideIdx = next
+                                        selectedSlideIdx = next
+                                    },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(Icons.AutoMirrored.Rounded.ArrowForward, contentDescription = "Next", tint = Color.White)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showCheatsSheet) {
+        M3GameCheatsSheet(
+            game = game,
+            cheats = savedCheats,
+            searching = findingCheats,
+            sourceLabel = cheatSource,
+            errorMessage = cheatError,
+            packs = cheatPacks,
+            activePack = activeCheatPack,
+            onAutoFind = { triggerAutoFindCheats(openSheetOnSuccess = true) },
+            onSelectPack = { pack ->
+                if (!findingCheats && activeCheatPack?.fileName != pack.fileName) {
+                    findingCheats = true
+                    scope.launch {
+                        val loaded = CheatFinder.loadPack(pack)
+                        findingCheats = false
+                        if (loaded.isNotEmpty()) {
+                            val merged = CheatFinder.merge(savedCheats.filter { it.enabled }, loaded)
+                            persistCheats(merged)
+                            activeCheatPack = pack
+                            cheatSource = "${pack.fileName.removeSuffix(".cht")} · libretro-database"
+                        }
+                    }
+                }
+            },
+            onToggleCheat = { index, enabled ->
+                if (index in savedCheats.indices) {
+                    persistCheats(savedCheats.toMutableList().also { it[index] = it[index].copy(enabled = enabled) })
+                }
+            },
+            onDisableAll = {
+                persistCheats(savedCheats.map { it.copy(enabled = false) })
+            },
+            onDismiss = { showCheatsSheet = false },
+        )
+    }
+
+    if (show3dInspector) {
+        val boxAspect = remember(physicalTextures.front, physicalSpec) {
+            (physicalTextures.front.width.toFloat() / physicalTextures.front.height.toFloat().coerceAtLeast(1f))
+                .coerceIn(0.54f, 1.50f)
+        }
+        M3PhysicalBoxInspectorDialog(
+            game = game,
+            spec = physicalSpec,
+            textures = physicalTextures,
+            initialSubject = inspectorSubject,
+            initialYawDeg = inspectorYaw,
+            boxAspect = boxAspect,
+            onPlayFromModel = {
+                show3dInspector = false
+                showInsertCeremony = true
+            },
+            onDismiss = { show3dInspector = false },
+        )
+    }
+
+    if (showInsertCeremony) {
+        M3ConsoleInsertionDialog(
+            game = game,
+            spec = physicalSpec,
+            textures = physicalTextures,
+            onLaunchNow = { onPlay(null) },
+            onDismiss = { showInsertCeremony = false },
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun M3GameCheatsSheet(
+    game: Game,
+    cheats: List<Cheat>,
+    searching: Boolean,
+    sourceLabel: String?,
+    errorMessage: String?,
+    packs: List<CheatPackMatch>,
+    activePack: CheatPackMatch?,
+    onAutoFind: () -> Unit,
+    onSelectPack: (CheatPackMatch) -> Unit,
+    onToggleCheat: (Int, Boolean) -> Unit,
+    onDisableAll: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val cs = MaterialTheme.colorScheme
+    var query by remember { mutableStateOf("") }
+    var tab by remember { mutableStateOf("all") }
+    val filtered = remember(cheats, query, tab) {
+        val q = query.trim().lowercase()
+        cheats.mapIndexed { idx, c -> idx to c }
+            .filter { (_, c) ->
+                val tabOk = when (tab) {
+                    "active" -> c.enabled
+                    "popular" -> CheatFinder.isPopularCheat(c.name) || c.enabled
+                    else -> true
+                }
+                val qOk = q.isEmpty() || c.name.lowercase().contains(q) || c.code.lowercase().contains(q)
+                tabOk && qOk
+            }
+            .sortedByDescending { (_, c) -> c.enabled }
+    }
+    val activeCount = remember(cheats) { cheats.count { it.enabled } }
+    val popularCount = remember(cheats) { cheats.count { CheatFinder.isPopularCheat(it.name) } }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = cs.surfaceContainerLow,
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = "${game.title} Cheats",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                        color = cs.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (sourceLabel != null) {
+                        Text(
+                            text = sourceLabel,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = cs.primary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                Spacer(Modifier.width(8.dp))
+                Row(
+                    Modifier
+                        .clip(CircleShape)
+                        .background(cs.primaryContainer)
+                        .clickable(enabled = !searching) { onAutoFind() }
+                        .padding(horizontal = 12.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(5.dp),
+                ) {
+                    if (searching) {
+                        CircularProgressIndicator(strokeWidth = 2.dp, color = cs.onPrimaryContainer, modifier = Modifier.size(14.dp))
+                    } else {
+                        Icon(Icons.Rounded.AutoAwesome, null, tint = cs.onPrimaryContainer, modifier = Modifier.size(15.dp))
+                    }
+                    Text(
+                        text = if (searching) "Searching…" else "Auto-find",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                        color = cs.onPrimaryContainer,
+                    )
+                }
+            }
+
+            if (packs.size > 1) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    packs.forEach { pack ->
+                        FilterChip(
+                            selected = activePack?.fileName == pack.fileName,
+                            onClick = { onSelectPack(pack) },
+                            label = { Text(pack.displayLabel, maxLines = 1) },
+                        )
+                    }
+                }
+            }
+
+            if (cheats.size > 5) {
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    placeholder = { Text("Search ${cheats.size} cheats…") },
+                    leadingIcon = { Icon(Icons.Rounded.Search, null, modifier = Modifier.size(18.dp)) },
+                    trailingIcon = if (query.isNotEmpty()) {
+                        { IconButton(onClick = { query = "" }) { Icon(Icons.Rounded.Close, "Clear", modifier = Modifier.size(18.dp)) } }
+                    } else null,
+                    singleLine = true,
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    FilterChip(selected = tab == "all", onClick = { tab = "all" }, label = { Text("All (${cheats.size})") })
+                    if (popularCount > 0) {
+                        FilterChip(selected = tab == "popular", onClick = { tab = "popular" }, label = { Text("Popular ($popularCount)") })
+                    }
+                    FilterChip(selected = tab == "active", onClick = { tab = "active" }, label = { Text("Active ($activeCount)") })
+                    if (activeCount > 0) {
+                        TextButton(onClick = onDisableAll) { Text("Disable all") }
+                    }
+                }
+            }
+
+            when {
+                searching && cheats.isEmpty() -> {
+                    Row(
+                        Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.5.dp)
+                        Spacer(Modifier.width(12.dp))
+                        Text("Searching libretro-database…", style = MaterialTheme.typography.bodyMedium, color = cs.onSurfaceVariant)
+                    }
+                }
+                filtered.isEmpty() -> {
+                    Text(
+                        text = errorMessage ?: if (tab == "active") "No active cheats yet." else "No cheats found matching your filter.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = cs.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 20.dp),
+                    )
+                }
+                else -> {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(360.dp),
+                        verticalArrangement = Arrangement.spacedBy(3.dp),
+                    ) {
+                        itemsIndexed(filtered, key = { _, pair -> "${pair.first}_${pair.second.code}" }) { rowIdx, (origIdx, cheat) ->
+                            Row(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clip(m3SegmentedShape(rowIdx, filtered.size))
+                                    .background(if (cheat.enabled) cs.primaryContainer.copy(alpha = 0.55f) else cs.surfaceContainerHigh)
+                                    .clickable { onToggleCheat(origIdx, !cheat.enabled) }
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        text = cheat.name,
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+                                        color = cs.onSurface,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    Text(
+                                        text = cheat.code,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = cs.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                                Switch(
+                                    checked = cheat.enabled,
+                                    onCheckedChange = { onToggleCheat(origIdx, it) },
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -2190,25 +2913,37 @@ private fun M3FallbackArtFrame(
     game: Game,
     sources: List<Any>,
     modifier: Modifier = Modifier,
+    storefrontFit: Boolean = false,
 ) {
     var idx by remember(game.id, sources) { mutableIntStateOf(0) }
     var loaded by remember(game.id, sources) { mutableStateOf(false) }
 
-    Box(modifier) {
+    Box(modifier, contentAlignment = Alignment.Center) {
         if (!loaded || idx >= sources.size) {
-            M3GameCover(game = game, showTitle = false, modifier = Modifier.fillMaxSize())
+            M3GameCover(game = game, showTitle = false, fitCover = storefrontFit, modifier = Modifier.fillMaxSize())
         }
         if (idx < sources.size) {
+            if (storefrontFit) {
+                AsyncImage(
+                    model = sources[idx],
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    alpha = 0.24f,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .blur(18.dp),
+                )
+            }
             AsyncImage(
                 model = sources[idx],
                 contentDescription = null,
-                contentScale = ContentScale.Crop,
+                contentScale = if (storefrontFit) ContentScale.Fit else ContentScale.Crop,
                 onSuccess = { loaded = true },
                 onError = {
                     loaded = false
                     idx++
                 },
-                modifier = Modifier.fillMaxSize(),
+                modifier = if (storefrontFit) Modifier.fillMaxSize().padding(4.dp) else Modifier.fillMaxSize(),
             )
         }
     }

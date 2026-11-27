@@ -29,37 +29,36 @@ fun SegmentedGroup(
     modifier: Modifier = Modifier,
     content: @Composable SegmentScope.() -> Unit,
 ) {
+    val cs = MaterialTheme.colorScheme
+    val cardShape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp)
     Column(modifier) {
         if (title != null) {
             androidx.compose.material3.Text(
                 title,
                 style = MaterialTheme.typography.labelMedium,
-                color = Tone.Muted,
+                color = cs.onSurfaceVariant,
                 modifier = Modifier.padding(start = 16.dp, bottom = 8.dp, top = 8.dp),
             )
         }
         val depth = if (Tone.isDark) Modifier else Modifier.shadow(
             2.dp,
-            Ascend.CardShape,
+            cardShape,
             ambientColor = Color.Black.copy(alpha = 0.05f),
             spotColor = Color.Black.copy(alpha = 0.08f),
         )
-        // One surface card with crisp Instrument hairline border.
         Column(
             Modifier
                 .then(depth)
-                .clip(Ascend.CardShape)
-                .background(GroupFill)
-                .border(1.dp, Tone.Line, Ascend.CardShape)
-                .padding(vertical = 6.dp),
+                .clip(cardShape)
+                .background(cs.surfaceContainerLow)
+                .border(1.dp, cs.outlineVariant.copy(alpha = 0.28f), cardShape)
+                .padding(vertical = 4.dp),
         ) {
             SegmentScope(count).content()
         }
     }
 }
 
-/** Segmented rows sit on a raised container so the group reads clearly against the page. */
+/** Segmented rows sit cleanly on the harmonized group container. */
 @Composable
 fun segmentColors() = ListItemDefaults.segmentedColors(containerColor = Color.Transparent)
-
-private val GroupFill get() = Tone.Surface

@@ -246,4 +246,53 @@ class LauncherScreenshotTest {
         compose.waitForIdle()
         save("m3e_home_light_sage")
     }
+
+    @Test
+    fun instant3dInspectorAndCasesEverywhereToggle() {
+        val ctx = org.robolectric.RuntimeEnvironment.getApplication()
+        val settings = com.retrohero.app.data.Settings(ctx)
+        org.junit.Assert.assertFalse("3D cases everywhere must default to OFF", settings.showCasesEverywhere.value)
+        settings.setShowCasesEverywhere(true)
+        org.junit.Assert.assertTrue(settings.showCasesEverywhere.value)
+        settings.setShowCasesEverywhere(false)
+        org.junit.Assert.assertFalse(settings.showCasesEverywhere.value)
+
+        val games = sampleGames()
+        var showCasesEverywhere by mutableStateOf(false)
+
+        compose.setContent {
+            RetroHeroTheme(dynamicColor = false) {
+                M3ExpressiveAppView(
+                    games = games,
+                    recents = games.take(3),
+                    favoriteIds = setOf(games[0].id),
+                    stats = emptyMap(),
+                    shelfStatuses = emptyMap(),
+                    showCasesEverywhere = showCasesEverywhere,
+                    onSetShowCasesEverywhere = { showCasesEverywhere = it },
+                )
+            }
+        }
+
+        // Open Game Info directly from Home hero and tap the 3D Case button WITHOUT scrolling down:
+        // fullscreen 3D Inspector must open immediately!
+        compose.mainClock.advanceTimeBy(600)
+        compose.onNodeWithContentDescription("Details for Chrono Symphony").performClick()
+        compose.mainClock.advanceTimeBy(600)
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("Inspect 3D retail box & cart").performClick()
+        compose.mainClock.advanceTimeBy(400)
+        compose.waitForIdle()
+        compose.onNodeWithText("Read Flat").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Close").performClick()
+        compose.mainClock.advanceTimeBy(300)
+        compose.onNodeWithContentDescription("Close details").performClick()
+        compose.mainClock.advanceTimeBy(400)
+
+        // Toggle "3D cases everywhere" ON and capture Home with 3D cases enabled
+        compose.runOnIdle { showCasesEverywhere = true }
+        compose.mainClock.advanceTimeBy(800)
+        compose.waitForIdle()
+        save("m3e_home_cases_everywhere")
+    }
 }

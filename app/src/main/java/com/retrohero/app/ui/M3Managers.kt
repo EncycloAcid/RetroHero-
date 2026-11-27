@@ -85,8 +85,10 @@ internal fun M3CoreManagerPage(
     val inset = LocalToolbarInset.current
     val allCores = remember { Systems.allCores() }
     val neededIds = remember(neededCores) { neededCores.map { it.id }.toSet() }
+    // Built-in cores ship inside the app, so they're always ready even with no install record.
+    fun ready(core: CoreInfo) = core.builtIn || coreStates[core.id] is CoreState.Installed
     val missingNeeded = remember(neededCores, coreStates) {
-        neededCores.filter { coreStates[it.id] !is CoreState.Installed }
+        neededCores.filter { !ready(it) }
     }
     var query by rememberSaveable { mutableStateOf("") }
     var tab by rememberSaveable { mutableIntStateOf(if (neededIds.isNotEmpty()) 0 else 2) }
@@ -95,7 +97,7 @@ internal fun M3CoreManagerPage(
         allCores.filter { (core, systems) ->
             val matchTab = when (tab) {
                 0 -> core.id in neededIds
-                1 -> coreStates[core.id] is CoreState.Installed
+                1 -> ready(core)
                 else -> true
             }
             val matchQuery = query.isBlank() ||
@@ -105,7 +107,7 @@ internal fun M3CoreManagerPage(
         }.let { list ->
             if (tab == 0) {
                 list.sortedBy { (core, _) ->
-                    when (coreStates[core.id]) {
+                    if (core.builtIn) 3 else when (coreStates[core.id]) {
                         is CoreState.Downloading -> 0
                         is CoreState.Failed -> 1
                         is CoreState.NotInstalled, null -> 2
@@ -123,7 +125,7 @@ internal fun M3CoreManagerPage(
     ) {
         item(key = "cores_top") {
             SubPageHeader(
-                eyebrow = "${allCores.count { coreStates[it.first.id] is CoreState.Installed }} OF ${allCores.size} INSTALLED",
+                eyebrow = "${allCores.count { ready(it.first) }} OF ${allCores.size} READY",
                 title = "Emulator cores",
                 onBack = onBack,
             )
@@ -252,7 +254,8 @@ internal fun M3CoreManagerPage(
             item(key = "cores_list") {
                 Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     filtered.forEachIndexed { idx, (core, systems) ->
-                        val state = coreStates[core.id] ?: CoreState.NotInstalled
+                        val rawState = coreStates[core.id] ?: CoreState.NotInstalled
+                        val state = if (core.builtIn && rawState !is CoreState.Installed) CoreState.Installed(bundled = true, sizeBytes = 0L) else rawState
                         Column(
                             Modifier
                                 .fillMaxWidth()
@@ -267,15 +270,26 @@ internal fun M3CoreManagerPage(
                                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
                                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(
+                                        text = core.displayName,
+                                        style = MaterialTheme.typography.titleSmall.copy(fontSize = 15.sp),
+                                        color = cs.onSurface,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    val sub = buildString {
+                                        append(systems.joinToString(" · ") { it.shortName })
+                                        if (core.builtIn || (state is CoreState.Installed && state.bundled)) {
+                                            append(" · native C++")
+                                        } else if (state is CoreState.Installed && state.sizeBytes > 0) {
+                                            append(" · ")
+                                            append(String.format(Locale.US, "%.1f MB", state.sizeBytes / (1024f * 1024f)))
+                                        } else if (state is CoreState.Failed) {
+                                            append(" · ")
+                                            append(state.message)
+                                        }
+                                    }
                                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        Text(
-                                            text = core.displayName,
-                                            style = MaterialTheme.typography.titleSmall.copy(fontSize = 15.sp),
-                                            color = cs.onSurface,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.weight(1f, fill = false),
-                                        )
                                         if (core.builtIn || (state is CoreState.Installed && state.bundled)) {
                                             Box(
                                                 Modifier
@@ -307,26 +321,15 @@ internal fun M3CoreManagerPage(
                                                 )
                                             }
                                         }
+                                        Text(
+                                            text = sub,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = if (state is CoreState.Failed) cs.error else cs.onSurfaceVariant,
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f, fill = false),
+                                        )
                                     }
-                                    val sub = buildString {
-                                        append(systems.joinToString(" · ") { it.shortName })
-                                        if (core.builtIn || (state is CoreState.Installed && state.bundled)) {
-                                            append(" · Built-in native C++")
-                                        } else if (state is CoreState.Installed && state.sizeBytes > 0) {
-                                            append(" · ")
-                                            append(String.format(Locale.US, "%.1f MB", state.sizeBytes / (1024f * 1024f)))
-                                        } else if (state is CoreState.Failed) {
-                                            append(" · ")
-                                            append(state.message)
-                                        }
-                                    }
-                                    Text(
-                                        text = sub,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = if (state is CoreState.Failed) cs.error else cs.onSurfaceVariant,
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
                                 }
 
                                 when (state) {

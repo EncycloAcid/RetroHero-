@@ -97,6 +97,27 @@ object CoreTuning {
             "beetle_psx_hw_cpu_dynarec" to "execute",
             "beetle_psx_hw_pgxp_mode" to "memory only",
         )
+        // Nintendo DS — melonDS DS (direct boot FreeBIOS, reliable software renderer + ARM64 JIT, no PC cursor)
+        "melondsds" -> mapOf(
+            "melonds_render_mode" to "software",
+            "melonds_jit_enable" to "enabled",
+            "melonds_boot_mode" to "direct",
+            "melonds_console_mode" to "ds",
+            "melonds_cursor_mode" to "never",
+            "melonds_screen_gap" to "0",
+        )
+        // Nintendo DS — DeSmuME
+        "desmume" -> mapOf(
+            "desmume_cpu_mode" to "jit",
+            "desmume_internal_resolution" to "256x192",
+            "desmume_pointer_colour" to "transparent",
+            "desmume_frameskip" to "0",
+        )
+        // Nintendo DS — legacy melonDS
+        "melonds" -> mapOf(
+            "melonds_boot_directly" to "enabled",
+            "melonds_jit_enable" to "enabled",
+        )
         else -> emptyMap()
     }
 }

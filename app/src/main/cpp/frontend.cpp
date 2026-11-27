@@ -541,6 +541,53 @@ void Frontend::runLoop() {
 }
 
 void Frontend::runFrameLocked() {
+    if (rollback_.isActive() && core_.serialize_size && core_.serialize && core_.unserialize) {
+        activeRunAhead_.store(0, std::memory_order_relaxed);
+        const size_t sz = core_.serialize_size();
+        const bool canSnap = sz > 0 && sz <= kRollbackMaxStateBytes;
+        if (canSnap && rollbackScratch_.size() != sz) rollbackScratch_.resize(sz);
+
+        // 1) If a confirmed remote input arrived late and disagreed with our prediction,
+        //    silently roll back to that frame and re-simulate up to the present!
+        uint32_t rbFrame = 0;
+        if (canSnap && rollback_.consumePendingRollback(rbFrame)) {
+            const auto *snap = rollback_.snapshotFor(rbFrame);
+            if (snap && snap->size() == sz && core_.unserialize(snap->data(), sz)) {
+                const uint32_t targetCur = rollback_.currentFrame();
+                suppressVideo_ = true;
+                suppressAudio_ = true;
+                for (uint32_t f = rbFrame; f < targetCur; f++) {
+                    if (f > rbFrame && core_.serialize(rollbackScratch_.data(), sz)) {
+                        rollback_.saveSnapshot(f, rollbackScratch_.data(), sz);
+                    }
+                    uint32_t p1 = 0, p2 = 0;
+                    rollback_.inputsForReplay(f, p1, p2);
+                    buttons_[0].store(p1, std::memory_order_relaxed);
+                    buttons_[1].store(p2, std::memory_order_relaxed);
+                    core_.run();
+                }
+                suppressVideo_ = false;
+                suppressAudio_ = false;
+                rollback_.recordRollbackStats(targetCur - rbFrame);
+            }
+        }
+
+        // 2) Save deterministic snapshot before stepping currentFrame
+        const uint32_t curFrame = rollback_.currentFrame();
+        if (canSnap && core_.serialize(rollbackScratch_.data(), sz)) {
+            rollback_.saveSnapshot(curFrame, rollbackScratch_.data(), sz);
+        }
+
+        // 3) Apply local input (with delay) + confirmed/predicted remote input and step core
+        uint32_t p1 = 0, p2 = 0;
+        rollback_.beginFrame(localNetplayButtons_.load(std::memory_order_relaxed), p1, p2);
+        buttons_[0].store(p1, std::memory_order_relaxed);
+        buttons_[1].store(p2, std::memory_order_relaxed);
+        core_.run();
+        rollback_.advanceFrame();
+        return;
+    }
+
     if (rewinding_ && rewindEnabled_) {
         activeRunAhead_.store(0, std::memory_order_relaxed);
         if (popRewindLocked()) core_.run();
@@ -761,6 +808,7 @@ bool Frontend::readMemory(unsigned memoryType, std::vector<uint8_t> &out, size_t
 
 void Frontend::shutdown(const std::string &sramPath) {
     running_ = false;
+    rollback_.stop();
     vsyncCv_.notify_all();
     if (thread_.joinable()) thread_.join();
     audio_.stop();
@@ -887,6 +935,23 @@ void Frontend::setColorProfile(int profile) {
     video_.setColorProfile(profile);
 }
 
+void Frontend::setUpscaleFactor(int factor) {
+    video_.setUpscaleFactor(factor);
+}
+
+void Frontend::setAmbilightEnabled(bool enabled) {
+    hw_.setAmbilightEnabled(enabled);
+    video_.setAmbilightEnabled(enabled);
+}
+
+void Frontend::pollAmbilight(uint32_t out[5]) const {
+    if (hwRenderEnabled_.load(std::memory_order_relaxed)) {
+        hw_.pollAmbilight(out);
+    } else {
+        video_.pollAmbilight(out);
+    }
+}
+
 void Frontend::frameSize(unsigned &width, unsigned &height) {
     if (hwRenderEnabled_.load()) hw_.frameSize(width, height);
     else video_.frameSize(width, height);
@@ -985,10 +1050,53 @@ void Frontend::setCoreOptionsV2(const retro_core_option_v2_definition *defs) {
 
 void Frontend::setButton(unsigned port, unsigned id, bool pressed) {
     if (port >= 4 || id >= 32) return;
+    if (port == 0) {
+        if (pressed) localNetplayButtons_.fetch_or(1u << id);
+        else localNetplayButtons_.fetch_and(~(1u << id));
+    }
     if (pressed)
         buttons_[port].fetch_or(1u << id);
     else
         buttons_[port].fetch_and(~(1u << id));
+}
+
+uint32_t Frontend::getButtonsMask(unsigned port) const {
+    if (port >= 4) return 0u;
+    if (port == 0 && rollback_.isActive()) {
+        return localNetplayButtons_.load(std::memory_order_relaxed);
+    }
+    return buttons_[port].load(std::memory_order_relaxed);
+}
+
+bool Frontend::netplayStart(int localPort, int inputDelayFrames) {
+    std::lock_guard<std::mutex> lk(coreMutex_);
+    if (!gameLoaded_ || !core_.serialize_size || !core_.serialize || !core_.unserialize) {
+        setError("This core does not support deterministic rollback states.");
+        return false;
+    }
+    size_t sz = core_.serialize_size();
+    if (sz == 0 || sz > kRollbackMaxStateBytes) {
+        setError("Core save state is too large for mobile rollback netplay.");
+        return false;
+    }
+    // Reset both peers deterministically to frame 0 for clean lockstep start
+    core_.reset();
+    rollback_.start(localPort, inputDelayFrames);
+    LOGI("Rollback Netplay started (localPort=%d, inputDelay=%d, stateSize=%zu)",
+         localPort, inputDelayFrames, sz);
+    return true;
+}
+
+void Frontend::netplayStop() {
+    rollback_.stop();
+}
+
+void Frontend::netplayPushRemoteInput(uint32_t frame, uint32_t buttonsMask) {
+    rollback_.pushRemoteInput(frame, buttonsMask);
+}
+
+RollbackTelemetry Frontend::netplayTelemetry() const {
+    return rollback_.telemetry();
 }
 
 void Frontend::setAnalog(unsigned port, unsigned index, unsigned axis, int16_t value) {
