@@ -101,4 +101,22 @@ class PocketGuideTest {
         assertFalse(fallback.controls.isEmpty())
         assertFalse(fallback.hints.isEmpty())
     }
+
+    @Test
+    fun pokemonGuidesPrioritizeMatchingRegionHints() {
+        val platinum = PocketGuides.forGame(fakeGame("Pokemon - Platinum Version", "nds"))
+        assertEquals("Trainer's Guide", platinum.title)
+        assertTrue(platinum.badge.startsWith("Sinnoh"))
+        assertTrue(platinum.hints.first().topic.contains("Sinnoh"))
+        assertTrue(platinum.hints.any { "Distortion World" in it.topic })
+        assertTrue(platinum.hints.any { "Iron Island" in it.solution && "Solaceon Ruins" in it.solution })
+
+        val emerald = PocketGuides.forGame(fakeGame("Pokemon - Emerald Version", "gba"))
+        assertTrue(emerald.badge.startsWith("Hoenn"))
+        assertTrue(emerald.hints.first().topic.contains("Hoenn"))
+
+        val heartGold = PocketGuides.forGame(fakeGame("Pokemon - HeartGold Version", "nds"))
+        assertTrue(heartGold.badge.startsWith("Johto"))
+        assertTrue(heartGold.hints.first().topic.contains("Johto"))
+    }
 }

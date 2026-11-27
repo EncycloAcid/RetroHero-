@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -15,15 +16,18 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
@@ -32,6 +36,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AutoAwesome
@@ -41,15 +46,14 @@ import androidx.compose.material.icons.rounded.EmojiEvents
 import androidx.compose.material.icons.rounded.Gamepad
 import androidx.compose.material.icons.rounded.Map
 import androidx.compose.material.icons.rounded.MenuBook
+import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.PushPin
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -64,6 +68,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -662,22 +667,70 @@ object PocketGuides {
             ),
         )
 
-        "pokemon" in title || "pokémon" in title -> PocketManual(
-            title = "Trainer's Pocket Pokedex",
-            badge = "Curated · Type Chart + Hints",
-            overview = "Monster-collecting RPG where type matchups, status moves, and HM navigation unlock the region.",
-            controls = listOf(
-                "A" to "Interact / Confirm",
-                "B" to "Cancel / Running Shoes (GBA+)",
-                "Select" to "Use Registered Key Item (Bike / Rod)",
-                "Start" to "Bag, Party & Save Menu",
-            ),
-            quickTips = listOf(
-                "Open the Reference tab to tap any opponent's Type and see instant 2× weaknesses & immunities!",
-                "Remember: in Gen 1–3, Physical vs Special attack depends on the move's TYPE, not the individual move.",
-                "Paralyzing or putting wild Pokémon to sleep dramatically increases Poké Ball catch rates.",
-            ),
-            hints = listOf(
+        "pokemon" in title || "pokémon" in title -> {
+            val isPlatinum = "platinum" in title
+            val isSinnoh = isPlatinum || "diamond" in title || "pearl" in title
+            val isHoenn = "emerald" in title || "ruby" in title || "sapphire" in title
+            val isJohto = "gold" in title || "silver" in title || "crystal" in title
+            val sinnohHmHint = if (isPlatinum) {
+                PocketHint(
+                    topic = "Finding HM04 Strength & HM05 Defog (Platinum)",
+                    nudge = "One awaits a ferry ride west from Canalave; the other is tucked deep inside the Unown's ancient chambers.",
+                    clue = "Sail from Canalave City to Iron Island for Strength, and descend the dead-end stairs in Solaceon Ruins for Defog.",
+                    solution = "Speak with Riley right outside the Iron Island cave entrance for HM04 Strength, and follow the Solaceon Ruins stairs (upper-right → lower-left → upper-right → upper-left → upper-left → lower-left) for HM05 Defog.",
+                )
+            } else {
+                PocketHint(
+                    topic = "Finding HM04 Strength & HM05 Defog (Sinnoh)",
+                    nudge = "One is at the top of a spooky tower south of Solaceon; the other is right inside Pastoria's safari.",
+                    clue = "Climb Lost Tower on Route 209 for Strength, and speak to the first Ace Trainer inside Great Marsh for Defog.",
+                    solution = "Reach the top floor of Lost Tower (Route 209) for HM04 Strength, and talk to the green-haired Ace Trainer right inside Pastoria's Great Marsh entrance for HM05 Defog.",
+                )
+            }
+            val sinnohHints = listOf(
+                PocketHint(
+                    topic = "Psyduck Blocking Route 210 (Sinnoh)",
+                    nudge = "They're suffering from a terrible headache — look for someone researching myths.",
+                    clue = "Beat Crasher Wake in Pastoria City, chase the Galactic Grunt east to Lake Valor, and speak with Cynthia.",
+                    solution = "Cynthia hands you the SecretPotion after the Lake Valor Galactic encounter; use it on the Psyduck on Route 210 to clear the path to Celestic Town.",
+                ),
+                sinnohHmHint,
+                PocketHint(
+                    topic = "Distortion World Boulder Puzzle (Platinum)",
+                    nudge = "The three lake guardians are trying to guide each boulder into its glowing pit.",
+                    clue = "Push the boulder near Mesprit, Uxie, and Azelf into the pits on the side islands — each guardian looks toward the right hole.",
+                    solution = "Drop down to each side platform, use Strength to push each boulder into the glowing depression beside each Lake Spirit, then jump to the central island to meet Cyrus and Giratina.",
+                ),
+                PocketHint(
+                    topic = "Preparing for Champion Cynthia (Sinnoh)",
+                    nudge = "One fast Ice-type move shuts down her most feared ace.",
+                    clue = "Bring Ice coverage for Garchomp (4× weak to Ice), Grass/Electric for Milotic, and watch out for Spiritomb having no type weaknesses in Gen IV.",
+                    solution = "Lead with a strong neutral hitter for Spiritomb, keep an Ice Beam/Ice Punch user ready for Garchomp, and pack Full Restores + Revives before entering the final chamber.",
+                ),
+            )
+            val hoennHints = listOf(
+                PocketHint(
+                    topic = "Reaching Sootopolis City (Hoenn)",
+                    nudge = "There's no land bridge — look beneath the dark deep-blue water.",
+                    clue = "Use HM08 Dive on the dark ocean trench on Route 126.",
+                    solution = "Dive underwater on Route 126, swim through the southern cave opening into the underwater cavern, and resurface inside the Sootopolis crater.",
+                ),
+                PocketHint(
+                    topic = "Unlocking the Sealed Chamber / Regis (Hoenn)",
+                    nudge = "Two very specific Pokémon must sit at the front and back of your party.",
+                    clue = "Read the Braille on the back wall of the underwater Sealed Chamber on Route 134 — Dig opens the first wall.",
+                    solution = "Use Dig at the far wall of Sealed Chamber, then inspect the back Braille with Relicanth first and Wailord last (reversed in Emerald) to trigger the earthquake opening all three Regi ruins.",
+                ),
+            )
+            val johtoHints = listOf(
+                PocketHint(
+                    topic = "Passing Sudowoodo Blocking Route 36 (Johto)",
+                    nudge = "That wiggly tree really hates water.",
+                    clue = "Visit the Flower Shop in Goldenrod City after earning the Plain Badge.",
+                    solution = "Defeat Whitney for the Plain Badge, pick up the SquirtBottle from the Goldenrod Flower Shop, and use it on the tree.",
+                ),
+            )
+            val kantoHints = listOf(
                 PocketHint(
                     topic = "Thirsty Guard Blocking Saffron City (Kanto)",
                     nudge = "Check the top floor of the biggest store in Celadon.",
@@ -691,22 +744,49 @@ object PocketGuides {
                     solution = "Rescue Mr. Fuji atop Pokémon Tower to receive the Poké Flute, then play it in front of Snorlax.",
                 ),
                 PocketHint(
-                    topic = "Passing Sudowoodo Blocking Route 36 (Johto)",
-                    nudge = "That wiggly tree really hates water.",
-                    clue = "Visit the Flower Shop in Goldenrod City after earning the Plain Badge.",
-                    solution = "Defeat Whitney for the Plain Badge, pick up the SquirtBottle from the Goldenrod Flower Shop, and use it on the tree.",
-                ),
-                PocketHint(
                     topic = "Finding HM04 Strength in Safari Zone (Kanto)",
                     nudge = "The Warden lost something valuable inside the Safari Zone.",
                     clue = "Explore Area 3 (West) to find the Secret House and a shiny item on the ground nearby.",
                     solution = "Pick up the Gold Teeth in Safari Zone Area 3 and return them to the Safari Warden in Fuchsia City for HM04 Strength.",
                 ),
-            ),
-            references = listOf(
-                PocketReference.PokemonTypeChart("Interactive Pokémon Type Chart"),
-            ),
-        )
+            )
+            val orderedHints = when {
+                isSinnoh -> sinnohHints + johtoHints + kantoHints
+                isHoenn -> hoennHints + johtoHints + kantoHints
+                isJohto -> johtoHints + kantoHints + sinnohHints
+                else -> kantoHints + johtoHints + sinnohHints
+            }
+            val regionBadge = when {
+                isSinnoh -> "Sinnoh · Type Chart + Hints"
+                isHoenn -> "Hoenn · Type Chart + Hints"
+                isJohto -> "Johto · Type Chart + Hints"
+                else -> "Kanto · Type Chart + Hints"
+            }
+            PocketManual(
+                title = "Trainer's Guide",
+                badge = regionBadge,
+                overview = "Monster-collecting RPG where type matchups, status moves, and HM navigation unlock the region.",
+                controls = listOf(
+                    "A" to "Interact / Confirm",
+                    "B" to "Cancel / Running Shoes (GBA+)",
+                    "Select" to "Use Registered Key Item (Bike / Rod)",
+                    "Start" to "Bag, Party & Save Menu",
+                ),
+                quickTips = listOf(
+                    "Open the Lists tab to tap any opponent's Type and see instant 2× weaknesses & immunities!",
+                    if (isSinnoh) {
+                        "Gen IV introduced the Physical / Special split — check each move's icon (burst vs rings) instead of its type!"
+                    } else {
+                        "Remember: in Gen 1–3, Physical vs Special attack depends on the move's TYPE, not the individual move."
+                    },
+                    "Paralyzing or putting wild Pokémon to sleep dramatically increases Poké Ball catch rates.",
+                ),
+                hints = orderedHints,
+                references = listOf(
+                    PocketReference.PokemonTypeChart("Interactive Pokémon Type Chart"),
+                ),
+            )
+        }
 
         "final fantasy" in title -> PocketManual(
             title = "Moogle Field Manual",
@@ -991,8 +1071,13 @@ fun PocketGuideDrawer(
                     tonalElevation = 6.dp,
                     modifier = Modifier
                         .fillMaxHeight()
-                        .widthIn(min = 310.dp, max = 430.dp)
+                        .widthIn(min = 316.dp, max = 430.dp)
                         .fillMaxWidth(0.90f)
+                        .border(
+                            width = 1.dp,
+                            color = cs.outlineVariant.copy(alpha = 0.28f),
+                            shape = RoundedCornerShape(topStart = 28.dp, bottomStart = 28.dp),
+                        )
                         .pointerInput(Unit) {
                             detectHorizontalDragGestures(
                                 onDragStart = { swipeCloseAccum = 0f },
@@ -1012,10 +1097,10 @@ fun PocketGuideDrawer(
                         Modifier
                             .fillMaxSize()
                             .safeDrawingPadding()
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        // Header
+                        // Header — balanced breathing room so title and game name stay crisp
                         Row(
                             Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
@@ -1023,86 +1108,128 @@ fun PocketGuideDrawer(
                         ) {
                             Box(
                                 Modifier
-                                    .size(38.dp)
+                                    .size(36.dp)
                                     .clip(CircleShape)
-                                    .background(cs.primaryContainer),
+                                    .background(cs.primaryContainer)
+                                    .border(1.dp, cs.onPrimaryContainer.copy(alpha = 0.14f), CircleShape),
                                 contentAlignment = Alignment.Center,
                             ) {
-                                Icon(Icons.Rounded.MenuBook, null, tint = cs.onPrimaryContainer, modifier = Modifier.size(20.dp))
+                                Icon(Icons.Rounded.MenuBook, null, tint = cs.onPrimaryContainer, modifier = Modifier.size(18.dp))
                             }
-                            Column(Modifier.weight(1f)) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
                                 Text(
                                     text = manual.title,
-                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = FontWeight.ExtraBold,
+                                        fontSize = 16.sp,
+                                    ),
                                     color = cs.onSurface,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )
                                 Text(
-                                    text = "${game.title} · ${manual.badge}",
+                                    text = game.title,
                                     style = MaterialTheme.typography.labelSmall,
                                     color = cs.onSurfaceVariant,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )
                             }
-                            Box(
-                                Modifier
-                                    .clip(CircleShape)
-                                    .background(cs.tertiaryContainer)
-                                    .clickable {
-                                        onSaveNotes(notes)
-                                        onOpenWebBrowser()
-                                    }
-                                    .padding(horizontal = 10.dp, vertical = 6.dp),
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
-                                Text(
-                                    "Web",
-                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.ExtraBold),
-                                    color = cs.onTertiaryContainer,
-                                )
-                            }
-                            IconButton(onClick = {
-                                onSaveNotes(notes)
-                                onDismiss()
-                            }) {
-                                Icon(Icons.Rounded.Close, "Close guide", tint = cs.onSurface)
+                                Row(
+                                    Modifier
+                                        .height(34.dp)
+                                        .clip(CircleShape)
+                                        .background(cs.tertiaryContainer)
+                                        .border(1.dp, cs.onTertiaryContainer.copy(alpha = 0.14f), CircleShape)
+                                        .clickable {
+                                            onSaveNotes(notes)
+                                            onOpenWebBrowser()
+                                        }
+                                        .padding(horizontal = 9.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    Icon(Icons.Rounded.Public, null, tint = cs.onTertiaryContainer, modifier = Modifier.size(13.5.dp))
+                                    Text(
+                                        "Web",
+                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.ExtraBold),
+                                        color = cs.onTertiaryContainer,
+                                        maxLines = 1,
+                                        softWrap = false,
+                                    )
+                                }
+                                Box(
+                                    Modifier
+                                        .size(34.dp)
+                                        .clip(CircleShape)
+                                        .background(cs.surfaceContainerHigh)
+                                        .border(1.dp, cs.outlineVariant.copy(alpha = 0.24f), CircleShape)
+                                        .clickable {
+                                            onSaveNotes(notes)
+                                            onDismiss()
+                                        },
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    Icon(Icons.Rounded.Close, "Close guide", tint = cs.onSurface, modifier = Modifier.size(17.dp))
+                                }
                             }
                         }
 
-                        // Expressive Pill Tab Selector
+                        // Expressive Connected Pill Tab Bar — spans full width cleanly with zero text clipping
                         val tabs = buildList {
                             add(Triple(0, "Hints", Icons.Rounded.AutoAwesome))
                             if (hasRefs) add(Triple(1, "Lists", Icons.Rounded.Map))
                             add(Triple(2, "Notes", Icons.Rounded.Gamepad))
                             add(Triple(3, "Trophies", Icons.Rounded.EmojiEvents))
                         }
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            tabs.forEach { (idx, label, icon) ->
-                                val active = selectedTab == idx
-                                Row(
-                                    Modifier
-                                        .weight(1f)
-                                        .clip(CircleShape)
-                                        .background(if (active) cs.primaryContainer else cs.surfaceContainerHigh)
-                                        .clickable { selectedTab = idx }
-                                        .padding(horizontal = 6.dp, vertical = 8.dp),
-                                    horizontalArrangement = Arrangement.Center,
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Icon(
-                                        icon,
-                                        null,
-                                        tint = if (active) cs.onPrimaryContainer else cs.onSurfaceVariant,
-                                        modifier = Modifier.size(14.dp),
-                                    )
-                                    Spacer(Modifier.width(4.dp))
-                                    Text(
-                                        label,
-                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                                        color = if (active) cs.onPrimaryContainer else cs.onSurfaceVariant,
-                                        maxLines = 1,
-                                    )
+                        BoxWithConstraints(
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(CircleShape)
+                                .background(cs.surfaceContainerHigh)
+                                .border(1.dp, cs.outlineVariant.copy(alpha = 0.22f), CircleShape)
+                                .padding(3.dp),
+                        ) {
+                            Row(
+                                Modifier
+                                    .horizontalScroll(rememberScrollState())
+                                    .widthIn(min = maxWidth),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                tabs.forEach { (idx, label, icon) ->
+                                    val active = selectedTab == idx
+                                    Row(
+                                        Modifier
+                                            .clip(CircleShape)
+                                            .background(if (active) cs.primaryContainer else Color.Transparent)
+                                            .clickable { selectedTab = idx }
+                                            .padding(horizontal = 8.5.dp, vertical = 7.dp),
+                                        horizontalArrangement = Arrangement.Center,
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Icon(
+                                            icon,
+                                            null,
+                                            tint = if (active) cs.onPrimaryContainer else cs.onSurfaceVariant,
+                                            modifier = Modifier.size(13.dp),
+                                        )
+                                        Spacer(Modifier.width(3.5.dp))
+                                        Text(
+                                            label,
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontWeight = if (active) FontWeight.ExtraBold else FontWeight.SemiBold,
+                                                fontSize = 11.sp,
+                                            ),
+                                            color = if (active) cs.onPrimaryContainer else cs.onSurfaceVariant,
+                                            maxLines = 1,
+                                            softWrap = false,
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1113,8 +1240,8 @@ fun PocketGuideDrawer(
                                 Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(14.dp))
-                                    .background(cs.secondaryContainer.copy(alpha = 0.75f))
-                                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                                    .background(cs.secondaryContainer.copy(alpha = 0.78f))
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
@@ -1130,8 +1257,12 @@ fun PocketGuideDrawer(
                                 Text(
                                     text = "Unpin",
                                     style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.ExtraBold),
-                                    color = cs.primary,
-                                    modifier = Modifier.clickable { onPinNote(null) }.padding(horizontal = 4.dp),
+                                    color = cs.onSecondaryContainer,
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .background(cs.surface.copy(alpha = 0.25f))
+                                        .clickable { onPinNote(null) }
+                                        .padding(horizontal = 8.dp, vertical = 2.dp),
                                 )
                             }
                         }
@@ -1175,6 +1306,15 @@ fun PocketGuideDrawer(
                                     onFilterChange = { trophyFilter = it },
                                 )
                             }
+
+                            Text(
+                                text = "Swipe right anywhere to return to game",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = cs.onSurfaceVariant.copy(alpha = 0.50f),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 6.dp, bottom = 4.dp),
+                            )
                         }
                     }
                 }
@@ -1192,98 +1332,200 @@ private fun HintsTabBody(
     onPinNote: (String?) -> Unit,
 ) {
     val cs = MaterialTheme.colorScheme
+    val filtered = remember(hints, query) { PocketGuideSearch.filterHints(hints, query) }
+    val anyRevealed = revealedTier.values.any { it > 0 }
+
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            "Spoiler-free: Nudge → Clue → Solution",
-            style = MaterialTheme.typography.bodySmall,
-            color = cs.onSurfaceVariant,
-            modifier = Modifier.weight(1f),
-        )
-        if (revealedTier.values.any { it > 0 }) {
+        Row(
+            Modifier.weight(1f),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+        ) {
+            Icon(
+                Icons.Rounded.AutoAwesome,
+                contentDescription = null,
+                tint = cs.onSurfaceVariant.copy(alpha = 0.80f),
+                modifier = Modifier.size(13.dp),
+            )
+            Text(
+                "Nudge → Clue → Solution",
+                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Medium),
+                color = cs.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        if (anyRevealed) {
             Row(
                 Modifier
                     .clip(CircleShape)
                     .background(cs.surfaceContainerHighest)
+                    .border(1.dp, cs.outlineVariant.copy(alpha = 0.25f), CircleShape)
                     .clickable { revealedTier.clear() }
                     .padding(horizontal = 9.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Icon(Icons.Rounded.VisibilityOff, null, tint = cs.onSurfaceVariant, modifier = Modifier.size(13.dp))
-                Text("Hide all", style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
+                Icon(Icons.Rounded.VisibilityOff, null, tint = cs.onSurfaceVariant, modifier = Modifier.size(12.dp))
+                Text(
+                    "Hide all",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = cs.onSurfaceVariant,
+                    softWrap = false,
+                )
+            }
+        } else {
+            Box(
+                Modifier
+                    .clip(CircleShape)
+                    .background(cs.surfaceContainerHighest)
+                    .padding(horizontal = 8.dp, vertical = 3.dp),
+            ) {
+                Text(
+                    "${filtered.size} topics",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 10.5.sp),
+                    color = cs.onSurfaceVariant,
+                    softWrap = false,
+                )
             }
         }
     }
 
+    // Sleek Material 3 Expressive Filled Pill Search Field (no harsh boxy border)
     if (hints.size > 1) {
-        OutlinedTextField(
-            value = query,
-            onValueChange = onQueryChange,
-            placeholder = { Text("Filter topics (spoiler-safe)…", style = MaterialTheme.typography.bodySmall) },
-            leadingIcon = { Icon(Icons.Rounded.Search, null, Modifier.size(17.dp)) },
-            singleLine = true,
-            shape = RoundedCornerShape(16.dp),
-            modifier = Modifier.fillMaxWidth(),
-        )
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .height(44.dp)
+                .clip(CircleShape)
+                .background(cs.surfaceContainerHighest)
+                .border(1.dp, cs.outlineVariant.copy(alpha = 0.24f), CircleShape)
+                .padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(Icons.Rounded.Search, null, tint = cs.onSurfaceVariant, modifier = Modifier.size(18.dp))
+            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                if (query.isEmpty()) {
+                    Text(
+                        "Filter topics (spoiler-safe)…",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = cs.onSurfaceVariant.copy(alpha = 0.78f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                BasicTextField(
+                    value = query,
+                    onValueChange = onQueryChange,
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(color = cs.onSurface),
+                    cursorBrush = SolidColor(cs.onPrimaryContainer),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            if (query.isNotEmpty()) {
+                Box(
+                    Modifier
+                        .size(24.dp)
+                        .clip(CircleShape)
+                        .background(cs.surfaceContainerHigh)
+                        .clickable { onQueryChange("") },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Rounded.Close, "Clear search", tint = cs.onSurfaceVariant, modifier = Modifier.size(14.dp))
+                }
+            }
+        }
     }
 
-    val filtered = remember(hints, query) { PocketGuideSearch.filterHints(hints, query) }
     if (filtered.isEmpty()) {
-        Text(
-            "No hint topics match \"$query\". Try another dungeon or boss name, or check the Web guide button above.",
-            style = MaterialTheme.typography.bodySmall,
-            color = cs.onSurfaceVariant,
-            modifier = Modifier.padding(vertical = 8.dp),
-        )
+        Surface(
+            shape = RoundedCornerShape(20.dp),
+            color = cs.surfaceContainerHigh,
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, cs.outlineVariant.copy(alpha = 0.22f), RoundedCornerShape(20.dp)),
+        ) {
+            Text(
+                "No hint topics match \"$query\". Try another location or boss name, or tap Web above.",
+                style = MaterialTheme.typography.bodySmall,
+                color = cs.onSurfaceVariant,
+                modifier = Modifier.padding(14.dp),
+            )
+        }
     }
 
     filtered.forEach { hint ->
         val idx = hints.indexOf(hint)
         val tier = revealedTier[idx] ?: 0
         Surface(
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(22.dp),
             color = cs.surfaceContainerHigh,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(
+                    width = 1.dp,
+                    color = if (tier > 0) cs.primaryContainer.copy(alpha = 0.85f) else cs.outlineVariant.copy(alpha = 0.22f),
+                    shape = RoundedCornerShape(22.dp),
+                ),
         ) {
             Column(
-                Modifier.padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                Modifier.padding(15.dp),
+                verticalArrangement = Arrangement.spacedBy(11.dp),
             ) {
                 Row(
                     Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.Top,
                 ) {
                     Text(
                         hint.topic,
-                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = FontWeight.ExtraBold,
+                            lineHeight = 20.sp,
+                        ),
                         color = cs.onSurface,
                         modifier = Modifier.weight(1f),
                     )
-                    // 3-dot progress indicator showing spoiler tier
-                    Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+                    // Animated 3-step capsule progress indicator cleanly separated from the title
+                    Row(
+                        Modifier.padding(top = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         for (dot in 1..3) {
+                            val active = tier >= dot
+                            val pillW by animateDpAsState(
+                                targetValue = if (active) 14.dp else 6.dp,
+                                animationSpec = tween(220),
+                                label = "hintDot$dot",
+                            )
                             Box(
                                 Modifier
-                                    .size(7.dp)
+                                    .width(pillW)
+                                    .height(5.dp)
                                     .clip(CircleShape)
-                                    .background(if (tier >= dot) cs.primary else cs.outlineVariant.copy(alpha = 0.5f)),
+                                    .background(
+                                        if (active) cs.onPrimaryContainer else cs.onSurfaceVariant.copy(alpha = 0.34f),
+                                    ),
                             )
                         }
                     }
                 }
                 AnimatedVisibility(visible = tier >= 1, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-                    HintTierBox("1 · NUDGE", hint.nudge, cs.secondaryContainer, cs.onSecondaryContainer)
+                    HintTierBox("1 · NUDGE", hint.nudge, cs.secondaryContainer.copy(alpha = 0.78f), cs.onSecondaryContainer)
                 }
                 AnimatedVisibility(visible = tier >= 2, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-                    HintTierBox("2 · CLUE", hint.clue, cs.tertiaryContainer, cs.onTertiaryContainer)
+                    HintTierBox("2 · CLUE", hint.clue, cs.tertiaryContainer.copy(alpha = 0.82f), cs.onTertiaryContainer)
                 }
                 AnimatedVisibility(visible = tier >= 3, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
-                    HintTierBox("3 · SOLUTION", hint.solution, cs.primaryContainer, cs.onPrimaryContainer)
+                    HintTierBox("3 · SOLUTION", hint.solution, cs.primaryContainer.copy(alpha = 0.86f), cs.onPrimaryContainer)
                 }
                 Row(
                     Modifier.fillMaxWidth(),
@@ -1291,25 +1533,28 @@ private fun HintsTabBody(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     if (tier < 3) {
-                        val nextLabel = when (tier) {
-                            0 -> "Reveal gentle nudge"
-                            1 -> "Reveal stronger clue"
-                            else -> "Reveal exact solution"
+                        val (nextLabel, btnBg, btnFg) = when (tier) {
+                            0 -> Triple("Reveal gentle nudge", cs.primaryContainer, cs.onPrimaryContainer)
+                            1 -> Triple("Reveal stronger clue", cs.secondaryContainer, cs.onSecondaryContainer)
+                            else -> Triple("Reveal exact solution", cs.tertiaryContainer, cs.onTertiaryContainer)
                         }
                         Row(
                             Modifier
                                 .clip(CircleShape)
-                                .background(cs.primary)
+                                .background(btnBg)
+                                .border(1.dp, btnFg.copy(alpha = 0.14f), CircleShape)
                                 .clickable { revealedTier[idx] = tier + 1 }
-                                .padding(horizontal = 12.dp, vertical = 7.dp),
+                                .padding(horizontal = 13.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
-                            Icon(Icons.Rounded.Visibility, null, tint = cs.onPrimary, modifier = Modifier.size(14.dp))
+                            Icon(Icons.Rounded.Visibility, null, tint = btnFg, modifier = Modifier.size(14.dp))
                             Text(
                                 nextLabel,
-                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                color = cs.onPrimary,
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.ExtraBold),
+                                color = btnFg,
+                                maxLines = 1,
+                                softWrap = false,
                             )
                         }
                     } else {
@@ -1317,16 +1562,18 @@ private fun HintsTabBody(
                             Modifier
                                 .clip(CircleShape)
                                 .background(cs.secondaryContainer)
+                                .border(1.dp, cs.onSecondaryContainer.copy(alpha = 0.14f), CircleShape)
                                 .clickable { onPinNote("${hint.topic}: ${hint.solution}") }
-                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                                .padding(horizontal = 12.dp, vertical = 7.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(5.dp),
                         ) {
                             Icon(Icons.Rounded.PushPin, null, tint = cs.onSecondaryContainer, modifier = Modifier.size(13.dp))
                             Text(
                                 "Pin to screen",
-                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                                 color = cs.onSecondaryContainer,
+                                maxLines = 1,
                             )
                         }
                     }
@@ -1334,8 +1581,19 @@ private fun HintsTabBody(
                         Text(
                             "Hide",
                             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                            color = cs.primary,
-                            modifier = Modifier.clickable { revealedTier[idx] = 0 }.padding(4.dp),
+                            color = cs.onSurfaceVariant,
+                            modifier = Modifier
+                                .clip(CircleShape)
+                                .background(cs.surfaceContainerHighest)
+                                .border(1.dp, cs.outlineVariant.copy(alpha = 0.22f), CircleShape)
+                                .clickable { revealedTier[idx] = 0 }
+                                .padding(horizontal = 10.dp, vertical = 5.dp),
+                        )
+                    } else {
+                        Text(
+                            "3 steps",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = cs.onSurfaceVariant.copy(alpha = 0.65f),
                         )
                     }
                 }
@@ -1370,11 +1628,13 @@ private fun PokemonTypeChartCard(
     val matchup = remember(selectedType) { PokemonTypeChartLookup.matchupsForDefender(selectedType) }
 
     Surface(
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(22.dp),
         color = cs.surfaceContainerHigh,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, cs.outlineVariant.copy(alpha = 0.22f), RoundedCornerShape(22.dp)),
     ) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1388,11 +1648,12 @@ private fun PokemonTypeChartCard(
                     Modifier
                         .clip(CircleShape)
                         .background(cs.secondaryContainer)
+                        .border(1.dp, cs.onSecondaryContainer.copy(alpha = 0.14f), CircleShape)
                         .clickable {
                             val weak = matchup.weakTo.joinToString("/") { it.label }
                             onPinNote("vs ${selectedType.label}: 2× $weak")
                         }
-                        .padding(horizontal = 9.dp, vertical = 5.dp),
+                        .padding(horizontal = 10.dp, vertical = 5.dp),
                 ) {
                     Text("Pin", style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold), color = cs.onSecondaryContainer)
                 }
@@ -1483,11 +1744,13 @@ private fun MoveListCard(
     }
 
     Surface(
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(22.dp),
         color = cs.surfaceContainerHigh,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, cs.outlineVariant.copy(alpha = 0.22f), RoundedCornerShape(22.dp)),
     ) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(ref.title, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold), color = cs.onSurface)
             Text(ref.subtitle, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
 
@@ -1542,7 +1805,7 @@ private fun MoveListCard(
                             color = cs.onSurface,
                             modifier = Modifier.weight(1f),
                         )
-                        Icon(Icons.Rounded.PushPin, "Pin move", tint = cs.primary.copy(alpha = 0.75f), modifier = Modifier.size(13.dp))
+                        Icon(Icons.Rounded.PushPin, "Pin move", tint = cs.onSurfaceVariant.copy(alpha = 0.8f), modifier = Modifier.size(13.dp))
                     }
                     Box(
                         Modifier
@@ -1575,11 +1838,13 @@ private fun SongBookCard(
 ) {
     val cs = MaterialTheme.colorScheme
     Surface(
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(22.dp),
         color = cs.surfaceContainerHigh,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, cs.outlineVariant.copy(alpha = 0.22f), RoundedCornerShape(22.dp)),
     ) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(ref.title, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold), color = cs.onSurface)
             Text(ref.subtitle, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
 
@@ -1599,7 +1864,7 @@ private fun SongBookCard(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(song.title, style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold), color = cs.onSurface)
-                        Icon(Icons.Rounded.PushPin, "Pin song", tint = cs.primary.copy(alpha = 0.75f), modifier = Modifier.size(13.dp))
+                        Icon(Icons.Rounded.PushPin, "Pin song", tint = cs.onSurfaceVariant.copy(alpha = 0.8f), modifier = Modifier.size(13.dp))
                     }
                     Row(
                         Modifier.horizontalScroll(rememberScrollState()),
@@ -1638,11 +1903,13 @@ private fun MapLegendCard(
 ) {
     val cs = MaterialTheme.colorScheme
     Surface(
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(22.dp),
         color = cs.surfaceContainerHigh,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, cs.outlineVariant.copy(alpha = 0.22f), RoundedCornerShape(22.dp)),
     ) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(ref.title, style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold), color = cs.onSurface)
             Text(ref.subtitle, style = MaterialTheme.typography.labelSmall, color = cs.onSurfaceVariant)
             ref.steps.forEach { step ->
@@ -1657,10 +1924,10 @@ private fun MapLegendCard(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(step.label, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.ExtraBold), color = cs.primary)
+                        Text(step.label, style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.ExtraBold), color = cs.onPrimaryContainer)
                         Text(step.detail, style = MaterialTheme.typography.bodySmall, color = cs.onSurface)
                     }
-                    Icon(Icons.Rounded.PushPin, "Pin step", tint = cs.primary.copy(alpha = 0.65f), modifier = Modifier.size(13.dp))
+                    Icon(Icons.Rounded.PushPin, "Pin step", tint = cs.onSurfaceVariant.copy(alpha = 0.75f), modifier = Modifier.size(13.dp))
                 }
             }
         }
@@ -1676,11 +1943,13 @@ private fun NotesAndManualTabBody(
 ) {
     val cs = MaterialTheme.colorScheme
     Surface(
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(22.dp),
         color = cs.surfaceContainerHigh,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, cs.outlineVariant.copy(alpha = 0.22f), RoundedCornerShape(22.dp)),
     ) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1688,14 +1957,15 @@ private fun NotesAndManualTabBody(
             ) {
                 Text(
                     "Personal Pocket Notes",
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold),
-                    color = cs.primary,
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
+                    color = cs.onSurface,
                 )
                 if (notes.isNotBlank()) {
                     Row(
                         Modifier
                             .clip(CircleShape)
                             .background(cs.primaryContainer)
+                            .border(1.dp, cs.onPrimaryContainer.copy(alpha = 0.14f), CircleShape)
                             .clickable {
                                 val firstLine = notes.lineSequence().firstOrNull { it.isNotBlank() }?.trim()
                                 if (!firstLine.isNullOrBlank()) onPinNote(firstLine)
@@ -1709,42 +1979,62 @@ private fun NotesAndManualTabBody(
                     }
                 }
             }
-            OutlinedTextField(
-                value = notes,
-                onValueChange = onNotesChange,
-                placeholder = { Text("Jot down door codes, passwords, or NPC clues…") },
-                minLines = 3,
-                maxLines = 6,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 84.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(cs.surfaceContainerHighest)
+                    .border(1.dp, cs.outlineVariant.copy(alpha = 0.24f), RoundedCornerShape(16.dp))
+                    .padding(12.dp),
+            ) {
+                if (notes.isEmpty()) {
+                    Text(
+                        "Jot down door codes, passwords, or NPC clues…",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = cs.onSurfaceVariant.copy(alpha = 0.78f),
+                    )
+                }
+                BasicTextField(
+                    value = notes,
+                    onValueChange = onNotesChange,
+                    textStyle = MaterialTheme.typography.bodySmall.copy(color = cs.onSurface, lineHeight = 18.sp),
+                    cursorBrush = SolidColor(cs.onPrimaryContainer),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
     }
 
     Surface(
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(22.dp),
         color = cs.surfaceContainerHigh,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, cs.outlineVariant.copy(alpha = 0.22f), RoundedCornerShape(22.dp)),
     ) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
                 "Overview",
-                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold),
-                color = cs.primary,
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
+                color = cs.onSurface,
             )
-            Text(manual.overview, style = MaterialTheme.typography.bodySmall, color = cs.onSurface)
+            Text(manual.overview, style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp), color = cs.onSurfaceVariant)
         }
     }
 
     Surface(
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(22.dp),
         color = cs.surfaceContainerHigh,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, cs.outlineVariant.copy(alpha = 0.22f), RoundedCornerShape(22.dp)),
     ) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
                 "Original Controls Reference",
-                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold),
-                color = cs.primary,
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
+                color = cs.onSurface,
             )
             manual.controls.forEach { (btn, desc) ->
                 Row(
@@ -1777,18 +2067,20 @@ private fun NotesAndManualTabBody(
 
     if (manual.quickTips.isNotEmpty()) {
         Surface(
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(22.dp),
             color = cs.surfaceContainerHigh,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, cs.outlineVariant.copy(alpha = 0.22f), RoundedCornerShape(22.dp)),
         ) {
-            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     "Field Tips",
-                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.ExtraBold),
-                    color = cs.primary,
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.ExtraBold),
+                    color = cs.onSurface,
                 )
                 manual.quickTips.forEach { tip ->
-                    Text("• $tip", style = MaterialTheme.typography.bodySmall, color = cs.onSurface)
+                    Text("• $tip", style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp), color = cs.onSurfaceVariant)
                 }
             }
         }
@@ -1805,9 +2097,11 @@ private fun TrophiesTabBody(
     val cs = MaterialTheme.colorScheme
     if (raData == null || raData.achievements.isEmpty()) {
         Surface(
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(22.dp),
             color = cs.surfaceContainerHigh,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, cs.outlineVariant.copy(alpha = 0.22f), RoundedCornerShape(22.dp)),
         ) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
@@ -1817,7 +2111,7 @@ private fun TrophiesTabBody(
                 )
                 Text(
                     "Sign into RetroAchievements in Settings to track live trophies, missables, and Hardcore unlocks right inside this drawer.",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
                     color = cs.onSurfaceVariant,
                 )
             }
@@ -1825,11 +2119,13 @@ private fun TrophiesTabBody(
     } else {
         val pct = if (raData.totalCount > 0) raData.unlockedCount.toFloat() / raData.totalCount else 0f
         Surface(
-            shape = RoundedCornerShape(20.dp),
+            shape = RoundedCornerShape(22.dp),
             color = cs.primaryContainer,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(1.dp, cs.onPrimaryContainer.copy(alpha = 0.14f), RoundedCornerShape(22.dp)),
         ) {
-            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -1848,6 +2144,8 @@ private fun TrophiesTabBody(
                 }
                 LinearProgressIndicator(
                     progress = { pct },
+                    color = cs.onPrimaryContainer,
+                    trackColor = cs.onPrimaryContainer.copy(alpha = 0.22f),
                     modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape),
                 )
             }
@@ -1860,6 +2158,7 @@ private fun TrophiesTabBody(
                     Modifier
                         .clip(CircleShape)
                         .background(if (active) cs.secondaryContainer else cs.surfaceContainerHigh)
+                        .border(1.dp, cs.outlineVariant.copy(alpha = 0.22f), CircleShape)
                         .clickable { onFilterChange(idx) }
                         .padding(horizontal = 12.dp, vertical = 6.dp),
                 ) {
@@ -1881,9 +2180,11 @@ private fun TrophiesTabBody(
         }
         filtered.forEach { ach ->
             Surface(
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(18.dp),
                 color = if (ach.unlocked) cs.secondaryContainer.copy(alpha = 0.65f) else cs.surfaceContainerHigh,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, cs.outlineVariant.copy(alpha = 0.20f), RoundedCornerShape(18.dp)),
             ) {
                 Row(
                     Modifier.padding(12.dp),
@@ -1893,7 +2194,7 @@ private fun TrophiesTabBody(
                     Icon(
                         if (ach.unlocked) Icons.Rounded.CheckCircle else Icons.Rounded.EmojiEvents,
                         null,
-                        tint = if (ach.unlocked) cs.primary else cs.onSurfaceVariant,
+                        tint = if (ach.unlocked) cs.onSecondaryContainer else cs.onSurfaceVariant,
                         modifier = Modifier.size(18.dp),
                     )
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -1915,7 +2216,7 @@ private fun TrophiesTabBody(
                     Text(
                         "${ach.points}p",
                         style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, fontSize = 11.sp),
-                        color = cs.primary,
+                        color = if (ach.unlocked) cs.onSecondaryContainer else cs.onPrimaryContainer,
                     )
                 }
             }
@@ -1925,15 +2226,40 @@ private fun TrophiesTabBody(
 
 @Composable
 private fun HintTierBox(label: String, body: String, bg: Color, fg: Color) {
-    Column(
+    Row(
         Modifier
             .fillMaxWidth()
+            .height(IntrinsicSize.Min)
             .clip(RoundedCornerShape(14.dp))
             .background(bg)
-            .padding(10.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+            .padding(11.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text(label, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Black, fontSize = 10.sp), color = fg.copy(alpha = 0.85f))
-        Text(body, style = MaterialTheme.typography.bodySmall, color = fg)
+        Box(
+            Modifier
+                .width(3.dp)
+                .fillMaxHeight()
+                .clip(CircleShape)
+                .background(fg.copy(alpha = 0.55f)),
+        )
+        Column(
+            Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(3.dp),
+        ) {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Black,
+                    fontSize = 10.sp,
+                    letterSpacing = 0.7.sp,
+                ),
+                color = fg.copy(alpha = 0.80f),
+            )
+            Text(
+                body,
+                style = MaterialTheme.typography.bodySmall.copy(lineHeight = 18.sp),
+                color = fg,
+            )
+        }
     }
 }
