@@ -1,6 +1,8 @@
 package com.retrohero.app.ui.components
 
+import android.graphics.BitmapFactory
 import android.view.HapticFeedbackConstants
+import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
@@ -40,21 +42,34 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.retrohero.app.R
 import com.retrohero.app.data.Game
 import com.retrohero.app.data.PhysicalMediaSpec
 import java.util.Locale
 import kotlin.math.PI
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 /** Authentic physical loading mechanism for each console family. */
@@ -338,7 +353,7 @@ data class ConsoleInsertionFrame(
     val lidOpen: Float,
     /** Motorized sliding tray extension fraction (`1f` extended out, `0f` retracted flush). */
     val trayOut: Float,
-    /** NES ZIF press-down drop (`0f..1f`) or DS/Switch spring-click over-travel bounce (`0f..1f`). */
+    /** NES ZIF press-down drop (`0f..1f`) or DS/3DS/Switch spring-click over-travel bounce (`0f..1f`). */
     val latchMotion: Float,
     /** Subtle downward console recoil in dp when cartridge/disc clicks into place. */
     val consoleBounceDp: Float,
@@ -373,9 +388,9 @@ object ConsoleInsertionMath {
         return when (spec.loaderKind) {
             ConsoleLoaderKind.CARTRIDGE_FRONT_DECK -> {
                 // Authentic 4-phase NES front-loader:
-                // 1) Flip door UP -> 2) Slide cart flat horizontally in -> 3) Press ZIF tray DOWN -> 4) Flip door SHUT!
-                val doorOpenT = smoothStep(p / 0.16f)
-                val slideInT = easeInOutCubic((p - 0.15f) / 0.37f)
+                // 1) Door open -> 2) Slide cart flat horizontally in -> 3) Press ZIF tray DOWN -> 4) Close door!
+                val doorOpenT = smoothStep(p / 0.14f)
+                val slideInT = easeInOutCubic((p - 0.14f) / 0.38f)
                 val zifDropT = easeInOutCubic((p - 0.52f) / 0.18f)
                 val doorCloseT = smoothStep((p - 0.70f) / 0.16f)
                 val seated = p >= 0.66f
@@ -384,15 +399,15 @@ object ConsoleInsertionMath {
                 val ledGlow = smoothStep((p - 0.78f) / 0.14f)
                 val bootFlash = smoothStep((p - 0.90f) / 0.10f)
                 val status = when {
-                    p < 0.18f -> "Opening NES cartridge door…"
+                    p < 0.16f -> "Opening NES cartridge door…"
                     p < 0.52f -> "Sliding Game Pak in…"
                     p < 0.72f -> "Pressing down into ZIF deck…"
                     else -> "Powering on ${spec.consoleLabel}…"
                 }
                 ConsoleInsertionFrame(
                     insertDepth = slideInT,
-                    mediaYawDeg = 10f * (1f - easeOutCubic(p / 0.22f)),
-                    mediaPitchDeg = -58f, // Paired with rotationZ = 180f so pins enter first & front label faces UP!
+                    mediaYawDeg = 8f * (1f - easeOutCubic(p / 0.22f)),
+                    mediaPitchDeg = -58f, // Paired with rotationZ = 180f so pins enter first & label faces UP!
                     discSpinDeg = 0f,
                     lidOpen = (doorOpenT * (1f - doorCloseT)).coerceIn(0f, 1f),
                     trayOut = 0f,
@@ -420,8 +435,8 @@ object ConsoleInsertionMath {
                 }
                 ConsoleInsertionFrame(
                     insertDepth = plungeT,
-                    mediaYawDeg = 20f * (1f - alignT),
-                    mediaPitchDeg = -5f + 15f * alignT,
+                    mediaYawDeg = 16f * (1f - alignT),
+                    mediaPitchDeg = -4f + 12f * alignT,
                     discSpinDeg = 0f,
                     lidOpen = plungeT,
                     trayOut = 0f,
@@ -435,24 +450,25 @@ object ConsoleInsertionMath {
             }
 
             ConsoleLoaderKind.HANDHELD_REAR_SLOT -> {
-                val alignT = easeOutCubic(p / 0.22f)
-                val slideT = easeInOutCubic((p - 0.20f) / 0.42f)
+                val isForwardHorizontalSlot = spec.systemId == "nds" || spec.systemId == "3ds"
+                val alignT = easeOutCubic(p / 0.20f)
+                val slideT = easeInOutCubic((p - 0.18f) / 0.44f)
                 // Authentic DS/3DS spring-loaded click over-travel & rebound flush into Slot-1!
                 val springPhase = clamp01((p - 0.60f) / 0.14f)
                 val springClick = if (springPhase > 0f && springPhase < 1f) sin(springPhase * PI).toFloat() else 0f
                 val seated = p >= 0.64f
-                val bounceDp = springClick * 4.5f
+                val bounceDp = springClick * 4.2f
                 val ledGlow = smoothStep((p - 0.70f) / 0.18f)
                 val bootFlash = smoothStep((p - 0.88f) / 0.12f)
                 val status = when {
-                    p < 0.25f -> spec.insertVerb + "…"
+                    p < 0.24f -> spec.insertVerb + "…"
                     p < 0.70f -> "Clicking flush into ${spec.consoleLabel}…"
                     else -> "Powering on ${spec.consoleLabel}…"
                 }
                 ConsoleInsertionFrame(
                     insertDepth = slideT,
-                    mediaYawDeg = 16f * (1f - alignT),
-                    mediaPitchDeg = -4f + 10f * alignT,
+                    mediaYawDeg = if (isForwardHorizontalSlot) 8f * (1f - alignT) else 14f * (1f - alignT),
+                    mediaPitchDeg = if (isForwardHorizontalSlot) -58f else -4f + 10f * alignT,
                     discSpinDeg = 0f,
                     lidOpen = 1f,
                     trayOut = 0f,
@@ -466,8 +482,8 @@ object ConsoleInsertionMath {
             }
 
             ConsoleLoaderKind.SWITCH_TOP_FLAP -> {
-                val flapOpenT = smoothStep(p / 0.18f)
-                val dropT = easeInOutCubic((p - 0.18f) / 0.42f)
+                val flapOpenT = smoothStep(p / 0.16f)
+                val dropT = easeInOutCubic((p - 0.16f) / 0.44f)
                 val springPhase = clamp01((p - 0.58f) / 0.12f)
                 val springClick = if (springPhase > 0f && springPhase < 1f) sin(springPhase * PI).toFloat() else 0f
                 val flapCloseT = smoothStep((p - 0.70f) / 0.15f)
@@ -475,13 +491,13 @@ object ConsoleInsertionMath {
                 val ledGlow = smoothStep((p - 0.74f) / 0.16f)
                 val bootFlash = smoothStep((p - 0.89f) / 0.11f)
                 val status = when {
-                    p < 0.20f -> "Opening Game Card flap…"
+                    p < 0.18f -> "Opening Game Card flap…"
                     p < 0.68f -> "Clicking Switch Game Card…"
                     else -> "Powering on ${spec.consoleLabel}…"
                 }
                 ConsoleInsertionFrame(
                     insertDepth = dropT,
-                    mediaYawDeg = 12f * (1f - easeOutCubic(p / 0.24f)),
+                    mediaYawDeg = 10f * (1f - easeOutCubic(p / 0.24f)),
                     mediaPitchDeg = 6f,
                     discSpinDeg = 0f,
                     lidOpen = (flapOpenT * (1f - flapCloseT)).coerceIn(0f, 1f),
@@ -502,7 +518,7 @@ object ConsoleInsertionMath {
                 val spinT = clamp01((p - 0.44f) / 0.56f)
                 val spinDeg = spinT * spinT * 980f
                 val bouncePhase = clamp01((p - 0.44f) / 0.14f)
-                val bounceDp = if (bouncePhase > 0f && bouncePhase < 1f) sin(bouncePhase * PI).toFloat() * 4.2f else 0f
+                val bounceDp = if (bouncePhase > 0f && bouncePhase < 1f) sin(bouncePhase * PI).toFloat() * 4.0f else 0f
                 val ledGlow = smoothStep((p - 0.72f) / 0.18f)
                 val bootFlash = smoothStep((p - 0.88f) / 0.12f)
                 val status = when {
@@ -569,7 +585,7 @@ object ConsoleInsertionMath {
                 }
                 ConsoleInsertionFrame(
                     insertDepth = slideT,
-                    mediaYawDeg = 10f * (1f - easeOutCubic(p / 0.22f)),
+                    mediaYawDeg = 8f * (1f - easeOutCubic(p / 0.22f)),
                     mediaPitchDeg = 4f,
                     discSpinDeg = 0f,
                     lidOpen = 1f - hatchCloseT,
@@ -612,11 +628,71 @@ object ConsoleInsertionMath {
     }
 }
 
+/** Decode & memoize a photorealistic console studio WebP drawable as a Compose [ImageBitmap]. */
+@Composable
+private fun rememberConsolePhoto(@DrawableRes resId: Int): ImageBitmap? {
+    val context = LocalContext.current
+    return remember(resId) {
+        runCatching {
+            val opts = BitmapFactory.Options().apply { inScaled = false }
+            BitmapFactory.decodeResource(context.resources, resId, opts)?.asImageBitmap()
+        }.getOrNull()
+    }
+}
+
+private fun DrawScope.drawPhotoCentered(
+    photo: ImageBitmap,
+    destLeft: Float,
+    destTop: Float,
+    destW: Float,
+    destH: Float,
+    alpha: Float = 1f,
+) {
+    drawImage(
+        image = photo,
+        dstOffset = IntOffset(destLeft.roundToInt(), destTop.roundToInt()),
+        dstSize = IntSize(destW.roundToInt().coerceAtLeast(1), destH.roundToInt().coerceAtLeast(1)),
+        alpha = alpha,
+    )
+}
+
+/** Additive glowing LED bloom for real photographed consoles (never draws a fake black dot when off). */
+private fun DrawScope.drawPhotoLedBloom(
+    center: Offset,
+    color: Color,
+    glow: Float,
+    radiusPx: Float = 3.4.dp.toPx(),
+    haloPx: Float = 20.dp.toPx(),
+) {
+    if (glow <= 0.04f) return
+    drawCircle(
+        brush = Brush.radialGradient(
+            0f to color.copy(alpha = 0.92f * glow),
+            0.42f to color.copy(alpha = 0.36f * glow),
+            1f to Color.Transparent,
+            center = center,
+            radius = haloPx,
+        ),
+        radius = haloPx,
+        center = center,
+    )
+    drawCircle(
+        color = color.copy(alpha = (0.45f + glow * 0.55f).coerceIn(0f, 1f)),
+        radius = radiusPx,
+        center = center,
+    )
+    drawCircle(
+        color = Color.White.copy(alpha = 0.72f * glow),
+        radius = radiusPx * 0.44f,
+        center = center,
+    )
+}
+
 /**
  * Tactile fullscreen Console Media Insertion Ceremony triggered when pressing Play from a 3D model!
- * Animates the game's actual 3D Cartridge / Game Card / Optical Disc inserting the exact physical
- * way into the real matching console hardware, clicks with haptics, illuminates the Power LED,
- * and launches the emulator.
+ * Animates the game's actual 3D Cartridge / Game Card / UMD / Optical Disc inserting the exact
+ * physical way into the real matching console hardware, clicks with haptics, illuminates the Power
+ * LED, and launches the emulator.
  */
 @Composable
 internal fun M3ConsoleInsertionDialog(
@@ -698,7 +774,7 @@ internal fun ConsoleInsertionStageContent(
             .fillMaxSize()
             .background(
                 Brush.radialGradient(
-                    0.0f to hwSpec.accentColor.copy(alpha = 0.20f + frame.ledGlow * 0.14f),
+                    0.0f to hwSpec.accentColor.copy(alpha = 0.18f + frame.ledGlow * 0.14f),
                     0.55f to Color(0xF511121A),
                     1.0f to Color(0xFA06070B),
                 ),
@@ -713,7 +789,7 @@ internal fun ConsoleInsertionStageContent(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp),
+                .padding(horizontal = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
@@ -744,7 +820,7 @@ internal fun ConsoleInsertionStageContent(
                 )
             }
 
-            // Main 3D Media + Authentic Console Hardware Insertion Stage (360dp tall)
+            // Main 3D Media + Real Photorealistic Console Hardware Stage (360dp tall)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -753,33 +829,45 @@ internal fun ConsoleInsertionStageContent(
                 contentAlignment = Alignment.Center,
             ) {
                 when (hwSpec.loaderKind) {
-                    ConsoleLoaderKind.CARTRIDGE_FRONT_DECK -> NesFrontDeckInsertionStage(
+                    ConsoleLoaderKind.CARTRIDGE_FRONT_DECK -> NesPhotoFrontDeckStage(
                         spec = spec,
                         textures = textures,
                         frame = frame,
                         modifier = Modifier.fillMaxSize(),
                     )
-                    ConsoleLoaderKind.CARTRIDGE_TOP_SLOT -> CartridgeTopSlotInsertionStage(
-                        spec = spec,
-                        hwSpec = hwSpec,
-                        textures = textures,
-                        frame = frame,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                    ConsoleLoaderKind.HANDHELD_REAR_SLOT -> HandheldRearSlotInsertionStage(
+                    ConsoleLoaderKind.CARTRIDGE_TOP_SLOT -> HomeConsolePhotoTopSlotStage(
                         spec = spec,
                         hwSpec = hwSpec,
                         textures = textures,
                         frame = frame,
                         modifier = Modifier.fillMaxSize(),
                     )
-                    ConsoleLoaderKind.SWITCH_TOP_FLAP -> SwitchTopFlapInsertionStage(
+                    ConsoleLoaderKind.HANDHELD_REAR_SLOT -> {
+                        if (hwSpec.systemId == "nds" || hwSpec.systemId == "3ds") {
+                            Ds3dsPhotoSlot1Stage(
+                                spec = spec,
+                                hwSpec = hwSpec,
+                                textures = textures,
+                                frame = frame,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        } else {
+                            GameBoyGbaPhotoRearSlotStage(
+                                spec = spec,
+                                hwSpec = hwSpec,
+                                textures = textures,
+                                frame = frame,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        }
+                    }
+                    ConsoleLoaderKind.SWITCH_TOP_FLAP -> SwitchPhotoTopFlapStage(
                         spec = spec,
                         textures = textures,
                         frame = frame,
                         modifier = Modifier.fillMaxSize(),
                     )
-                    ConsoleLoaderKind.DISC_TOP_LID -> DiscTopLidInsertionStage(
+                    ConsoleLoaderKind.DISC_TOP_LID -> DiscTopLidStage(
                         spec = spec,
                         hwSpec = hwSpec,
                         textures = textures,
@@ -792,7 +880,7 @@ internal fun ConsoleInsertionStageContent(
                         frame = frame,
                         modifier = Modifier.fillMaxSize(),
                     )
-                    ConsoleLoaderKind.DISC_REAR_UMD -> PspRearUmdInsertionStage(
+                    ConsoleLoaderKind.DISC_REAR_UMD -> PspPhotoRearUmdStage(
                         spec = spec,
                         textures = textures,
                         frame = frame,
@@ -871,39 +959,186 @@ internal fun ConsoleInsertionStageContent(
 }
 
 // =================================================================================================
-// 1. NES Front-Loading Deck: Door flips UP -> Cart slides flat horizontally -> ZIF clicks DOWN -> Door shuts!
+// 1. REAL NINTENDO DS LITE & NINTENDO 3DS — Photorealistic Rear-Top Clamshell + Horizontal Slot-1!
 // =================================================================================================
 
 @Composable
-private fun NesFrontDeckInsertionStage(
+private fun Ds3dsPhotoSlot1Stage(
+    spec: PhysicalMediaSpec,
+    hwSpec: ConsoleHardwareSpec,
+    textures: ResolvedPhysicalTextures,
+    frame: ConsoleInsertionFrame,
+    modifier: Modifier = Modifier,
+) {
+    val is3ds = hwSpec.systemId == "3ds"
+    val photo = rememberConsolePhoto(if (is3ds) R.drawable.console_3ds else R.drawable.console_nds)
+
+    // Measured exact normalized coordinates from console_grid_sheet_1.png
+    val consoleW = 336f
+    val consoleH = if (is3ds) consoleW * (327f / 720f) else consoleW * (288f / 720f) // 152.6dp / 134.4dp
+    val consoleTopY = if (is3ds) 76f else 84f
+    val slotTopFrac = if (is3ds) 0.435f else 0.755f
+    val slotTopY = consoleTopY + consoleH * slotTopFrac
+    val ledXFrac = if (is3ds) 0.90f else 0.078f
+    val ledYFrac = if (is3ds) 0.53f else 0.515f
+
+    // DS/3DS Game Card lies flat (pins first, label facing UP!) & slides straight forward into Slot-1!
+    val cardSizeDp = if (is3ds) 128f else 120f
+    val startY = slotTopY + 34f
+    val endY = slotTopY - cardSizeDp * 0.56f
+    val yDp = startY + (endY - startY) * frame.insertDepth - frame.latchMotion * 7.5f
+    val cardScale = 1.05f - frame.insertDepth * 0.15f
+    val cardAlpha = if (frame.insertDepth > 0.92f) {
+        (1f - ((frame.insertDepth - 0.92f) / 0.08f) * 0.55f).coerceIn(0.45f, 1f)
+    } else 1f
+
+    Box(modifier = modifier, contentAlignment = Alignment.TopCenter) {
+        // Layer 1: Full real photorealistic Nintendo DS Lite / 3DS + soft grounded shadow
+        Canvas(Modifier.fillMaxSize()) {
+            val left = (size.width - consoleW.dp.toPx()) * 0.5f
+            val top = consoleTopY.dp.toPx()
+            val cw = consoleW.dp.toPx()
+            val ch = consoleH.dp.toPx()
+            drawConsoleShadow(size.width * 0.5f, top + ch + 10.dp.toPx(), cw * 1.02f, 28.dp.toPx())
+            if (photo != null) {
+                drawPhotoCentered(photo, left, top, cw, ch)
+            } else {
+                drawNdsOr3dsConsoleBack(hwSpec, frame)
+            }
+        }
+
+        // Layer 2: Real 3D DS / 3DS Game Card sliding flat horizontally into Slot-1!
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .drawWithContent {
+                    clipRect(top = slotTopY.dp.toPx()) {
+                        this@drawWithContent.drawContent()
+                    }
+                },
+            contentAlignment = Alignment.TopCenter,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(cardSizeDp.dp)
+                    .offset(y = yDp.dp)
+                    .graphicsLayer {
+                        scaleX = cardScale
+                        scaleY = cardScale
+                        rotationZ = 180f // Pairs with pitchDeg = -58f: gold pins enter Slot-1 FIRST, label faces UP!
+                        alpha = cardAlpha
+                    },
+            ) {
+                Physical3dStageCanvas(
+                    subject = PhysicalViewerSubject.GAME_MEDIA,
+                    spec = spec,
+                    textures = textures,
+                    boxAspect = spec.mediaKind.defaultAspect,
+                    yawDeg = frame.mediaYawDeg,
+                    pitchDeg = frame.mediaPitchDeg,
+                    floorShadow = false,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+
+        // Layer 3: Upper lip of the real DS/3DS photo + subtle slot AO shadow + additive glowing hinge LED!
+        Canvas(Modifier.fillMaxSize()) {
+            val left = (size.width - consoleW.dp.toPx()) * 0.5f
+            val top = consoleTopY.dp.toPx()
+            val cw = consoleW.dp.toPx()
+            val ch = consoleH.dp.toPx()
+            val clipY = slotTopY.dp.toPx()
+            if (photo != null) {
+                clipRect(bottom = clipY) {
+                    drawPhotoCentered(photo, left, top, cw, ch)
+                }
+            } else {
+                drawNdsOr3dsConsoleFront(hwSpec, frame)
+            }
+            if (frame.insertDepth > 0.25f) {
+                val slotW = cw * (if (is3ds) 0.26f else 0.24f)
+                drawLine(
+                    color = Color.Black.copy(alpha = 0.52f * frame.insertDepth),
+                    start = Offset(size.width * 0.5f - slotW * 0.5f, clipY + 1.dp.toPx()),
+                    end = Offset(size.width * 0.5f + slotW * 0.5f, clipY + 1.dp.toPx()),
+                    strokeWidth = 3.dp.toPx(),
+                    cap = StrokeCap.Round,
+                )
+            }
+            drawPhotoLedBloom(
+                center = Offset(left + cw * ledXFrac, top + ch * ledYFrac),
+                color = hwSpec.ledColor,
+                glow = frame.ledGlow,
+                radiusPx = 3.4.dp.toPx(),
+                haloPx = 20.dp.toPx(),
+            )
+        }
+    }
+}
+
+// =================================================================================================
+// 2. REAL 1985 NES-001 — Photorealistic Open Flip-Door + Horizontal Slide + ZIF Click + Door Shut!
+// =================================================================================================
+
+@Composable
+private fun NesPhotoFrontDeckStage(
     spec: PhysicalMediaSpec,
     textures: ResolvedPhysicalTextures,
     frame: ConsoleInsertionFrame,
     modifier: Modifier = Modifier,
 ) {
-    Box(modifier = modifier, contentAlignment = Alignment.TopCenter) {
-        Canvas(Modifier.fillMaxSize()) { drawNesConsoleBack(frame) }
+    val photo = rememberConsolePhoto(R.drawable.console_nes)
 
-        // Clipped cleanly at the top ceiling of the open NES front bay (145dp) so pins disappear inside!
+    // Exact normalized measurements from console_grid_sheet_1.png (720x463)
+    val consoleW = 336f
+    val consoleH = consoleW * (463f / 720f) // 216.1dp
+    val consoleTopY = 52f
+    val slotCxFrac = 0.42f
+    val slotTopY = consoleTopY + consoleH * 0.465f // 152.5dp (bottom rim of open flip-up door!)
+    val slotOffsetX = (slotCxFrac - 0.5f) * consoleW // -26.9dp
+
+    val cartW = 188f
+    val cartH = 166f
+    val startY = slotTopY + 52f
+    val endY = slotTopY - cartH * 0.46f
+    val yDp = startY + (endY - startY) * frame.insertDepth + frame.latchMotion * 13f
+    val scale = 1.04f - frame.insertDepth * 0.24f
+    val cartAlpha = if (frame.seated) (frame.lidOpen * 1.55f).coerceIn(0f, 1f) else 1f
+
+    Box(modifier = modifier, contentAlignment = Alignment.TopCenter) {
+        Canvas(Modifier.fillMaxSize()) {
+            val left = (size.width - consoleW.dp.toPx()) * 0.5f
+            val top = consoleTopY.dp.toPx()
+            val cw = consoleW.dp.toPx()
+            val ch = consoleH.dp.toPx()
+            drawConsoleShadow(size.width * 0.5f, top + ch + 8.dp.toPx(), cw * 1.04f, 30.dp.toPx())
+            if (photo != null) {
+                drawPhotoCentered(photo, left, top, cw, ch)
+            } else {
+                drawNesConsoleBack(frame)
+            }
+        }
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 145.dp)
-                .clipToBounds(),
+                .drawWithContent {
+                    clipRect(top = slotTopY.dp.toPx()) {
+                        this@drawWithContent.drawContent()
+                    }
+                },
             contentAlignment = Alignment.TopCenter,
         ) {
-            val slideY = 48f + (-86f) * frame.insertDepth + frame.latchMotion * 14f
-            val scale = 1.02f - frame.insertDepth * 0.28f
-            val cartAlpha = if (frame.seated) (frame.lidOpen * 1.6f).coerceIn(0f, 1f) else 1f
             Box(
                 modifier = Modifier
-                    .width(172.dp)
-                    .height(158.dp)
-                    .offset(x = (-55).dp, y = slideY.dp)
+                    .width(cartW.dp)
+                    .height(cartH.dp)
+                    .offset(x = slotOffsetX.dp, y = yDp.dp)
                     .graphicsLayer {
                         scaleX = scale
                         scaleY = scale
-                        rotationZ = 180f // Pairs with pitchDeg = -58f: pins go IN first, grip faces you, label faces UP!
+                        rotationZ = 180f // Pairs with pitchDeg = -58f: pins go IN first, label faces UP!
                         alpha = cartAlpha
                     },
             ) {
@@ -920,73 +1155,70 @@ private fun NesFrontDeckInsertionStage(
             }
         }
 
-        Canvas(Modifier.fillMaxSize()) { drawNesConsoleFront(frame) }
-    }
-}
-
-// =================================================================================================
-// 2. Classic Top-Loading Home Consoles: SNES, Nintendo 64, Sega Genesis
-// =================================================================================================
-
-@Composable
-private fun CartridgeTopSlotInsertionStage(
-    spec: PhysicalMediaSpec,
-    hwSpec: ConsoleHardwareSpec,
-    textures: ResolvedPhysicalTextures,
-    frame: ConsoleInsertionFrame,
-    modifier: Modifier = Modifier,
-) {
-    val slotLipYDp = 220.dp
-    Box(modifier = modifier, contentAlignment = Alignment.TopCenter) {
         Canvas(Modifier.fillMaxSize()) {
-            when (hwSpec.systemId) {
-                "snes" -> drawSnesConsoleBack(frame)
-                "n64" -> drawN64ConsoleBack(frame)
-                else -> drawGenesisConsoleBack(frame)
-            }
-        }
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(slotLipYDp)
-                .clipToBounds(),
-            contentAlignment = Alignment.TopCenter,
-        ) {
-            val startY = 6f
-            val endY = 122f
-            val yDp = startY + (endY - startY) * frame.insertDepth
-            Physical3dStageCanvas(
-                subject = PhysicalViewerSubject.GAME_MEDIA,
-                spec = spec,
-                textures = textures,
-                boxAspect = spec.mediaKind.defaultAspect,
-                yawDeg = frame.mediaYawDeg,
-                pitchDeg = frame.mediaPitchDeg,
-                floorShadow = false,
-                modifier = Modifier
-                    .width(192.dp)
-                    .height(172.dp)
-                    .offset(y = yDp.dp),
-            )
-        }
-
-        Canvas(Modifier.fillMaxSize()) {
-            when (hwSpec.systemId) {
-                "snes" -> drawSnesConsoleFront(frame)
-                "n64" -> drawN64ConsoleFront(frame)
-                else -> drawGenesisConsoleFront(frame)
+            val left = (size.width - consoleW.dp.toPx()) * 0.5f
+            val top = consoleTopY.dp.toPx()
+            val cw = consoleW.dp.toPx()
+            val ch = consoleH.dp.toPx()
+            val clipY = slotTopY.dp.toPx()
+            if (photo != null) {
+                clipRect(bottom = clipY) {
+                    drawPhotoCentered(photo, left, top, cw, ch)
+                }
+                if (frame.seated && frame.lidOpen < 0.96f) {
+                    val closed = (1f - frame.lidOpen).coerceIn(0f, 1f)
+                    val bayL = left + cw * 0.195f
+                    val bayW = cw * 0.455f
+                    val bayTop = top + ch * 0.460f
+                    val bayH = ch * 0.225f * closed
+                    drawRoundRect(
+                        brush = Brush.verticalGradient(
+                            0f to Color(0xFFDCDAD3),
+                            1f to Color(0xFFBDBBB3),
+                            startY = bayTop,
+                            endY = bayTop + bayH,
+                        ),
+                        topLeft = Offset(bayL, bayTop),
+                        size = Size(bayW, bayH),
+                        cornerRadius = CornerRadius(3.dp.toPx()),
+                    )
+                    drawRoundRect(
+                        color = Color(0xFF706E68).copy(alpha = 0.55f),
+                        topLeft = Offset(bayL, bayTop),
+                        size = Size(bayW, bayH),
+                        cornerRadius = CornerRadius(3.dp.toPx()),
+                        style = Stroke(1.2.dp.toPx()),
+                    )
+                    if (closed > 0.35f) {
+                        drawLine(
+                            color = Color(0xFFD62828),
+                            start = Offset(bayL + 10.dp.toPx(), bayTop + bayH - 10.dp.toPx()),
+                            end = Offset(bayL + bayW * 0.65f, bayTop + bayH - 10.dp.toPx()),
+                            strokeWidth = 2.6.dp.toPx(),
+                            cap = StrokeCap.Round,
+                        )
+                    }
+                }
+                drawPhotoLedBloom(
+                    center = Offset(left + cw * 0.165f, top + ch * 0.845f),
+                    color = Color(0xFFFF2430),
+                    glow = frame.ledGlow,
+                    radiusPx = 3.2.dp.toPx(),
+                    haloPx = 18.dp.toPx(),
+                )
+            } else {
+                drawNesConsoleFront(frame)
             }
         }
     }
 }
 
 // =================================================================================================
-// 3. Real Handheld Top-Rear Slot: Nintendo DS Lite, 3DS, Game Boy DMG, GBC, Game Boy Advance
+// 3. REAL HOME TOP-LOADING CONSOLES: SNES, NINTENDO 64, SEGA GENESIS (Photorealistic Studio Photos!)
 // =================================================================================================
 
 @Composable
-private fun HandheldRearSlotInsertionStage(
+private fun HomeConsolePhotoTopSlotStage(
     spec: PhysicalMediaSpec,
     hwSpec: ConsoleHardwareSpec,
     textures: ResolvedPhysicalTextures,
@@ -994,53 +1226,82 @@ private fun HandheldRearSlotInsertionStage(
     modifier: Modifier = Modifier,
 ) {
     val id = hwSpec.systemId
-    val isDsFamily = id == "nds" || id == "3ds"
-    val isGba = id == "gba"
+    val resId = when (id) {
+        "snes" -> R.drawable.console_snes
+        "n64" -> R.drawable.console_n64
+        else -> R.drawable.console_genesis
+    }
+    val photo = rememberConsolePhoto(resId)
 
-    val clipHeightDp = when {
-        isDsFamily -> 193.dp
-        isGba -> 195.dp
-        else -> 238.dp // DMG / GBC open-backed recessed rear pocket
+    val consoleW = when (id) {
+        "snes" -> 332f
+        "n64" -> 332f
+        else -> 322f
     }
-    val cartW = when {
-        isDsFamily -> 116.dp
-        isGba -> 150.dp
-        else -> 144.dp
+    val consoleH = when (id) {
+        "snes" -> consoleW * (453f / 720f)
+        "n64" -> consoleW * (438f / 720f)
+        else -> consoleW * (514f / 720f)
     }
-    val cartH = when {
-        isDsFamily -> 116.dp
-        isGba -> 104.dp
-        else -> 148.dp
+    val consoleTopY = when (id) {
+        "snes" -> 134f
+        "n64" -> 138f
+        else -> 114f
     }
-    val startY = when {
-        isDsFamily -> 8f
-        isGba -> 16f
-        else -> 12f
+    val slotCxFrac = if (id == "snes" || id == "n64") 0.50f else 0.60f
+    val slotLipFrac = when (id) {
+        "snes" -> 0.265f
+        "n64" -> 0.255f
+        else -> 0.305f
     }
-    val endY = when {
-        isDsFamily -> 176f // Top edge rests cleanly flush in Slot-1 (spring-clicks down +5.5dp & rebounds!)
-        isGba -> 160f
-        else -> 148f // Flush with top of Game Boy / GBC rear bay
+    val slotLipY = consoleTopY + consoleH * slotLipFrac
+    val slotOffsetX = (slotCxFrac - 0.5f) * consoleW
+
+    val cartW = when (id) {
+        "snes" -> 200f
+        "n64" -> 164f
+        else -> 160f
     }
-    val springExtraY = if (isDsFamily) frame.latchMotion * 5.5f else 0f
+    val cartH = when (id) {
+        "snes" -> 166f
+        "n64" -> 148f
+        else -> 144f
+    }
+    val startY = 4f
+    val endY = slotLipY - cartH * 0.56f
+    val yDp = startY + (endY - startY) * frame.insertDepth
+
+    val (ledXFrac, ledYFrac) = when (id) {
+        "snes" -> 0.175f to 0.425f
+        "n64" -> 0.500f to 0.780f
+        else -> 0.605f to 0.705f
+    }
 
     Box(modifier = modifier, contentAlignment = Alignment.TopCenter) {
         Canvas(Modifier.fillMaxSize()) {
-            when {
-                isDsFamily -> drawNdsOr3dsConsoleBack(hwSpec, frame)
-                isGba -> drawGbaConsoleBack(hwSpec, frame)
-                else -> drawGameBoyConsoleBack(hwSpec, frame)
+            val left = (size.width - consoleW.dp.toPx()) * 0.5f
+            val top = consoleTopY.dp.toPx()
+            val cw = consoleW.dp.toPx()
+            val ch = consoleH.dp.toPx()
+            drawConsoleShadow(size.width * 0.5f, top + ch + 6.dp.toPx(), cw * 1.04f, 28.dp.toPx())
+            if (photo != null) {
+                drawPhotoCentered(photo, left, top, cw, ch)
+            } else {
+                when (id) {
+                    "snes" -> drawSnesConsoleBack(frame)
+                    "n64" -> drawN64ConsoleBack(frame)
+                    else -> drawGenesisConsoleBack(frame)
+                }
             }
         }
 
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(clipHeightDp)
+                .height(slotLipY.dp)
                 .clipToBounds(),
             contentAlignment = Alignment.TopCenter,
         ) {
-            val yDp = startY + (endY - startY) * frame.insertDepth + springExtraY
             Physical3dStageCanvas(
                 subject = PhysicalViewerSubject.GAME_MEDIA,
                 spec = spec,
@@ -1050,88 +1311,408 @@ private fun HandheldRearSlotInsertionStage(
                 pitchDeg = frame.mediaPitchDeg,
                 floorShadow = false,
                 modifier = Modifier
-                    .width(cartW)
-                    .height(cartH)
-                    .offset(y = yDp.dp),
+                    .width(cartW.dp)
+                    .height(cartH.dp)
+                    .offset(x = slotOffsetX.dp, y = yDp.dp),
             )
         }
 
         Canvas(Modifier.fillMaxSize()) {
-            when {
-                isDsFamily -> drawNdsOr3dsConsoleFront(hwSpec, frame)
-                isGba -> drawGbaConsoleFront(hwSpec, frame)
-                else -> drawGameBoyConsoleFront(hwSpec, frame)
+            val left = (size.width - consoleW.dp.toPx()) * 0.5f
+            val top = consoleTopY.dp.toPx()
+            val cw = consoleW.dp.toPx()
+            val ch = consoleH.dp.toPx()
+            val clipY = slotLipY.dp.toPx()
+            if (photo != null) {
+                clipRect(top = clipY) {
+                    drawPhotoCentered(photo, left, top, cw, ch)
+                }
+                if (frame.insertDepth > 0.35f) {
+                    val slotW = cartW.dp.toPx() * 0.72f
+                    val scx = size.width * 0.5f + slotOffsetX.dp.toPx()
+                    drawLine(
+                        color = Color.Black.copy(alpha = 0.45f * frame.insertDepth),
+                        start = Offset(scx - slotW * 0.5f, clipY),
+                        end = Offset(scx + slotW * 0.5f, clipY),
+                        strokeWidth = 3.dp.toPx(),
+                        cap = StrokeCap.Round,
+                    )
+                }
+                drawPhotoLedBloom(
+                    center = Offset(left + cw * ledXFrac, top + ch * ledYFrac),
+                    color = hwSpec.ledColor,
+                    glow = frame.ledGlow,
+                    radiusPx = 3.6.dp.toPx(),
+                    haloPx = 20.dp.toPx(),
+                )
+            } else {
+                when (id) {
+                    "snes" -> drawSnesConsoleFront(frame)
+                    "n64" -> drawN64ConsoleFront(frame)
+                    else -> drawGenesisConsoleFront(frame)
+                }
             }
         }
     }
 }
 
 // =================================================================================================
-// 4. Nintendo Switch: Top-Right Hinged Game Card Flap flanked by Neon Blue & Red Joy-Cons
+// 4. REAL GAME BOY (DMG-01), GAME BOY COLOR, GAME BOY ADVANCE — Photorealistic Rear-Top Shells!
 // =================================================================================================
 
 @Composable
-private fun SwitchTopFlapInsertionStage(
-    spec: PhysicalMediaSpec,
-    textures: ResolvedPhysicalTextures,
-    frame: ConsoleInsertionFrame,
-    modifier: Modifier = Modifier,
-) {
-    Box(modifier = modifier, contentAlignment = Alignment.TopCenter) {
-        Canvas(Modifier.fillMaxSize()) { drawSwitchConsoleBack(frame) }
-
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(198.dp)
-                .clipToBounds(),
-            contentAlignment = Alignment.TopCenter,
-        ) {
-            val yDp = 24f + (186f - 24f) * frame.insertDepth + frame.latchMotion * 4.5f
-            Physical3dStageCanvas(
-                subject = PhysicalViewerSubject.GAME_MEDIA,
-                spec = spec,
-                textures = textures,
-                boxAspect = spec.mediaKind.defaultAspect,
-                yawDeg = frame.mediaYawDeg,
-                pitchDeg = frame.mediaPitchDeg,
-                floorShadow = false,
-                modifier = Modifier
-                    .width(68.dp)
-                    .height(86.dp)
-                    .offset(x = 58.dp, y = yDp.dp),
-            )
-        }
-
-        Canvas(Modifier.fillMaxSize()) { drawSwitchConsoleFront(frame) }
-    }
-}
-
-// =================================================================================================
-// 5. Top-Lid Optical Disc Consoles: PS1, GameCube (8cm Mini-DVD!), Dreamcast, Saturn
-// =================================================================================================
-
-@Composable
-private fun DiscTopLidInsertionStage(
+private fun GameBoyGbaPhotoRearSlotStage(
     spec: PhysicalMediaSpec,
     hwSpec: ConsoleHardwareSpec,
     textures: ResolvedPhysicalTextures,
     frame: ConsoleInsertionFrame,
     modifier: Modifier = Modifier,
 ) {
-    val isGameCube = hwSpec.systemId == "gc" || hwSpec.systemId == "gamecube"
-    val isDreamcast = hwSpec.systemId == "dc" || hwSpec.systemId == "dreamcast"
+    val id = hwSpec.systemId
+    val isGba = id == "gba"
+    val resId = when (id) {
+        "gba" -> R.drawable.console_gba
+        "gbc" -> R.drawable.console_gbc
+        else -> R.drawable.console_gb
+    }
+    val photo = rememberConsolePhoto(resId)
 
-    val discSizeDp = when {
-        isGameCube -> 178f // Authentic 8cm Nintendo GameCube Mini-DVD filling the compact GameCube bay!
-        isDreamcast -> 218f
-        else -> 226f
+    val consoleW = if (isGba) 334f else 308f
+    val consoleH = if (isGba) consoleW * (431f / 720f) else consoleW * (469f / 720f)
+    val consoleTopY = 142f
+    val slotLipFrac = if (isGba) 0.275f else 0.295f
+    val slotLipY = consoleTopY + consoleH * slotLipFrac
+
+    val cartW = if (isGba) 152f else 172f
+    val cartH = if (isGba) 104f else 160f
+    val startY = 8f
+    val endY = if (isGba) slotLipY - cartH * 0.44f else slotLipY - cartH * 0.56f
+    val yDp = startY + (endY - startY) * frame.insertDepth
+
+    Box(modifier = modifier, contentAlignment = Alignment.TopCenter) {
+        Canvas(Modifier.fillMaxSize()) {
+            val left = (size.width - consoleW.dp.toPx()) * 0.5f
+            val top = consoleTopY.dp.toPx()
+            val cw = consoleW.dp.toPx()
+            val ch = consoleH.dp.toPx()
+            drawConsoleShadow(size.width * 0.5f, top + ch + 6.dp.toPx(), cw * 1.02f, 26.dp.toPx())
+            if (photo != null) {
+                drawPhotoCentered(photo, left, top, cw, ch)
+            } else if (isGba) {
+                drawGbaConsoleBack(hwSpec, frame)
+            } else {
+                drawGameBoyConsoleBack(hwSpec, frame)
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(slotLipY.dp)
+                .clipToBounds(),
+            contentAlignment = Alignment.TopCenter,
+        ) {
+            Physical3dStageCanvas(
+                subject = PhysicalViewerSubject.GAME_MEDIA,
+                spec = spec,
+                textures = textures,
+                boxAspect = spec.mediaKind.defaultAspect,
+                yawDeg = frame.mediaYawDeg,
+                pitchDeg = frame.mediaPitchDeg,
+                floorShadow = false,
+                modifier = Modifier
+                    .width(cartW.dp)
+                    .height(cartH.dp)
+                    .offset(y = yDp.dp),
+            )
+        }
+
+        Canvas(Modifier.fillMaxSize()) {
+            val left = (size.width - consoleW.dp.toPx()) * 0.5f
+            val top = consoleTopY.dp.toPx()
+            val cw = consoleW.dp.toPx()
+            val ch = consoleH.dp.toPx()
+            val clipY = slotLipY.dp.toPx()
+            if (photo != null) {
+                clipRect(top = clipY) {
+                    drawPhotoCentered(photo, left, top, cw, ch)
+                }
+                val ledPt = if (isGba) {
+                    Offset(left + cw * 0.87f, top + ch * 0.22f)
+                } else {
+                    Offset(left + cw * 0.145f, top + ch * 0.72f)
+                }
+                drawPhotoLedBloom(ledPt, hwSpec.ledColor, frame.ledGlow, 3.4.dp.toPx(), 18.dp.toPx())
+            } else if (isGba) {
+                drawGbaConsoleFront(hwSpec, frame)
+            } else {
+                drawGameBoyConsoleFront(hwSpec, frame)
+            }
+        }
     }
-    val bayCyDp = when {
-        isGameCube -> 360f * 0.50f
-        isDreamcast -> 360f * 0.60f
-        else -> 360f * 0.61f
+}
+
+// =================================================================================================
+// 5. REAL NINTENDO SWITCH — Photorealistic Joy-Cons + Real Top-Right Open Game Card Slot!
+// =================================================================================================
+
+@Composable
+private fun SwitchPhotoTopFlapStage(
+    spec: PhysicalMediaSpec,
+    textures: ResolvedPhysicalTextures,
+    frame: ConsoleInsertionFrame,
+    modifier: Modifier = Modifier,
+) {
+    val photo = rememberConsolePhoto(R.drawable.console_switch)
+
+    // Exact normalized measurements from console_grid_sheet_1.png (720x349): open flap spans x = 0.655..0.755 -> center 0.705!
+    val consoleW = 344f
+    val consoleH = consoleW * (349f / 720f) // 166.7dp
+    val consoleTopY = 154f
+    val slotCxFrac = 0.705f
+    val slotLipFrac = 0.295f
+    val slotLipY = consoleTopY + consoleH * slotLipFrac // 203.2dp
+    val slotOffsetX = (slotCxFrac - 0.5f) * consoleW // +70.5dp
+
+    val cardW = 50f
+    val cardH = 66f
+    val startY = 30f
+    val endY = slotLipY - 8f
+    val yDp = startY + (endY - startY) * frame.insertDepth + frame.latchMotion * 5f
+
+    Box(modifier = modifier, contentAlignment = Alignment.TopCenter) {
+        Canvas(Modifier.fillMaxSize()) {
+            val left = (size.width - consoleW.dp.toPx()) * 0.5f
+            val top = consoleTopY.dp.toPx()
+            val cw = consoleW.dp.toPx()
+            val ch = consoleH.dp.toPx()
+            drawConsoleShadow(size.width * 0.5f, top + ch + 6.dp.toPx(), cw * 0.98f, 24.dp.toPx())
+            if (photo != null) {
+                drawPhotoCentered(photo, left, top, cw, ch)
+            } else {
+                drawSwitchConsoleBack(frame)
+            }
+        }
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(slotLipY.dp)
+                .clipToBounds(),
+            contentAlignment = Alignment.TopCenter,
+        ) {
+            Physical3dStageCanvas(
+                subject = PhysicalViewerSubject.GAME_MEDIA,
+                spec = spec,
+                textures = textures,
+                boxAspect = spec.mediaKind.defaultAspect,
+                yawDeg = frame.mediaYawDeg,
+                pitchDeg = frame.mediaPitchDeg,
+                floorShadow = false,
+                modifier = Modifier
+                    .width(cardW.dp)
+                    .height(cardH.dp)
+                    .offset(x = slotOffsetX.dp, y = yDp.dp),
+            )
+        }
+
+        Canvas(Modifier.fillMaxSize()) {
+            val left = (size.width - consoleW.dp.toPx()) * 0.5f
+            val top = consoleTopY.dp.toPx()
+            val cw = consoleW.dp.toPx()
+            val ch = consoleH.dp.toPx()
+            val clipY = slotLipY.dp.toPx()
+            if (photo != null) {
+                clipRect(top = clipY) {
+                    drawPhotoCentered(photo, left, top, cw, ch)
+                }
+                if (frame.ledGlow > 0.04f) {
+                    val scrL = left + cw * 0.22f
+                    val scrT = top + ch * 0.36f
+                    val scrW = cw * 0.56f
+                    val scrH = ch * 0.50f
+                    drawRoundRect(
+                        brush = Brush.radialGradient(
+                            0f to Color(0xFFE60012).copy(alpha = 0.55f * frame.ledGlow),
+                            1f to Color.Transparent,
+                            center = Offset(scrL + scrW * 0.5f, scrT + scrH * 0.5f),
+                            radius = scrW * 0.55f,
+                        ),
+                        topLeft = Offset(scrL, scrT),
+                        size = Size(scrW, scrH),
+                        cornerRadius = CornerRadius(4.dp.toPx()),
+                    )
+                }
+            } else {
+                drawSwitchConsoleFront(frame)
+            }
+        }
     }
+}
+
+// =================================================================================================
+// 6. REAL PLAYSTATION 1 & GAMECUBE (Photorealistic Open-Lid Photos!) + DREAMCAST / SATURN
+// =================================================================================================
+
+@Composable
+private fun DiscTopLidStage(
+    spec: PhysicalMediaSpec,
+    hwSpec: ConsoleHardwareSpec,
+    textures: ResolvedPhysicalTextures,
+    frame: ConsoleInsertionFrame,
+    modifier: Modifier = Modifier,
+) {
+    val id = hwSpec.systemId
+    val isPs1 = id == "psx" || id == "ps1"
+    val isGc = id == "gc" || id == "gamecube"
+
+    if (isPs1 || isGc) {
+        val photo = rememberConsolePhoto(if (isPs1) R.drawable.console_ps1 else R.drawable.console_gc)
+        // Exact spindle coordinates verified directly on console_grid_sheet_1.png (PS1: 0.555) & sheet_2.png (GC: 0.438)
+        val consoleW = if (isPs1) 334f else 232f
+        val consoleH = if (isPs1) consoleW * (537f / 720f) else consoleW * (918f / 720f)
+        val consoleTopY = if (isPs1) 70f else 42f
+        val bayCyFrac = if (isPs1) 0.555f else 0.438f
+        val bayRxFrac = if (isPs1) 0.278f else 0.285f
+        val bayRyFrac = if (isPs1) 0.205f else 0.125f
+        val bayCyDp = consoleTopY + consoleH * bayCyFrac
+        val bayRxDp = consoleW * bayRxFrac
+        val bayRyDp = consoleH * bayRyFrac
+        val targetForeshorten = (bayRyDp / bayRxDp).coerceIn(0.48f, 0.65f)
+
+        // Disc fills the real circular bay snugly; Physical3dStageCanvas centers disc at 0.48 * size!
+        val discSizeDp = (bayRxDp * 2f * 0.94f) / 0.78f
+        val startY = 4f
+        val endY = bayCyDp - discSizeDp * 0.48f
+        val yDp = startY + (endY - startY) * frame.insertDepth
+        val foreshortenY = (0.82f - frame.insertDepth * (0.82f - targetForeshorten)).coerceIn(targetForeshorten, 0.90f)
+        val discAlpha = if (frame.lidOpen < 0.40f) (frame.lidOpen / 0.40f).coerceIn(0f, 1f) else 1f
+
+        Box(modifier = modifier, contentAlignment = Alignment.TopCenter) {
+            Canvas(Modifier.fillMaxSize()) {
+                val left = (size.width - consoleW.dp.toPx()) * 0.5f
+                val top = consoleTopY.dp.toPx()
+                val cw = consoleW.dp.toPx()
+                val ch = consoleH.dp.toPx()
+                drawConsoleShadow(size.width * 0.5f, top + ch + 6.dp.toPx(), cw * 1.04f, 28.dp.toPx())
+                if (photo != null) {
+                    drawPhotoCentered(photo, left, top, cw, ch)
+                } else {
+                    drawTopLidConsoleBack(hwSpec, frame)
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .size(discSizeDp.dp)
+                    .offset(y = yDp.dp)
+                    .graphicsLayer {
+                        scaleX = 0.98f
+                        scaleY = 0.98f * foreshortenY
+                        alpha = discAlpha
+                    },
+                contentAlignment = Alignment.Center,
+            ) {
+                Physical3dStageCanvas(
+                    subject = PhysicalViewerSubject.GAME_MEDIA,
+                    spec = spec,
+                    textures = textures,
+                    boxAspect = 1.0f,
+                    yawDeg = 0f,
+                    pitchDeg = 0f,
+                    floorShadow = false,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { rotationZ = frame.discSpinDeg },
+                )
+            }
+
+            Canvas(Modifier.fillMaxSize()) {
+                val left = (size.width - consoleW.dp.toPx()) * 0.5f
+                val top = consoleTopY.dp.toPx()
+                val cw = consoleW.dp.toPx()
+                val ch = consoleH.dp.toPx()
+                val cx = size.width * 0.5f
+                val cy = bayCyDp.dp.toPx()
+                val rx = bayRxDp.dp.toPx()
+                val ry = bayRyDp.dp.toPx()
+
+                // Real metallic 3-ball spindle hub snapping UP through the disc's center hole when seated!
+                if (frame.insertDepth > 0.86f && frame.lidOpen > 0.35f) {
+                    val hubAlpha = ((frame.insertDepth - 0.86f) / 0.14f).coerceIn(0f, 1f) * discAlpha
+                    drawOval(
+                        color = Color(0xFF1E2128).copy(alpha = 0.92f * hubAlpha),
+                        topLeft = Offset(cx - 8.dp.toPx(), cy - 5.dp.toPx()),
+                        size = Size(16.dp.toPx(), 10.dp.toPx()),
+                    )
+                    drawOval(
+                        color = Color(0xFFD5DCE6).copy(alpha = 0.95f * hubAlpha),
+                        topLeft = Offset(cx - 5.dp.toPx(), cy - 3.dp.toPx()),
+                        size = Size(10.dp.toPx(), 6.dp.toPx()),
+                    )
+                    drawCircle(Color.White.copy(alpha = hubAlpha), 1.3.dp.toPx(), Offset(cx - 3.5.dp.toPx(), cy))
+                    drawCircle(Color.White.copy(alpha = hubAlpha), 1.3.dp.toPx(), Offset(cx + 3.5.dp.toPx(), cy))
+                    drawCircle(Color.White.copy(alpha = hubAlpha), 1.3.dp.toPx(), Offset(cx, cy - 2.dp.toPx()))
+                }
+
+                // Closing matching circular lid sweeping down from the real rear hinge over the spinning disc!
+                if (frame.lidOpen < 0.96f) {
+                    val closed = (1f - frame.lidOpen).coerceIn(0f, 1f)
+                    val lidTop = cy - ry - (1f - closed) * 56.dp.toPx()
+                    val lidH = ry * 2f * (0.30f + 0.70f * closed)
+                    val lidTopCol = if (isPs1) Color(0xFFB5B8BE) else Color(0xFF5D50B0)
+                    val lidMidCol = if (isPs1) Color(0xFF9699A0) else Color(0xFF42368C)
+                    drawOval(
+                        brush = Brush.verticalGradient(
+                            0f to lidTopCol.copy(alpha = (0.38f + closed * 0.62f).coerceIn(0f, 1f)),
+                            1f to lidMidCol.copy(alpha = (0.38f + closed * 0.62f).coerceIn(0f, 1f)),
+                            startY = lidTop,
+                            endY = lidTop + lidH,
+                        ),
+                        topLeft = Offset(cx - rx * 1.03f, lidTop),
+                        size = Size(rx * 2.06f, lidH),
+                    )
+                    drawOval(
+                        color = Color.White.copy(alpha = 0.28f * closed),
+                        topLeft = Offset(cx - rx * 1.03f, lidTop),
+                        size = Size(rx * 2.06f, lidH),
+                        style = Stroke(1.4.dp.toPx()),
+                    )
+                    if (closed > 0.40f) {
+                        val lidCy = lidTop + lidH * 0.5f
+                        if (isPs1) {
+                            drawOval(
+                                color = Color(0xFF6B6E75).copy(alpha = 0.55f * closed),
+                                topLeft = Offset(cx - rx * 0.80f, lidCy - lidH * 0.38f),
+                                size = Size(rx * 1.60f, lidH * 0.76f),
+                                style = Stroke(1.3.dp.toPx()),
+                            )
+                        } else {
+                            drawOval(
+                                color = Color(0xFF101218).copy(alpha = 0.94f * closed),
+                                topLeft = Offset(cx - 22.dp.toPx(), lidCy - lidH * 0.24f),
+                                size = Size(44.dp.toPx(), lidH * 0.48f),
+                            )
+                        }
+                    }
+                }
+
+                // Additive bloom strictly on the real photographed LED lens when powered on!
+                val ledPt = if (isPs1) {
+                    Offset(left + cw * 0.179f, top + ch * 0.770f)
+                } else {
+                    Offset(left + cw * 0.50f, top + ch * 0.545f)
+                }
+                drawPhotoLedBloom(ledPt, hwSpec.ledColor, frame.ledGlow, 4.dp.toPx(), 22.dp.toPx())
+            }
+        }
+        return
+    }
+
+    // Dreamcast / Saturn / Sega CD high-craft studio hardware stage
+    val isDreamcast = id == "dc" || id == "dreamcast"
+    val discSizeDp = if (isDreamcast) 218f else 226f
+    val bayCyDp = if (isDreamcast) 360f * 0.60f else 360f * 0.61f
     val startY = 4f
     val endY = bayCyDp - discSizeDp * 0.5f
     val yDp = startY + (endY - startY) * frame.insertDepth
@@ -1171,7 +1752,123 @@ private fun DiscTopLidInsertionStage(
 }
 
 // =================================================================================================
-// 6. PlayStation 2: Motorized Front Disc Tray extending out & retracting straight into the Monolith!
+// 7. REAL SONY PSP-1000 — Photorealistic Rear Shell + Sliding UMD + Real Closing Chrome-Ring Door!
+// =================================================================================================
+
+@Composable
+private fun PspPhotoRearUmdStage(
+    spec: PhysicalMediaSpec,
+    textures: ResolvedPhysicalTextures,
+    frame: ConsoleInsertionFrame,
+    modifier: Modifier = Modifier,
+) {
+    val photo = rememberConsolePhoto(R.drawable.console_psp)
+
+    // Exact measurements from console_grid_sheet_1.png (720x426)
+    val consoleW = 340f
+    val consoleH = consoleW * (426f / 720f) // 201.2dp
+    val consoleTopY = 122f
+    val bayCyDp = consoleTopY + consoleH * 0.385f // 199.5dp (dead center of brushed stainless-steel UMD spindle!)
+    val doorTopFrac = 0.555f
+    val doorTopY = consoleTopY + consoleH * doorTopFrac // 233.7dp (top rim of the real open chrome-ring door!)
+
+    val umdSizeDp = 132f
+    val startY = 14f
+    val endY = bayCyDp - umdSizeDp * 0.5f + 10f
+    val yDp = startY + (endY - startY) * frame.insertDepth
+    val umdAlpha = if (frame.lidOpen < 0.38f) (frame.lidOpen / 0.38f).coerceIn(0f, 1f) else 1f
+
+    Box(modifier = modifier, contentAlignment = Alignment.TopCenter) {
+        // Layer 1: Full real photorealistic Sony PSP-1000 back showing stainless-steel internal UMD drive!
+        Canvas(Modifier.fillMaxSize()) {
+            val left = (size.width - consoleW.dp.toPx()) * 0.5f
+            val top = consoleTopY.dp.toPx()
+            val cw = consoleW.dp.toPx()
+            val ch = consoleH.dp.toPx()
+            drawConsoleShadow(size.width * 0.5f, top + ch + 4.dp.toPx(), cw * 0.96f, 26.dp.toPx())
+            if (photo != null) {
+                drawPhotoCentered(photo, left, top, cw, ch)
+            } else {
+                drawPspConsoleBack(frame)
+            }
+        }
+
+        // Layer 2: Real 3D UMD sliding straight DOWN into the brushed stainless-steel basket BEHIND the open chrome door!
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height((doorTopY + 30f).dp)
+                .clipToBounds(),
+            contentAlignment = Alignment.TopCenter,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(umdSizeDp.dp)
+                    .offset(y = yDp.dp)
+                    .graphicsLayer { alpha = umdAlpha },
+                contentAlignment = Alignment.Center,
+            ) {
+                Physical3dStageCanvas(
+                    subject = PhysicalViewerSubject.GAME_MEDIA,
+                    spec = spec,
+                    textures = textures,
+                    boxAspect = 1.0f,
+                    yawDeg = frame.mediaYawDeg,
+                    pitchDeg = frame.mediaPitchDeg,
+                    floorShadow = false,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+        }
+
+        // Layer 3: THE REAL PHOTOGRAPHED `SONY PSP` CHROME-RING DOOR sliced straight from console_psp.webp!
+        // While open, it masks the bottom of the sliding UMD; when closing, it smoothly lifts & snaps flush over the bay!
+        Canvas(Modifier.fillMaxSize()) {
+            val left = (size.width - consoleW.dp.toPx()) * 0.5f
+            val top = consoleTopY.dp.toPx()
+            val cw = consoleW.dp.toPx()
+            val ch = consoleH.dp.toPx()
+            if (photo != null) {
+                val closed = (1f - frame.lidOpen).coerceIn(0f, 1f)
+                // Slice source rect of the real chrome-ring SONY PSP door (x: 26%..74%, y: 55.5%..98%)
+                val srcX = (photo.width * 0.26f).roundToInt()
+                val srcY = (photo.height * doorTopFrac).roundToInt()
+                val srcW = (photo.width * 0.48f).roundToInt()
+                val srcH = (photo.height * (0.98f - doorTopFrac)).roundToInt()
+
+                // Interpolate door position smoothly from open downward (55.5%..98%) UP flush over the UMD bay (11%..64%)!
+                val dstL = left + cw * 0.26f
+                val dstW = cw * 0.48f
+                val openTop = top + ch * doorTopFrac
+                val openH = ch * (0.98f - doorTopFrac)
+                val closedTop = top + ch * 0.11f
+                val closedH = ch * 0.54f
+                val curTop = openTop + (closedTop - openTop) * closed
+                val curH = openH + (closedH - openH) * closed
+
+                drawImage(
+                    image = photo,
+                    srcOffset = IntOffset(srcX, srcY),
+                    srcSize = IntSize(srcW, srcH),
+                    dstOffset = IntOffset(dstL.roundToInt(), curTop.roundToInt()),
+                    dstSize = IntSize(dstW.roundToInt(), curH.roundToInt().coerceAtLeast(1)),
+                )
+                drawPhotoLedBloom(
+                    center = Offset(left + cw * 0.91f, top + ch * 0.52f),
+                    color = Color(0xFF34EB6E),
+                    glow = frame.ledGlow,
+                    radiusPx = 3.5.dp.toPx(),
+                    haloPx = 18.dp.toPx(),
+                )
+            } else {
+                drawPspConsoleFront(frame)
+            }
+        }
+    }
+}
+
+// =================================================================================================
+// 8. PlayStation 2: Motorized Front Disc Tray extending out & retracting straight into the Monolith!
 // =================================================================================================
 
 @Composable
@@ -1182,7 +1879,6 @@ private fun Ps2SlideTrayInsertionStage(
     modifier: Modifier = Modifier,
 ) {
     val discSizeDp = 194f
-    // Extended tray oval center tracks directly with drawPs2ConsoleBack's trayTipY!
     val trayBackY = 360f * 0.47f + 14f
     val trayTipY = 360f * 0.47f + 28f + frame.trayOut * 84f
     val trayCenterY = trayBackY + (trayTipY - trayBackY) * 0.54f
@@ -1194,8 +1890,6 @@ private fun Ps2SlideTrayInsertionStage(
     Box(modifier = modifier, contentAlignment = Alignment.TopCenter) {
         Canvas(Modifier.fillMaxSize()) { drawPs2ConsoleBack(frame) }
 
-        // Once the disc rests on the tray, clip strictly below the PS2 drive mouth (172dp) so it
-        // physically disappears INSIDE the monolith as the motorized tray retracts!
         val clipModifier = if (frame.seated) {
             Modifier
                 .fillMaxSize()
@@ -1240,51 +1934,7 @@ private fun Ps2SlideTrayInsertionStage(
 }
 
 // =================================================================================================
-// 7. PlayStation Portable (PSP): Rear Hinged Chrome-Ring UMD Clamshell Hatch!
-// =================================================================================================
-
-@Composable
-private fun PspRearUmdInsertionStage(
-    spec: PhysicalMediaSpec,
-    textures: ResolvedPhysicalTextures,
-    frame: ConsoleInsertionFrame,
-    modifier: Modifier = Modifier,
-) {
-    val umdSizeDp = 148f
-    val bayCyDp = 360f * 0.67f
-    val startY = 14f
-    val endY = bayCyDp - umdSizeDp * 0.5f
-    val yDp = startY + (endY - startY) * frame.insertDepth
-    val umdAlpha = if (frame.lidOpen < 0.35f) (frame.lidOpen / 0.35f).coerceIn(0f, 1f) else 1f
-
-    Box(modifier = modifier, contentAlignment = Alignment.TopCenter) {
-        Canvas(Modifier.fillMaxSize()) { drawPspConsoleBack(frame) }
-
-        Box(
-            modifier = Modifier
-                .size(umdSizeDp.dp)
-                .offset(y = yDp.dp)
-                .graphicsLayer { alpha = umdAlpha },
-            contentAlignment = Alignment.Center,
-        ) {
-            Physical3dStageCanvas(
-                subject = PhysicalViewerSubject.GAME_MEDIA,
-                spec = spec,
-                textures = textures,
-                boxAspect = 1.0f,
-                yawDeg = frame.mediaYawDeg,
-                pitchDeg = frame.mediaPitchDeg,
-                floorShadow = false,
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
-
-        Canvas(Modifier.fillMaxSize()) { drawPspConsoleFront(frame) }
-    }
-}
-
-// =================================================================================================
-// 8. Nintendo Wii / Wii U: Upright Glossy Tower with Horizontal Feed into Vertical Electric-Blue Slot!
+// 9. Nintendo Wii / Wii U: Upright Glossy Tower with Horizontal Feed into Vertical Electric-Blue Slot!
 // =================================================================================================
 
 @Composable
@@ -1296,14 +1946,12 @@ private fun WiiVerticalSlotInsertionStage(
     modifier: Modifier = Modifier,
 ) {
     val discSizeDp = 178f
-    // Glides horizontally from right (+96dp) straight LEFT into the vertical glowing blue slot (-66dp)!
     val offsetX = 96f + (-162f) * frame.insertDepth
     val discAlpha = (1f - ((frame.insertDepth - 0.85f) / 0.15f).coerceIn(0f, 1f))
 
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) { drawWiiConsoleBack(hwSpec, frame) }
 
-        // Clip cleanly at the vertical glowing blue slot (cx - 21dp) so the disc feeds DIRECTLY into the blue slit!
         Box(
             modifier = Modifier
                 .fillMaxSize()

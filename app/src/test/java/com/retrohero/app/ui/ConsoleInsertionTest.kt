@@ -150,19 +150,21 @@ class ConsoleInsertionTest {
         data class SampleCase(val file: String, val game: Game, val publisher: String, val progress: Float)
 
         val cases = listOf(
+            SampleCase("insertion_nds_card.png", Game("nds_plat", "Pokemon - Platinum Version (USA).nds", "nds", "tree", "doc", 134217728L), "Nintendo", 0.36f),
+            SampleCase("insertion_3ds_card.png", Game("3ds_albw", "The Legend of Zelda: A Link Between Worlds.3ds", "3ds", "tree", "doc", 700000000L), "Nintendo", 0.36f),
+            SampleCase("insertion_psx_disc.png", Game("psx_ff7", "Final Fantasy VII (USA).chd", "psx", "tree", "doc", 650000000L), "Sony Computer Entertainment", 0.48f),
+            SampleCase("insertion_psp_umd.png", Game("psp_cc", "Crisis Core: Final Fantasy VII (USA).chd", "psp", "tree", "doc", 1200000000L), "Square Enix", 0.42f),
+            SampleCase("insertion_switch_card.png", Game("sw_botw", "The Legend of Zelda: Breath of the Wild.nsp", "switch", "tree", "doc", 14000000000L), "Nintendo", 0.36f),
             SampleCase("insertion_nes_cart.png", Game("nes_smb3", "Super Mario Bros. 3 (USA).nes", "nes", "tree", "doc", 393216L), "Nintendo", 0.34f),
             SampleCase("insertion_snes_cart.png", Game("snes_ct", "Chrono Trigger (USA).sfc", "snes", "tree", "doc", 4194304L), "Square Soft", 0.56f),
-            SampleCase("insertion_nds_card.png", Game("nds_plat", "Pokemon - Platinum Version (USA).nds", "nds", "tree", "doc", 134217728L), "Nintendo", 0.38f),
             SampleCase("insertion_n64_cart.png", Game("n64_oot", "The Legend of Zelda: Ocarina of Time (USA).z64", "n64", "tree", "doc", 33554432L), "Nintendo", 0.56f),
             SampleCase("insertion_genesis_cart.png", Game("gen_s3", "Sonic the Hedgehog 3 (USA).md", "genesis", "tree", "doc", 2097152L), "Sega", 0.54f),
-            SampleCase("insertion_gb_cart.png", Game("gb_red", "Pokemon - Red Version (USA).gb", "gb", "tree", "doc", 1048576L), "Nintendo", 0.44f),
-            SampleCase("insertion_gba_cart.png", Game("gba_em", "Pokemon - Emerald Version (USA).gba", "gba", "tree", "doc", 16777216L), "Nintendo", 0.42f),
-            SampleCase("insertion_switch_card.png", Game("sw_botw", "The Legend of Zelda: Breath of the Wild.nsp", "switch", "tree", "doc", 14000000000L), "Nintendo", 0.36f),
-            SampleCase("insertion_psx_disc.png", Game("psx_ff7", "Final Fantasy VII (USA).chd", "psx", "tree", "doc", 650000000L), "Sony Computer Entertainment", 0.48f),
+            SampleCase("insertion_gb_cart.png", Game("gb_red", "Pokemon - Red Version (USA).gb", "gb", "tree", "doc", 1048576L), "Nintendo", 0.48f),
+            SampleCase("insertion_gbc_cart.png", Game("gbc_crys", "Pokemon - Crystal Version (USA).gbc", "gbc", "tree", "doc", 2097152L), "Nintendo", 0.48f),
+            SampleCase("insertion_gba_cart.png", Game("gba_em", "Pokemon - Emerald Version (USA).gba", "gba", "tree", "doc", 16777216L), "Nintendo", 0.48f),
             SampleCase("insertion_gc_disc.png", Game("gc_melee", "Super Smash Bros. Melee (USA).rvz", "gc", "tree", "doc", 1459978240L), "Nintendo", 0.48f),
             SampleCase("insertion_dc_disc.png", Game("dc_sa2", "Sonic Adventure 2 (USA).chd", "dc", "tree", "doc", 850000000L), "Sega", 0.48f),
             SampleCase("insertion_ps2_disc.png", Game("ps2_sotc", "Shadow of the Colossus (USA).chd", "ps2", "tree", "doc", 2200000000L), "Sony Computer Entertainment", 0.46f),
-            SampleCase("insertion_psp_umd.png", Game("psp_cc", "Crisis Core: Final Fantasy VII (USA).chd", "psp", "tree", "doc", 1200000000L), "Square Enix", 0.42f),
             SampleCase("insertion_wii_disc.png", Game("wii_smg", "Super Mario Galaxy (USA).rvz", "wii", "tree", "doc", 3500000000L), "Nintendo", 0.46f),
         )
 

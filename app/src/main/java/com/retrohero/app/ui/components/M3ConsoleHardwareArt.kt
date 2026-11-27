@@ -1,5 +1,7 @@
 package com.retrohero.app.ui.components
 
+import android.graphics.Paint as AndroidPaint
+import android.graphics.Typeface
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -11,6 +13,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 
 /**
@@ -19,6 +23,34 @@ import androidx.compose.ui.unit.dp
  * and a foreground/lip/lid layer (drawn over the media so cartridges, cards, and discs physically
  * vanish into real slots, trays, bays, and lids).
  */
+
+internal fun DrawScope.drawHardwareLabel(
+    text: String,
+    center: Offset,
+    textSizeDp: Float,
+    color: Color,
+    bold: Boolean = true,
+    italic: Boolean = false,
+    letterSpacingEm: Float = 0.06f,
+    align: AndroidPaint.Align = AndroidPaint.Align.CENTER,
+) {
+    val style = when {
+        bold && italic -> Typeface.BOLD_ITALIC
+        bold -> Typeface.BOLD
+        italic -> Typeface.ITALIC
+        else -> Typeface.NORMAL
+    }
+    val paint = AndroidPaint(AndroidPaint.ANTI_ALIAS_FLAG).apply {
+        this.color = color.toArgb()
+        textSize = textSizeDp.dp.toPx()
+        textAlign = align
+        typeface = Typeface.create(Typeface.SANS_SERIF, style)
+        letterSpacing = letterSpacingEm
+    }
+    val fm = paint.fontMetrics
+    val baseline = center.y - (fm.ascent + fm.descent) * 0.5f
+    drawContext.canvas.nativeCanvas.drawText(text, center.x, baseline, paint)
+}
 
 internal fun DrawScope.drawConsoleShadow(cx: Float, bottomY: Float, width: Float, height: Float = 28.dp.toPx()) {
     drawOval(
@@ -1702,27 +1734,58 @@ private fun DrawScope.drawDreamcastConsoleBack(frame: ConsoleInsertionFrame) {
         brush = Brush.verticalGradient(0f to Color(0xFFF0F1F4), 1f to Color(0xFFD5D8E0), startY = topY, endY = frontEdgeY),
     )
 
-    // Trapezoidal Dreamcast POWER (left) and OPEN (right) buttons
-    drawRoundRect(Color(0xFFC2C6D0), Offset(deckL + 22.dp.toPx(), frontEdgeY - 26.dp.toPx()), Size(32.dp.toPx(), 16.dp.toPx()), CornerRadius(4.dp.toPx()))
-    drawRoundRect(Color(0xFFC2C6D0), Offset(deckR - 54.dp.toPx(), frontEdgeY - 26.dp.toPx()), Size(32.dp.toPx(), 16.dp.toPx()), CornerRadius(4.dp.toPx()))
+    // Trapezoidal Dreamcast POWER (left) and OPEN (right) buttons with crisp bevel + silkscreen
+    val pwrBtnL = deckL + 20.dp.toPx()
+    val opnBtnL = deckR - 54.dp.toPx()
+    val topBtnY = frontEdgeY - 26.dp.toPx()
+    drawRoundRect(
+        brush = Brush.verticalGradient(0f to Color(0xFFE5E8EE), 1f to Color(0xFFB5BAC6), startY = topBtnY, endY = topBtnY + 17.dp.toPx()),
+        topLeft = Offset(pwrBtnL, topBtnY),
+        size = Size(34.dp.toPx(), 17.dp.toPx()),
+        cornerRadius = CornerRadius(4.dp.toPx()),
+    )
+    drawRoundRect(Color(0xFF8C92A0), Offset(pwrBtnL, topBtnY), Size(34.dp.toPx(), 17.dp.toPx()), CornerRadius(4.dp.toPx()), style = Stroke(0.9.dp.toPx()))
+    drawHardwareLabel("POWER", Offset(pwrBtnL + 17.dp.toPx(), topBtnY + 8.5.dp.toPx()), 6.2f, Color(0xFF4A4E59), bold = true)
+
+    drawRoundRect(
+        brush = Brush.verticalGradient(0f to Color(0xFFE5E8EE), 1f to Color(0xFFB5BAC6), startY = topBtnY, endY = topBtnY + 17.dp.toPx()),
+        topLeft = Offset(opnBtnL, topBtnY),
+        size = Size(34.dp.toPx(), 17.dp.toPx()),
+        cornerRadius = CornerRadius(4.dp.toPx()),
+    )
+    drawRoundRect(Color(0xFF8C92A0), Offset(opnBtnL, topBtnY), Size(34.dp.toPx(), 17.dp.toPx()), CornerRadius(4.dp.toPx()), style = Stroke(0.9.dp.toPx()))
+    drawHardwareLabel("OPEN", Offset(opnBtnL + 17.dp.toPx(), topBtnY + 8.5.dp.toPx()), 6.2f, Color(0xFF4A4E59), bold = true)
 
     // Sculpted white front bezel with iconic curved recessed 4-controller bay!
     drawRoundRect(
-        brush = Brush.verticalGradient(0f to Color(0xFFD4D7DF), 1f to Color(0xFFA7ACB8), startY = frontEdgeY, endY = bottomY),
+        brush = Brush.verticalGradient(0f to Color(0xFFDCE0E8), 0.35f to Color(0xFFC5C9D3), 1f to Color(0xFF9EA4B2), startY = frontEdgeY, endY = bottomY),
         topLeft = Offset(deckL, frontEdgeY),
         size = Size(deckW, bottomY - frontEdgeY),
         cornerRadius = CornerRadius(10.dp.toPx()),
     )
-    // Recessed 4 semicircular Dreamcast controller ports (A, B, C, D)
+    drawLine(Color.White.copy(alpha = 0.65f), Offset(deckL + 10.dp.toPx(), frontEdgeY + 1.2.dp.toPx()), Offset(deckR - 10.dp.toPx(), frontEdgeY + 1.2.dp.toPx()), 1.4.dp.toPx())
+    // Subtle dark front controller-bay surround
+    drawRoundRect(
+        color = Color(0xFFB3B8C4),
+        topLeft = Offset(deckL + 14.dp.toPx(), frontEdgeY + 8.dp.toPx()),
+        size = Size(deckW - 28.dp.toPx(), (bottomY - frontEdgeY) - 14.dp.toPx()),
+        cornerRadius = CornerRadius(8.dp.toPx()),
+    )
+    // Recessed 4 semicircular Dreamcast controller ports (A, B, C, D) with real 5-pin socket details
     val portW = 46.dp.toPx()
     val portH = 22.dp.toPx()
     val gap = 12.dp.toPx()
     val startX = cx - (portW * 4f + gap * 3f) * 0.5f
-    val portY = frontEdgeY + (bottomY - frontEdgeY - portH) * 0.54f
+    val portY = frontEdgeY + (bottomY - frontEdgeY - portH) * 0.60f
+    val dcLabels = listOf("A", "B", "C", "D")
     for (i in 0..3) {
         val px = startX + i * (portW + gap)
-        drawRoundRect(Color(0xFF424650), Offset(px, portY), Size(portW, portH), CornerRadius(10.dp.toPx()))
-        drawRoundRect(Color(0xFF181A20), Offset(px + 5.dp.toPx(), portY + 5.dp.toPx()), Size(portW - 10.dp.toPx(), portH - 10.dp.toPx()), CornerRadius(6.dp.toPx()))
+        drawHardwareLabel(dcLabels[i], Offset(px + portW * 0.5f, portY - 5.5.dp.toPx()), 6.2f, Color(0xFF565B68), bold = true)
+        drawRoundRect(Color(0xFF3E424D), Offset(px, portY), Size(portW, portH), CornerRadius(10.dp.toPx()))
+        drawRoundRect(Color(0xFF14161C), Offset(px + 4.dp.toPx(), portY + 4.dp.toPx()), Size(portW - 8.dp.toPx(), portH - 8.dp.toPx()), CornerRadius(6.dp.toPx()))
+        for (pin in 0..4) {
+            drawCircle(Color(0xFF9EA6B6), 1.2.dp.toPx(), Offset(px + 11.dp.toPx() + pin * 6.dp.toPx(), portY + portH * 0.52f))
+        }
     }
 
     val bayCy = h * 0.60f
@@ -1741,10 +1804,12 @@ private fun DrawScope.drawDreamcastConsoleFront(frame: ConsoleInsertionFrame) {
     val rx = deckW * 0.315f
     val ry = rx * 0.50f
 
-    drawClosingCircularLid(cx, bayCy, rx, ry, frame.lidOpen, Color(0xFFF2F3F6), Color(0xFFD8DBE2)) { center, _, closed ->
-        // Iconic Dreamcast orange swirl emblem on the center lid!
-        drawCircle(Color(0xFFFF641E).copy(alpha = 0.88f * closed), 12.dp.toPx(), center, style = Stroke(2.4.dp.toPx()))
-        drawCircle(Color(0xFFFF641E).copy(alpha = 0.88f * closed), 6.5.dp.toPx(), Offset(center.x + 1.5.dp.toPx(), center.y - 1.dp.toPx()), style = Stroke(2.dp.toPx()))
+    drawClosingCircularLid(cx, bayCy, rx, ry, frame.lidOpen, Color(0xFFF5F6F9), Color(0xFFD6D9E2)) { center, lidH, closed ->
+        // Iconic Dreamcast orange swirl emblem + "Dreamcast" wordmark on the closed lid!
+        val swirlCenter = Offset(center.x, center.y - lidH * 0.10f)
+        drawCircle(Color(0xFFFF5E1A).copy(alpha = 0.90f * closed), 11.dp.toPx(), swirlCenter, style = Stroke(2.4.dp.toPx()))
+        drawCircle(Color(0xFFFF5E1A).copy(alpha = 0.90f * closed), 5.8.dp.toPx(), Offset(swirlCenter.x + 1.4.dp.toPx(), swirlCenter.y - 1.dp.toPx()), style = Stroke(2.dp.toPx()))
+        drawHardwareLabel("Dreamcast", Offset(center.x, center.y + lidH * 0.22f), 8.2f, Color(0xFF2E323D).copy(alpha = 0.88f * closed), bold = false, letterSpacingEm = 0.04f)
     }
 
     // Iconic glowing translucent ORANGE TRIANGLE LED in front of the lid!
@@ -1788,12 +1853,16 @@ private fun DrawScope.drawSaturnConsoleBack(hwSpec: ConsoleHardwareSpec, frame: 
     }
     drawPath(topDeck, brush = Brush.verticalGradient(0f to hwSpec.bodyTop, 1f to hwSpec.bodyMid, startY = topY, endY = frontEdgeY))
     // Sculpted side wing steps (classic Saturn ridge)
-    drawLine(Color.White.copy(alpha = 0.14f), Offset(deckL + 42.dp.toPx(), topY + 4.dp.toPx()), Offset(deckL + 30.dp.toPx(), frontEdgeY - 4.dp.toPx()), 2.dp.toPx())
-    drawLine(Color.White.copy(alpha = 0.14f), Offset(deckR - 42.dp.toPx(), topY + 4.dp.toPx()), Offset(deckR - 30.dp.toPx(), frontEdgeY - 4.dp.toPx()), 2.dp.toPx())
+    drawLine(Color.White.copy(alpha = 0.16f), Offset(deckL + 42.dp.toPx(), topY + 4.dp.toPx()), Offset(deckL + 30.dp.toPx(), frontEdgeY - 4.dp.toPx()), 2.dp.toPx())
+    drawLine(Color.White.copy(alpha = 0.16f), Offset(deckR - 42.dp.toPx(), topY + 4.dp.toPx()), Offset(deckR - 30.dp.toPx(), frontEdgeY - 4.dp.toPx()), 2.dp.toPx())
 
-    // Oval POWER & RESET buttons on front-left
-    drawOval(Color(0xFF525866), Offset(deckL + 20.dp.toPx(), frontEdgeY - 24.dp.toPx()), Size(26.dp.toPx(), 13.dp.toPx()))
-    drawOval(Color(0xFF424754), Offset(deckL + 50.dp.toPx(), frontEdgeY - 24.dp.toPx()), Size(22.dp.toPx(), 12.dp.toPx()))
+    // Oval POWER & RESET buttons on front-left + OPEN on front-right with crisp labels
+    drawOval(Color(0xFF565C6B), Offset(deckL + 18.dp.toPx(), frontEdgeY - 24.dp.toPx()), Size(28.dp.toPx(), 14.dp.toPx()))
+    drawHardwareLabel("POWER", Offset(deckL + 32.dp.toPx(), frontEdgeY - 17.dp.toPx()), 5.2f, Color(0xFFDADEE8))
+    drawOval(Color(0xFF454B59), Offset(deckL + 50.dp.toPx(), frontEdgeY - 24.dp.toPx()), Size(24.dp.toPx(), 13.dp.toPx()))
+    drawHardwareLabel("RESET", Offset(deckL + 62.dp.toPx(), frontEdgeY - 17.5.dp.toPx()), 5.0f, Color(0xFFC5CAD6))
+    drawOval(Color(0xFF565C6B), Offset(deckR - 46.dp.toPx(), frontEdgeY - 24.dp.toPx()), Size(28.dp.toPx(), 14.dp.toPx()))
+    drawHardwareLabel("OPEN", Offset(deckR - 32.dp.toPx(), frontEdgeY - 17.dp.toPx()), 5.2f, Color(0xFFDADEE8))
 
     // Front face with dual controller ports
     drawRoundRect(
@@ -1802,10 +1871,13 @@ private fun DrawScope.drawSaturnConsoleBack(hwSpec: ConsoleHardwareSpec, frame: 
         size = Size(deckW, bottomY - frontEdgeY),
         cornerRadius = CornerRadius(8.dp.toPx()),
     )
+    drawLine(Color.White.copy(alpha = 0.22f), Offset(deckL + 10.dp.toPx(), frontEdgeY + 1.2.dp.toPx()), Offset(deckR - 10.dp.toPx(), frontEdgeY + 1.2.dp.toPx()), 1.2.dp.toPx())
     for (p in 0..1) {
         val px = cx - 76.dp.toPx() + p * 98.dp.toPx()
         drawRoundRect(Color(0xFF0A0B0F), Offset(px, frontEdgeY + 14.dp.toPx()), Size(54.dp.toPx(), 20.dp.toPx()), CornerRadius(4.dp.toPx()))
+        drawRoundRect(Color(0xFF3E4452), Offset(px, frontEdgeY + 14.dp.toPx()), Size(54.dp.toPx(), 20.dp.toPx()), CornerRadius(4.dp.toPx()), style = Stroke(1.dp.toPx()))
     }
+    drawHardwareLabel(hwSpec.consoleLabel.uppercase(), Offset(cx, frontEdgeY + 24.dp.toPx()), 6.4f, Color.White.copy(alpha = 0.65f), bold = true, letterSpacingEm = 0.12f)
 
     val bayCy = h * 0.61f
     val rx = deckW * 0.305f
@@ -1825,7 +1897,8 @@ private fun DrawScope.drawSaturnConsoleFront(hwSpec: ConsoleHardwareSpec, frame:
     val ry = rx * 0.50f
 
     drawClosingCircularLid(cx, bayCy, rx, ry, frame.lidOpen, hwSpec.bodyTop, hwSpec.bodyMid) { center, _, closed ->
-        drawOval(hwSpec.accentColor.copy(alpha = 0.65f * closed), Offset(center.x - 22.dp.toPx(), center.y - 10.dp.toPx()), Size(44.dp.toPx(), 20.dp.toPx()), style = Stroke(2.dp.toPx()))
+        drawOval(hwSpec.accentColor.copy(alpha = 0.65f * closed), Offset(center.x - 24.dp.toPx(), center.y - 10.dp.toPx()), Size(48.dp.toPx(), 20.dp.toPx()), style = Stroke(1.8.dp.toPx()))
+        drawHardwareLabel(hwSpec.consoleLabel.uppercase(), center, 6.8f, Color.White.copy(alpha = 0.88f * closed), bold = true, letterSpacingEm = 0.10f)
     }
 
     drawGlowingLed(Offset(deckL + deckW - 34.dp.toPx(), frontEdgeY - 14.dp.toPx()), hwSpec.ledColor, frame.ledGlow, 3.5.dp.toPx(), 18.dp.toPx())
@@ -1858,11 +1931,19 @@ internal fun DrawScope.drawPs2ConsoleBack(frame: ConsoleInsertionFrame) {
         close()
     }
     drawPath(roofPath, brush = Brush.verticalGradient(0f to Color(0xFF2B2E36), 1f to Color(0xFF1A1C22), startY = topY, endY = driveMouthY))
-    // Subtle ribbed top grooves characteristic of the PS2!
+    // Subtle ribbed top grooves + debossed "PlayStation 2" branding on upper monolith deck
     for (r in 0..4) {
         val x = deckL + 28.dp.toPx() + r * 20.dp.toPx()
         drawLine(Color(0xFF111318), Offset(x, topY + 2.dp.toPx()), Offset(x - 6.dp.toPx(), driveMouthY - 2.dp.toPx()), 1.4.dp.toPx())
     }
+    drawHardwareLabel(
+        text = "PlayStation 2",
+        center = Offset(cx + deckW * 0.14f, (topY + driveMouthY) * 0.52f),
+        textSizeDp = 9.0f,
+        color = Color(0xFF6B7792).copy(alpha = 0.78f),
+        bold = true,
+        letterSpacingEm = 0.08f,
+    )
 
     // Upper front monolith body
     drawRect(
@@ -1881,18 +1962,23 @@ internal fun DrawScope.drawPs2ConsoleBack(frame: ConsoleInsertionFrame) {
         cornerRadius = CornerRadius(4.dp.toPx()),
     )
     // Iconic PS2 blue horizontal accent stripe between upper & lower tiers
-    drawRect(Color(0xFF2A66FF).copy(alpha = 0.78f), Offset(baseL + 4.dp.toPx(), midStepY - 1.dp.toPx()), Size(baseW - 8.dp.toPx(), 2.5.dp.toPx()))
+    drawRect(Color(0xFF2A66FF).copy(alpha = 0.85f), Offset(baseL + 4.dp.toPx(), midStepY - 1.dp.toPx()), Size(baseW - 8.dp.toPx(), 2.5.dp.toPx()))
 
     // Twin left Controller/MC ports + right-side ribbed PS2 grille louvers
     for (p in 0..1) {
         val px = baseL + 14.dp.toPx() + p * 64.dp.toPx()
         drawRoundRect(Color(0xFF0A0B0E), Offset(px, midStepY + 8.dp.toPx()), Size(52.dp.toPx(), 10.dp.toPx()), CornerRadius(2.dp.toPx()))
+        drawHardwareLabel("MC ${p + 1}", Offset(px + 26.dp.toPx(), midStepY + 13.dp.toPx()), 4.8f, Color(0xFF62697A), bold = true)
         drawRoundRect(Color(0xFF0A0B0E), Offset(px, midStepY + 22.dp.toPx()), Size(52.dp.toPx(), 16.dp.toPx()), CornerRadius(3.dp.toPx()))
+        for (g in 0..2) {
+            drawRect(Color(0xFF232732), Offset(px + 6.dp.toPx() + g * 14.dp.toPx(), midStepY + 26.dp.toPx()), Size(10.dp.toPx(), 8.dp.toPx()))
+        }
     }
     for (l in 0..6) {
         val ly = midStepY + 9.dp.toPx() + l * 4.5.dp.toPx()
         drawLine(Color(0xFF282C36), Offset(cx + 12.dp.toPx(), ly), Offset(baseL + baseW - 14.dp.toPx(), ly), 1.6.dp.toPx())
     }
+    drawHardwareLabel("SONY", Offset(baseL + baseW - 30.dp.toPx(), midStepY + 24.dp.toPx()), 6.8f, Color(0xFF8C96AD), bold = true, letterSpacingEm = 0.16f)
 
     // Dark recessed optical drive mouth on upper-left of PS2 front face
     val trayW = deckW * 0.56f
@@ -1927,9 +2013,10 @@ internal fun DrawScope.drawPs2ConsoleBack(frame: ConsoleInsertionFrame) {
             // Center spindle guide ring
             drawOval(Color(0xFF3E4350), Offset(ovalCx - 12.dp.toPx(), ovalCy - 5.dp.toPx()), Size(24.dp.toPx(), 10.dp.toPx()))
         }
-        // Thick glossy black tray front lip with blue accent line
+        // Thick glossy black tray front lip with authentic blue "PS2" logo & DVD mark
         drawRoundRect(Color(0xFF1F222A), Offset(trayL - 2.dp.toPx(), trayTipY - 4.dp.toPx()), Size(trayW + 4.dp.toPx(), 14.dp.toPx()), CornerRadius(3.dp.toPx()))
-        drawLine(Color(0xFF3B7BFF), Offset(trayCx - 14.dp.toPx(), trayTipY + 3.dp.toPx()), Offset(trayCx + 14.dp.toPx(), trayTipY + 3.dp.toPx()), 2.dp.toPx(), StrokeCap.Round)
+        drawHardwareLabel("PS2", Offset(trayCx, trayTipY + 3.dp.toPx()), 7.6f, Color(0xFF478BFF), bold = true, letterSpacingEm = 0.16f)
+        drawHardwareLabel("DVD", Offset(trayL + trayW - 22.dp.toPx(), trayTipY + 3.dp.toPx()), 5.0f, Color(0xFF9EA6B8), bold = true)
     }
 }
 
@@ -1952,10 +2039,13 @@ internal fun DrawScope.drawPs2ConsoleFront(frame: ConsoleInsertionFrame) {
     if (frame.trayOut <= 0.08f) {
         drawRoundRect(Color(0xFF1E212A), Offset(trayL, driveMouthY + 7.dp.toPx()), Size(trayW, 22.dp.toPx()), CornerRadius(2.dp.toPx()))
         drawRoundRect(Color.White.copy(alpha = 0.16f), Offset(trayL, driveMouthY + 7.dp.toPx()), Size(trayW, 22.dp.toPx()), CornerRadius(2.dp.toPx()), style = Stroke(1.dp.toPx()))
-        drawLine(Color(0xFF3B7BFF), Offset(trayL + trayW * 0.5f - 14.dp.toPx(), driveMouthY + 18.dp.toPx()), Offset(trayL + trayW * 0.5f + 14.dp.toPx(), driveMouthY + 18.dp.toPx()), 2.4.dp.toPx(), StrokeCap.Round)
+        drawHardwareLabel("PS2", Offset(trayL + trayW * 0.5f, driveMouthY + 18.dp.toPx()), 8.2f, Color(0xFF478BFF), bold = true, letterSpacingEm = 0.18f)
+        drawHardwareLabel("DVD", Offset(trayL + trayW - 22.dp.toPx(), driveMouthY + 18.dp.toPx()), 5.2f, Color(0xFF9EA6B8), bold = true)
     }
 
-    // Iconic PS2 glowing GREEN RESET & ELECTRIC-BLUE EJECT LEDs on the right bezel!
+    // Iconic PS2 glowing GREEN RESET & ELECTRIC-BLUE EJECT LEDs + labels on the right bezel!
+    drawHardwareLabel("RESET", Offset(deckR - 46.dp.toPx(), driveMouthY + 16.dp.toPx()), 5.2f, Color(0xFF9EA6B8), bold = true)
+    drawHardwareLabel("EJECT", Offset(deckR - 46.dp.toPx(), driveMouthY + 34.dp.toPx()), 5.2f, Color(0xFF9EA6B8), bold = true)
     drawGlowingLed(Offset(deckR - 22.dp.toPx(), driveMouthY + 16.dp.toPx()), Color(0xFF2EE86C), frame.ledGlow, 3.6.dp.toPx(), 18.dp.toPx())
     drawGlowingLed(Offset(deckR - 22.dp.toPx(), driveMouthY + 34.dp.toPx()), Color(0xFF3282FF), (0.35f + frame.ledGlow * 0.65f), 3.6.dp.toPx(), 18.dp.toPx())
 }
@@ -2147,11 +2237,19 @@ internal fun DrawScope.drawWiiConsoleFront(hwSpec: ConsoleHardwareSpec, frame: C
     drawPath(frontLeftPath, color = Color.White.copy(alpha = if (isWiiU) 0.18f else 0.72f), style = Stroke(1.2.dp.toPx()))
 
     // Tiny iconic Wii front buttons down the left edge: POWER (with green LED), RESET, EJECT + SD card flap!
+    val labelTint = if (isWiiU) Color(0xFF9EA6B6) else Color(0xFF6B7382)
     val btnXTop = towerL + slant + 18.dp.toPx()
     val pwrCenter = Offset(btnXTop - 2.dp.toPx(), towerTop + 34.dp.toPx())
     drawCircle(Color(0xFFB4BCC9), 6.5.dp.toPx(), pwrCenter)
+    drawCircle(Color(0xFF7D8594), 6.5.dp.toPx(), pwrCenter, style = Stroke(0.8.dp.toPx()))
     drawGlowingLed(Offset(pwrCenter.x - 10.dp.toPx(), pwrCenter.y), Color(0xFF2CE86C), frame.ledGlow, 2.5.dp.toPx(), 12.dp.toPx())
-    drawCircle(Color(0xFFB4BCC9), 5.5.dp.toPx(), Offset(btnXTop - 4.dp.toPx(), towerTop + 58.dp.toPx()))
+    drawHardwareLabel("POWER", Offset(pwrCenter.x + 17.dp.toPx(), pwrCenter.y), 4.6f, labelTint, bold = true)
+
+    val rstCenter = Offset(btnXTop - 4.dp.toPx(), towerTop + 58.dp.toPx())
+    drawCircle(Color(0xFFB4BCC9), 5.5.dp.toPx(), rstCenter)
+    drawCircle(Color(0xFF7D8594), 5.5.dp.toPx(), rstCenter, style = Stroke(0.8.dp.toPx()))
+    drawHardwareLabel("RESET", Offset(rstCenter.x + 17.dp.toPx(), rstCenter.y), 4.6f, labelTint, bold = true)
+
     // Recessed SD Card door
     drawRoundRect(
         color = Color.Black.copy(alpha = if (isWiiU) 0.25f else 0.08f),
@@ -2166,7 +2264,20 @@ internal fun DrawScope.drawWiiConsoleFront(hwSpec: ConsoleHardwareSpec, frame: C
         cornerRadius = CornerRadius(4.dp.toPx()),
         style = Stroke(1.dp.toPx()),
     )
-    drawCircle(Color(0xFFB4BCC9), 5.5.dp.toPx(), Offset(towerL + 16.dp.toPx(), towerBottom - 36.dp.toPx()))
+    val ejCenter = Offset(towerL + 16.dp.toPx(), towerBottom - 44.dp.toPx())
+    drawCircle(Color(0xFFB4BCC9), 5.5.dp.toPx(), ejCenter)
+    drawCircle(Color(0xFF7D8594), 5.5.dp.toPx(), ejCenter, style = Stroke(0.8.dp.toPx()))
+    drawHardwareLabel("EJECT", Offset(ejCenter.x + 18.dp.toPx(), ejCenter.y), 4.6f, labelTint, bold = true)
+
+    // Iconic lower-front "Wii" / "Wii U" silver-grey wordmark!
+    drawHardwareLabel(
+        text = if (isWiiU) "Wii U" else "Wii",
+        center = Offset(towerL + towerW * 0.42f, towerBottom - 16.dp.toPx()),
+        textSizeDp = 13.5f,
+        color = if (isWiiU) Color(0xFFB0B8C8) else Color(0xFF8A92A0),
+        bold = true,
+        letterSpacingEm = 0.04f,
+    )
 
     // Iconic VERTICAL GLOWING ELECTRIC-BLUE OPTICAL DISC SLOT halo hugging the entering disc!
     val slotTop = Offset(towerL + towerW + slant - slotOffsetFromRight, towerTop + 26.dp.toPx())
