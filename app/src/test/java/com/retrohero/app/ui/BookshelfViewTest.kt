@@ -70,6 +70,16 @@ class BookshelfViewTest {
         assertTrue(ShelfLayoutMath.isLightSpine(ShelfLayoutMath.spineBaseColor(dsGame, PhysicalMediaSpec.forSystem("nds"))))
         assertFalse(ShelfLayoutMath.isLightSpine(ShelfLayoutMath.spineBaseColor(psxGame, PhysicalMediaSpec.forSystem("psx"))))
 
+        // 3D shelf geometry: slot widths follow each case's real depth; a pulled case needs more room.
+        val jewel = PhysicalMediaSpec.forSystem("psx")
+        val snesBox = PhysicalMediaSpec.forSystem("snes")
+        val jewelSlot = ShelfLayoutMath.spineSlotWidthDp(jewel, ShelfLayoutMath.proceduralFrontAspect(jewel), 130f)
+        val snesSlot = ShelfLayoutMath.spineSlotWidthDp(snesBox, ShelfLayoutMath.proceduralFrontAspect(snesBox), 130f)
+        assertTrue(jewelSlot < snesSlot)
+        assertTrue(ShelfLayoutMath.spineSlotWidthDp(snesBox, 1.38f, 130f, ShelfLayoutMath.PULLED_YAW) > snesSlot)
+        // The generated spine texture has the spine face's exact shape.
+        assertEquals(snesBox.caseStyle.depthRatio * 1.38f, ShelfLayoutMath.spineFaceRatio(snesBox, 1.38f), 0.0001f)
+
         val chunked = ShelfLayoutMath.chunkIntoShelves(List(10) { fakeGame("g$it", "Game $it", "snes") }, perShelf = 8)
         assertEquals(listOf(8, 2), chunked.map { it.size })
     }

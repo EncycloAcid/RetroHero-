@@ -1053,7 +1053,11 @@ internal fun Physical3dStageCanvas(
         // Fit cleanly inside the stage regardless of portrait vs landscape box proportions
         val maxBoxH = stageH * if (isDisc) 0.78f else 0.80f
         val maxBoxW = stageW * 0.70f
-        var halfH = if (spineFit) stageH * ShelfLayoutMath.SPINE_FIT_HALF_HEIGHT else maxBoxH * 0.5f
+        // Spine-on, the spine sits halfW nearer the camera and perspective enlarges it by
+        // focal / (focal - halfW). Solve for the half-height that lands it exactly at the target,
+        // so wide and narrow cases stand the same height on the shelf.
+        val spineTarget = stageH * ShelfLayoutMath.SPINE_FIT_HALF_HEIGHT
+        var halfH = if (spineFit) spineTarget * focal / (focal + spineTarget * targetAspect) else maxBoxH * 0.5f
         var halfW = halfH * targetAspect
         if (!spineFit && halfW * 2f > maxBoxW) {
             halfW = maxBoxW * 0.5f

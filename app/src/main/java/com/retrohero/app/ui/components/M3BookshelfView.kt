@@ -103,7 +103,7 @@ object ShelfLayoutMath {
     const val SPINE_YAW = 88f
     const val SPINE_PITCH = -4f
     /** A pulled case turns a little toward you, showing a sliver of its front. */
-    const val PULLED_YAW = 66f
+    const val PULLED_YAW = 78f
 
     /** Width / height of a case's spine face in the 3D model (depth relative to the case's long side). */
     fun spineFaceRatio(spec: PhysicalMediaSpec, boxAspect: Float): Float =
