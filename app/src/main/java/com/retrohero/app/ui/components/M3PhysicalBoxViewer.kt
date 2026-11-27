@@ -2026,10 +2026,15 @@ private fun rememberPhysicalTextures(
     spec: PhysicalMediaSpec,
     override: PhysicalViewerBitmaps?,
 ): ResolvedPhysicalTextures {
-    val frontCandidates = remember(game.id, dossier.boxArtUrl) {
+    val artSources = rememberArtSources(game)
+    val frontCandidates = remember(game.id, dossier.boxArtUrl, artSources) {
         buildList<Any> {
+            // 1. User's local custom / cached box art file (instant, offline, highest priority)
+            artSources.filterIsInstance<java.io.File>().forEach { add(it) }
+            // 2. Real LaunchBox `Box - Front` scan
             dossier.boxArtUrl?.let { add(it) }
-            addAll(game.boxArtUrls.take(3))
+            // 3. Full Libretro Named_Boxarts & regional official retail box art fallbacks
+            artSources.forEach { src -> if (src !in this) add(src) }
         }
     }
     val backCandidates = remember(game.id, dossier.boxBackUrl) {
