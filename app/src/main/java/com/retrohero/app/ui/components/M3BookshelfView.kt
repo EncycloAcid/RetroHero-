@@ -613,7 +613,7 @@ private fun PulledCaseSpotlight(
                     append(spec.caseStyle.label)
                     if (stat != null && stat.seconds > 0) {
                         append(" · ")
-                        append(PlayTime.format(stat.seconds))
+                        append(PlayTime.format(stat.seconds).replace(' ', '\u00A0')) // keep "2 h 3 min" together
                     }
                 }
                 Text(
