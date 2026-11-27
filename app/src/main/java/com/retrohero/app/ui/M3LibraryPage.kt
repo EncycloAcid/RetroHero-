@@ -77,6 +77,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.graphics.shapes.RoundedPolygon
 import com.retrohero.app.data.Game
+import com.retrohero.app.data.GameDossier
 import com.retrohero.app.data.GameSystem
 import com.retrohero.app.data.PlayStat
 import com.retrohero.app.data.PlayTime
@@ -86,6 +87,7 @@ import com.retrohero.app.ui.components.M3ConnectedButtonGroup
 import com.retrohero.app.ui.components.M3ConsoleImage
 import com.retrohero.app.ui.components.M3ExpressiveSpring
 import com.retrohero.app.ui.components.M3GameCover
+import com.retrohero.app.ui.components.M3PhysicalCaseShowcase
 import com.retrohero.app.ui.components.M3ShapeBadge
 import androidx.compose.material.icons.rounded.ViewColumn
 import com.retrohero.app.ui.components.M3BookshelfSection
@@ -417,6 +419,8 @@ internal fun M3LibraryPage(
                     isFavorite = lead.id in favoriteIds,
                     onOpen = { onOpenDetail(lead) },
                     onPlay = { onQuickPlay(lead) },
+                    dossierFor = dossierFor,
+                    loadDossier = loadDossier,
                 )
             }
 
@@ -433,6 +437,8 @@ internal fun M3LibraryPage(
                         silhouetteVariant = (idx + 1) % 3,
                         onOpen = { onOpenDetail(game) },
                         onPlay = { onQuickPlay(game) },
+                        dossierFor = dossierFor,
+                        loadDossier = loadDossier,
                     )
                 }
             }
@@ -529,6 +535,8 @@ private fun M3LeadEditorialRowCard(
     isFavorite: Boolean,
     onOpen: () -> Unit,
     onPlay: () -> Unit,
+    dossierFor: (Game) -> GameDossier? = { null },
+    loadDossier: (suspend (Game) -> GameDossier)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     val view = LocalView.current
@@ -558,7 +566,15 @@ private fun M3LeadEditorialRowCard(
                 .aspectRatio(0.92f)
                 .clip(artShape),
         ) {
-            M3GameCover(game = game, showTitle = false, modifier = Modifier.fillMaxSize())
+            M3PhysicalCaseShowcase(
+                game = game,
+                dossierFor = dossierFor,
+                loadDossier = loadDossier,
+                yawDeg = 24f,
+                pitchDeg = -6f,
+                stagePaddingDp = 6.dp,
+                modifier = Modifier.fillMaxSize(),
+            )
             if (isFavorite) {
                 M3ShapeBadge(
                     polygon = MaterialShapes.Heart,

@@ -276,6 +276,8 @@ fun M3ExpressiveAppView(
                                 onToggleTheme = { onSetDarkMode(!Tone.isDark) },
                                 onAddFolder = onAddFolder,
                                 onOpenHomebrew = onOpenHomebrew,
+                                dossierFor = cachedDossierFor,
+                                loadDossier = loadDossierFor?.let { load -> { g: Game -> load(g, false) } },
                             )
                             1 -> M3LibraryPage(
                                 games = games,

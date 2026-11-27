@@ -3454,11 +3454,13 @@ internal fun rememberShelfCaseArt(
     dossierFor: (Game) -> GameDossier?,
     /** Looks the game up on LaunchBox (as its game page does) when nothing is cached yet. */
     loadDossier: (suspend (Game) -> GameDossier)? = null,
+    frontWidthPx: Int = SHELF_COVER_PX,
+    proceduralFrontFallback: Boolean = false,
 ): ShelfCaseArt? {
     val context = LocalContext.current
     val paths = LocalArtPaths.current
     val artVersion = LocalArtVersion.current
-    val baseKey = "${game.id}|${spec.spineHeaderColor.toArgb()}|$artVersion"
+    val baseKey = "${game.id}|${spec.spineHeaderColor.toArgb()}|$artVersion|$frontWidthPx|$proceduralFrontFallback"
     val state = androidx.compose.runtime.produceState(initialValue = ShelfCaseCache.get(baseKey), baseKey) {
         // Shows the last case at once, then re-checks: the game page may have fetched real scans since.
         val cached = withContext(Dispatchers.IO) { dossierFor(game) }
@@ -3494,7 +3496,10 @@ internal fun rememberShelfCaseArt(
             val spineH = (SHELF_SPINE_WIDTH_PX * spineFull.height.toFloat() / spineFull.width).toInt().coerceIn(SHELF_SPINE_WIDTH_PX, 900)
             val spineSmall = Bitmap.createScaledBitmap(spineFull, SHELF_SPINE_WIDTH_PX, spineH, true)
             val frontSmall = if (front != null) {
-                Bitmap.createScaledBitmap(front, SHELF_COVER_PX, (SHELF_COVER_PX / aspect).toInt().coerceAtLeast(16), true)
+                Bitmap.createScaledBitmap(front, frontWidthPx, (frontWidthPx / aspect).toInt().coerceAtLeast(16), true)
+            } else if (proceduralFrontFallback) {
+                val proc = buildProceduralFrontBitmap(game, dossier, spec)
+                Bitmap.createScaledBitmap(proc, frontWidthPx, (frontWidthPx / aspect).toInt().coerceAtLeast(16), true)
             } else {
                 // No cover: a plain face in the spine's body color (only a sliver ever shows on the shelf).
                 val body = spineSmall.getPixel(spineSmall.width / 2, spineSmall.height / 2)
@@ -3555,4 +3560,63 @@ internal fun rememberShelfCaseArt(
         value = art
     }
     return state.value
+}
+
+private const val SHOWCASE_COVER_PX = 380
+
+/**
+ * Renders a game's physical retail case in crisp 3/4 3D view using the exact same [Physical3dStageCanvas]
+ * engine, LaunchBox front & spine scans, acrylic jewel-case ribs, keep-case wrap seams, cardboard
+ * creases, and grounded studio shadow as the Game Information screen's 3D Box Viewer.
+ */
+@Composable
+fun M3PhysicalCaseShowcase(
+    game: Game,
+    modifier: Modifier = Modifier,
+    dossierFor: (Game) -> GameDossier? = { null },
+    loadDossier: (suspend (Game) -> GameDossier)? = null,
+    yawDeg: Float = 24f,
+    pitchDeg: Float = -6f,
+    stagePaddingDp: androidx.compose.ui.unit.Dp = 8.dp,
+) {
+    val cs = MaterialTheme.colorScheme
+    val viewerAccent = game.system?.color ?: cs.primary
+    val spec = remember(game.systemId, viewerAccent) { PhysicalMediaSpec.forSystem(game.systemId, viewerAccent) }
+    val art = rememberShelfCaseArt(
+        game = game,
+        spec = spec,
+        dossierFor = dossierFor,
+        loadDossier = loadDossier,
+        frontWidthPx = SHOWCASE_COVER_PX,
+        proceduralFrontFallback = true,
+    )
+
+    Box(
+        modifier = modifier.background(
+            Brush.radialGradient(
+                0.0f to cs.primaryContainer.copy(alpha = 0.24f),
+                0.62f to Color(0xFF14131B),
+                1.0f to Color(0xFF0A0A0F),
+            ),
+        ),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (art != null) {
+            Physical3dStageCanvas(
+                subject = PhysicalViewerSubject.RETAIL_BOX,
+                spec = spec,
+                textures = art.textures,
+                boxAspect = art.boxAspect,
+                yawDeg = yawDeg,
+                pitchDeg = pitchDeg,
+                spineFit = false,
+                floorShadow = true,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(stagePaddingDp),
+            )
+        } else {
+            M3GameCover(game = game, showTitle = false, modifier = Modifier.fillMaxSize())
+        }
+    }
 }

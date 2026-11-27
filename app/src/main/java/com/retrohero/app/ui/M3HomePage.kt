@@ -83,6 +83,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.retrohero.app.data.Game
+import com.retrohero.app.data.GameDossier
 import com.retrohero.app.data.GameSystem
 import com.retrohero.app.data.PlayStat
 import com.retrohero.app.data.PlayTime
@@ -93,6 +94,7 @@ import com.retrohero.app.ui.components.M3CircularWavyGauge
 import com.retrohero.app.ui.components.M3ConsoleImage
 import com.retrohero.app.ui.components.M3ExpressiveSpring
 import com.retrohero.app.ui.components.M3GameCover
+import com.retrohero.app.ui.components.M3PhysicalCaseShowcase
 import com.retrohero.app.ui.components.M3ShapeBadge
 import com.retrohero.app.ui.components.M3SplitButton
 import com.retrohero.app.ui.components.M3WavyBar
@@ -125,6 +127,8 @@ internal fun M3HomePage(
     onToggleTheme: () -> Unit,
     onAddFolder: () -> Unit,
     onOpenHomebrew: () -> Unit,
+    dossierFor: (Game) -> GameDossier? = { null },
+    loadDossier: (suspend (Game) -> GameDossier)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     val inset = LocalToolbarInset.current
@@ -356,6 +360,8 @@ internal fun M3HomePage(
                             completionProgress = clearedFrac.coerceIn(0.24f, 1f),
                             onPlay = { onPlay(game) },
                             onDetails = { onOpenDetail(game) },
+                            dossierFor = dossierFor,
+                            loadDossier = loadDossier,
                             modifier = Modifier.graphicsLayer {
                                 scaleX = pageScale
                                 scaleY = pageScale
@@ -469,6 +475,8 @@ internal fun M3HomePage(
                                     silhouetteVariant = idx % 3,
                                     onOpen = { onOpenDetail(game) },
                                     onPlay = { onPlay(game) },
+                                    dossierFor = dossierFor,
+                                    loadDossier = loadDossier,
                                 )
                             }
                         }
@@ -500,6 +508,8 @@ internal fun M3HomePage(
                                     silhouetteVariant = (idx + 1) % 3,
                                     onOpen = { onOpenDetail(game) },
                                     onPlay = { onPlay(game) },
+                                    dossierFor = dossierFor,
+                                    loadDossier = loadDossier,
                                 )
                             }
                         }
@@ -520,6 +530,8 @@ private fun M3SculpturalHeroCard(
     onPlay: () -> Unit,
     onDetails: () -> Unit,
     modifier: Modifier = Modifier,
+    dossierFor: (Game) -> GameDossier? = { null },
+    loadDossier: (suspend (Game) -> GameDossier)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     val outerShape = RoundedCornerShape(34.dp)
@@ -545,7 +557,15 @@ private fun M3SculpturalHeroCard(
                     .fillMaxSize()
                     .clip(artShape),
             ) {
-                M3GameCover(game = game, showTitle = false, modifier = Modifier.fillMaxSize())
+                M3PhysicalCaseShowcase(
+                    game = game,
+                    dossierFor = dossierFor,
+                    loadDossier = loadDossier,
+                    yawDeg = 22f,
+                    pitchDeg = -6f,
+                    stagePaddingDp = 10.dp,
+                    modifier = Modifier.fillMaxSize(),
+                )
 
                 Row(
                     Modifier
@@ -929,6 +949,8 @@ internal fun M3ExpressiveGameCard(
     onPlay: () -> Unit,
     playTimeLabel: String? = null,
     silhouetteVariant: Int = 0,
+    dossierFor: (Game) -> GameDossier? = { null },
+    loadDossier: (suspend (Game) -> GameDossier)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     val view = LocalView.current
@@ -972,7 +994,15 @@ internal fun M3ExpressiveGameCard(
                 .aspectRatio(0.88f)
                 .clip(artShape),
         ) {
-            M3GameCover(game = game, showTitle = false, modifier = Modifier.fillMaxSize())
+            M3PhysicalCaseShowcase(
+                game = game,
+                dossierFor = dossierFor,
+                loadDossier = loadDossier,
+                yawDeg = 24f,
+                pitchDeg = -6f,
+                stagePaddingDp = 8.dp,
+                modifier = Modifier.fillMaxSize(),
+            )
 
             if (playTimeLabel != null) {
                 Box(
