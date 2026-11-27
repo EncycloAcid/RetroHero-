@@ -107,6 +107,8 @@ internal fun M3LibraryPage(
     onSelectSystem: (String?) -> Unit,
     onOpenDetail: (Game) -> Unit,
     onQuickPlay: (Game) -> Unit,
+    dossierFor: (Game) -> com.retrohero.app.data.GameDossier? = { null },
+    loadDossier: (suspend (Game) -> com.retrohero.app.data.GameDossier)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     val inset = LocalToolbarInset.current
@@ -386,6 +388,8 @@ internal fun M3LibraryPage(
                     stats = stats,
                     onOpenDetail = onOpenDetail,
                     onQuickPlay = onQuickPlay,
+                    dossierFor = dossierFor,
+                    loadDossier = loadDossier,
                 )
             }
         } else if (viewMode == 1) {

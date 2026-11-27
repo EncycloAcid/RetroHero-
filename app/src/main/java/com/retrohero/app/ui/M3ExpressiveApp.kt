@@ -286,6 +286,8 @@ fun M3ExpressiveAppView(
                                 onSelectSystem = { librarySystemFilter = it },
                                 onOpenDetail = { g -> detailGameId = g.id },
                                 onQuickPlay = { g -> onPlay(g, null) },
+                                dossierFor = cachedDossierFor,
+                                loadDossier = loadDossierFor?.let { load -> { g: Game -> load(g, false) } },
                             )
                             else -> M3SettingsPage(
                                 games = games,

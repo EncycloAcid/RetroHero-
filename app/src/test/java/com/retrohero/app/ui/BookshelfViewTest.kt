@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -105,11 +106,15 @@ class BookshelfViewTest {
         }
 
         compose.onNodeWithText("Physical Shelf").assertIsDisplayed()
-        compose.onNodeWithText("Chrono Trigger").performClick()
+        // Spines show the 3D viewer's spine art; the title is their accessibility label.
+        compose.onNodeWithContentDescription("Chrono Trigger").performClick()
         compose.waitForIdle()
         compose.onNodeWithText("3D Case").assertIsDisplayed()
         compose.onNodeWithText("Play").assertIsDisplayed()
 
+        // Spine and case art are built off the main thread; give them a moment before the capture.
+        Thread.sleep(1500)
+        compose.waitForIdle()
         // Capture visual screenshot for inspection
         val outDir = File("build/screenshots").apply { mkdirs() }
         val bmp = compose.onRoot().captureToImage().asAndroidBitmap()

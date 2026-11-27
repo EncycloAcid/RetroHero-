@@ -153,7 +153,7 @@ data class PhysicalViewerBitmaps(
 )
 
 @Immutable
-private data class ResolvedPhysicalTextures(
+internal data class ResolvedPhysicalTextures(
     val front: Bitmap,
     val back: Bitmap,
     val spine: Bitmap,
@@ -2020,7 +2020,7 @@ private fun trimTransparentBounds(src: Bitmap): Bitmap {
 }
 
 @Composable
-private fun rememberPhysicalTextures(
+internal fun rememberPhysicalTextures(
     game: Game,
     dossier: GameDossier,
     spec: PhysicalMediaSpec,
@@ -3298,4 +3298,69 @@ private fun rememberDeviceTiltAngles(
     }
 
     return (sensor != null) to offsetState
+}
+
+// ---- Shelf spines: the same spine art as the 3D viewer, at shelf size --------------------------
+
+/** Shelf-size spines, kept within a fixed memory budget (a full 3D-viewer spine is ~400 KB). */
+private object ShelfSpineCache {
+    private val cache = object : android.util.LruCache<String, androidx.compose.ui.graphics.ImageBitmap>(12 * 1024) {
+        override fun sizeOf(key: String, value: androidx.compose.ui.graphics.ImageBitmap) =
+            (value.width * value.height * 4 / 1024).coerceAtLeast(1)
+    }
+    fun get(key: String) = cache.get(key)
+    fun put(key: String, value: androidx.compose.ui.graphics.ImageBitmap) { cache.put(key, value) }
+}
+
+private const val SHELF_SPINE_WIDTH_PX = 72
+
+/**
+ * The spine the 3D box viewer on the game page shows for [game], scaled down for the shelf:
+ * the LaunchBox `Box - Spine` scan, else the spine slice of the `Box - Full` wraparound, else the
+ * same generated spine. [dossierFor] is called off the main thread (it may read the disk cache).
+ * Null until it's ready; the shelf draws a plain spine meanwhile.
+ */
+@Composable
+internal fun rememberShelfSpineArt(
+    game: Game,
+    spec: PhysicalMediaSpec,
+    dossierFor: (Game) -> GameDossier?,
+): androidx.compose.ui.graphics.ImageBitmap? {
+    val context = LocalContext.current
+    val baseKey = "${game.id}|${spec.spineHeaderColor.toArgb()}"
+    val state = androidx.compose.runtime.produceState(initialValue = ShelfSpineCache.get(baseKey), baseKey) {
+        // Shows the last spine at once, then re-checks: the game page may have fetched real scans since.
+        val dossier = withContext(Dispatchers.IO) { dossierFor(game) } ?: GameDossier.localFallback(game)
+        val key = "$baseKey|${dossier.boxSpineUrl}|${dossier.boxFullUrl}|${dossier.title}|${dossier.publisher}"
+        ShelfSpineCache.get(key)?.let { value = it; return@produceState }
+
+        suspend fun load(src: Any?, max: Int): Bitmap? {
+            if (src == null) return null
+            return runCatching {
+                val req = ImageRequest.Builder(context)
+                    .data(src)
+                    .allowHardware(false)
+                    .bitmapConfig(Bitmap.Config.ARGB_8888)
+                    .size(max, max)
+                    .scale(Scale.FIT)
+                    .build()
+                (context.imageLoader.execute(req) as? SuccessResult)?.drawable?.toBitmap(config = Bitmap.Config.ARGB_8888)
+            }.getOrNull()?.takeIf { it.width >= 16 && it.height >= 16 }
+        }
+
+        val realSpine = load(dossier.boxSpineUrl, 800)
+            ?: load(dossier.boxFullUrl, 1200)?.let { full ->
+                PhysicalMediaSpec.sliceFullBoxCover(full, (spec.caseStyle.depthRatio * 0.55f).coerceIn(0.05f, 0.14f))?.second
+            }
+        val small = withContext(Dispatchers.Default) {
+            val full = realSpine?.let { PhysicalMediaSpec.orientSpineVertical(trimTransparentBounds(it)) }
+                ?: buildProceduralSpineBitmap(game, dossier, spec)
+            val h = (SHELF_SPINE_WIDTH_PX * full.height.toFloat() / full.width).toInt().coerceIn(SHELF_SPINE_WIDTH_PX, 600)
+            Bitmap.createScaledBitmap(full, SHELF_SPINE_WIDTH_PX, h, true).asImageBitmap()
+        }
+        ShelfSpineCache.put(key, small)
+        ShelfSpineCache.put(baseKey, small)
+        value = small
+    }
+    return state.value
 }

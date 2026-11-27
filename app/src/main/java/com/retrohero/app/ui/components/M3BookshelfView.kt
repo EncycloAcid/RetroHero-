@@ -41,6 +41,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.Image
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import com.retrohero.app.data.GameDossier
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -147,6 +156,10 @@ fun M3BookshelfSection(
     onOpenDetail: (Game) -> Unit,
     onQuickPlay: (Game) -> Unit,
     modifier: Modifier = Modifier,
+    /** Cached LaunchBox data for a game (may read disk; called off the main thread). */
+    dossierFor: (Game) -> GameDossier? = { null },
+    /** Fetches LaunchBox data for the pulled-out case, as the game page does. */
+    loadDossier: (suspend (Game) -> GameDossier)? = null,
 ) {
     val cs = MaterialTheme.colorScheme
     val view = LocalView.current
@@ -226,6 +239,7 @@ fun M3BookshelfSection(
                         ShelfSpineCase(
                             game = game,
                             pulled = isPulled,
+                            dossierFor = dossierFor,
                             onClick = {
                                 view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                                 pulledGameId = if (isPulled) null else game.id
@@ -247,6 +261,8 @@ fun M3BookshelfSection(
                         PulledCaseSpotlight(
                             game = g,
                             stat = stats[g.id],
+                            dossierFor = dossierFor,
+                            loadDossier = loadDossier,
                             onPlay = { onQuickPlay(g) },
                             onInspect = { onOpenDetail(g) },
                             modifier = Modifier.padding(horizontal = 20.dp, vertical = 10.dp),
@@ -263,8 +279,13 @@ private fun ShelfSpineCase(
     game: Game,
     pulled: Boolean,
     onClick: () -> Unit,
+    dossierFor: (Game) -> GameDossier?,
 ) {
     val spec = remember(game.systemId) { PhysicalMediaSpec.forSystem(game.systemId) }
+    // Same spec (and accent) as the game page's 3D viewer, so the spine art matches it.
+    val viewerAccent = game.system?.color ?: MaterialTheme.colorScheme.primary
+    val viewerSpec = remember(game.systemId, viewerAccent) { PhysicalMediaSpec.forSystem(game.systemId, viewerAccent) }
+    val spineArt = rememberShelfSpineArt(game, viewerSpec, dossierFor)
     val dims = remember(game.systemId) { ShelfLayoutMath.spineDimensions(game.systemId) }
     val baseColor = remember(game.id) { ShelfLayoutMath.spineBaseColor(game, spec) }
     val isLight = remember(baseColor) { ShelfLayoutMath.isLightSpine(baseColor) }
@@ -318,8 +339,17 @@ private fun ShelfSpineCase(
                 color = if (pulled) MaterialTheme.colorScheme.primary else Color.White.copy(alpha = if (isLight) 0.55f else 0.16f),
                 shape = RoundedCornerShape(topStart = corner, topEnd = corner, bottomStart = 2.dp, bottomEnd = 2.dp),
             )
+            .semantics { contentDescription = game.title }
             .clickable(onClick = onClick),
     ) {
+        if (spineArt != null) {
+            Image(
+                bitmap = spineArt,
+                contentDescription = null,
+                contentScale = ContentScale.FillBounds,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
         // 3D cylindrical spine bevel shading + subtle plastic/cardboard top edge highlight
         Canvas(Modifier.fillMaxSize()) {
             // Left/right spine curvature lighting
@@ -353,7 +383,8 @@ private fun ShelfSpineCase(
             )
         }
 
-        Column(
+        // Plain printed spine while the real art loads (the art already carries title and logo).
+        if (spineArt == null) Column(
             Modifier
                 .fillMaxSize()
                 .padding(vertical = 6.dp, horizontal = 2.dp),
@@ -503,10 +534,22 @@ private fun PulledCaseSpotlight(
     stat: PlayStat?,
     onPlay: () -> Unit,
     onInspect: () -> Unit,
+    dossierFor: (Game) -> GameDossier?,
+    loadDossier: (suspend (Game) -> GameDossier)?,
     modifier: Modifier = Modifier,
 ) {
     val cs = MaterialTheme.colorScheme
     val spec = remember(game.systemId) { PhysicalMediaSpec.forSystem(game.systemId) }
+    // The same box front and disc/cartridge textures the game page's 3D viewer shows.
+    var dossier by remember(game.id) { mutableStateOf(GameDossier.localFallback(game)) }
+    LaunchedEffect(game.id) {
+        withContext(Dispatchers.IO) { dossierFor(game) }?.let { dossier = it }
+        loadDossier?.let { load -> runCatching { load(game) }.getOrNull()?.let { dossier = it } }
+    }
+    val viewerAccent = game.system?.color ?: cs.primary
+    val viewerSpec = remember(game.systemId, viewerAccent) { PhysicalMediaSpec.forSystem(game.systemId, viewerAccent) }
+    val textures = rememberPhysicalTextures(game, dossier, viewerSpec, null)
+    val frontAspect = (textures.front.width.toFloat() / textures.front.height.coerceAtLeast(1)).coerceIn(0.6f, 1.45f)
     Surface(
         shape = RoundedCornerShape(24.dp),
         color = cs.surfaceContainerHigh,
@@ -520,20 +563,38 @@ private fun PulledCaseSpotlight(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            // Angled 3/4 mini case preview
+            // Angled 3/4 case with its disc or cartridge sliding out from behind it
+            val caseW = (92f * frontAspect).dp
             Box(
                 Modifier
-                    .width(74.dp)
-                    .height(92.dp)
-                    .graphicsLayer {
-                        rotationY = -14f
-                        cameraDistance = 14f * density
-                    }
-                    .shadow(8.dp, RoundedCornerShape(10.dp))
-                    .clip(RoundedCornerShape(10.dp))
-                    .clickable(onClick = onInspect),
+                    .width(caseW + 34.dp)
+                    .height(96.dp)
+                    .clickable(onClickLabel = "Open the 3D case", onClick = onInspect),
             ) {
-                M3GameCover(game = game, modifier = Modifier.fillMaxSize())
+                Image(
+                    bitmap = textures.mediaFront.asImageBitmap(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .size(64.dp)
+                        .graphicsLayer { rotationZ = if (viewerSpec.mediaKind.isOpticalDisc) 0f else 7f },
+                )
+                Image(
+                    bitmap = textures.front.asImageBitmap(),
+                    contentDescription = "${game.title} case",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .width(caseW)
+                        .height(92.dp)
+                        .graphicsLayer {
+                            rotationY = -14f
+                            cameraDistance = 14f * density
+                        }
+                        .shadow(8.dp, RoundedCornerShape(6.dp))
+                        .clip(RoundedCornerShape(6.dp)),
+                )
             }
 
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
