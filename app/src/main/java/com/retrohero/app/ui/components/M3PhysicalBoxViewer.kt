@@ -1174,42 +1174,118 @@ private fun Physical3dStageCanvas(
                                         native.clipPath(cartShellClip)
                                     }
 
-                                    // Optional molded plastic keep-case / jewel-case outer rim around paper insert
+                                    // Authentic physical retail case housing around the printed cover insert
                                     if (subject == PhysicalViewerSubject.RETAIL_BOX && spec.caseStyle.hasPlasticRim) {
                                         fillPaint.shader = null
                                         fillPaint.color = shadeArgb(caseColorArgb, q.shade)
                                         native.drawRect(0f, 0f, bw, bh, fillPaint)
-                                        val padX = if (q.face == BoxFaceId.LEFT_SPINE) 0f else bw * 0.022f
-                                        val padY = bh * 0.018f
+
+                                        // Molded outer plastic rim bevel catch-light (top/left highlight, bottom/right shadow)
+                                        fillPaint.shader = LinearGradient(
+                                            0f, 0f, bw, bh,
+                                            AndroidColor.argb(46, 255, 255, 255),
+                                            AndroidColor.argb(64, 0, 0, 0),
+                                            Shader.TileMode.CLAMP,
+                                        )
+                                        native.drawRect(0f, 0f, bw, bh, fillPaint)
+                                        fillPaint.shader = null
+
+                                        val isJewel = spec.caseStyle == RetailCaseStyle.JEWEL_CASE_CD
+                                        val hingeW = if (isJewel && q.face == BoxFaceId.FRONT) bw * 0.074f else 0f
+                                        val padX = if (q.face == BoxFaceId.LEFT_SPINE) 0f else bw * 0.024f
+                                        val padY = bh * 0.020f
                                         val dstRect = RectF(
-                                            if (q.face == BoxFaceId.FRONT) 0f else padX,
+                                            when {
+                                                isJewel && q.face == BoxFaceId.FRONT -> hingeW
+                                                q.face == BoxFaceId.FRONT -> 0f
+                                                else -> padX
+                                            },
                                             padY,
                                             if (q.face == BoxFaceId.BACK) bw else bw - padX,
                                             bh - padY,
                                         )
+                                        // Subtle recessed pocket shadow around the paper insert
+                                        fillPaint.color = AndroidColor.argb(95, 0, 0, 0)
+                                        native.drawRect(
+                                            dstRect.left - 1.5f,
+                                            dstRect.top - 1.5f,
+                                            dstRect.right + 1.5f,
+                                            dstRect.bottom + 1.5f,
+                                            fillPaint,
+                                        )
                                         native.drawBitmap(faceBmp, null, dstRect, bmpPaint)
 
-                                        // Clear acrylic CD jewel case left hinge ribs
-                                        if (spec.caseStyle == RetailCaseStyle.JEWEL_CASE_CD && q.face == BoxFaceId.FRONT) {
-                                            val hingeW = bw * 0.068f
-                                            fillPaint.color = AndroidColor.argb(95, 235, 242, 255)
+                                        if (isJewel && q.face == BoxFaceId.FRONT) {
+                                            // Authentic PS1 / Dreamcast / Saturn clear ribbed acrylic left tray strip!
+                                            fillPaint.color = AndroidColor.rgb(20, 22, 28)
                                             native.drawRect(0f, 0f, hingeW, bh, fillPaint)
-                                            fillPaint.color = AndroidColor.argb(120, 20, 22, 28)
-                                            native.drawRect(hingeW - 2f, 0f, hingeW, bh, fillPaint)
+                                            val ribCount = 30
+                                            val ribStep = bh / ribCount
+                                            for (r in 0 until ribCount) {
+                                                val ry = r * ribStep
+                                                fillPaint.color = AndroidColor.argb(62, 210, 224, 248)
+                                                native.drawRect(bw * 0.010f, ry + ribStep * 0.18f, hingeW - 3f, ry + ribStep * 0.44f, fillPaint)
+                                                fillPaint.color = AndroidColor.argb(85, 0, 0, 0)
+                                                native.drawRect(bw * 0.010f, ry + ribStep * 0.44f, hingeW - 3f, ry + ribStep * 0.64f, fillPaint)
+                                            }
+                                            // Clear acrylic lid hinge bar + top/bottom molded hinge pins
+                                            fillPaint.shader = LinearGradient(
+                                                0f, 0f, hingeW, 0f,
+                                                intArrayOf(
+                                                    AndroidColor.argb(82, 255, 255, 255),
+                                                    AndroidColor.argb(24, 225, 238, 255),
+                                                    AndroidColor.argb(95, 255, 255, 255),
+                                                    AndroidColor.argb(145, 10, 12, 18),
+                                                ),
+                                                floatArrayOf(0f, 0.45f, 0.86f, 1f),
+                                                Shader.TileMode.CLAMP,
+                                            )
+                                            native.drawRect(0f, 0f, hingeW, bh, fillPaint)
+                                            fillPaint.shader = null
+
+                                            // Tiny clear acrylic booklet retainer tabs on top & bottom of the jewel case lid
+                                            fillPaint.color = AndroidColor.argb(95, 235, 244, 255)
+                                            val tabW = bw * 0.042f
+                                            val tabH = bh * 0.014f
+                                            native.drawRoundRect(RectF(bw * 0.34f, padY, bw * 0.34f + tabW, padY + tabH), 4f, 4f, fillPaint)
+                                            native.drawRoundRect(RectF(bw * 0.72f, padY, bw * 0.72f + tabW, padY + tabH), 4f, 4f, fillPaint)
+                                            native.drawRoundRect(RectF(bw * 0.34f, bh - padY - tabH, bw * 0.34f + tabW, bh - padY), 4f, 4f, fillPaint)
+                                            native.drawRoundRect(RectF(bw * 0.72f, bh - padY - tabH, bw * 0.72f + tabW, bh - padY), 4f, 4f, fillPaint)
+                                        } else if (q.face == BoxFaceId.FRONT || q.face == BoxFaceId.BACK) {
+                                            // Authentic clear polypropylene outer jacket sleeve heat-seal lip lines (DS / PS2 / GC / Wii / Switch)
+                                            fillPaint.color = AndroidColor.argb(58, 255, 255, 255)
+                                            native.drawRect(dstRect.left, dstRect.top, dstRect.right, dstRect.top + 1.8f, fillPaint)
+                                            fillPaint.color = AndroidColor.argb(46, 255, 255, 255)
+                                            native.drawRect(dstRect.left, dstRect.bottom - 1.8f, dstRect.right, dstRect.bottom, fillPaint)
                                         }
                                     } else {
                                         native.drawBitmap(faceBmp, 0f, 0f, bmpPaint)
+                                        // Subtle printed cardboard top-flap fold crease & warm cardstock edge wear on cardboard boxes
+                                        if (isCardboardBox && (q.face == BoxFaceId.FRONT || q.face == BoxFaceId.BACK)) {
+                                            fillPaint.shader = LinearGradient(
+                                                0f, 0f, 0f, bh * 0.022f,
+                                                intArrayOf(
+                                                    AndroidColor.argb(48, 255, 248, 236),
+                                                    AndroidColor.argb(42, 0, 0, 0),
+                                                    AndroidColor.TRANSPARENT,
+                                                ),
+                                                floatArrayOf(0f, 0.38f, 1f),
+                                                Shader.TileMode.CLAMP,
+                                            )
+                                            native.drawRect(0f, 0f, bw, bh * 0.022f, fillPaint)
+                                            fillPaint.shader = null
+                                        }
                                     }
 
                                     // Realistic spine-fold crease shadow + edge catch-light on 3D retail boxes
                                     if (subject == PhysicalViewerSubject.RETAIL_BOX) {
                                         if (q.face == BoxFaceId.FRONT) {
-                                            val creaseW = bw * 0.032f
+                                            val creaseW = bw * 0.036f
                                             fillPaint.shader = LinearGradient(
                                                 0f, 0f, creaseW, 0f,
                                                 intArrayOf(
-                                                    AndroidColor.argb(72, 255, 255, 255),
-                                                    AndroidColor.argb(46, 0, 0, 0),
+                                                    AndroidColor.argb(82, 255, 252, 246),
+                                                    AndroidColor.argb(54, 0, 0, 0),
                                                     AndroidColor.TRANSPARENT,
                                                 ),
                                                 floatArrayOf(0f, 0.24f, 1f),
@@ -1218,13 +1294,13 @@ private fun Physical3dStageCanvas(
                                             native.drawRect(0f, 0f, creaseW, bh, fillPaint)
                                             fillPaint.shader = null
                                         } else if (q.face == BoxFaceId.BACK) {
-                                            val creaseW = bw * 0.032f
+                                            val creaseW = bw * 0.036f
                                             fillPaint.shader = LinearGradient(
                                                 bw - creaseW, 0f, bw, 0f,
                                                 intArrayOf(
                                                     AndroidColor.TRANSPARENT,
-                                                    AndroidColor.argb(46, 0, 0, 0),
-                                                    AndroidColor.argb(60, 255, 255, 255),
+                                                    AndroidColor.argb(54, 0, 0, 0),
+                                                    AndroidColor.argb(70, 255, 252, 246),
                                                 ),
                                                 floatArrayOf(0f, 0.76f, 1f),
                                                 Shader.TileMode.CLAMP,
@@ -1236,10 +1312,10 @@ private fun Physical3dStageCanvas(
                                             fillPaint.shader = LinearGradient(
                                                 0f, 0f, bw, 0f,
                                                 intArrayOf(
-                                                    AndroidColor.argb(54, 0, 0, 0),
+                                                    AndroidColor.argb(64, 0, 0, 0),
                                                     AndroidColor.TRANSPARENT,
                                                     AndroidColor.TRANSPARENT,
-                                                    AndroidColor.argb(66, 255, 255, 255),
+                                                    AndroidColor.argb(74, 255, 252, 246),
                                                 ),
                                                 floatArrayOf(0f, 0.16f, 0.84f, 1f),
                                                 Shader.TileMode.CLAMP,
@@ -1781,38 +1857,78 @@ private fun drawCaseOrCartSideEdge(
             }
         }
     } else if (spec.caseStyle.hasPlasticRim) {
-        // Molded DVD / Clamshell / DS / Jewel plastic case opening edge with recessed insert & thumb clasp
-        fillPaint.color = shadeArgb(baseArgb, shade * 0.95f)
-        native.drawRect(0f, 0f, ew, eh, fillPaint)
-        // Recessed interior seam groove
-        fillPaint.color = AndroidColor.argb(115, 8, 10, 15)
-        native.drawRect(ew * 0.38f, eh * 0.02f, ew * 0.62f, eh * 0.98f, fillPaint)
-        if (face == BoxFaceId.RIGHT_OPENING) {
-            // Authentic keep-case finger-clasp indent in the middle of the right opening edge!
-            fillPaint.color = shadeArgb(baseArgb, shade * 0.70f)
-            native.drawRoundRect(RectF(ew * 0.18f, eh * 0.40f, ew * 0.82f, eh * 0.60f), 14f, 14f, fillPaint)
+        if (spec.caseStyle == RetailCaseStyle.JEWEL_CASE_CD) {
+            // Clear polystyrene acrylic outer lid + dark ribbed inner CD tray sandwiched inside!
+            fillPaint.shader = LinearGradient(
+                0f, 0f, ew, 0f,
+                intArrayOf(
+                    AndroidColor.argb(230, 210, 222, 240),
+                    AndroidColor.rgb(26, 28, 36),
+                    AndroidColor.rgb(18, 20, 26),
+                    AndroidColor.argb(225, 200, 214, 236),
+                ),
+                floatArrayOf(0f, 0.22f, 0.78f, 1f),
+                Shader.TileMode.CLAMP,
+            )
+            native.drawRect(0f, 0f, ew, eh, fillPaint)
+            fillPaint.shader = null
+            // Fine acrylic edge highlights
+            fillPaint.color = AndroidColor.argb(90, 255, 255, 255)
+            native.drawRect(ew * 0.16f, 0f, ew * 0.20f, eh, fillPaint)
+            native.drawRect(ew * 0.80f, 0f, ew * 0.84f, eh, fillPaint)
+        } else {
+            // Molded DVD / Clamshell / DS / Switch keep-case opening edge with 3D thumb-grip cutout & dual-shell seam
+            fillPaint.shader = LinearGradient(
+                0f, 0f, ew, 0f,
+                intArrayOf(
+                    shadeArgb(baseArgb, shade * 1.06f),
+                    shadeArgb(baseArgb, shade * 0.92f),
+                    shadeArgb(baseArgb, shade * 0.82f),
+                ),
+                floatArrayOf(0f, 0.50f, 1f),
+                Shader.TileMode.CLAMP,
+            )
+            native.drawRect(0f, 0f, ew, eh, fillPaint)
+            fillPaint.shader = null
+            // Recessed interior dual-shell parting groove + edge catch-light
+            fillPaint.color = AndroidColor.argb(135, 6, 8, 12)
+            native.drawRect(ew * 0.40f, eh * 0.015f, ew * 0.60f, eh * 0.985f, fillPaint)
+            fillPaint.color = AndroidColor.argb(46, 255, 255, 255)
+            native.drawRect(ew * 0.60f, eh * 0.015f, ew * 0.64f, eh * 0.985f, fillPaint)
+            if (face == BoxFaceId.RIGHT_OPENING) {
+                // Sculpted 3D keep-case thumb-grip recess in the center of the right opening edge!
+                val gripRect = RectF(ew * 0.16f, eh * 0.39f, ew * 0.84f, eh * 0.61f)
+                fillPaint.color = shadeArgb(baseArgb, shade * 0.58f)
+                native.drawRoundRect(gripRect, 16f, 16f, fillPaint)
+                fillPaint.color = AndroidColor.argb(55, 255, 255, 255)
+                native.drawRoundRect(RectF(ew * 0.20f, eh * 0.595f, ew * 0.80f, eh * 0.612f), 6f, 6f, fillPaint)
+            }
         }
     } else {
         // Printed retail cardboard box top/bottom tuck flap matched to the real box cover cardstock color!
         fillPaint.shader = LinearGradient(
             0f, 0f, ew, 0f,
             intArrayOf(
-                shadeArgb(baseArgb, shade * 1.06f),
+                shadeArgb(baseArgb, shade * 1.08f),
                 shadeArgb(baseArgb, shade * 0.92f),
-                shadeArgb(baseArgb, shade * 0.80f),
+                shadeArgb(baseArgb, shade * 0.78f),
             ),
             floatArrayOf(0f, 0.50f, 1f),
             Shader.TileMode.CLAMP,
         )
         native.drawRect(0f, 0f, ew, eh, fillPaint)
         fillPaint.shader = null
-        // Authentic cardboard tuck-flap seam & center thumb-tab notch
-        fillPaint.color = AndroidColor.argb(105, 0, 0, 0)
+        // Authentic cardboard tuck-flap seam, inner side-ear seams & center thumb-tab notch
+        fillPaint.color = AndroidColor.argb(115, 0, 0, 0)
         native.drawRect(ew * 0.14f, eh * 0.02f, ew * 0.18f, eh * 0.98f, fillPaint)
-        fillPaint.color = AndroidColor.argb(38, 255, 255, 255)
+        fillPaint.color = AndroidColor.argb(42, 255, 250, 240)
         native.drawRect(ew * 0.18f, eh * 0.02f, ew * 0.21f, eh * 0.98f, fillPaint)
+        // Left & right inner cardboard ear-flap fold seams
+        fillPaint.color = AndroidColor.argb(72, 0, 0, 0)
+        native.drawRect(ew * 0.18f, eh * 0.06f, ew * 0.92f, eh * 0.072f, fillPaint)
+        native.drawRect(ew * 0.18f, eh * 0.928f, ew * 0.92f, eh * 0.94f, fillPaint)
         // Subtle semi-circular thumb cutout on the tuck flap
-        fillPaint.color = AndroidColor.argb(85, 0, 0, 0)
+        fillPaint.color = AndroidColor.argb(92, 0, 0, 0)
         native.drawOval(RectF(ew * 0.06f, eh * 0.44f, ew * 0.24f, eh * 0.56f), fillPaint)
     }
 
@@ -2069,41 +2185,116 @@ internal fun buildProceduralFrontBitmap(
         tp,
     )
 
-    // Decorative retro grid / emblem backdrop
-    paint.color = AndroidColor.argb(34, 255, 255, 255)
-    c.drawCircle(w * 0.72f, h * 0.46f, min(w, h) * 0.28f, paint)
+    // Subtle vintage printed retail box diagonal grid & framed key-art window
+    paint.style = Paint.Style.STROKE
+    paint.strokeWidth = 1.2f
+    paint.color = AndroidColor.argb(18, 255, 255, 255)
+    val gridStep = min(w, h) * 0.065f
+    var gx = 0f
+    while (gx < w) {
+        c.drawLine(gx, bandH, gx, h.toFloat(), paint)
+        gx += gridStep
+    }
+    var gy = bandH
+    while (gy < h) {
+        c.drawLine(0f, gy, w.toFloat(), gy, paint)
+        gy += gridStep
+    }
+    paint.style = Paint.Style.FILL
+
+    // Framed key-art emblem card
+    val artFrame = RectF(w * 0.06f, bandH + h * 0.055f, w * 0.94f, h * 0.76f)
+    paint.shader = LinearGradient(
+        artFrame.left, artFrame.top, artFrame.right, artFrame.bottom,
+        intArrayOf(
+            shadeArgb(headerArgb, 0.72f),
+            AndroidColor.rgb(24, 26, 40),
+            AndroidColor.rgb(12, 13, 22),
+        ),
+        floatArrayOf(0f, 0.55f, 1f),
+        Shader.TileMode.CLAMP,
+    )
+    c.drawRoundRect(artFrame, 12f, 12f, paint)
+    paint.shader = null
+    paint.style = Paint.Style.STROKE
+    paint.strokeWidth = 2.4f
+    paint.color = AndroidColor.argb(72, 255, 255, 255)
+    c.drawRoundRect(artFrame, 12f, 12f, paint)
+    paint.style = Paint.Style.FILL
+
+    // Decorative retro emblem backdrop inside key-art frame
+    paint.color = AndroidColor.argb(28, 255, 255, 255)
+    c.drawCircle(w * 0.72f, h * 0.45f, min(w, h) * 0.24f, paint)
     paint.color = shadeArgb(headerArgb, 1.15f)
-    paint.alpha = 55
-    c.drawCircle(w * 0.68f, h * 0.48f, min(w, h) * 0.19f, paint)
+    paint.alpha = 65
+    c.drawCircle(w * 0.68f, h * 0.47f, min(w, h) * 0.16f, paint)
     paint.alpha = 255
 
-    // Bold retail cover title
+    // Bold drop-shadowed retail cover title
     val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         color = AndroidColor.WHITE
         typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
-        textSize = min(w, h) * 0.095f
+        textSize = min(w, h) * 0.092f
+        setShadowLayer(8f, 0f, 4f, AndroidColor.argb(180, 0, 0, 0))
     }
     val titleLayout = StaticLayout.Builder
-        .obtain(game.title, 0, game.title.length, titlePaint, (w * 0.84f).toInt())
+        .obtain(game.title, 0, game.title.length, titlePaint, (w * 0.80f).toInt())
         .setAlignment(Layout.Alignment.ALIGN_NORMAL)
         .setMaxLines(3)
         .setEllipsize(TextUtils.TruncateAt.END)
         .build()
     c.save()
-    c.translate(w * 0.08f, h * 0.34f)
+    c.translate(w * 0.10f, h * 0.34f)
     titleLayout.draw(c)
     c.restore()
 
-    // Bottom ESRB + Publisher stamp
-    drawEsrbStamp(c, dossier.esrbRating.ifBlank { "E" }, w * 0.07f, h * 0.81f, min(w, h) * 0.13f)
+    // Bottom ESRB + Publisher stamp + metallic gold Official Seal of Quality on Nintendo boxes
+    drawEsrbStamp(c, dossier.esrbRating.ifBlank { "E" }, w * 0.07f, h * 0.80f, min(w, h) * 0.13f)
+    val isNintendoBox = game.systemId in setOf("nes", "snes", "n64", "gb", "gbc", "gba", "nds", "3ds", "gc", "wii", "switch")
+    if (isNintendoBox) {
+        val sealW = min(w, h) * 0.17f
+        val sealH = sealW * 0.62f
+        val sealRect = RectF(w * 0.93f - sealW, h * 0.80f, w * 0.93f, h * 0.80f + sealH)
+        paint.shader = LinearGradient(
+            sealRect.left, sealRect.top, sealRect.right, sealRect.bottom,
+            intArrayOf(
+                AndroidColor.rgb(252, 224, 126),
+                AndroidColor.rgb(206, 162, 54),
+                AndroidColor.rgb(154, 112, 28),
+            ),
+            floatArrayOf(0f, 0.52f, 1f),
+            Shader.TileMode.CLAMP,
+        )
+        c.drawOval(sealRect, paint)
+        paint.shader = null
+        paint.color = AndroidColor.rgb(252, 248, 236)
+        c.drawOval(
+            RectF(sealRect.left + 4f, sealRect.top + 4f, sealRect.right - 4f, sealRect.bottom - 4f),
+            paint,
+        )
+        val sealTp = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = AndroidColor.rgb(138, 98, 22)
+            typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD)
+            textSize = sealH * 0.25f
+            textAlign = Paint.Align.CENTER
+        }
+        c.drawText("OFFICIAL", sealRect.centerX(), sealRect.centerY() - sealH * 0.06f, sealTp)
+        c.drawText("SEAL", sealRect.centerX(), sealRect.centerY() + sealH * 0.24f, sealTp)
+    }
+
     val pubPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = AndroidColor.argb(215, 235, 238, 248)
+        color = AndroidColor.argb(225, 235, 238, 248)
         typeface = Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD)
         textSize = min(w, h) * 0.036f
     }
     val pub = dossier.publisher.ifBlank { dossier.developer }.uppercase(Locale.US)
     val pubW = pubPaint.measureText(pub)
-    c.drawText(pub, (w * 0.93f - pubW).coerceAtLeast(w * 0.28f), h * 0.90f, pubPaint)
+    val pubX = if (isNintendoBox) {
+        (w * 0.52f - pubW * 0.5f).coerceAtLeast(w * 0.26f)
+    } else {
+        (w * 0.93f - pubW).coerceAtLeast(w * 0.28f)
+    }
+    c.drawText(pub, pubX, h * 0.90f, pubPaint)
 
     // Physical case finishing details (cardboard flap seam vs. acrylic jewel-case inner bevel + studio sheen)
     when (spec.caseStyle) {
