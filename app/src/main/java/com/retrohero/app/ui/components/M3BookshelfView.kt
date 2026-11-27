@@ -564,10 +564,12 @@ private fun PulledCaseSpotlight(
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             // Angled 3/4 case with its disc or cartridge sliding out from behind it
-            val caseW = (92f * frontAspect).dp
+            // Wide boxes (SNES, N64) get shorter rather than wider, so the text and buttons keep their room.
+            val caseW = (92f * frontAspect).coerceAtMost(96f).dp
+            val caseH = (caseW.value / frontAspect).dp
             Box(
                 Modifier
-                    .width(caseW + 34.dp)
+                    .width(caseW + 28.dp)
                     .height(96.dp)
                     .clickable(onClickLabel = "Open the 3D case", onClick = onInspect),
             ) {
@@ -577,7 +579,7 @@ private fun PulledCaseSpotlight(
                     contentScale = ContentScale.Fit,
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
-                        .size(64.dp)
+                        .size(if (viewerSpec.mediaKind.isOpticalDisc) 64.dp else 52.dp)
                         .graphicsLayer { rotationZ = if (viewerSpec.mediaKind.isOpticalDisc) 0f else 7f },
                 )
                 Image(
@@ -587,7 +589,7 @@ private fun PulledCaseSpotlight(
                     modifier = Modifier
                         .align(Alignment.CenterStart)
                         .width(caseW)
-                        .height(92.dp)
+                        .height(caseH)
                         .graphicsLayer {
                             rotationY = -14f
                             cameraDistance = 14f * density
@@ -618,7 +620,7 @@ private fun PulledCaseSpotlight(
                     text = meta,
                     style = MaterialTheme.typography.labelSmall,
                     color = cs.onSurfaceVariant,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -629,7 +631,7 @@ private fun PulledCaseSpotlight(
                     ) {
                         Icon(Icons.Rounded.PlayArrow, null, Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text("Play", style = MaterialTheme.typography.labelMedium)
+                        Text("Play", style = MaterialTheme.typography.labelMedium, maxLines = 1, softWrap = false)
                     }
                     FilledTonalButton(
                         onClick = onInspect,
@@ -638,7 +640,7 @@ private fun PulledCaseSpotlight(
                     ) {
                         Icon(Icons.Rounded.ViewInAr, null, Modifier.size(15.dp))
                         Spacer(Modifier.width(4.dp))
-                        Text("3D Case", style = MaterialTheme.typography.labelMedium)
+                        Text("3D Case", style = MaterialTheme.typography.labelMedium, maxLines = 1, softWrap = false)
                     }
                 }
             }
